@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { emailSchema } from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
 import { microsoftProfileSchema } from '../users/users.service.js';
-import type { OAuthTransaction } from './sessions.service.js';
+import type { OAuthTransaction } from './oauth-transactions/oauth-transaction.schema.js';
 
 const identitySchema = z.object({
   sub: z.string().min(1),

@@ -1,32 +1,14 @@
-import { createHash } from 'node:crypto';
 import {
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RedisStore } from 'connect-redis';
 import session from 'express-session';
 import type { CookieOptions, Request, Response } from 'express';
-import { z } from 'zod';
-import type { Environment } from '../../config/environment.js';
-import { RedisService } from '../../redis/redis.service.js';
+import type { Environment } from '../../../config/environment.js';
+import { SessionsRepository } from './sessions.repository.js';
 import './session.types.js';
-
-const OAUTH_TTL_SECONDS = 600;
-export const SESSION_PREFIX = 'roller-bay:session:';
-const transactionSchema = z.object({
-  state: z.string(),
-  nonce: z.string(),
-  verifier: z.string(),
-  expiresAt: z.number(),
-});
-export type OAuthTransaction = z.infer<typeof transactionSchema>;
-
-export function sessionTtl(value: session.SessionData) {
-  const expiresAt = value.auth?.expiresAt ?? value.oauthExpiresAt ?? 0;
-  return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
-}
 
 @Injectable()
 export class SessionsService {
@@ -35,7 +17,7 @@ export class SessionsService {
   readonly cookieOptions: CookieOptions;
 
   constructor(
-    private readonly redis: RedisService,
+    private readonly repository: SessionsRepository,
     private readonly config: ConfigService<Environment, true>,
   ) {
     const secure = config.get('NODE_ENV', { infer: true }) === 'production';
@@ -44,12 +26,7 @@ export class SessionsService {
     this.middleware = session({
       name: this.cookieName,
       secret: config.get('AUTH_SESSION_SECRET', { infer: true }),
-      store: new RedisStore({
-        client: redis.client,
-        prefix: SESSION_PREFIX,
-        disableTouch: true,
-        ttl: sessionTtl,
-      }),
+      store: repository.store,
       rolling: false,
       resave: false,
       saveUninitialized: false,
@@ -58,59 +35,27 @@ export class SessionsService {
   }
 
   assertAvailable() {
-    if (!this.redis.client.isReady)
+    if (!this.repository.isAvailable())
       throw new ServiceUnavailableException('Session storage is unavailable.');
   }
 
-  private transactionKey(request: Request, state: string) {
-    const browser = createHash('sha256')
-      .update(request.sessionID)
-      .digest('hex');
-    return `roller-bay:oauth:${browser}:${state}`;
-  }
-
-  async begin(
-    request: Request,
-    transaction: Omit<OAuthTransaction, 'expiresAt'>,
-  ) {
+  async createAnonymous(request: Request, lifetimeSeconds: number) {
     await this.regenerate(request);
-    const expiresAt = Date.now() + OAUTH_TTL_SECONDS * 1000;
-    request.session.oauthExpiresAt = expiresAt;
+    const expiresAt = Date.now() + lifetimeSeconds * 1000;
+    request.session.expiresAt = expiresAt;
     request.session.cookie.expires = new Date(expiresAt);
-    await this.storage(() =>
-      this.redis.client.set(
-        this.transactionKey(request, transaction.state),
-        JSON.stringify({ ...transaction, expiresAt }),
-        { expiration: { type: 'EX', value: OAUTH_TTL_SECONDS } },
-      ),
-    );
     await this.save(request);
+    return request.sessionID;
   }
 
-  async consume(request: Request, state: string) {
-    if (
-      !request.session.oauthExpiresAt ||
-      request.session.oauthExpiresAt <= Date.now() ||
-      !/^[\w-]{32,128}$/.test(state)
-    ) {
+  requireActiveId(request: Request) {
+    const expiresAt =
+      request.session.auth?.expiresAt ?? request.session.expiresAt;
+    if (!expiresAt || !Number.isFinite(expiresAt) || expiresAt <= Date.now())
       throw new UnauthorizedException(
-        'Invalid or expired sign-in. Start again.',
+        'Invalid or expired browser session. Start again.',
       );
-    }
-    // Browser binding is part of the key; another browser cannot consume it.
-    const raw = await this.storage(() =>
-      this.redis.client.getDel(this.transactionKey(request, state)),
-    );
-    const result = transactionSchema.safeParse(raw ? JSON.parse(raw) : null);
-    if (
-      !result.success ||
-      result.data.expiresAt <= Date.now() ||
-      result.data.state !== state
-    )
-      throw new UnauthorizedException(
-        'Invalid or expired sign-in. Start again.',
-      );
-    return result.data;
+    return request.sessionID;
   }
 
   async authenticate(request: Request, userId: string) {

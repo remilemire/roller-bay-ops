@@ -11,7 +11,7 @@ import type { Request } from 'express';
 import { IS_PUBLIC } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
 import { UsersService } from '../users/users.service.js';
-import { SessionsService } from './sessions.service.js';
+import { SessionsService } from './sessions/sessions.service.js';
 
 @Injectable()
 export class AuthGuard implements CanActivate {

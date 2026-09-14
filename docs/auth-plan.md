@@ -43,6 +43,8 @@ The Redis adapter documents expiry and touch behavior in [connect-redis](https:/
 
 `features/auth` owns OAuth orchestration, sessions, guards, and auth routes. `features/users` owns persistence and profile synchronization. Shared Zod contracts expose the authenticated user's public profile and existing shared role enum; never expose Microsoft tokens, subjects, or session secrets.
 
+Inside auth, `sessions/` and `oauth-transactions/` are sibling Nest modules. Each provides a service backed by its own repository, and neither imports the other. `SessionsRepository` owns the Express session-store adapter and Redis session TTLs; `OAuthTransactionsRepository` owns transaction key construction, serialization, expiry, and atomic consumption. The services own their lifecycle rules and map storage failures to generic errors. The auth controller coordinates anonymous browser-session creation, transaction storage, and authenticated session creation.
+
 | Route                    | Behavior                                                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/auth/login`    | Begin Microsoft sign-in.                                                                                                    |

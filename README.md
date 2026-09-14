@@ -55,6 +55,8 @@ apps/
   api/
     src/features/
       auth/                     # Microsoft login, Redis sessions, access guard
+        sessions/               # Browser-session module, service, repository
+        oauth-transactions/     # Login-transaction module, service, repository
       users/                    # User profiles, roles, and persistence
       notes/                    # Controller, service, repository, table, tests
       health/                   # Liveness endpoint

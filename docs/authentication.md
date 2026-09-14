@@ -54,6 +54,14 @@ Emails are required. The shared `emailSchema` trims surrounding whitespace, lowe
 
 The directory's `mail` supplies profile email. Missing/blank/invalid email denies login; the app does not fabricate one from a sign-in name. The domain check uses the directory's `userPrincipalName`, which can differ from its mailbox address. Microsoft subject ID identifies the user, so email changes update the same account. If another subject already has that email, synchronization fails atomically; an administrator must resolve the conflict. No account linking or role transfer occurs by email.
 
+## Module boundaries
+
+`features/auth/sessions/` owns browser-session creation, cookies, authentication, and logout. Its repository owns the Redis-backed Express session store and absolute expiry. Anonymous sessions have a generic expiry and contain no OAuth state, nonce, or PKCE verifier.
+
+`features/auth/oauth-transactions/` is a sibling module that owns those short-lived login transactions. Its service enforces the ten-minute lifetime and validates consumed transactions. Its repository owns Redis keys and serialization, binds records to the browser session ID, and uses atomic `GETDEL` so a transaction can only be consumed once.
+
+Neither module imports the other. The auth controller coordinates them; services use repositories rather than issuing Redis commands. The session repository exposes the established Express session-store interface instead of introducing a duplicate CRUD interface.
+
 ## Tests
 
 `npm test` runs provider fixtures, configuration and email checks, and the notes controller tests. The OIDC tests use the real validation library with generated RSA-signed tokens; they reject invalid signatures, issuers, audiences, expiry, nonce, and state.

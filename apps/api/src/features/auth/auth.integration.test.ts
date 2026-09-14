@@ -15,11 +15,11 @@ import { HealthModule } from '../health/health.module.js';
 import { NotesModule } from '../notes/notes.module.js';
 import { AuthModule } from './auth.module.js';
 import { MicrosoftService } from './microsoft.service.js';
+import { SessionsService } from './sessions/sessions.service.js';
 import {
   SESSION_PREFIX,
-  SessionsService,
-  sessionTtl,
-} from './sessions.service.js';
+  SessionsRepository,
+} from './sessions/sessions.repository.js';
 import type { SessionData } from 'express-session';
 
 const enabled = process.env.AUTH_INTEGRATION_TESTS === '1';
@@ -230,6 +230,19 @@ test(
             { expiration: { type: 'EX', value: 10 } },
           );
           await callback(expired).expect(401);
+
+          const expiredBrowser = await start();
+          const sessionKey = SESSION_PREFIX + sid(expiredBrowser.cookie);
+          const anonymous: SessionData = JSON.parse(
+            (await redis.client.get(sessionKey))!,
+          );
+          anonymous.expiresAt = Date.now() - 1;
+          await redis.client.set(sessionKey, JSON.stringify(anonymous), {
+            expiration: { type: 'EX', value: 10 },
+          });
+          // Even if a rounded Redis TTL leaves the key present, browser-session
+          // expiry must deny a callback whose transaction is otherwise valid.
+          await callback(expiredBrowser).expect(401);
         },
       );
 
@@ -317,18 +330,23 @@ test(
             (await redis.client.get(key))!,
           );
           stored.auth!.expiresAt = Date.now() + 1200;
-          const store = app.get(SessionsService);
-          // Use the actual adapter through the session middleware's attached store.
-          const { RedisStore } = await import('connect-redis');
-          const adapter = new RedisStore({
-            client: redis.client,
-            prefix: SESSION_PREFIX,
-            disableTouch: true,
-            ttl: sessionTtl,
-          });
-          await adapter.set(sid(authenticated), stored);
-          await adapter.touch(sid(authenticated), stored);
-          await adapter.set(sid(authenticated), stored);
+          const adapter = app.get(SessionsRepository).store;
+          const save = () =>
+            new Promise<void>((resolve, reject) => {
+              adapter.set(sid(authenticated), stored, (error) =>
+                error ? reject(error) : resolve(),
+              );
+            });
+          assert.ok(adapter.touch);
+          const touch = () =>
+            new Promise<void>((resolve, reject) => {
+              adapter.touch!(sid(authenticated), stored, (error?: unknown) =>
+                error ? reject(error) : resolve(),
+              );
+            });
+          await save();
+          await touch();
+          await save();
           assert.ok((await redis.client.ttl(key)) <= 2);
           await delay(1300);
           // Key may remain for a fractional second; the guard must still reject it.
@@ -338,7 +356,6 @@ test(
             .expect(401);
           await delay(800);
           assert.equal(await redis.client.get(key), null);
-          assert.ok(store);
         },
       );
 
@@ -406,7 +423,7 @@ test(
         'production cookies require HTTPS and use the host-only prefix',
         () => {
           const production = new SessionsService(
-            redis,
+            app.get(SessionsRepository),
             new ConfigService({ ...config, NODE_ENV: 'production' }),
           );
           assert.equal(production.cookieName, '__Host-roller_bay.sid');

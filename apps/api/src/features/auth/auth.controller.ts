@@ -14,13 +14,18 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
 import { UsersService } from '../users/users.service.js';
 import { MicrosoftService } from './microsoft.service.js';
-import { SessionsService } from './sessions.service.js';
+import { SessionsService } from './sessions/sessions.service.js';
+import {
+  OAuthTransactionsService,
+  OAUTH_TRANSACTION_TTL_SECONDS,
+} from './oauth-transactions/oauth-transactions.service.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly microsoft: MicrosoftService,
     private readonly sessions: SessionsService,
+    private readonly transactions: OAuthTransactionsService,
     private readonly users: UsersService,
     private readonly config: ConfigService<Environment, true>,
   ) {}
@@ -30,7 +35,11 @@ export class AuthController {
   async login(@Req() request: Request, @Res() response: Response) {
     response.setHeader('Cache-Control', 'no-store');
     const { url, transaction } = await this.microsoft.begin();
-    await this.sessions.begin(request, transaction);
+    const browserSessionId = await this.sessions.createAnonymous(
+      request,
+      OAUTH_TRANSACTION_TTL_SECONDS,
+    );
+    await this.transactions.create(browserSessionId, transaction);
     response.redirect(url);
   }
 
@@ -47,7 +56,10 @@ export class AuthController {
     const states = url.searchParams.getAll('state');
     if (states.length !== 1 || !states[0])
       throw new UnauthorizedException('Invalid sign-in response.');
-    const transaction = await this.sessions.consume(request, states[0]);
+    const transaction = await this.transactions.consume(
+      this.sessions.requireActiveId(request),
+      states[0],
+    );
     const profile = await this.microsoft.complete(url, transaction);
     const user = await this.users.synchronizeMicrosoftProfile(profile);
     await this.sessions.authenticate(request, user.id);
