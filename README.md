@@ -35,7 +35,7 @@ Local environment files are ignored by Git. The database credentials and unauthe
 
 ## Redis
 
-Redis stores application sessions and short-lived Microsoft login transactions. Session lifetime defaults to seven days, without extending on activity.
+Redis stores application sessions, short-lived Microsoft login transactions, and shared rate-limit counters. Session lifetime defaults to seven days, without extending on activity. See [rate limiting](docs/authentication.md#rate-limiting) for request budgets and configuration.
 
 See the [authentication plan](docs/auth-plan.md) for Microsoft sign-in, Redis sessions, and email handling decisions.
 
@@ -64,6 +64,7 @@ apps/
       health/                   # Liveness endpoint
     src/database/               # Connection pool and lifecycle only
     src/redis/                  # Redis connection and lifecycle only
+    src/rate-limiting/          # API and login request budgets backed by Redis
     src/config/                 # Environment validation
     src/common/pipes/           # Reusable HTTP validation
     drizzle/                    # Generated SQL migrations and metadata

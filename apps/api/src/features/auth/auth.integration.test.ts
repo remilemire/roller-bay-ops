@@ -14,6 +14,8 @@ import request from 'supertest';
 import { currentUserSchema } from '@roller-bay/shared/auth';
 import { environmentSchema } from '../../config/environment.js';
 import { RedisService } from '../../redis/redis.service.js';
+import { RateLimitingModule } from '../../rate-limiting/rate-limiting.module.js';
+import { RATE_LIMIT_KEY_PREFIX } from '../../rate-limiting/rate-limiting.service.js';
 import { UsersService } from '../users/users.service.js';
 import { HealthModule } from '../health/health.module.js';
 import { AuthModule } from './auth.module.js';
@@ -37,6 +39,7 @@ test(
     );
     assert.ok(process.env.TEST_REDIS_URL, 'Set TEST_REDIS_URL to local Redis.');
     const schema = `auth_test_${randomUUID().replaceAll('-', '')}`;
+    const rateLimitPrefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
     const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
     const url = new URL(process.env.TEST_DATABASE_URL);
     url.searchParams.set('options', `-csearch_path=${schema},public`);
@@ -52,6 +55,8 @@ test(
       BOOTSTRAP_OWNER_EMAIL: ' Owner@Example.COM ',
       AUTH_SESSION_SECRET: 'integration-test-secret-at-least-32-characters',
       AUTH_SESSION_TTL_SECONDS: 60,
+      RATE_LIMIT_API_LIMIT: 10000,
+      RATE_LIMIT_LOGIN_LIMIT: 10000,
     });
     let profile = {
       microsoftSubjectId: 'initial-subject',
@@ -66,11 +71,14 @@ test(
           ignoreEnvFile: true,
           load: [() => config],
         }),
+        RateLimitingModule,
         AuthModule,
         HealthModule,
         FabricCatalogModule,
       ],
     })
+      .overrideProvider(RATE_LIMIT_KEY_PREFIX)
+      .useValue(rateLimitPrefix)
       .overrideProvider(MicrosoftService)
       .useValue({
         begin: async () => {
@@ -573,6 +581,13 @@ test(
         },
       );
     } finally {
+      if (redis.client.isReady) {
+        for await (const batch of redis.client.scanIterator({
+          MATCH: `${rateLimitPrefix}*`,
+        })) {
+          if (batch.length) await redis.client.del(batch);
+        }
+      }
       if (redis.client.isReady && keys.size) await redis.client.del([...keys]);
       await app.close();
       // Only the randomly named schema created by this test is removed.

@@ -49,6 +49,18 @@ Navigate the browser to `http://localhost:3001/api/auth/login` to start login. M
 
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
 
+## Rate limiting
+
+`RateLimitingModule` runs before session middleware and authentication. All API paths share a per-IP budget of 600 requests per 60-second window. Login and callback additionally share a separate, stricter budget of 30 requests per window (a normal sign-in uses two). Failed requests also count. GET health checks and OPTIONS preflights are exempt.
+
+Configure `RATE_LIMIT_API_LIMIT`, `RATE_LIMIT_LOGIN_LIMIT`, and `RATE_LIMIT_WINDOW_SECONDS` in the backend environment. Defaults apply when omitted; limits must be positive integers up to 1,000,000, and windows must be 1–3,600 seconds. Employees sharing a public IP share these budgets. IPv6 addresses are grouped by /56 subnet to prevent bypass by rotating addresses. Tune limits for the company's shared network usage.
+
+The implementation uses [express-rate-limit](https://express-rate-limit.mintlify.app/reference/configuration) and its [Redis store](https://github.com/express-rate-limit/rate-limit-redis). Atomic Redis counters under `roller-bay:rate-limit:` are shared by API instances. Each counter expires after its window; denied requests do not extend the window. These are fixed-window limits, so bursts near a reset can span two budgets.
+
+Exhausted budgets return 429 with a JSON error and `Retry-After` in seconds. `RateLimit` and `RateLimit-Policy` report the applicable budgets. CORS exposes these headers and `Retry-After` to the configured frontend. Redis failures return 503 without a memory fallback; GET `/api/health` remains available. Redis script initialization must succeed before the API serves traffic.
+
+Client addresses come from Express's `request.ip`. The existing `TRUSTED_PROXY_IPS` setting must identify only actual proxies; with an empty setting, forwarded IP headers cannot change the rate-limit identity. This protects API routes, not the separately hosted Next.js frontend or network-level traffic.
+
 ## User activation
 
 Admins and the owner can call `PATCH /api/users/:id/activation` with `{ "isActive": false }` to deactivate an existing user, or `{ "isActive": true }` to reactivate them. The request requires a valid active admin session and the configured Origin header. Regular users cannot change activation. The owner cannot be deactivated, including by the owner themselves. The body accepts only a boolean `isActive`; the endpoint cannot change roles or profile fields.
@@ -111,6 +123,8 @@ npm run test:integration
 ```
 
 This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, activation permissions, blocked sign-in and existing-session access for inactive users, reactivation, owner bootstrap, database owner uniqueness, role-management permissions, concurrent ownership transfer, service-level rollback after a simulated recipient-update failure, and lock timeout recovery, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
+
+The rate-limiting integration suite uses two API instances sharing a random Redis key prefix. It verifies shared and concurrent budgets, login/callback limits, request-method coverage, retry headers, expiry, proxy and IPv6 behavior, health/preflight exemptions, and outage recovery. Cleanup deletes only that suite's keys. The auth suite also loads rate limiting, with higher budgets to exercise its existing scenarios.
 
 ## Current limits
 

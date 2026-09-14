@@ -58,6 +58,24 @@ export const environmentSchema = z
         typeof value === 'string' && value.trim() === '' ? undefined : value,
       emailSchema.optional(),
     ),
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3600)
+      .default(60),
+    RATE_LIMIT_API_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000000)
+      .default(600),
+    RATE_LIMIT_LOGIN_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000000)
+      .default(30),
     AUTH_SESSION_SECRET: z.string().min(32),
     AUTH_SESSION_TTL_SECONDS: z.coerce
       .number()
