@@ -1,0 +1,21 @@
+name: roller-bay-ops
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: roller_bay
+      POSTGRES_PASSWORD: roller_bay_local
+      POSTGRES_DB: roller_bay_ops
+    ports:
+      - '127.0.0.1:5434:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U roller_bay -d roller_bay_ops']
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

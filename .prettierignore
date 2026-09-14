@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+.turbo
+.test-dist
+coverage
+package-lock.json
+apps/api/drizzle/meta
+apps/web/next-env.d.ts

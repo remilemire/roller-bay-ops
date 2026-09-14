@@ -1,0 +1,23 @@
+{
+  "name": "@roller-bay/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./notes": {
+      "types": "./dist/features/notes/index.d.ts",
+      "default": "./dist/features/notes/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
