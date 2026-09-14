@@ -2,81 +2,110 @@
 
 ## Purpose
 
-Help a window covering company locate, allocate, and accurately track its fabric stock at the level of individual physical items.
+Track individual fabric stock items for a window covering company, help employees allocate fabric to production orders, and update stock after cutting from the physical fabric that remains.
 
-The current system tracks theoretical stock. Cutting introduces unplanned losses from flaws, uneven edges, and other waste, so calculated balances drift away from what is actually on the shelf. Roller Bay Ops will update stock from measurements of the fabric returned after cutting.
+The existing system tracks theoretical consumption. Flaws, uneven edges, and other cutting waste cause its balances to drift. This app will start with the known length of a received roll, then use physical measurements to calculate its remaining length after cutting. Calculated roll length is an estimate grounded in measurements, not an exact direct measurement of the unwound fabric.
 
-Tracking covers rolls, remnants, scrap pieces, and fully consumed stock. An item must remain traceable after it stops being available for production.
+Tracking includes rolls, retained remnants, scrap, and fully consumed items. Records remain traceable after an item is no longer available.
 
-## Required workflows
+## Confirmed terminology and stock structure
 
-- **Incoming stock:** Enter purchase orders to record incoming fabric and establish its stock records.
-- **Inventory:** Identify each physical stock item, its fabric type, dimensions, measured remaining quantity, lifecycle state, and current location where applicable. Preserve records of fully consumed items and scrap.
-- **Allocation:** Before production, help an employee find suitable fabric, plan the cuts, and associate specific stock items and estimated usage with an order. Reserve the planned quantity for that order.
-- **Cutting completion:** Re-measure every stock item returning to a shelf and update its recorded balance to the actual remainder. Record remnants, scrap, and fully consumed items as well. Reconcile the completed order's reservations against the actual outcome.
+| Concept          | Meaning and known attributes                                                                                                                                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Color            | The company's identifier for a fabric type. It is closer to a catalog code than a literal visual color. Use the business term in the app.                                                                                                          |
+| Fabric catalog   | One entry per color, containing fabric thickness and material. Pricing is deferred and is not required for the current functionality.                                                                                                              |
+| Stock item       | An individual roll or piece associated with a color. The same color can exist in different widths; width is not a single fixed attribute of the color.                                                                                             |
+| Received roll    | A physical roll listed on a purchase order with its color, width, and known length/yardage.                                                                                                                                                        |
+| Tube diameter    | A property of the individual roll, recorded after its first cut for subsequent length calculations. It remains unchanged for the rest of that roll's life. Use the outside diameter of the tube where the fabric begins; see the measurement note. |
+| Location         | Where the physical item is currently stored, including warehouse locations and shelves near the cutters.                                                                                                                                           |
+| Production order | The work being allocated and cut, identified by an order number and accompanied by a paper form.                                                                                                                                                   |
+| Allocation       | A reservation of estimated fabric usage from specific stock items for a production order.                                                                                                                                                          |
 
-Cut planning assistance is part of the intended product. The first implementation can record an employee's plan and estimate; automated optimization can follow once the cutting constraints are understood.
+The unique identifier for a physical roll is separate from its color. Exact database table names and API shapes are not yet implemented.
 
-## Vocabulary and quantity rules
+## Operational workflow
 
-The following distinctions are proposed design rules to validate before implementing the domain models.
+### 1. Receive a shipment
 
-| Concept             | Meaning                                                                                                               |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Fabric definition   | The material or variant shared by multiple stock items; exact identifying attributes remain to be agreed.             |
-| Stock item          | One individually identifiable roll, remnant, or scrap piece, with a record that survives its consumption or disposal. |
-| Location            | The shelf or other place where a stock item can be found.                                                             |
-| Purchase order      | A record of fabric being purchased; it is distinct from a production order.                                           |
-| Production order    | Work that requires fabric to be selected and cut. How these orders enter the app is undecided.                        |
-| Allocation          | An order's reservation of estimated consumption from specific stock items.                                            |
-| Measured stock      | The last observed quantity of a physical stock item, with the measurement time.                                       |
-| Projected remainder | What should remain after planned cuts; it is an estimate, not a new measurement.                                      |
+An employee enters the purchase-order details when the shipment is received. Each listed roll supplies its color, width, and known length/yardage. Record each physical roll and where it is placed.
 
-- Keep ordered quantities separate from received stock. Proposed receiving behavior: creating a purchase order records expected stock; confirming receipt creates the individual allocatable items. Confirm this distinction with the business.
-- Allocating fabric reserves it without reducing its measured balance. Where a single length measure is sufficient, unreserved quantity is measured quantity minus outstanding reservations.
-- An unreserved quantity does not by itself prove an order can be cut. Width, defects, orientation, and cut layout may affect suitability; the applicable constraints still need to be established.
-- Preserve the relationship between a source item and pieces produced from it. Proposed behavior: separately tracked remnants and scraps have their own identities linked to their source; quantities must not be counted on both the source and its resulting pieces.
-- Track lifecycle and usability separately from quantity. Fully consumed or disposed items remain in history but are unavailable for allocation. Record scrap even when it cannot be reused; agree on the rules for classifying any reusable pieces before including them in availability.
-- Completing cutting replaces the old balance with the measured remainder and settles that order's reservation. Do not subtract the estimated usage again.
-- If a new measurement leaves insufficient stock for other reservations, flag those orders for review. Do not silently discard reservations or continue presenting them as covered.
-- Keep a history of receipts, measurements, moves, and reservation changes, including who recorded them and when. During cutting, the previous measurement must not imply that the item is still sitting on its shelf.
-- Availability checks and reservation writes must be coordinated so two employees cannot reserve the same available stock simultaneously. Measurement updates and reservation settlement also need a consistent, atomic outcome.
+About 90% of incoming stock goes to the warehouse. Treat the warehouse as a likely default that the employee can change, not a mandatory destination. Recording purchase orders before delivery and handling partial deliveries are not yet specified.
 
-**Example, assuming length-based stock:** A roll measures 100 m and an order reserves 30 m. The projected remainder is 70 m. After cutting, the returned roll measures 66 m. Record 66 m and settle the 30 m reservation; do not subtract 30 m from 66 m. The 4 m difference is a discrepancy to record, not automatically proof of a particular cause of waste.
+### 2. Allocate an order
+
+An employee reviews the order, determines suitable fabric and a cutting plan, and locates the stock. They usually look on the shelves near the cutters first; if suitable fabric is unavailable there, they retrieve a new roll from the warehouse. These are operating preferences, not restrictions on which location can supply an order.
+
+The paper form attached to the order contains:
+
+- Order number.
+- Fabric/color and the width needed to identify suitable stock.
+- Stock location.
+- Amount required and estimated usage, kept as separate concepts until their exact meanings are confirmed.
+- A possible roll identifier in the proposed company workflow. **Recommendation: make a stock-item identifier required for each allocated item**, because color, width, and location may match multiple rolls.
+
+The app should reserve the planned usage for the order and assist with cutting plans. Whether the app generates the form, or employees fill it independently and enter the allocation, remains undecided. Reservations need to be recorded before production; the paper form alone cannot reserve stock in the system.
+
+### 3. Cut and record the outcome
+
+Cutters use the form to find the selected fabric. After cutting, they record:
+
+- Rolls that were fully consumed.
+- Scrap/remnant pieces large enough to keep.
+- Measurements needed to establish the remaining length of each returned roll.
+- Where each remaining roll or retained piece is placed.
+
+Previously used stock is commonly kept on shelves near the cutters, including rolls that remain fairly large, but this is not universal. Record the actual destination of each item rather than deriving its location from whether it has been used.
+
+All scrap must remain tracked, as previously specified. The exact method for recording discarded scrap, beyond the retained pieces listed on the form, is still to be agreed.
+
+### 4. Enter the completed form
+
+The completed form is entered into the app. For each remaining roll, use the recorded depth, that roll's tube diameter, and the thickness from its color's catalog entry to calculate remaining length. The tube diameter is recorded after the first cut and reused for later cuts; it is not needed to establish the known received length.
+
+Record retained pieces, consumed items, and destination locations, then reconcile the order's reservations. Flat remnants and scraps need their own dimension-recording rules; the wound-roll formula does not apply to them.
+
+The confirmed depth is the one-sided distance from the outside of the tube to the outside of the fabric: `(roll outside diameter − tube outside diameter) / 2`. See [roll measurement](roll-measurement.md) for the formula and units.
+
+## Proposed inventory rules
+
+These recommendations are distinct from the confirmed workflow above.
+
+- Keep received length, later calculated balances, reserved usage, and projected remainders distinct. Record the basis and time of each balance.
+- Allocation reserves stock without subtracting from its recorded physical balance. Where length is sufficient, unreserved length is the current recorded balance minus outstanding reservations; cut fit also depends on width and other production constraints.
+- On completion, replace the roll's balance with the newly calculated remainder and settle that order's reservation. Do not subtract estimated consumption again.
+- Give separately retained pieces their own identities linked to the source roll. Avoid counting their material on both the source and the resulting pieces.
+- Fully consumed and disposed items stay in history but cannot be allocated. Scrap is not automatically available stock; its usability must be explicit.
+- Preserve raw measurements, their units, the tube diameter and fabric thickness used, the resulting length, and who recorded the entry and when. Later catalog edits must not silently alter previous calculations.
+- Record measurement/cutting time separately from form-entry time where needed. Until a completed form is entered, the system may have an old balance or location; represent outstanding production/return information explicitly rather than presenting it as freshly confirmed stock.
+- If the revised balance cannot cover other reservations, flag the affected orders. Prevent simultaneous over-allocation and apply completion changes consistently. Re-entering the same form must not duplicate pieces or settle reservations twice.
 
 ## Proposed feature boundaries
 
-These are application modules within the existing monorepo, not separate services.
+| Feature                | Owns                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fabric catalog         | Color identifiers, thickness, and material. Pricing is deferred.                                                                                  |
+| Purchasing / receiving | Purchase-order details, receipts, and registration of incoming rolls through inventory operations.                                                |
+| Inventory              | Physical identities, widths/dimensions, locations, roll-specific tube diameters, balance history, lifecycle, and source-piece relationships.      |
+| Orders / allocation    | Production requirements, selected stock, reservations, and allocation details for the paper form.                                                 |
+| Cutting / returns      | Cut planning and completed-form entry; coordinates measurements, calculated balances, resulting pieces, destinations, and reservation settlement. |
 
-| Feature                | Owns                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Fabric catalog         | Fabric definitions and the attributes used to find compatible stock.                                                     |
-| Purchasing / receiving | Purchase orders, incoming quantities, and receipt records. Uses inventory operations to register received items.         |
-| Inventory              | Physical stock identities, dimensions, locations, measured balances, lifecycle, source-piece relationships, and history. |
-| Orders / allocation    | Production requirements, stock selection, reservations, and estimated usage.                                             |
-| Cutting                | Cut plans and completion workflow. Coordinates inventory measurements and reservation settlement.                        |
+These are modules within the monorepo. Inventory owns stock balances; other features use its operations. Shared Zod contracts expose public inputs and outputs, while Drizzle tables stay within their owning backend feature.
 
-Inventory remains the authority for measured balances. Other features use its operations instead of independently changing those balances. Shared Zod contracts describe public inputs and outputs; database tables stay with their owning backend feature.
+## Recommended implementation sequence
 
-## Recommended starting point
+The catalog and receiving workflow are now sufficiently described to begin a focused model design. Resolve the remaining field-level questions as they become relevant.
 
-Start by defining the physical stock item's identity, measurements, and lifecycle, including how cutting produces remnants and scrap and how consumption is recorded. Then build **receive and locate a stock item** as the first vertical slice.
+1. **Catalog and receiving:** Model colors, individual stock items, purchase-order receipts, and locations. Build one receipt-entry and inventory-lookup workflow end to end, using the received length as its initial balance.
+2. **Allocation and form:** Select individual items, record required amounts and planned usage, reserve stock, and establish how the paper form carries those selections to the cutters.
+3. **Completed-form entry:** Using the confirmed one-sided depth convention, implement roll-length calculations, consumed rolls, retained pieces, destinations, and reservation reconciliation. Validate calculations with representative real rolls before relying on them for allocation.
+4. **Cutting-plan assistance:** Add optimization once the actual order inputs and cutting constraints are known.
 
-1. Settle the minimum rules: what counts as an item, how it is measured, how splitting and full consumption affect its record, when received stock becomes available, and how a shelf is identified. Walk through one receipt, one cut with remnants and scrap, and one fully consumed roll before choosing tables.
-2. Implement just enough fabric, purchase-order receipt, stock-item, and location models for one receipt. Define that use case's Zod contracts and API alongside its business rules.
-3. Build the receiving form and inventory lookup. Verify that a received item has a unique identity, a measured quantity, a purchase-order origin, and a location that can be found later.
-4. Add manual allocation against production orders, including releasing or changing reservations and preventing over-allocation.
-5. Add cutting completion, measured returns, source-linked remnants and scrap, full consumption, and reconciliation of remaining reservations. This closes the accuracy and traceability loop that motivates the product.
-6. Add cutting-plan assistance and optimization using confirmed production constraints and representative real orders.
+## Remaining decisions
 
-This sequence gives each step a working UI → API → database path. It avoids designing the entire database first or building an optimizer on top of unreliable stock records. The first slice establishes inventory; allocation and measured returns are still necessary to deliver the core business outcome.
+- **Measurements:** Confirm the units and precision of radial depth, tube outside diameter, fabric thickness, width, and yardage. Define how retained pieces are measured.
+- **Allocation:** Clarify the distinction between amount required and estimated usage; confirm item identification and when allocation is entered relative to form preparation.
+- **Forms and orders:** Decide whether forms are generated by the app, who enters completed forms, how orders enter the system, and how partial completion, substitutions, or corrections are handled.
+- **Catalog and receiving:** Confirm color-code uniqueness, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
+- **Availability:** Define which scraps are reusable and any batch, shade, defect, or orientation constraints that affect selection and cutting.
 
-## Decisions still needed
-
-- **Physical stock and measurement:** Which dimensions, units, and measurement precision are needed for rolls, remnants, and scrap? Are irregular pieces retained? Which scraps can be reused, and how is disposal recorded? All items, including consumed rolls and scrap, must remain tracked; the recording detail is still to be agreed.
-- **Fabric compatibility:** Which attributes identify suitable fabric, and do batch, shade, defects, or direction impose selection or cutting restrictions?
-- **Receiving and initial stock:** Are purchase orders recorded before delivery? Can deliveries be partial? How will the existing shelves be measured and entered when the app is introduced?
-- **Orders and production:** Where do production orders and required cut dimensions come from? Can several orders reserve one item, and can orders be cut or completed in stages?
-- **Physical workflow:** How are items identified and tagged today, who measures returned fabric, and how is a move from shelf to cutting and back recorded?
-
-These questions are unresolved requirements, not implemented behavior. The notes example in the repository demonstrates technical wiring only.
+The repository currently contains a technical notes example only. These fabric workflows are documented requirements and proposals, not implemented functionality.
