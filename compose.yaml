@@ -17,5 +17,28 @@ services:
       timeout: 3s
       retries: 10
 
+  session-redis:
+    image: redis:8-alpine
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    ports:
+      - '127.0.0.1:6380:6379'
+    volumes:
+      - session_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres_data:
+  session_redis_data:

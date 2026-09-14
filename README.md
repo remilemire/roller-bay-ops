@@ -8,7 +8,7 @@ The current implementation is a TypeScript monorepo with a Next.js App Router fr
 
 ## Get started
 
-Use Node.js 24 LTS (`nvm use`) and npm 11. Docker with Compose is needed for the provided local PostgreSQL service; an existing PostgreSQL installation also works if you update `DATABASE_URL`.
+Use Node.js 24 LTS (`nvm use`) and npm 11. Docker with Compose provides local PostgreSQL and Redis services. Existing installations also work if you update `DATABASE_URL` and `REDIS_URL`.
 
 From the repository root:
 
@@ -16,7 +16,7 @@ From the repository root:
 npm ci
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
-npm run db:up
+npm run services:up
 npm run db:migrate
 npm run dev
 ```
@@ -25,10 +25,23 @@ npm run dev
 - API liveness: <http://localhost:3001/api/health>
 - Example feature: `GET /api/notes` and `POST /api/notes` with `{"title":"First note"}`
 - PostgreSQL: `localhost:5434` (the container uses port 5432 internally)
+- Redis: `localhost:6380` (the container uses port 6379 internally)
 
-Local environment files are ignored by Git. The database credentials in the examples are for local development only. The API validates its environment on startup. `/api/health` reports process liveness; it does not check database availability. Use the notes screen to exercise the database connection.
+Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use the notes screen to exercise the database connection.
 
-`npm run dev` builds shared contracts before starting the applications. Turborepo watches the dependency graph and rebuilds shared contracts and restarts dependent development tasks when they change. Stop the development processes with Ctrl+C; stop PostgreSQL separately with `npm run db:down`. Database data stays in the Compose volume.
+`npm run dev` builds shared contracts before starting the applications. Turborepo watches the dependency graph and rebuilds shared contracts and restarts dependent development tasks when they change. Stop the development processes with Ctrl+C; stop the backing services separately with `npm run services:down`. PostgreSQL and Redis data stay in separate Compose volumes.
+
+## Redis
+
+Redis is the planned session store. This step adds the service and connection lifecycle; session middleware, cookies, expiry rules, and Microsoft authentication are not implemented yet.
+
+See the [authentication plan](docs/auth-plan.md) for Microsoft sign-in, Redis sessions, and email handling decisions.
+
+Set `REDIS_URL=redis://localhost:6380` in `apps/api/.env`. The API connects before it starts listening and fails startup if the initial connection fails. After a successful connection, it retries interruptions with backoff. Commands issued while disconnected fail immediately instead of queuing. Shutdown closes the connection and stops retries.
+
+Features that need Redis import `RedisModule` and inject `RedisService`, using its `client` directly. Keep session behavior in the future auth feature; `src/redis` only manages the shared connection. Redis does not require a Drizzle model or migration.
+
+The `session-redis` Compose service uses append-only persistence with a sync every second and a dedicated volume. A sudden failure can lose roughly the most recent second of writes. The `noeviction` policy prevents memory pressure from silently evicting sessions; session expiry will be set by auth. This local configuration does not impose a memory cap. For deployment, configure authenticated Redis with TLS (`rediss://`) and appropriate memory limits. See [Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/) and [Node client connections](https://redis.io/docs/latest/develop/clients/nodejs/connect/).
 
 ## Layout
 
@@ -42,6 +55,7 @@ apps/
       notes/                    # Controller, service, repository, table, tests
       health/                   # Liveness endpoint
     src/database/               # Connection pool and lifecycle only
+    src/redis/                  # Redis connection and lifecycle only
     src/config/                 # Environment validation
     src/common/pipes/           # Reusable HTTP validation
     drizzle/                    # Generated SQL migrations and metadata
@@ -77,8 +91,12 @@ Both applications import contracts from `@roller-bay/shared/notes`. The shared p
 | `npm test`                                  | Test API validation and response contracts without a database  |
 | `npm run format`                            | Format source and configuration                                |
 | `npm run format:check`                      | Check formatting without changing files                        |
+| `npm run services:up`                       | Start PostgreSQL and Redis and wait until healthy              |
+| `npm run services:down`                     | Stop PostgreSQL and Redis and preserve data                    |
 | `npm run db:up`                             | Start local PostgreSQL and wait until healthy                  |
 | `npm run db:down`                           | Stop local PostgreSQL and preserve data                        |
+| `npm run redis:up`                          | Start local Redis and wait until healthy                       |
+| `npm run redis:down`                        | Stop local Redis and preserve data                             |
 | `npm run db:generate -- --name=change_name` | Generate a SQL migration from feature tables                   |
 | `npm run db:migrate`                        | Apply pending migrations                                       |
 | `npm run db:studio`                         | Open Drizzle Studio for the configured database                |

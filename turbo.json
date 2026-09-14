@@ -13,12 +13,24 @@
       "cache": false,
       "persistent": true,
       "interruptible": true,
-      "env": ["DATABASE_URL", "PORT", "WEB_ORIGIN", "NEXT_PUBLIC_API_URL"]
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "PORT",
+        "WEB_ORIGIN",
+        "NEXT_PUBLIC_API_URL"
+      ]
     },
     "start": {
       "cache": false,
       "persistent": true,
-      "env": ["DATABASE_URL", "PORT", "WEB_ORIGIN", "NEXT_PUBLIC_API_URL"]
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "PORT",
+        "WEB_ORIGIN",
+        "NEXT_PUBLIC_API_URL"
+      ]
     },
     "typecheck": { "dependsOn": ["^build"] },
     "lint": {},

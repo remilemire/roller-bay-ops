@@ -19,6 +19,7 @@
     "@nestjs/config": "^12.0.0",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
+    "@redis/client": "^6.2.1",
     "@roller-bay/shared": "*",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",

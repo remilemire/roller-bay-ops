@@ -11,6 +11,12 @@ export const environmentSchema = z.object({
       (value) => ['postgres:', 'postgresql:'].includes(new URL(value).protocol),
       'DATABASE_URL must be a PostgreSQL connection URL.',
     ),
+  REDIS_URL: z
+    .url()
+    .refine(
+      (value) => ['redis:', 'rediss:'].includes(new URL(value).protocol),
+      'REDIS_URL must be a Redis connection URL (redis:// or rediss://).',
+    ),
   WEB_ORIGIN: z.url().default('http://localhost:3000'),
 });
 
