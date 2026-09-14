@@ -2,7 +2,7 @@
 
 The catalog is organized as manufacturer → material → color. Each material belongs to one manufacturer, and each color belongs to one material. Physical stock, receiving, and allocation are separate features.
 
-All routes require a valid session. Every signed-in role can read. Only `admin` can create, update, or delete; `owner` does not implicitly inherit admin privileges. Permissions use the current user role from PostgreSQL on every request. Writes also require the configured `WEB_ORIGIN` as the request's Origin header.
+All routes require a valid session. Every signed-in role can read. Admins and the owner can create, update, or delete; the owner inherits all admin permissions. Permissions use the current user role from PostgreSQL on every request. Writes also require the configured `WEB_ORIGIN` as the request's Origin header.
 
 ## Module structure
 
@@ -63,4 +63,4 @@ Deleting a manufacturer with materials or a material with colors is blocked by f
 
 Apply the existing `0001_add_fabric_catalog.sql` migration with `npm run db:migrate` before using these endpoints against the application database. The endpoint implementation does not require another migration.
 
-`npm run test:integration`, with the test URLs described in [authentication](authentication.md#tests), exercises real session authorization and catalog CRUD. Apply pending migrations to the test database first. It copies the migrated application table structures into the suite's disposable PostgreSQL schema, leaves application tables unchanged, and cleans up its own schema and Redis keys. Coverage includes all three resources, owner/user write denial, immediate role changes, invalid inputs, duplicate codes, missing references, blocked deletions, hierarchy responses, search, and pagination.
+`npm run test:integration`, with the test URLs described in [authentication](authentication.md#tests), exercises real session authorization and catalog CRUD. Apply pending migrations to the test database first. It copies the migrated application table structures into the suite's disposable PostgreSQL schema, leaves application tables unchanged, and cleans up its own schema and Redis keys. Coverage includes all three resources, user write denial and owner write access, immediate role changes, invalid inputs, duplicate codes, missing references, blocked deletions, hierarchy responses, search, and pagination.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { emailSchema } from '@roller-bay/shared/users';
 
 const httpUrl = z.url().refine((value) => {
   const url = new URL(value);
@@ -52,6 +53,11 @@ export const environmentSchema = z
         /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
       )
       .max(253),
+    BOOTSTRAP_OWNER_EMAIL: z.preprocess(
+      (value) =>
+        typeof value === 'string' && value.trim() === '' ? undefined : value,
+      emailSchema.optional(),
+    ),
     AUTH_SESSION_SECRET: z.string().min(32),
     AUTH_SESSION_TTL_SECONDS: z.coerce
       .number()

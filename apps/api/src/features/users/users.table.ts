@@ -26,5 +26,10 @@ export const users = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [uniqueIndex('users_email_unique').on(sql`lower(${table.email})`)],
+  (table) => [
+    uniqueIndex('users_email_unique').on(sql`lower(${table.email})`),
+    uniqueIndex('users_single_owner_unique')
+      .on(table.role)
+      .where(sql`${table.role} = 'owner'`),
+  ],
 );

@@ -1,7 +1,21 @@
-import { Body, Controller, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Req,
+} from '@nestjs/common';
+import type { Request } from 'express';
 import {
   updateUserActivationSchema,
   type UpdateUserActivation,
+  updateUserRoleSchema,
+  type UpdateUserRole,
+  transferOwnershipSchema,
+  type TransferOwnership,
 } from '@roller-bay/shared/users';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
@@ -14,10 +28,39 @@ export class UsersController {
   @Patch(':id/activation')
   @Roles('admin')
   setActivation(
+    @Req() request: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateUserActivationSchema))
     input: UpdateUserActivation,
   ) {
-    return this.users.setActivation(id, input.isActive);
+    return this.users.setActivation(
+      request.currentUser!.id,
+      id,
+      input.isActive,
+    );
+  }
+
+  @Patch(':id/role')
+  @Roles('admin')
+  setRole(
+    @Req() request: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateUserRoleSchema)) input: UpdateUserRole,
+  ) {
+    return this.users.setRole(request.currentUser!.id, id, input.role);
+  }
+
+  @Post('transfer-ownership')
+  @Roles('owner')
+  @HttpCode(200)
+  transferOwnership(
+    @Req() request: Request,
+    @Body(new ZodValidationPipe(transferOwnershipSchema))
+    input: TransferOwnership,
+  ) {
+    return this.users.transferOwnership(
+      request.currentUser!.id,
+      input.newOwnerId,
+    );
   }
 }

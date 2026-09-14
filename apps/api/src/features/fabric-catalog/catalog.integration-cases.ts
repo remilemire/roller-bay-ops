@@ -49,7 +49,7 @@ export async function testCatalog(
 
   try {
     await t.test(
-      'catalog reads require a session; only admins can mutate every resource',
+      'catalog reads require a session; admins and the owner can mutate every resource',
       async () => {
         for (const route of routes) {
           await request(server).get(`/api/fabric-catalog/${route}`).expect(401);
@@ -62,7 +62,7 @@ export async function testCatalog(
             .send({})
             .expect(401);
         }
-        for (const value of ['user', 'owner']) {
+        for (const value of ['user']) {
           await role(value);
           for (const route of routes) {
             await read(route).expect(200);
@@ -70,6 +70,12 @@ export async function testCatalog(
             await patch(`${route}/${randomUUID()}`, {}).expect(403);
             await remove(`${route}/${randomUUID()}`).expect(403);
           }
+        }
+        await role('owner');
+        for (const route of routes) {
+          await post(route, {}).expect(400);
+          await patch(`${route}/${randomUUID()}`, {}).expect(400);
+          await remove(`${route}/${randomUUID()}`).expect(404);
         }
         await role('admin');
         await request(server)

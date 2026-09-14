@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { testUserRoles } from '../users/users.integration-cases.js';
 import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
 import { FabricCatalogModule } from '../fabric-catalog/fabric-catalog.module.js';
 import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
@@ -48,6 +49,7 @@ test(
       MICROSOFT_CLIENT_SECRET: 'fixture',
       MICROSOFT_CALLBACK_URL: 'http://localhost:3001/api/auth/callback',
       AUTH_ALLOWED_DOMAIN: 'example.com',
+      BOOTSTRAP_OWNER_EMAIL: ' Owner@Example.COM ',
       AUTH_SESSION_SECRET: 'integration-test-secret-at-least-32-characters',
       AUTH_SESSION_TTL_SECONDS: 60,
     });
@@ -357,13 +359,6 @@ test(
             403,
           );
           await pool.query(
-            `UPDATE "${schema}".users SET role='owner' WHERE id=$1`,
-            [target.id],
-          );
-          await change({ isActive: false }, targetLogin.authenticated).expect(
-            403,
-          );
-          await pool.query(
             `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
             [target.id],
           );
@@ -448,6 +443,24 @@ test(
           profile = savedProfile;
         },
       );
+
+      const savedOwnershipProfile = profile;
+      await testUserRoles(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        config.WEB_ORIGIN,
+        (next) => {
+          profile = next;
+        },
+        signIn,
+        async () => {
+          await callback(await start()).expect(403);
+        },
+      );
+      profile = savedOwnershipProfile;
 
       await t.test(
         'absolute expiry survives resaves and stale session data is denied',

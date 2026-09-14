@@ -246,3 +246,25 @@ test('directory outages do not produce a user profile', async () => {
     /directory is unavailable/,
   );
 });
+
+test('bootstrap owner email uses the same normalization as user emails', () => {
+  assert.equal(
+    environmentSchema.parse({
+      ...settings,
+      BOOTSTRAP_OWNER_EMAIL: ' Owner@Example.COM ',
+    }).BOOTSTRAP_OWNER_EMAIL,
+    'owner@example.com',
+  );
+  assert.equal(
+    environmentSchema.parse({ ...settings, BOOTSTRAP_OWNER_EMAIL: '   ' })
+      .BOOTSTRAP_OWNER_EMAIL,
+    undefined,
+  );
+  assert.equal(
+    environmentSchema.safeParse({
+      ...settings,
+      BOOTSTRAP_OWNER_EMAIL: 'invalid',
+    }).success,
+    false,
+  );
+});

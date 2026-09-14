@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, before, mock, test } from 'node:test';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
@@ -30,6 +31,7 @@ before(async () => {
     providers: [
       UsersRepository,
       UsersService,
+      { provide: ConfigService, useValue: new ConfigService({}) },
       {
         provide: DatabaseService,
         useValue: { db: drizzle(pool) },

@@ -4,7 +4,7 @@ Roller Bay Ops tracks individual fabric stock items for a window covering compan
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [admin user activation](docs/authentication.md#user-activation).
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
 
 ## Get started
 
@@ -56,7 +56,7 @@ apps/
       auth/                     # Microsoft login, Redis sessions, access guard
         sessions/               # Browser-session module, service, repository
         oauth-transactions/     # Login-transaction module, service, repository
-      users/                    # User profiles, roles, activation, and persistence
+      users/                    # User profiles, activation, roles, and ownership
       fabric-catalog/           # Catalog namespace and shared behavior
         manufacturers/          # Manufacturer module and vertical slice
         materials/              # Material module and vertical slice
@@ -126,7 +126,7 @@ npm run format:check
 
 The default tests verify user persistence errors, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
 
-Microsoft authentication is implemented in the backend. A frontend login screen and credentialed API calls are still a separate step. Catalog writes require the admin role and catalog lists support pagination. Deployment remains future work.
+Microsoft authentication is implemented in the backend. A frontend login screen and credentialed API calls are still a separate step. Catalog writes allow admins and the owner and catalog lists support pagination. Deployment remains future work.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

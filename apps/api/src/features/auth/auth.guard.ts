@@ -1,3 +1,4 @@
+import { hasAnyRole } from '../../common/authorization/roles.js';
 import {
   ForbiddenException,
   Injectable,
@@ -56,7 +57,7 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (roles && !roles.includes(user.role))
+    if (roles && !hasAnyRole(user.role, roles))
       throw new ForbiddenException('Your role cannot perform this action.');
     return true;
   }

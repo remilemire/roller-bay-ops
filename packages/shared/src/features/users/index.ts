@@ -28,3 +28,24 @@ export const updateUserActivationSchema = z.strictObject({
 });
 
 export type UpdateUserActivation = z.infer<typeof updateUserActivationSchema>;
+
+export const updateUserRoleSchema = z.strictObject({
+  role: userRoleSchema.exclude(['owner']),
+});
+
+export type UpdateUserRole = z.infer<typeof updateUserRoleSchema>;
+
+export const transferOwnershipSchema = z.strictObject({
+  newOwnerId: z.uuid(),
+});
+
+export type TransferOwnership = z.infer<typeof transferOwnershipSchema>;
+
+export const ownershipTransferResultSchema = z.object({
+  previousOwner: userSchema,
+  newOwner: userSchema,
+});
+
+export type OwnershipTransferResult = z.infer<
+  typeof ownershipTransferResultSchema
+>;
