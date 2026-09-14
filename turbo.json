@@ -18,7 +18,9 @@
         "REDIS_URL",
         "PORT",
         "WEB_ORIGIN",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "AUTH_SESSION_SECRET",
+        "AUTH_SESSION_TTL_SECONDS"
       ]
     },
     "start": {
@@ -29,11 +31,18 @@
         "REDIS_URL",
         "PORT",
         "WEB_ORIGIN",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "AUTH_SESSION_SECRET",
+        "AUTH_SESSION_TTL_SECONDS"
       ]
     },
-    "typecheck": { "dependsOn": ["^build"] },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "lint": {},
-    "test": { "dependsOn": ["^build"], "outputs": [] }
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
   }
 }
