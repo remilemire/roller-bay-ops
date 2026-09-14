@@ -12,8 +12,8 @@ Tracking includes rolls, retained remnants, scrap, and fully consumed items. Rec
 
 | Concept          | Meaning and known attributes                                                                                                                                                                                                                       |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Color            | The company's identifier for a fabric type. It is closer to a catalog code than a literal visual color. Use the business term in the app.                                                                                                          |
-| Fabric catalog   | One entry per color, containing fabric thickness and material. Pricing is deferred and is not required for the current functionality.                                                                                                              |
+| Color            | The company's unique identifier for a fabric type, beneath manufacturer and material in the catalog hierarchy. It is closer to a catalog code than a literal visual color. Use the business term in the app.                                       |
+| Fabric catalog   | Organized as manufacturer → material → unique color, with fabric thickness recorded for each color. Pricing is deferred and is not required for the current functionality.                                                                         |
 | Stock item       | An individual roll or piece associated with a color. The same color can exist in different widths; width is not a single fixed attribute of the color.                                                                                             |
 | Received roll    | A physical roll listed on a purchase order with its color, width, and known length/yardage.                                                                                                                                                        |
 | Tube diameter    | A property of the individual roll, recorded after its first cut for subsequent length calculations. It remains unchanged for the rest of that roll's life. Use the outside diameter of the tube where the fabric begins; see the measurement note. |
@@ -22,6 +22,14 @@ Tracking includes rolls, retained remnants, scrap, and fully consumed items. Rec
 | Allocation       | A reservation of estimated fabric usage from specific stock items for a production order.                                                                                                                                                          |
 
 The unique identifier for a physical roll is separate from its color. Exact database table names and API shapes are not yet implemented.
+
+### Catalog table proposal — not yet approved
+
+If each material belongs to one manufacturer, represent the hierarchy with `manufacturers`, `fabric_materials`, and `fabric_colors`. A material references its manufacturer; a color references its material. The color code is unique across the catalog as currently described. Physical stock items reference the color and retain their own widths and dimensions.
+
+The manufacturer is then obtained through the material relationship, so a separate manufacturer field on each color would duplicate that relationship and allow conflicting values. Keep thickness on the color as currently specified. Whether it is actually shared by every color of a material can be revisited with a concrete catalog example.
+
+Confirm what the business means by material before approving this structure. A manufacturer-specific product line fits the stated hierarchy; a generic composition such as polyester may be shared across manufacturers and needs a different relationship. These table names and relationships remain recommendations, not implemented models.
 
 ## Operational workflow
 
@@ -83,7 +91,7 @@ These recommendations are distinct from the confirmed workflow above.
 
 | Feature                | Owns                                                                                                                                              |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fabric catalog         | Color identifiers, thickness, and material. Pricing is deferred.                                                                                  |
+| Fabric catalog         | Manufacturers, materials, unique color identifiers, and thickness. Pricing is deferred.                                                           |
 | Purchasing / receiving | Purchase-order details, receipts, and registration of incoming rolls through inventory operations.                                                |
 | Inventory              | Physical identities, widths/dimensions, locations, roll-specific tube diameters, balance history, lifecycle, and source-piece relationships.      |
 | Orders / allocation    | Production requirements, selected stock, reservations, and allocation details for the paper form.                                                 |
@@ -95,7 +103,7 @@ These are modules within the monorepo. Inventory owns stock balances; other feat
 
 The catalog and receiving workflow are now sufficiently described to begin a focused model design. Resolve the remaining field-level questions as they become relevant.
 
-1. **Catalog and receiving:** Model colors, individual stock items, purchase-order receipts, and locations. Build one receipt-entry and inventory-lookup workflow end to end, using the received length as its initial balance.
+1. **Catalog and receiving:** Model the manufacturer/material/color catalog, individual stock items, purchase-order receipts, and locations. Build one receipt-entry and inventory-lookup workflow end to end, using the received length as its initial balance.
 2. **Allocation and form:** Select individual items, record required amounts and planned usage, reserve stock, and establish how the paper form carries those selections to the cutters.
 3. **Completed-form entry:** Using the confirmed one-sided depth convention, implement roll-length calculations, consumed rolls, retained pieces, destinations, and reservation reconciliation. Validate calculations with representative real rolls before relying on them for allocation.
 4. **Cutting-plan assistance:** Add optimization once the actual order inputs and cutting constraints are known.
@@ -105,7 +113,7 @@ The catalog and receiving workflow are now sufficiently described to begin a foc
 - **Measurements:** Confirm the units and precision of radial depth, tube outside diameter, fabric thickness, width, and yardage. Define how retained pieces are measured.
 - **Allocation:** Clarify the distinction between amount required and estimated usage; confirm item identification and when allocation is entered relative to form preparation.
 - **Forms and orders:** Decide whether forms are generated by the app, who enters completed forms, how orders enter the system, and how partial completion, substitutions, or corrections are handled.
-- **Catalog and receiving:** Confirm color-code uniqueness, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
+- **Catalog and receiving:** Clarify whether material denotes a manufacturer-specific product line or a generic composition, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
 - **Availability:** Define which scraps are reusable and any batch, shade, defect, or orientation constraints that affect selection and cutting.
 
 The repository currently contains a technical notes example only. These fabric workflows are documented requirements and proposals, not implemented functionality.
