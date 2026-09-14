@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnvironment } from './config/environment.js';
 import { HealthModule } from './features/health/health.module.js';
-import { NotesModule } from './features/notes/notes.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AuthModule } from './features/auth/auth.module.js';
 
@@ -12,7 +11,6 @@ import { AuthModule } from './features/auth/auth.module.js';
     RedisModule,
     AuthModule,
     HealthModule,
-    NotesModule,
   ],
 })
 export class AppModule {}

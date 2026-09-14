@@ -2,7 +2,7 @@
 
 The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users receive role `user`; subsequent logins preserve their role and history. Administrators must keep Entra membership appropriate for employee access.
 
-The backend is implemented and tested. The frontend login screen is not yet implemented, and the demo notes UI does not yet send session credentials. Live Microsoft authentication requires your app registration and has not yet been exercised.
+The backend is implemented and tested. The frontend is a placeholder; the login screen and credentialed API calls are not yet implemented. Live Microsoft authentication requires your app registration and has not yet been exercised.
 
 ## Microsoft registration
 
@@ -64,7 +64,7 @@ Neither module imports the other. The auth controller coordinates them; services
 
 ## Tests
 
-`npm test` runs provider fixtures, configuration and email checks, and the notes controller tests. The OIDC tests use the real validation library with generated RSA-signed tokens; they reject invalid signatures, issuers, audiences, expiry, nonce, and state.
+`npm test` runs provider fixtures, configuration and email checks, and user persistence error tests. The OIDC tests use the real validation library with generated RSA-signed tokens; they reject invalid signatures, issuers, audiences, expiry, nonce, and state.
 
 Run the real-service auth suite against local services after migrations:
 
@@ -74,7 +74,7 @@ TEST_REDIS_URL=redis://localhost:6380 \
 npm run test:integration
 ```
 
-This suite creates a randomly named PostgreSQL schema containing copies of the migrated users/notes table structures, then removes that schema. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
+This suite creates a randomly named PostgreSQL schema containing a copy of the migrated users table structure, then removes that schema. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
 
 ## Current limits
 

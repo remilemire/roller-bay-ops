@@ -4,7 +4,7 @@ Roller Bay Ops tracks individual fabric stock items for a window covering compan
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. The **notes** feature is a technical example only; the fabric workflows are not implemented yet.
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles and Microsoft authentication are implemented in the backend. The frontend is a placeholder; fabric workflows are not implemented yet.
 
 ## Get started
 
@@ -25,11 +25,11 @@ Before `npm run dev`, fill in the Microsoft and session settings in `apps/api/.e
 
 - Frontend: <http://localhost:3000>
 - API liveness: <http://localhost:3001/api/health>
-- Example feature (sign-in required): `GET /api/notes` and `POST /api/notes` with `{"title":"First note"}`
+- Current user (sign-in required): `GET /api/auth/me`
 - PostgreSQL: `localhost:5434` (the container uses port 5432 internally)
 - Redis: `localhost:6380` (the container uses port 6379 internally)
 
-Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use authenticated notes API requests to exercise the database connection.
+Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use an authenticated `GET /api/auth/me` request to exercise the database connection.
 
 `npm run dev` builds shared contracts before starting the applications. Turborepo watches the dependency graph and rebuilds shared contracts and restarts dependent development tasks when they change. Stop the development processes with Ctrl+C; stop the backing services separately with `npm run services:down`. PostgreSQL and Redis data stay in separate Compose volumes.
 
@@ -51,14 +51,12 @@ The `session-redis` Compose service uses append-only persistence with a sync eve
 apps/
   web/
     src/app/                    # Next.js route entries, layouts, global styles
-    src/features/notes/         # Feature UI and HTTP calls
   api/
     src/features/
       auth/                     # Microsoft login, Redis sessions, access guard
         sessions/               # Browser-session module, service, repository
         oauth-transactions/     # Login-transaction module, service, repository
       users/                    # User profiles, roles, and persistence
-      notes/                    # Controller, service, repository, table, tests
       health/                   # Liveness endpoint
     src/database/               # Connection pool and lifecycle only
     src/redis/                  # Redis connection and lifecycle only
@@ -67,7 +65,6 @@ apps/
     drizzle/                    # Generated SQL migrations and metadata
 packages/
   shared/
-    src/features/notes/         # Zod request/response schemas and inferred types
     src/features/users/         # Roles, normalized email, public user schema
     src/features/auth/          # Current-user response contract
 ```
@@ -83,7 +80,7 @@ First agree on the workflow, business rules, and feature ownership. Then impleme
 
 Controllers handle HTTP and validate inputs with the Zod pipe. Services own business behavior and map database rows into public responses. Repositories own database queries. `src/database` owns the shared connection pool, not feature models.
 
-Both applications import contracts from `@roller-bay/shared/notes`. The shared package builds to JavaScript and declaration files so Nest can execute its schemas and Next can bundle them. Its API is limited to explicit feature exports; avoid importing another workspace's source files directly.
+Import shared contracts through feature exports such as `@roller-bay/shared/users` and `@roller-bay/shared/auth`. The shared package builds to JavaScript and declaration files so Nest can execute its schemas and Next can bundle them. Its API is limited to explicit feature exports; avoid importing another workspace's source files directly.
 
 **Database models and API contracts are different boundaries.** Drizzle infers database row types; Zod infers public request/response types and validates runtime input. Do not export Drizzle tables, database credentials, Nest classes, or database row types to the browser. For example, `createdAt` is a `Date` in the database layer and an ISO string in the JSON contract. Avoid defining duplicate hand-written interfaces for a Zod schema.
 
@@ -110,7 +107,7 @@ Both applications import contracts from `@roller-bay/shared/notes`. The shared p
 | `npm run db:migrate`                        | Apply pending migrations                                       |
 | `npm run db:studio`                         | Open Drizzle Studio for the configured database                |
 
-Commit generated SQL and the `drizzle/meta` files together. Migrations run explicitly, not automatically at API startup. Database commands load `apps/api/.env`, because npm runs them from the API workspace. The web application reads `apps/web/.env.local`; `NEXT_PUBLIC_API_URL` is public and is embedded at build time.
+The migration history starts with a single initial migration for users and roles. Commit generated SQL and the `drizzle/meta` files together. Migrations run explicitly, not automatically at API startup. Database commands load `apps/api/.env`, because npm runs them from the API workspace. The web application reads `apps/web/.env.local`; `NEXT_PUBLIC_API_URL` is public and is embedded at build time.
 
 To verify the starter:
 
@@ -122,9 +119,9 @@ npm run build
 npm run format:check
 ```
 
-The default tests verify notes contracts, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
+The default tests verify user persistence errors, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
 
-Microsoft authentication is implemented in the backend. Notes require an authenticated session; a frontend login screen and credentialed API calls are still a separate step, so the existing demo UI is not yet integrated with auth. Role-specific permissions, pagination, and deployment remain future work.
+Microsoft authentication is implemented in the backend. A frontend login screen and credentialed API calls are still a separate step. Role-specific permissions, pagination, and deployment remain future work.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

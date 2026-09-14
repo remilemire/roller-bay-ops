@@ -12,7 +12,6 @@ import { environmentSchema } from '../../config/environment.js';
 import { RedisService } from '../../redis/redis.service.js';
 import { UsersService } from '../users/users.service.js';
 import { HealthModule } from '../health/health.module.js';
-import { NotesModule } from '../notes/notes.module.js';
 import { AuthModule } from './auth.module.js';
 import { MicrosoftService } from './microsoft.service.js';
 import { SessionsService } from './sessions/sessions.service.js';
@@ -64,7 +63,6 @@ test(
         }),
         AuthModule,
         HealthModule,
-        NotesModule,
       ],
     })
       .overrideProvider(MicrosoftService)
@@ -143,19 +141,15 @@ test(
       await pool.query(
         `ALTER INDEX "${schema}".users_lower_idx RENAME TO users_email_unique`,
       );
-      await pool.query(
-        `CREATE TABLE "${schema}".notes (LIKE public.notes INCLUDING ALL)`,
-      );
       await app.init();
 
       await t.test(
-        'liveness stays public, notes require auth, and rejected origins cannot mutate',
+        'liveness stays public, profiles require auth, and untrusted origins are rejected',
         async () => {
           await request(app.getHttpServer()).get('/api/health').expect(200);
-          await request(app.getHttpServer()).get('/api/notes').expect(401);
+          await request(app.getHttpServer()).get('/api/auth/me').expect(401);
           await request(app.getHttpServer())
-            .post('/api/notes')
-            .send({ title: 'blocked' })
+            .post('/api/auth/logout')
             .expect(403);
           await request(app.getHttpServer())
             .post('/api/auth/logout')
@@ -201,10 +195,6 @@ test(
             SESSION_PREFIX + sid(authenticated),
           );
           assert.ok(ttl > 0 && ttl <= 60);
-          await request(app.getHttpServer())
-            .get('/api/notes')
-            .set('Cookie', authenticated)
-            .expect(200);
         },
       );
 

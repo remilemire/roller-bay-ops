@@ -116,4 +116,4 @@ The catalog and receiving workflow are now sufficiently described to begin a foc
 - **Catalog and receiving:** Clarify whether material denotes a manufacturer-specific product line or a generic composition, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
 - **Availability:** Define which scraps are reusable and any batch, shade, defect, or orientation constraints that affect selection and cutting.
 
-The repository currently contains a technical notes example only. These fabric workflows are documented requirements and proposals, not implemented functionality.
+The repository currently contains user profiles and Microsoft authentication in the backend, with a placeholder frontend. These fabric workflows are documented requirements and proposals, not implemented functionality.

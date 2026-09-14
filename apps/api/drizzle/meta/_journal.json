@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1789344856674,
-      "tag": "0000_initial_notes",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1789372160261,
-      "tag": "0001_add_users",
+      "when": 1789380175444,
+      "tag": "0000_initial",
       "breakpoints": true
     }
   ]

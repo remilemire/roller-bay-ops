@@ -8,10 +8,6 @@
       "types": "./dist/features/auth/index.d.ts",
       "default": "./dist/features/auth/index.js"
     },
-    "./notes": {
-      "types": "./dist/features/notes/index.d.ts",
-      "default": "./dist/features/notes/index.js"
-    },
     "./users": {
       "types": "./dist/features/users/index.d.ts",
       "default": "./dist/features/users/index.js"

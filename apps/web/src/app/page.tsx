@@ -1,5 +1,8 @@
-import { NotesScreen } from '@/features/notes/notes-screen';
-
 export default function HomePage() {
-  return <NotesScreen />;
+  return (
+    <main>
+      <h1>Roller Bay Ops</h1>
+      <p className="intro">Fabric inventory and production tracking.</p>
+    </main>
+  );
 }

@@ -52,7 +52,7 @@ Inside auth, `sessions/` and `oauth-transactions/` are sibling Nest modules. Eac
 | `GET /api/auth/me`       | Return the current user or 401.                                                                                             |
 | `POST /api/auth/logout`  | Destroy the current app session and clear its cookie.                                                                       |
 
-Use a global session guard. Explicitly mark login, callback, and process liveness public; protect the existing notes example as well as future business endpoints. Allow credentialed CORS only from `WEB_ORIGIN`. Require that exact Origin for state-changing browser requests, including logout; reject missing/untrusted origins. GET business routes must not mutate business state. OAuth callback uses its dedicated state/nonce/PKCE protections.
+Use a global session guard. Explicitly mark login, callback, and process liveness public; protect current-user and future business endpoints. Allow credentialed CORS only from `WEB_ORIGIN`. Require that exact Origin for state-changing browser requests, including logout; reject missing/untrusted origins. GET business routes must not mutate business state. OAuth callback uses its dedicated state/nonce/PKCE protections.
 
 Configuration includes `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_CALLBACK_URL`, `AUTH_ALLOWED_DOMAIN`, `AUTH_SESSION_SECRET`, and `AUTH_SESSION_TTL_SECONDS`, alongside `REDIS_URL` and `WEB_ORIGIN`. Validate configuration on startup and document the single-tenant Entra registration and delegated permission setup. Actual tenant, domain, and credentials are still needed for a live sign-in test.
 
@@ -62,4 +62,4 @@ Test rejected tenant/domain/guest identities, invalid signatures and claims, mis
 
 Directory profile and eligibility checks happen at sign-in. An Entra account change or disablement does not automatically revoke an already issued local session; it can last until logout or the seven-day deadline. Immediate offboarding would require an explicit session-revocation or directory-revalidation design before deployment. Loading the app user on every request does make local user deletion and role changes take effect immediately.
 
-Implemented: shared email normalization and auth contracts, user synchronization, Redis session integration, Microsoft callback flow, route protection, and automated tests. The existing users migration was applied with permission; authentication required no additional schema changes.
+Implemented: shared email normalization and auth contracts, user synchronization, Redis session integration, Microsoft callback flow, route protection, and automated tests. The migration history is reset to a single initial users migration; authentication requires no additional PostgreSQL tables.
