@@ -138,6 +138,11 @@ test(
       await pool.query(
         `CREATE TABLE "${schema}".users (LIKE public.users INCLUDING ALL)`,
       );
+      // LIKE copies definitions but generates new index names. Match the
+      // production name because the repository classifies this constraint.
+      await pool.query(
+        `ALTER INDEX "${schema}".users_lower_idx RENAME TO users_email_unique`,
+      );
       await pool.query(
         `CREATE TABLE "${schema}".notes (LIKE public.notes INCLUDING ALL)`,
       );

@@ -3,36 +3,24 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { emailSchema, userSchema } from '@roller-bay/shared/users';
-import { z } from 'zod';
+import { userSchema } from '@roller-bay/shared/users';
 import { UsersRepository } from './users.repository.js';
-
-export const microsoftProfileSchema = z.object({
-  microsoftSubjectId: z.string().min(1).max(255),
-  name: z.string().trim().min(1).max(120),
-  email: emailSchema,
-});
-
-function isUniqueViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  if ('code' in error && error.code === '23505') return true;
-  return (
-    'cause' in error && error.cause !== error && isUniqueViolation(error.cause)
-  );
-}
+import {
+  microsoftProfileSchema,
+  type MicrosoftProfileInput,
+} from './microsoft-profile.schema.js';
+import { UserEmailConflictError } from './users.errors.js';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly repository: UsersRepository) {}
 
-  async synchronizeMicrosoftProfile(
-    input: z.input<typeof microsoftProfileSchema>,
-  ) {
+  async synchronizeMicrosoftProfile(input: MicrosoftProfileInput) {
     const profile = microsoftProfileSchema.parse(input);
     try {
       return this.toPublic(await this.repository.synchronize(profile));
     } catch (error) {
-      if (isUniqueViolation(error))
+      if (error instanceof UserEmailConflictError)
         throw new ConflictException(
           'Account profile conflict. Contact an administrator.',
         );
