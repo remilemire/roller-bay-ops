@@ -4,7 +4,7 @@ Roller Bay Ops tracks individual fabric stock items for a window covering compan
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md).
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [admin user activation](docs/authentication.md#user-activation).
 
 ## Get started
 
@@ -56,7 +56,7 @@ apps/
       auth/                     # Microsoft login, Redis sessions, access guard
         sessions/               # Browser-session module, service, repository
         oauth-transactions/     # Login-transaction module, service, repository
-      users/                    # User profiles, roles, and persistence
+      users/                    # User profiles, roles, activation, and persistence
       fabric-catalog/           # Catalog namespace and shared behavior
         manufacturers/          # Manufacturer module and vertical slice
         materials/              # Material module and vertical slice

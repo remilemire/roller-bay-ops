@@ -16,8 +16,15 @@ export const userSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
   role: userRoleSchema,
+  isActive: z.boolean(),
   email: emailSchema,
   createdAt: z.iso.datetime(),
 });
 
 export type User = z.infer<typeof userSchema>;
+
+export const updateUserActivationSchema = z.strictObject({
+  isActive: z.boolean(),
+});
+
+export type UpdateUserActivation = z.infer<typeof updateUserActivationSchema>;

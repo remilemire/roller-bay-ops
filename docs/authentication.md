@@ -1,6 +1,6 @@
 # Authentication setup
 
-The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users receive role `user`; subsequent logins preserve their role and history. Administrators must keep Entra membership appropriate for employee access.
+The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users receive role `user` and are active by default; subsequent logins preserve their role, activation status, and history. Administrators must keep Entra membership appropriate for employee access.
 
 The backend is implemented and tested. The frontend is a placeholder; the login screen and credentialed API calls are not yet implemented. Live Microsoft authentication requires your app registration and has not yet been exercised.
 
@@ -44,9 +44,19 @@ Run `npm run services:up`, apply the database migrations with `npm run db:migrat
 
 Navigate the browser to `http://localhost:3001/api/auth/login` to start login. Microsoft returns to the configured callback; after validation, the API redirects to `WEB_ORIGIN`. Failures return a generic HTTP error without provider tokens or profile details. There is no arbitrary return-URL parameter.
 
-`GET /api/auth/me` returns `{ id, name, role, email, createdAt }`. `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
+`GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt }`. `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
 
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
+
+## User activation
+
+Admins can call `PATCH /api/users/:id/activation` with `{ "isActive": false }` to deactivate an existing user, or `{ "isActive": true }` to reactivate them. The request requires a valid active admin session and the configured Origin header. Other roles, including owner, cannot change activation. The body accepts only a boolean `isActive`; the endpoint cannot change roles or profile fields.
+
+A successful update returns 200 with the public user profile, including `isActive`. Repeating the current state also succeeds. Invalid input returns 400, missing users return 404, and unauthorized roles return 403.
+
+Deactivated users receive 403 when completing Microsoft sign-in, before an authenticated session is created. Signing in never changes their activation status. The global guard also checks activation on every protected request, so existing sessions lose access on their next request. Logout remains available. Reactivation permits sign-in again; an existing unexpired session can also resume because the activation check is live, rather than permanent session revocation.
+
+The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DEFAULT true`, preserving access for existing users. Apply pending migrations before running the updated backend.
 
 ## Email and user identity
 
@@ -66,7 +76,7 @@ Neither module imports the other. The auth controller coordinates them; services
 
 `npm test` runs provider fixtures, configuration and email checks, and user persistence error tests. The OIDC tests use the real validation library with generated RSA-signed tokens; they reject invalid signatures, issuers, audiences, expiry, nonce, and state.
 
-Run the real-service auth suite against local services after migrations:
+Run the real-service auth suite against local services after applying pending migrations:
 
 ```sh
 TEST_DATABASE_URL=postgresql://roller_bay:roller_bay_local@localhost:5434/roller_bay_ops \
@@ -74,11 +84,11 @@ TEST_REDIS_URL=redis://localhost:6380 \
 npm run test:integration
 ```
 
-This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
+This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, activation permissions, blocked sign-in and existing-session access for inactive users, reactivation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
 
 ## Current limits
 
-Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. Immediate offboarding requires a session revocation or revalidation feature. Local user deletion and role updates take effect on the next protected request. Protected endpoints can require explicit roles; there is no implicit role hierarchy.
+Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. An admin can deactivate the local user to deny access on the next protected request. Local user deletion and role updates also take effect on the next protected request. Protected endpoints can require explicit roles; there is no implicit role hierarchy.
 
 Keep the tenant and client registration stable: the stored Microsoft subject is scoped to them. Changing registrations requires an explicit identity transition. Redis session data is required for access; there is no memory fallback during an outage.
 

@@ -1,9 +1,11 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { userSchema } from '@roller-bay/shared/users';
+import { userSchema, type User } from '@roller-bay/shared/users';
 import { UsersRepository } from './users.repository.js';
 import {
   microsoftProfileSchema,
@@ -17,8 +19,9 @@ export class UsersService {
 
   async synchronizeMicrosoftProfile(input: MicrosoftProfileInput) {
     const profile = microsoftProfileSchema.parse(input);
+    let user: User;
     try {
-      return this.toPublic(await this.repository.synchronize(profile));
+      user = this.toPublic(await this.repository.synchronize(profile));
     } catch (error) {
       if (error instanceof UserEmailConflictError)
         throw new ConflictException(
@@ -26,6 +29,9 @@ export class UsersService {
         );
       throw new ServiceUnavailableException('User storage is unavailable.');
     }
+    if (!user.isActive)
+      throw new ForbiddenException('Your account is deactivated.');
+    return user;
   }
 
   async findById(id: string) {
@@ -35,6 +41,18 @@ export class UsersService {
     } catch {
       throw new ServiceUnavailableException('User storage is unavailable.');
     }
+  }
+
+  async setActivation(id: string, isActive: boolean) {
+    let user: User | undefined;
+    try {
+      const updated = await this.repository.setActivation(id, isActive);
+      user = updated ? this.toPublic(updated) : undefined;
+    } catch {
+      throw new ServiceUnavailableException('User storage is unavailable.');
+    }
+    if (!user) throw new NotFoundException('User not found.');
+    return user;
   }
 
   private toPublic(user: Awaited<ReturnType<UsersRepository['synchronize']>>) {

@@ -1,6 +1,7 @@
 import { userRoles } from '@roller-bay/shared/users';
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   pgEnum,
   pgTable,
   text,
@@ -18,6 +19,7 @@ export const users = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     name: varchar('name', { length: 120 }).notNull(),
     role: userRoleEnum('role').default('user').notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
     email: varchar('email', { length: 254 }).notNull(),
     microsoftSubjectId: text('microsoft_subject_id').notNull().unique(),
     createdAt: timestamp('created_at', { withTimezone: true })

@@ -49,6 +49,8 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sign in required.');
     const user = await this.users.findById(auth.userId);
     if (!user) throw new UnauthorizedException('Sign in required.');
+    if (!user.isActive)
+      throw new ForbiddenException('Your account is deactivated.');
     request.currentUser = user;
     const roles = this.reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [
       context.getHandler(),

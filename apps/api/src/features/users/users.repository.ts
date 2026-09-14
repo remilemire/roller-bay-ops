@@ -65,4 +65,13 @@ export class UsersRepository {
       throw new UserEmailConflictError({ cause: error });
     }
   }
+
+  async setActivation(id: string, isActive: boolean) {
+    const [user] = await this.database.db
+      .update(users)
+      .set({ isActive })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
 }

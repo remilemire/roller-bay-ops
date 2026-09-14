@@ -184,6 +184,7 @@ test(
           userId = user.id;
           assert.equal(user.email, 'employee@example.com');
           assert.equal(user.role, 'user');
+          assert.equal(user.isActive, true);
           assert.equal(me.body.microsoftSubjectId, undefined);
           assert.equal(me.headers['cache-control'], 'no-store');
           assert.equal(me.headers['access-control-allow-credentials'], 'true');
@@ -320,6 +321,131 @@ test(
           assert.equal(new Set(results.map((user) => user.id)).size, 1);
           assert.equal(results[0]?.email, 'concurrent@example.com');
           assert.equal(results[0]?.role, 'user');
+        },
+      );
+
+      await t.test(
+        'admins control activation; inactive users cannot finish login or use existing sessions',
+        async () => {
+          const savedProfile = profile;
+          profile = {
+            microsoftSubjectId: randomUUID(),
+            name: 'Activation test',
+            email: 'activation@example.com',
+          };
+          const targetLogin = await signIn();
+          const target = (
+            await request(app.getHttpServer())
+              .get('/api/auth/me')
+              .set('Cookie', targetLogin.authenticated)
+              .expect(200)
+          ).body;
+          assert.equal(target.isActive, true);
+          const path = `/api/users/${target.id}/activation`;
+          const change = (body: object, cookie = authenticated, route = path) =>
+            request(app.getHttpServer())
+              .patch(route)
+              .set('Cookie', cookie)
+              .set('Origin', config.WEB_ORIGIN)
+              .send(body);
+          await request(app.getHttpServer())
+            .patch(path)
+            .set('Origin', config.WEB_ORIGIN)
+            .send({ isActive: false })
+            .expect(401);
+          await change({ isActive: false }, targetLogin.authenticated).expect(
+            403,
+          );
+          await pool.query(
+            `UPDATE "${schema}".users SET role='owner' WHERE id=$1`,
+            [target.id],
+          );
+          await change({ isActive: false }, targetLogin.authenticated).expect(
+            403,
+          );
+          await pool.query(
+            `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
+            [target.id],
+          );
+          await request(app.getHttpServer())
+            .patch(path)
+            .set('Cookie', authenticated)
+            .send({ isActive: false })
+            .expect(403);
+          await request(app.getHttpServer())
+            .patch(path)
+            .set('Cookie', authenticated)
+            .set('Origin', 'https://untrusted.example')
+            .send({ isActive: false })
+            .expect(403);
+          for (const body of [
+            {},
+            { isActive: 'false' },
+            { isActive: 0 },
+            { isActive: null },
+            { isActive: false, role: 'owner' },
+          ])
+            await change(body).expect(400);
+          await change(
+            { isActive: false },
+            authenticated,
+            '/api/users/not-a-uuid/activation',
+          ).expect(400);
+          await change(
+            { isActive: false },
+            authenticated,
+            `/api/users/${randomUUID()}/activation`,
+          ).expect(404);
+
+          const pendingLogin = await start();
+          const disabled = (await change({ isActive: false }).expect(200)).body;
+          assert.equal(disabled.id, target.id);
+          assert.equal(disabled.isActive, false);
+          assert.equal(disabled.role, 'admin');
+          assert.equal(disabled.microsoftSubjectId, undefined);
+          await change({ isActive: false }).expect(200);
+          await request(app.getHttpServer())
+            .get('/api/auth/me')
+            .set('Cookie', targetLogin.authenticated)
+            .expect(403);
+          await request(app.getHttpServer())
+            .get('/api/fabric-catalog/colors')
+            .set('Cookie', targetLogin.authenticated)
+            .expect(403);
+          await change({ isActive: true }, targetLogin.authenticated).expect(
+            403,
+          );
+          await callback(pendingLogin).expect(403);
+          const rejectedSession = JSON.parse(
+            (await redis.client.get(
+              SESSION_PREFIX + sid(pendingLogin.cookie),
+            ))!,
+          );
+          assert.equal(rejectedSession.auth, undefined);
+          await callback(pendingLogin).expect(401);
+          const anotherLogin = await start();
+          await callback(anotherLogin).expect(403);
+          assert.equal(
+            (await app.get(UsersService).findById(target.id))?.isActive,
+            false,
+          );
+          await request(app.getHttpServer())
+            .get('/api/auth/me')
+            .set('Cookie', anotherLogin.cookie)
+            .expect(401);
+
+          const enabled = (await change({ isActive: true }).expect(200)).body;
+          assert.equal(enabled.isActive, true);
+          assert.equal(enabled.createdAt, target.createdAt);
+          await change({ isActive: true }).expect(200);
+          const newLogin = await signIn();
+          const me = await request(app.getHttpServer())
+            .get('/api/auth/me')
+            .set('Cookie', newLogin.authenticated)
+            .expect(200);
+          assert.equal(me.body.id, target.id);
+          assert.equal(me.body.isActive, true);
+          profile = savedProfile;
         },
       );
 
