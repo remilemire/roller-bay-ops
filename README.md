@@ -57,7 +57,7 @@ apps/
         sessions/               # Browser-session module, service, repository
         oauth-transactions/     # Login-transaction module, service, repository
       users/                    # User profiles, activation, roles, and ownership
-      fabric-catalog/           # Catalog namespace and shared behavior
+      fabric-catalog/           # Groups catalog modules and shared behavior
         manufacturers/          # Manufacturer module and vertical slice
         materials/              # Material module and vertical slice
         colors/                 # Color module and vertical slice
