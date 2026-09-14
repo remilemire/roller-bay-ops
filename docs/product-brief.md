@@ -21,15 +21,15 @@ Tracking includes rolls, retained remnants, scrap, and fully consumed items. Rec
 | Production order | The work being allocated and cut, identified by an order number and accompanied by a paper form.                                                                                                                                                   |
 | Allocation       | A reservation of estimated fabric usage from specific stock items for a production order.                                                                                                                                                          |
 
-The unique identifier for a physical roll is separate from its color. Exact database table names and API shapes are not yet implemented.
+The unique identifier for a physical roll is separate from its color. The catalog tables and API are implemented; physical stock models are still pending.
 
-### Catalog table proposal — not yet approved
+### Catalog model
 
-If each material belongs to one manufacturer, represent the hierarchy with `manufacturers`, `fabric_materials`, and `fabric_colors`. A material references its manufacturer; a color references its material. The color code is unique across the catalog as currently described. Physical stock items reference the color and retain their own widths and dimensions.
+Each material belongs to one manufacturer. The implemented hierarchy uses `manufacturers`, `fabric_materials`, and `fabric_colors`. A material references its manufacturer; a color references its material. The color code is unique across the catalog as currently described. Physical stock items reference the color and retain their own widths and dimensions.
 
 The manufacturer is then obtained through the material relationship, so a separate manufacturer field on each color would duplicate that relationship and allow conflicting values. Keep thickness on the color as currently specified. Whether it is actually shared by every color of a material can be revisited with a concrete catalog example.
 
-Confirm what the business means by material before approving this structure. A manufacturer-specific product line fits the stated hierarchy; a generic composition such as polyester may be shared across manufacturers and needs a different relationship. These table names and relationships remain recommendations, not implemented models.
+The implemented model treats materials as manufacturer-specific entries. A generic composition such as polyester may be shared across manufacturers; if the business needs that distinction, model it separately. See the [catalog API](fabric-catalog.md) for contracts and access rules.
 
 ## Operational workflow
 
@@ -116,4 +116,4 @@ The catalog and receiving workflow are now sufficiently described to begin a foc
 - **Catalog and receiving:** Clarify whether material denotes a manufacturer-specific product line or a generic composition, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
 - **Availability:** Define which scraps are reusable and any batch, shade, defect, or orientation constraints that affect selection and cutting.
 
-The repository currently contains user profiles and Microsoft authentication in the backend, with a placeholder frontend. These fabric workflows are documented requirements and proposals, not implemented functionality.
+The repository currently contains user profiles, Microsoft authentication, and catalog CRUD in the backend, with a placeholder frontend. Stock, receiving, allocation, and cutting workflows remain documented requirements and proposals.

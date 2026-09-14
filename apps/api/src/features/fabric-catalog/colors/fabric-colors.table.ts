@@ -8,7 +8,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { fabricMaterials } from './fabric-materials.table.js';
+import { fabricMaterials } from '../materials/fabric-materials.table.js';
 
 export const fabricColors = pgTable(
   'fabric_colors',

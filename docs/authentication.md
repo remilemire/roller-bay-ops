@@ -74,10 +74,12 @@ TEST_REDIS_URL=redis://localhost:6380 \
 npm run test:integration
 ```
 
-This suite creates a randomly named PostgreSQL schema containing a copy of the migrated users table structure, then removes that schema. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
+This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
 
 ## Current limits
 
-Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. Immediate offboarding requires a session revocation or revalidation feature. Local user deletion and role updates take effect on the next protected request. Role-specific business permissions are not implemented yet.
+Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. Immediate offboarding requires a session revocation or revalidation feature. Local user deletion and role updates take effect on the next protected request. Protected endpoints can require explicit roles; there is no implicit role hierarchy.
 
 Keep the tenant and client registration stable: the stored Microsoft subject is scoped to them. Changing registrations requires an explicit identity transition. Redis session data is required for access; there is no memory fallback during an outage.
+
+Catalog reads allow all signed-in roles; writes require exactly the `admin` role. The global guard checks role metadata after loading the current user. See [catalog API permissions](fabric-catalog.md).

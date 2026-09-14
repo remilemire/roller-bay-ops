@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
+import { FabricCatalogModule } from '../fabric-catalog/fabric-catalog.module.js';
+import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { test } from 'node:test';
@@ -63,6 +66,7 @@ test(
         }),
         AuthModule,
         HealthModule,
+        FabricCatalogModule,
       ],
     })
       .overrideProvider(MicrosoftService)
@@ -132,15 +136,7 @@ test(
     }
 
     try {
-      await pool.query(`CREATE SCHEMA "${schema}"`);
-      await pool.query(
-        `CREATE TABLE "${schema}".users (LIKE public.users INCLUDING ALL)`,
-      );
-      // LIKE copies definitions but generates new index names. Match the
-      // production name because the repository classifies this constraint.
-      await pool.query(
-        `ALTER INDEX "${schema}".users_lower_idx RENAME TO users_email_unique`,
-      );
+      await copyApplicationTables(pool, schema);
       await app.init();
 
       await t.test(
@@ -196,6 +192,16 @@ test(
           );
           assert.ok(ttl > 0 && ttl <= 60);
         },
+      );
+
+      await testCatalog(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
       );
 
       await t.test(

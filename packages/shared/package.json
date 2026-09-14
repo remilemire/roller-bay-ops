@@ -11,6 +11,10 @@
     "./users": {
       "types": "./dist/features/users/index.d.ts",
       "default": "./dist/features/users/index.js"
+    },
+    "./fabric-catalog": {
+      "types": "./dist/features/fabric-catalog/index.d.ts",
+      "default": "./dist/features/fabric-catalog/index.js"
     }
   },
   "files": [
