@@ -1,6 +1,10 @@
 # Roller Bay Ops
 
-A TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. The small **notes** feature demonstrates a complete vertical slice: form → validated HTTP request → service → Drizzle → PostgreSQL → validated response.
+Roller Bay Ops tracks individual fabric stock items for a window covering company. It connects incoming stock, shelf locations, order allocations, and measured stock remaining after cutting.
+
+See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
+
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. The **notes** feature is a technical example only; the fabric workflows are not implemented yet.
 
 ## Get started
 
@@ -47,6 +51,8 @@ packages/
 ```
 
 ## Adding a feature
+
+First agree on the workflow, business rules, and feature ownership. Then implement a small use case across the layers below, rather than designing every model or endpoint up front.
 
 1. Define its public request and response schemas under `packages/shared/src/features/<feature>/`. Infer TypeScript types with `z.infer` and add a feature subpath to the shared package's `exports`.
 2. Create a Nest module under `apps/api/src/features/<feature>/` and register it in `AppModule`. Keep controllers, business rules, database queries, tables, and tests together inside that feature.
