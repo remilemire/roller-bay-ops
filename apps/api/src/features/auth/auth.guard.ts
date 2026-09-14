@@ -1,0 +1,53 @@
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
+import { IS_PUBLIC } from '../../common/decorators/public.decorator.js';
+import type { Environment } from '../../config/environment.js';
+import { UsersService } from '../users/users.service.js';
+import { SessionsService } from './sessions.service.js';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly config: ConfigService<Environment, true>,
+    private readonly users: UsersService,
+    private readonly sessions: SessionsService,
+  ) {}
+
+  async canActivate(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest<Request>();
+    if (
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
+      request.get('origin') !== this.config.get('WEB_ORIGIN', { infer: true })
+    ) {
+      throw new ForbiddenException('Untrusted request origin.');
+    }
+    if (
+      this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    )
+      return true;
+    this.sessions.assertAvailable();
+    const auth = request.session?.auth;
+    if (
+      !auth ||
+      !Number.isFinite(auth.expiresAt) ||
+      auth.expiresAt <= Date.now()
+    )
+      throw new UnauthorizedException('Sign in required.');
+    const user = await this.users.findById(auth.userId);
+    if (!user) throw new UnauthorizedException('Sign in required.');
+    request.currentUser = user;
+    return true;
+  }
+}

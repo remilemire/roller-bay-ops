@@ -21,27 +21,29 @@ npm run db:migrate
 npm run dev
 ```
 
+Before `npm run dev`, fill in the Microsoft and session settings in `apps/api/.env` using the [authentication setup](docs/authentication.md). Required values are intentionally blank in the example. API startup rejects incomplete configuration.
+
 - Frontend: <http://localhost:3000>
 - API liveness: <http://localhost:3001/api/health>
-- Example feature: `GET /api/notes` and `POST /api/notes` with `{"title":"First note"}`
+- Example feature (sign-in required): `GET /api/notes` and `POST /api/notes` with `{"title":"First note"}`
 - PostgreSQL: `localhost:5434` (the container uses port 5432 internally)
 - Redis: `localhost:6380` (the container uses port 6379 internally)
 
-Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use the notes screen to exercise the database connection.
+Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use authenticated notes API requests to exercise the database connection.
 
 `npm run dev` builds shared contracts before starting the applications. Turborepo watches the dependency graph and rebuilds shared contracts and restarts dependent development tasks when they change. Stop the development processes with Ctrl+C; stop the backing services separately with `npm run services:down`. PostgreSQL and Redis data stay in separate Compose volumes.
 
 ## Redis
 
-Redis is the planned session store. This step adds the service and connection lifecycle; session middleware, cookies, expiry rules, and Microsoft authentication are not implemented yet.
+Redis stores application sessions and short-lived Microsoft login transactions. Session lifetime defaults to seven days, without extending on activity.
 
 See the [authentication plan](docs/auth-plan.md) for Microsoft sign-in, Redis sessions, and email handling decisions.
 
 Set `REDIS_URL=redis://localhost:6380` in `apps/api/.env`. The API connects before it starts listening and fails startup if the initial connection fails. After a successful connection, it retries interruptions with backoff. Commands issued while disconnected fail immediately instead of queuing. Shutdown closes the connection and stops retries.
 
-Features that need Redis import `RedisModule` and inject `RedisService`, using its `client` directly. Keep session behavior in the future auth feature; `src/redis` only manages the shared connection. Redis does not require a Drizzle model or migration.
+Features that need Redis import `RedisModule` and inject `RedisService`, using its `client` directly. The auth feature owns session behavior; `src/redis` only manages the shared connection. Redis does not require a Drizzle model or migration.
 
-The `session-redis` Compose service uses append-only persistence with a sync every second and a dedicated volume. A sudden failure can lose roughly the most recent second of writes. The `noeviction` policy prevents memory pressure from silently evicting sessions; session expiry will be set by auth. This local configuration does not impose a memory cap. For deployment, configure authenticated Redis with TLS (`rediss://`) and appropriate memory limits. See [Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/) and [Node client connections](https://redis.io/docs/latest/develop/clients/nodejs/connect/).
+The `session-redis` Compose service uses append-only persistence with a sync every second and a dedicated volume. A sudden failure can lose roughly the most recent second of writes. The `noeviction` policy prevents memory pressure from silently evicting sessions; auth sets each session's expiry. This local configuration does not impose a memory cap. For deployment, configure authenticated Redis with TLS (`rediss://`) and appropriate memory limits. See [Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/) and [Node client connections](https://redis.io/docs/latest/develop/clients/nodejs/connect/).
 
 ## Layout
 
@@ -52,6 +54,8 @@ apps/
     src/features/notes/         # Feature UI and HTTP calls
   api/
     src/features/
+      auth/                     # Microsoft login, Redis sessions, access guard
+      users/                    # User profiles, roles, and persistence
       notes/                    # Controller, service, repository, table, tests
       health/                   # Liveness endpoint
     src/database/               # Connection pool and lifecycle only
@@ -62,6 +66,8 @@ apps/
 packages/
   shared/
     src/features/notes/         # Zod request/response schemas and inferred types
+    src/features/users/         # Roles, normalized email, public user schema
+    src/features/auth/          # Current-user response contract
 ```
 
 ## Adding a feature
@@ -88,7 +94,8 @@ Both applications import contracts from `@roller-bay/shared/notes`. The shared p
 | `npm start`                                 | Run both built apps; run `build` first                         |
 | `npm run typecheck`                         | Check application, contract, and migration configuration types |
 | `npm run lint`                              | Check TypeScript and Next.js conventions                       |
-| `npm test`                                  | Test API validation and response contracts without a database  |
+| `npm test`                                  | Test contracts, normalization, and simulated Microsoft sign-in |
+| `npm run test:integration`                  | Test auth with local Redis and PostgreSQL; requires test URLs  |
 | `npm run format`                            | Format source and configuration                                |
 | `npm run format:check`                      | Check formatting without changing files                        |
 | `npm run services:up`                       | Start PostgreSQL and Redis and wait until healthy              |
@@ -113,9 +120,9 @@ npm run build
 npm run format:check
 ```
 
-The automated API tests replace the repository with a small fixture. They verify input rejection before persistence, title normalization, and JSON response contracts; they do not prove SQL execution. After starting PostgreSQL and applying migrations, add a note in the UI and reload to check real persistence.
+The default tests verify notes contracts, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
 
-This is a local application skeleton. Notes are an example feature with public list/create endpoints; authentication, authorization, pagination, and deployment configuration are future product work.
+Microsoft authentication is implemented in the backend. Notes require an authenticated session; a frontend login screen and credentialed API calls are still a separate step, so the existing demo UI is not yet integrated with auth. Role-specific permissions, pagination, and deployment remain future work.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.tools.json",
     "lint": "eslint src drizzle.config.ts",
     "test": "tsc -p tsconfig.test.json && node --test \".test-dist/**/*.test.js\"",
+    "test:integration": "tsc -p tsconfig.test.json && AUTH_INTEGRATION_TESTS=1 node --test .test-dist/features/auth/auth.integration.test.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"

@@ -1,6 +1,6 @@
 # Microsoft authentication implementation plan
 
-Status: planned, not implemented. Redis infrastructure and the users schema exist. This plan replaces the earlier PostgreSQL session-store proposal. The next implementation is backend only; frontend login screens remain a separate step.
+Status: backend implementation complete. Redis sessions replace the earlier PostgreSQL session-store proposal. Frontend login screens remain a separate step. See [authentication setup](authentication.md) for configuration, tests, and current limits. Live Microsoft sign-in awaits tenant/app credentials.
 
 ## Access and identity
 
@@ -17,11 +17,11 @@ Microsoft documents that email and usernames are mutable and that `sub` and `oid
 
 Treat `users.email` as directory profile information, separate from the work sign-in name used for the domain policy. Read it from Graph `mail`. Do not silently substitute the UPN, `preferred_username`, or an ID-token email claim: a sign-in name does not establish a working mailbox. The profile email may differ from the sign-in name, and its domain does not replace the chosen UPN restriction.
 
-Normalize a present email by trimming whitespace and lowercasing it, consistent with the app's case-insensitive unique index. Validate its format and the existing 254-character limit. Preserve dots and plus tags; do not invent provider-specific alias rules. Never truncate an address to make it fit.
+Use one shared Zod email schema to trim surrounding whitespace and lowercase the entire address, then validate its format and the existing 254-character limit. Apply it before every email write or comparison so stored values and API contracts use the same normalized form. Keep the existing case-insensitive unique index as the database safeguard. Preserve dots and plus tags; do not invent provider-specific alias rules. Never truncate an address to make it fit.
 
 On every successful sign-in, look up the Microsoft subject first, then refresh that user's directory name and email. Never look up an email to attach a new Microsoft identity to an existing user. If an updated or newly received email belongs to another subject, reject the login with a generic conflict message and leave both records unchanged. Resolving reassigned addresses is an explicit administrative action, with no automatic transfer of roles or history. Handle simultaneous sign-ins through the database's uniqueness constraints and a subject-based retry, not just a preliminary lookup.
 
-**Confirmed email decision:** allow eligible employees without a mailbox and make `users.email` nullable during auth implementation. Keep the existing case-insensitive uniqueness constraint for present addresses. A missing/blank `mail` becomes `null`, including when a previously recorded address is removed from the directory. A present but invalid value should fail profile synchronization rather than be fabricated or silently truncated. No schema changes or migrations are included in this planning step; the current column is still non-null.
+**Confirmed email decision:** keep `users.email` required, with no nullable-email schema change. Missing, blank, or malformed directory email fails sign-in/profile synchronization without changing the existing user. The implementation focus is consistent normalization and validation.
 
 This feature sends no email and adds no password reset, email login, or verification flow. A synchronized directory address is not a claim that this app has verified mailbox delivery. If notifications or user-editable contact addresses are added later, define and verify that contact address separately.
 
@@ -56,8 +56,8 @@ Configuration includes `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_
 
 ## Validation and limits
 
-Test rejected tenant/domain/guest identities, invalid signatures and claims, mismatched Graph identity, replayed or expired OAuth transactions, and session fixation. Test profile synchronization, missing/malformed emails, case differences, reassigned addresses, uniqueness races, and preservation of existing roles. Test cookies, Origin checks, logout, absolute expiry after session writes, and Redis outages/reconnects against real Redis. Use provider fixtures for automated tests and report live Microsoft sign-in separately.
+Test rejected tenant/domain/guest identities, invalid signatures and claims, mismatched Graph identity, replayed or expired OAuth transactions, and session fixation. Test profile synchronization, rejection of missing/blank/malformed emails, normalization of surrounding whitespace and case, preservation of dots and plus tags, reassigned addresses, uniqueness races, and preservation of existing roles. Test cookies, Origin checks, logout, absolute expiry after session writes, and Redis outages/reconnects against real Redis. Use provider fixtures for automated tests and report live Microsoft sign-in separately.
 
 Directory profile and eligibility checks happen at sign-in. An Entra account change or disablement does not automatically revoke an already issued local session; it can last until logout or the seven-day deadline. Immediate offboarding would require an explicit session-revocation or directory-revalidation design before deployment. Loading the app user on every request does make local user deletion and role changes take effect immediately.
 
-Implement incrementally: nullable email and shared auth contracts, user synchronization, Redis session integration, Microsoft callback flow, then route protection and tests. Generate or apply migrations only with explicit permission; this plan does not authorize either.
+Implemented: shared email normalization and auth contracts, user synchronization, Redis session integration, Microsoft callback flow, route protection, and automated tests. The existing users migration was applied with permission; authentication required no additional schema changes.
