@@ -8,6 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import type { UserRole } from '@roller-bay/shared/users';
+import { REQUIRED_ROLES } from '../../common/decorators/roles.decorator.js';
 import { IS_PUBLIC } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
 import { UsersService } from '../users/users.service.js';
@@ -48,6 +50,12 @@ export class AuthGuard implements CanActivate {
     const user = await this.users.findById(auth.userId);
     if (!user) throw new UnauthorizedException('Sign in required.');
     request.currentUser = user;
+    const roles = this.reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (roles && !roles.includes(user.role))
+      throw new ForbiddenException('Your role cannot perform this action.');
     return true;
   }
 }
