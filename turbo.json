@@ -18,9 +18,15 @@
         "REDIS_URL",
         "PORT",
         "WEB_ORIGIN",
-        "NEXT_PUBLIC_API_URL",
+        "MICROSOFT_TENANT_ID",
+        "MICROSOFT_CLIENT_ID",
+        "MICROSOFT_CLIENT_SECRET",
+        "MICROSOFT_CALLBACK_URL",
+        "AUTH_ALLOWED_DOMAIN",
         "AUTH_SESSION_SECRET",
-        "AUTH_SESSION_TTL_SECONDS"
+        "AUTH_SESSION_TTL_SECONDS",
+        "TRUSTED_PROXY_IPS",
+        "NEXT_PUBLIC_API_URL"
       ]
     },
     "start": {
@@ -31,18 +37,19 @@
         "REDIS_URL",
         "PORT",
         "WEB_ORIGIN",
-        "NEXT_PUBLIC_API_URL",
+        "MICROSOFT_TENANT_ID",
+        "MICROSOFT_CLIENT_ID",
+        "MICROSOFT_CLIENT_SECRET",
+        "MICROSOFT_CALLBACK_URL",
+        "AUTH_ALLOWED_DOMAIN",
         "AUTH_SESSION_SECRET",
-        "AUTH_SESSION_TTL_SECONDS"
+        "AUTH_SESSION_TTL_SECONDS",
+        "TRUSTED_PROXY_IPS",
+        "NEXT_PUBLIC_API_URL"
       ]
     },
-    "typecheck": {
-      "dependsOn": ["^build"]
-    },
+    "typecheck": { "dependsOn": ["^build"] },
     "lint": {},
-    "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    }
+    "test": { "dependsOn": ["^build"], "outputs": [] }
   }
 }
