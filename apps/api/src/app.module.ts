@@ -1,3 +1,4 @@
+import { StockReceiptsModule } from './features/stock-receipts/stock-receipts.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnvironment } from './config/environment.js';
@@ -19,6 +20,7 @@ import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
     FabricCatalogModule,
     LocationsModule,
     StockItemsModule,
+    StockReceiptsModule,
   ],
 })
 export class AppModule {}

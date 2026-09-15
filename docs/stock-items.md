@@ -12,7 +12,7 @@
 | PATCH  | `/api/stock-items/:id` | 200, updated stock item                       |
 | DELETE | `/api/stock-items/:id` | 204, permanently removed record               |
 
-All reads require an active signed-in user. Create, update, and delete require admin or owner permissions and the configured Origin header. Global rate limits apply. These are administrative maintenance endpoints. User-facing receipt and cutting-form operations are future work.
+All reads require an active signed-in user. Create, update, and delete require admin or owner permissions and the configured Origin header. Global rate limits apply. These are administrative maintenance endpoints. [Stock-receipt submission](stock-receipts.md) provides the employee receiving workflow; cutting-form operations are future work.
 
 ## Create and update
 
@@ -42,7 +42,7 @@ Dimensions are JSON numbers in millimetres with at most three decimal places, up
 
 `remainingLengthMm`, `measurementThicknessMm`, `stockReceiptItemId`, IDs, and creation/update timestamps are server-controlled. The nullable stock-receipt item reference identifies the receipt line that created a roll; admin CRUD cannot set or change it. Invalid measurements, including calculated lengths outside the supported range, return 400 without partially updating the record.
 
-DELETE removes a record outright and is intended for correcting registration mistakes. Use `consumedAt` for exhausted fabric. Items referenced by remnants cannot be deleted and return 409. Referenced colors and storage locations are also protected against deletion.
+DELETE removes a record outright and is intended for correcting registration mistakes. Use `consumedAt` for exhausted fabric. Items referenced by remnants or linked to a stock-receipt receipt cannot be deleted and return 409. Referenced colors and storage locations are also protected against deletion.
 
 ## Queries and responses
 

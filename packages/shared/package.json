@@ -23,6 +23,10 @@
     "./fabric-catalog": {
       "types": "./dist/features/fabric-catalog/index.d.ts",
       "default": "./dist/features/fabric-catalog/index.js"
+    },
+    "./stock-receipts": {
+      "types": "./dist/features/stock-receipts/index.d.ts",
+      "default": "./dist/features/stock-receipts/index.js"
     }
   },
   "files": [

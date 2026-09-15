@@ -1,3 +1,5 @@
+import { testStockReceipts } from '../stock-receipts/stock-receipts.integration-cases.js';
+import { StockReceiptsModule } from '../stock-receipts/stock-receipts.module.js';
 import 'reflect-metadata';
 import { testUserRoles } from '../users/users.integration-cases.js';
 import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
@@ -81,6 +83,7 @@ test(
         FabricCatalogModule,
         LocationsModule,
         StockItemsModule,
+        StockReceiptsModule,
       ],
     })
       .overrideProvider(RATE_LIMIT_KEY_PREFIX)
@@ -233,6 +236,16 @@ test(
       );
 
       await testStockItems(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testStockReceipts(
         t,
         app,
         pool,

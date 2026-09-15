@@ -50,6 +50,13 @@
       "when": 1789452925091,
       "tag": "0006_add_stock_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789455679318,
+      "tag": "0007_add_stock_receipt_idempotency",
+      "breakpoints": true
     }
   ]
 }
