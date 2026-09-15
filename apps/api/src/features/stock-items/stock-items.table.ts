@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
 import { locations } from '../locations/levels/location-levels.table.js';
+import { stockReceiptItems } from '../stock-receipts/stock-receipt-items.table.js';
 
 export const stockItems = pgTable(
   'fabric_stock_items',
@@ -66,6 +67,10 @@ export const stockItems = pgTable(
       (): AnyPgColumn => stockItems.id,
       { onDelete: 'restrict' },
     ),
+    stockReceiptItemId: uuid('stock_receipt_item_id').references(
+      () => stockReceiptItems.id,
+      { onDelete: 'restrict' },
+    ),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
@@ -80,6 +85,9 @@ export const stockItems = pgTable(
     index('fabric_stock_items_location_id_idx').on(table.locationId),
     index('fabric_stock_items_source_stock_item_id_idx').on(
       table.sourceStockItemId,
+    ),
+    index('fabric_stock_items_stock_receipt_item_id_idx').on(
+      table.stockReceiptItemId,
     ),
     check(
       'fabric_stock_items_width_mm_positive',

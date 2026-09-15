@@ -105,6 +105,7 @@ export const stockItemQuerySchema = z.strictObject({
 export const stockItemSchema = z.object({
   ...fields,
   id: z.uuid(),
+  stockReceiptItemId: z.uuid().nullable(),
   measurementThicknessMm: z
     .number()
     .positive()

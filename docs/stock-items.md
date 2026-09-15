@@ -1,6 +1,6 @@
 # Stock items API
 
-`StockItemsModule` owns physical rolls and retained remnants. The database table is `fabric_stock_items`; each item's UUID is also its external identifier. Apply `0005_add_stock_items.sql` before using these endpoints. The CRUD endpoints require no additional migration.
+`StockItemsModule` owns physical rolls and retained remnants. The database table is `fabric_stock_items`; each item's UUID is also its external identifier. The table was introduced in `0005_add_stock_items.sql`. Apply `0006_add_stock_receipts.sql` for the [stock-receipt line reference](stock-receipts.md) before running the updated API.
 
 ## Endpoints and permissions
 
@@ -40,7 +40,7 @@ Dimensions are JSON numbers in millimetres with at most three decimal places, up
 - Clearing depth clears the thickness snapshot and restores the initial-length basis. It preserves `isUsed` and the tube diameter. This is an admin correction, not a cutting workflow.
 - Setting `consumedAt` to an ISO UTC timestamp makes remaining length zero. Clearing it restores the balance derived from the stored inputs.
 
-`remainingLengthMm`, `measurementThicknessMm`, IDs, and creation/update timestamps are server-controlled. Invalid measurements, including calculated lengths outside the supported range, return 400 without partially updating the record.
+`remainingLengthMm`, `measurementThicknessMm`, `stockReceiptItemId`, IDs, and creation/update timestamps are server-controlled. The nullable stock-receipt item reference identifies the receipt line that created a roll; admin CRUD cannot set or change it. Invalid measurements, including calculated lengths outside the supported range, return 400 without partially updating the record.
 
 DELETE removes a record outright and is intended for correcting registration mistakes. Use `consumedAt` for exhausted fabric. Items referenced by remnants cannot be deleted and return 409. Referenced colors and storage locations are also protected against deletion.
 

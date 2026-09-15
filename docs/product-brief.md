@@ -35,7 +35,7 @@ The implemented model treats materials as manufacturer-specific entries. A gener
 
 ### 1. Receive a shipment
 
-An employee enters the purchase-order details when the shipment is received. Each listed roll supplies its color, width, and known length/yardage. Record each physical roll and where it is placed.
+An employee submits a stock receipt when the shipment arrives, using the purchase-order number as a paperwork reference. Each receipt line records a fabric color, width, known length per roll, quantity, and destination; submission creates each physical stock item.
 
 About 90% of incoming stock goes to the warehouse. Treat the warehouse as a likely default that the employee can change, not a mandatory destination. Recording purchase orders before delivery and handling partial deliveries are not yet specified.
 
@@ -89,13 +89,13 @@ These recommendations are distinct from the confirmed workflow above.
 
 ## Proposed feature boundaries
 
-| Feature                | Owns                                                                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fabric catalog         | Manufacturers, materials, unique color identifiers, and thickness. Pricing is deferred.                                                           |
-| Purchasing / receiving | Purchase-order details, receipts, and registration of incoming rolls through inventory operations.                                                |
-| Inventory              | Physical identities, widths/dimensions, locations, roll-specific tube diameters, balance history, lifecycle, and source-piece relationships.      |
-| Orders / allocation    | Production requirements, selected stock, reservations, and allocation details for the paper form.                                                 |
-| Cutting / returns      | Cut planning and completed-form entry; coordinates measurements, calculated balances, resulting pieces, destinations, and reservation settlement. |
+| Feature             | Owns                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fabric catalog      | Manufacturers, materials, unique color identifiers, and thickness. Pricing is deferred.                                                           |
+| Stock receipts      | Delivery receipts, purchase-order references, and registration of incoming rolls through stock-item operations.                                   |
+| Inventory           | Physical identities, widths/dimensions, locations, roll-specific tube diameters, balance history, lifecycle, and source-piece relationships.      |
+| Orders / allocation | Production requirements, selected stock, reservations, and allocation details for the paper form.                                                 |
+| Cutting / returns   | Cut planning and completed-form entry; coordinates measurements, calculated balances, resulting pieces, destinations, and reservation settlement. |
 
 These are modules within the monorepo. Inventory owns stock balances; other features use its operations. Shared Zod contracts expose public inputs and outputs, while Drizzle tables stay within their owning backend feature.
 

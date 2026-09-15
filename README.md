@@ -1,6 +1,6 @@
 # Roller Bay Ops
 
-Roller Bay Ops tracks individual fabric stock items for a window covering company. It connects purchase-order receipts, warehouse and shelf locations, order allocations, and paper cutting forms. Stock is tracked by the company’s fabric “color” identifier and individual roll or piece; remaining roll length is calculated from physical measurements after cutting.
+Roller Bay Ops tracks individual fabric stock items for a window covering company. It connects stock receipts, warehouse and shelf locations, order allocations, and paper cutting forms. Stock is tracked by the company’s fabric “color” identifier and individual roll or piece; remaining roll length is calculated from physical measurements after cutting.
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
