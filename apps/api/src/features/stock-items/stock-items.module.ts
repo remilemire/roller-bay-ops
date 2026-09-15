@@ -8,5 +8,6 @@ import { StockItemsRepository } from './stock-items.repository.js';
   imports: [DatabaseModule],
   controllers: [StockItemsController],
   providers: [StockItemsService, StockItemsRepository],
+  exports: [StockItemsService],
 })
 export class StockItemsModule {}

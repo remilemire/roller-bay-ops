@@ -7,11 +7,16 @@ import {
   getTableColumns,
   gte,
   ilike,
+  inArray,
   isNull,
   isNotNull,
 } from 'drizzle-orm';
 import type { StockItemQuery } from '@roller-bay/shared/stock-items';
-import { DatabaseService } from '../../database/database.service.js';
+import { StockItemInUseError } from './stock-items.errors.js';
+import {
+  DatabaseService,
+  type DatabaseTransaction,
+} from '../../database/database.service.js';
 import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
 import { fabricMaterials } from '../fabric-catalog/materials/fabric-materials.table.js';
 import { manufacturers } from '../fabric-catalog/manufacturers/manufacturers.table.js';
@@ -147,18 +152,54 @@ export class StockItemsRepository {
     await this.db.update(stockItems).set(input).where(eq(stockItems.id, id));
   }
 
+  async createReceivedRolls(
+    transaction: DatabaseTransaction,
+    values: StockItemWrite[],
+  ) {
+    return stockItemsQuery(() =>
+      transaction.insert(stockItems).values(values).returning({
+        id: stockItems.id,
+        stockReceiptItemId: stockItems.stockReceiptItemId,
+      }),
+    );
+  }
+
+  async findByStockReceiptItemIds(
+    ids: string[],
+    transaction: DatabaseTransaction,
+  ) {
+    if (ids.length === 0) return [];
+    return stockItemsQuery(() =>
+      this.select(transaction)
+        .where(inArray(stockItems.stockReceiptItemId, ids))
+        .orderBy(asc(stockItems.id)),
+    );
+  }
+
   delete(id: string) {
     return stockItemsQuery(async () => {
       const [row] = await this.db
         .delete(stockItems)
-        .where(eq(stockItems.id, id))
+        .where(
+          and(eq(stockItems.id, id), isNull(stockItems.stockReceiptItemId)),
+        )
         .returning({ id: stockItems.id });
+      if (!row) {
+        const [existing] = await this.db
+          .select({ receipt: stockItems.stockReceiptItemId })
+          .from(stockItems)
+          .where(eq(stockItems.id, id));
+        if (existing?.receipt)
+          throw new StockItemInUseError(
+            'Stock received through a purchase order cannot be deleted.',
+          );
+      }
       return row;
     }, true);
   }
 
-  private select() {
-    return this.db
+  private select(db: StockItemsDatabase = this.db) {
+    return db
       .select({
         ...getTableColumns(stockItems),
         fabricColorCode: fabricColors.code,

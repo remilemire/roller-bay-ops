@@ -1,3 +1,4 @@
+import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
   BadRequestException,
   ConflictException,
@@ -26,6 +27,15 @@ import {
 
 const nullableNumber = (value: string | null) =>
   value === null ? null : Number(value);
+
+export interface ReceiveRollLine {
+  stockReceiptItemId: string;
+  fabricColorId: string;
+  widthMm: number;
+  initialLengthMm: number;
+  quantity: number;
+  locationId: string;
+}
 
 @Injectable()
 export class StockItemsService {
@@ -99,6 +109,41 @@ export class StockItemsService {
         await repository.update(id, values);
         return this.toPublic(await repository.findById(id));
       }),
+    );
+  }
+
+  receiveRolls(lines: ReceiveRollLine[], transaction: DatabaseTransaction) {
+    return this.operation(async () => {
+      if (
+        !lines.length ||
+        lines.reduce((total, line) => total + line.quantity, 0) > 1000
+      )
+        throw new BadRequestException('Provide between 1 and 1,000 rolls.');
+      const values = lines.flatMap((line) => {
+        if (!Number.isInteger(line.quantity) || line.quantity < 1)
+          throw new BadRequestException(
+            'Roll quantities must be positive integers.',
+          );
+        const input = createStockItemSchema.parse({
+          fabricColorId: line.fabricColorId,
+          widthMm: line.widthMm,
+          initialLengthMm: line.initialLengthMm,
+          locationId: line.locationId,
+        });
+        return Array.from({ length: line.quantity }, () => ({
+          ...this.toWrite(input),
+          stockReceiptItemId: line.stockReceiptItemId,
+        }));
+      });
+      return this.repository.createReceivedRolls(transaction, values);
+    });
+  }
+
+  findByStockReceiptItemIds(ids: string[], transaction: DatabaseTransaction) {
+    return this.operation(async () =>
+      (await this.repository.findByStockReceiptItemIds(ids, transaction)).map(
+        (row) => this.toPublic(row),
+      ),
     );
   }
 
