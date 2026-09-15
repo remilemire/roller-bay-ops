@@ -8,6 +8,7 @@ const tables = [
   'location_zones',
   'location_sections',
   'locations',
+  'fabric_stock_items',
 ];
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 

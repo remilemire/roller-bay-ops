@@ -6,7 +6,7 @@ See the [product brief](docs/product-brief.md) for the workflows, proposed featu
 
 The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. The frontend is a placeholder; receiving, allocation, and production-form workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
 
 ## Get started
 
@@ -65,6 +65,7 @@ apps/
         colors/                 # Color module and vertical slice
       health/                   # Liveness endpoint
       locations/                # Zones, sections, and storage levels
+      stock-items/              # Physical rolls/remnants and admin CRUD
     src/database/               # Connection pool and lifecycle only
     src/redis/                  # Redis connection and lifecycle only
     src/rate-limiting/          # API and login request budgets backed by Redis

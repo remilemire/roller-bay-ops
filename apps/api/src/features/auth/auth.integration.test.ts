@@ -5,6 +5,8 @@ import { FabricCatalogModule } from '../fabric-catalog/fabric-catalog.module.js'
 import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
 import { LocationsModule } from '../locations/locations.module.js';
 import { testLocations } from '../locations/locations.integration-cases.js';
+import { StockItemsModule } from '../stock-items/stock-items.module.js';
+import { testStockItems } from '../stock-items/stock-items.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { test } from 'node:test';
@@ -78,6 +80,7 @@ test(
         HealthModule,
         FabricCatalogModule,
         LocationsModule,
+        StockItemsModule,
       ],
     })
       .overrideProvider(RATE_LIMIT_KEY_PREFIX)
@@ -220,6 +223,16 @@ test(
       );
 
       await testLocations(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testStockItems(
         t,
         app,
         pool,

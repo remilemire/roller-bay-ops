@@ -1,0 +1,63 @@
+# Stock items API
+
+`StockItemsModule` owns physical rolls and retained remnants. The database table is `fabric_stock_items`; each item's UUID is also its external identifier. Apply `0005_add_stock_items.sql` before using these endpoints. The CRUD endpoints require no additional migration.
+
+## Endpoints and permissions
+
+| Method | Path                   | Result                                        |
+| ------ | ---------------------- | --------------------------------------------- |
+| GET    | `/api/stock-items`     | 200, paginated stock list                     |
+| GET    | `/api/stock-items/:id` | 200, one stock item, including consumed items |
+| POST   | `/api/stock-items`     | 201, created stock item                       |
+| PATCH  | `/api/stock-items/:id` | 200, updated stock item                       |
+| DELETE | `/api/stock-items/:id` | 204, permanently removed record               |
+
+All reads require an active signed-in user. Create, update, and delete require admin or owner permissions and the configured Origin header. Global rate limits apply. These are administrative maintenance endpoints. User-facing receipt and cutting-form operations are future work.
+
+## Create and update
+
+Creation requires `fabricColorId`, `widthMm`, `initialLengthMm`, and `locationId`. `isRemnant` and `isUsed` default to false. Optional `sourceStockItemId`, `consumedAt`, and measurement inputs default to null. A retained remnant requires `isRemnant: true` and `explicitLengthMm`. Its optional source must exist and have the same fabric color; source records may already be consumed.
+
+```json
+{
+  "fabricColorId": "11111111-1111-4111-8111-111111111111",
+  "widthMm": 2000,
+  "initialLengthMm": 50000,
+  "locationId": "22222222-2222-4222-8222-222222222222"
+}
+```
+
+PATCH accepts a nonempty subset of `isUsed`, `widthMm`, `initialLengthMm`, `explicitLengthMm`, `radialDepthMm`, `tubeOuterDiameterMm`, `locationId`, and `consumedAt`. Color, roll/remnant type, and source linkage are fixed after creation. Unknown fields are rejected. Validation uses the resulting complete record, so partial updates cannot create inconsistent measurement inputs. Concurrent updates lock the affected row before reading and changing it.
+
+Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Width and initial length must be positive. Explicit length and radial depth may be zero. Tube diameter must be a positive integer multiple of five, within PostgreSQL's integer range.
+
+- Remnants require explicit length and cannot have roll depth or a tube diameter, regardless of `isUsed`. A new remnant starts unused independently of its source.
+- Unused rolls (`isUsed: false`) cannot have a tube diameter or depth. Used rolls (`isUsed: true`) require a tube diameter. Submit `isUsed` and the tube diameter together when first recording use. No first-use date is required or stored.
+- Every item requires a location. Consumed items retain their last assigned location.
+- Rolls cannot have explicit length. Before measurement, remaining length equals initial length.
+- A measured roll must be marked used and requires radial depth and tube diameter. The API copies the current catalog thickness into `measurementThicknessMm`; PostgreSQL calculates remaining length.
+- Updating depth to a non-null value captures current catalog thickness, even if the submitted depth equals the previous value. Other updates preserve the snapshot. A later measurement can reuse the stored tube diameter.
+- Clearing depth clears the thickness snapshot and restores the initial-length basis. It preserves `isUsed` and the tube diameter. This is an admin correction, not a cutting workflow.
+- Setting `consumedAt` to an ISO UTC timestamp makes remaining length zero. Clearing it restores the balance derived from the stored inputs.
+
+`remainingLengthMm`, `measurementThicknessMm`, IDs, and creation/update timestamps are server-controlled. Invalid measurements, including calculated lengths outside the supported range, return 400 without partially updating the record.
+
+DELETE removes a record outright and is intended for correcting registration mistakes. Use `consumedAt` for exhausted fabric. Items referenced by remnants cannot be deleted and return 409. Referenced colors and storage locations are also protected against deletion.
+
+## Queries and responses
+
+Lists accept `fabricColorId`, `locationId`, `sectionId`, `zoneId`, `isRemnant`, `isConsumed`, `minWidthMm`, `minRemainingLengthMm`, `search`, `page`, and `pageSize`. Filters combine with AND. Boolean query values must be the strings `true` or `false`. `isConsumed` defaults to false; use true to list consumed records. Search matches a literal, case-insensitive substring of the fabric color code.
+
+Pagination defaults to page 1 and 25 items, with at most 100 items per page. Results sort by creation time, then UUID. Page items and totals use the same database snapshot. The response is `{ items, total, page, pageSize }`.
+
+Each item includes its dimensions, measurement inputs, generated remaining length, source reference, usage flag, consumed timestamp, and creation/update timestamps. It also includes color code, material and manufacturer IDs/names, and location/section/zone labels and IDs. Location hierarchy fields are always present. Decimals are returned as JSON numbers and timestamps as ISO strings.
+
+Missing items or referenced records return 404. Unauthenticated requests return 401, inactive or unauthorized users return 403, referenced deletions return 409, and storage failures return a generic 503.
+
+## Current scope and verification
+
+Existing stock can be registered through the admin create endpoint without knowing its first-use date. Register an existing used roll with `isUsed: true`, its tube diameter, current radial depth, and location. For opening inventory, `initialLengthMm` is the length at registration, which can be the calculated current length; it need not represent an unknown original purchase length. The API still requires that value explicitly. Register existing remnants with their current explicit length and location; their source reference can remain null if unknown.
+
+These endpoints do not record measurement history, reconcile reservations, or subtract a new remnant from its source. Until the form workflows are implemented, admins must reconcile the source item separately when registering remnants. Completed-form processing must eventually coordinate those changes atomically and prevent duplicate submissions.
+
+The auth integration suite copies the migrated stock table into an isolated schema; it does not execute migrations. It tests role and Origin enforcement, generated balances, remnant validation, snapshot preservation/refresh, rollback on invalid updates, concurrent corrections, consumption/restoration, filters, pagination, hierarchy responses, and deletion protection.

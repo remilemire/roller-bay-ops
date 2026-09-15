@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./stock-items": {
+      "types": "./dist/features/stock-items/index.d.ts",
+      "default": "./dist/features/stock-items/index.js"
+    },
     "./locations": {
       "types": "./dist/features/locations/index.d.ts",
       "default": "./dist/features/locations/index.js"

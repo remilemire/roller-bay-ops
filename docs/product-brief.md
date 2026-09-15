@@ -21,7 +21,7 @@ Tracking includes rolls, retained remnants, scrap, and fully consumed items. Rec
 | Production order | The work being allocated and cut, identified by an order number and accompanied by a paper form.                                                                                                                                                   |
 | Allocation       | A reservation of estimated fabric usage from specific stock items for a production order.                                                                                                                                                          |
 
-The unique identifier for a physical roll is separate from its color. The catalog tables and API are implemented; physical stock models are still pending.
+The unique identifier for a physical roll is separate from its color. The catalog, locations, and physical stock tables and basic CRUD APIs are implemented. See the [stock items API](stock-items.md) for current measurement rules and the admin maintenance scope.
 
 ### Catalog model
 
@@ -116,4 +116,4 @@ The catalog and receiving workflow are now sufficiently described to begin a foc
 - **Catalog and receiving:** Clarify whether material denotes a manufacturer-specific product line or a generic composition, partial-receipt handling if needed, and how existing stock will be entered at rollout. Pricing can be revisited later and does not block the initial models.
 - **Availability:** Define which scraps are reusable and any batch, shade, defect, or orientation constraints that affect selection and cutting.
 
-The repository currently contains user profiles, Microsoft authentication, and catalog CRUD in the backend, with a placeholder frontend. Stock, receiving, allocation, and cutting workflows remain documented requirements and proposals.
+The repository currently contains user profiles, Microsoft authentication, catalog and location CRUD, and stock lookup/admin CRUD in the backend, with a placeholder frontend. Receiving, allocation, and cutting-form workflows remain documented requirements and proposals.

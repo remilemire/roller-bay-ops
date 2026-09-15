@@ -6,6 +6,7 @@ import { RedisModule } from './redis/redis.module.js';
 import { FabricCatalogModule } from './features/fabric-catalog/fabric-catalog.module.js';
 import { AuthModule } from './features/auth/auth.module.js';
 import { LocationsModule } from './features/locations/locations.module.js';
+import { StockItemsModule } from './features/stock-items/stock-items.module.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
 
 @Module({
@@ -17,6 +18,7 @@ import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
     HealthModule,
     FabricCatalogModule,
     LocationsModule,
+    StockItemsModule,
   ],
 })
 export class AppModule {}

@@ -4,6 +4,8 @@
 
 - A received roll starts with the known length/yardage on the purchase order.
 - After its first cut, record that individual roll's tube diameter for future calculations. It remains constant during the roll's life.
+- `is_used` records whether this stock item has been used; no first-use date is required. Unused rolls must have null tube diameter and depth. Used rolls require their tube diameter, even if a current depth reading is cleared as an admin correction. All remnants must have null tube diameter and depth regardless of usage.
+- When first recording a roll's use, set `isUsed: true` and its tube diameter together, then reuse that diameter for later measurements.
 - The fabric catalog supplies thickness by color.
 - Cutters record a roll-depth measurement on the order's paper form. The app calculates the remaining length when the form is entered.
 
