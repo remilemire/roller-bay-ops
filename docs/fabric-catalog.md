@@ -57,7 +57,7 @@ All records include `id` and `createdAt` as an ISO timestamp. Material responses
 - 409: duplicate color code or deletion blocked by a reference.
 - 503: catalog storage unavailable.
 
-Deleting a manufacturer with materials or a material with colors is blocked by foreign keys. There is no cascading deletion. Colors can currently be deleted because stock-item references have not been implemented.
+Deleting a manufacturer with materials, a material with colors, or a color referenced by stock items is blocked by foreign keys. There is no cascading deletion.
 
 ## Setup and verification
 

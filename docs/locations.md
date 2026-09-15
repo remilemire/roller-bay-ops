@@ -30,7 +30,7 @@ Creation returns 201; reads and updates return 200. All records include `id`, `s
 
 Lists return `{ items, total, page, pageSize }`. All support `search`, `page` (default 1), and `pageSize` (default 25, maximum 100). Search is a case-insensitive literal substring of the resource's own name or label. Filters combine with AND. Sort order is `sortOrder`, then name/label, then ID; page data and totals use the same database snapshot.
 
-Deletion returns 204. Zones containing sections and sections containing locations return 409. Locations currently have no stock references; stock-item foreign keys must also restrict deletion when inventory is implemented. Duplicate names/labels return 409; missing records or parents return 404; invalid input returns 400. Storage failures return a generic 503.
+Deletion returns 204. Zones containing sections, sections containing locations, and locations referenced by stock items return 409. Duplicate names/labels return 409; missing records or parents return 404; invalid input returns 400. Storage failures return a generic 503.
 
 `updatedAt` is maintained for API writes through Drizzle's update hook; direct SQL updates must set it explicitly.
 
