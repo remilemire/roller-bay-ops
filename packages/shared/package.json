@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./locations": {
+      "types": "./dist/features/locations/index.d.ts",
+      "default": "./dist/features/locations/index.js"
+    },
     "./auth": {
       "types": "./dist/features/auth/index.d.ts",
       "default": "./dist/features/auth/index.js"

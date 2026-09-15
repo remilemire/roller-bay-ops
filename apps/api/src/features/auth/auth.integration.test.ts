@@ -3,6 +3,8 @@ import { testUserRoles } from '../users/users.integration-cases.js';
 import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
 import { FabricCatalogModule } from '../fabric-catalog/fabric-catalog.module.js';
 import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
+import { LocationsModule } from '../locations/locations.module.js';
+import { testLocations } from '../locations/locations.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { test } from 'node:test';
@@ -75,6 +77,7 @@ test(
         AuthModule,
         HealthModule,
         FabricCatalogModule,
+        LocationsModule,
       ],
     })
       .overrideProvider(RATE_LIMIT_KEY_PREFIX)
@@ -207,6 +210,16 @@ test(
       );
 
       await testCatalog(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testLocations(
         t,
         app,
         pool,

@@ -4,6 +4,8 @@ Roller Bay Ops tracks individual fabric stock items for a window covering compan
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
+The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
+
 The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, and the fabric catalog API are implemented in the backend. The frontend is a placeholder; stock, receiving, and production workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
 
 ## Get started
@@ -62,6 +64,7 @@ apps/
         materials/              # Material module and vertical slice
         colors/                 # Color module and vertical slice
       health/                   # Liveness endpoint
+      locations/                # Zones, sections, and storage levels
     src/database/               # Connection pool and lifecycle only
     src/redis/                  # Redis connection and lifecycle only
     src/rate-limiting/          # API and login request budgets backed by Redis

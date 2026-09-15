@@ -1,6 +1,14 @@
 import type { Pool } from 'pg';
 
-const tables = ['users', 'manufacturers', 'fabric_materials', 'fabric_colors'];
+const tables = [
+  'users',
+  'manufacturers',
+  'fabric_materials',
+  'fabric_colors',
+  'location_zones',
+  'location_sections',
+  'locations',
+];
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 // Test rows remain isolated, but their structure comes from the migrated DB.
@@ -24,6 +32,15 @@ export async function copyApplicationTables(pool: Pool, schema: string) {
     );
     await client.query(
       `ALTER TABLE ${target}.fabric_colors RENAME CONSTRAINT fabric_colors_code_key TO fabric_colors_code_unique`,
+    );
+    await client.query(
+      `ALTER INDEX ${target}.location_zones_lower_idx RENAME TO location_zones_name_unique`,
+    );
+    await client.query(
+      `ALTER INDEX ${target}.location_sections_zone_id_lower_idx RENAME TO location_sections_zone_label_unique`,
+    );
+    await client.query(
+      `ALTER INDEX ${target}.locations_section_id_lower_idx RENAME TO locations_section_label_unique`,
     );
 
     // LIKE does not copy foreign keys. Recreate the live definitions and bind
