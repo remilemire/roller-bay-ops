@@ -147,7 +147,8 @@ test(
 
     try {
       await copyApplicationTables(pool, schema);
-      await app.init();
+      // Keep one listener for the suite; Supertest must not close it between requests.
+      await app.listen(0, '127.0.0.1');
 
       await t.test(
         'liveness stays public, profiles require auth, and untrusted origins are rejected',

@@ -62,7 +62,8 @@ test(
       app.setGlobalPrefix('api');
       // Same explicit-proxy configuration used by main.ts; no proxies trusted.
       app.set('trust proxy', []);
-      await app.init();
+      // Parallel requests share a listener instead of starting/stopping it themselves.
+      await app.listen(0, '127.0.0.1');
       return app;
     }
     const first = await createApp();
