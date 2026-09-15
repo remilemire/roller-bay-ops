@@ -29,6 +29,13 @@
       "when": 1789417701094,
       "tag": "0003_single_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789424869825,
+      "tag": "0004_add_locations",
+      "breakpoints": true
     }
   ]
 }
