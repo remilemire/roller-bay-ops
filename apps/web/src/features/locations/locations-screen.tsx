@@ -1,10 +1,24 @@
 'use client';
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, MapPin } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  MapPin,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Folder,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/field';
@@ -27,130 +41,83 @@ import {
   type LocationKind,
   type LocationRow,
 } from './locations.api';
+import styles from './locations-screen.module.css';
 const formSchema = z.object({
   name: z.string().trim().min(1, 'Enter a name or label.'),
   parentId: z.string(),
   sortOrder: z.string(),
 });
+type EditingLocation = {
+  kind: LocationKind;
+  row?: LocationRow;
+  parent?: LocationRow;
+};
+const singular = { zones: 'zone', sections: 'section', levels: 'level' };
 export function LocationsScreen() {
-  return (
-    <>
-      <PageHeading title="Locations" />
-      <div className="stack">
-        <LocationList kind="zones" title="Zones" />
-        <LocationList kind="sections" title="Sections" />
-        <LocationList kind="levels" title="Levels" />
-      </div>
-    </>
-  );
-}
-function LocationList({ kind, title }: { kind: LocationKind; title: string }) {
-  const params = useListParams(kind);
-  const query = useQuery({
-    queryKey: [...locationsKey, kind, params.search, params.page],
-    queryFn: ({ signal }) =>
-      listLocations(kind, params.search, params.page, signal),
-  });
+  const params = useListParams();
   const canManage = useCanManage();
-  const [editing, setEditing] = useState<LocationRow | 'new' | null>(null);
-  const [deleting, setDeleting] = useState<LocationRow | null>(null);
+  const [editing, setEditing] = useState<EditingLocation | null>(null);
+  const [deleting, setDeleting] = useState<{
+    kind: LocationKind;
+    row: LocationRow;
+  } | null>(null);
   const client = useQueryClient();
+  const query = useQuery({
+    queryKey: [...locationsKey, 'zones', params.search, params.page],
+    queryFn: ({ signal }) =>
+      listLocations('zones', params.search, params.page, signal),
+  });
   const remove = useMutation({
-    mutationFn: () => deleteLocation(kind, deleting!.id),
+    mutationFn: () => deleteLocation(deleting!.kind, deleting!.row.id),
     onSuccess: async () => {
       setDeleting(null);
       await client.invalidateQueries({ queryKey: locationsKey });
     },
   });
+  const actions: TreeActions = {
+    canManage,
+    edit: setEditing,
+    remove: (kind, row) => {
+      remove.reset();
+      setDeleting({ kind, row });
+    },
+  };
   return (
     <>
-      <section className="panel" aria-labelledby={`${kind}-heading`}>
-        <div className="panel-heading">
-          <h2 id={`${kind}-heading`}>{title}</h2>
-          {canManage && (
-            <Button onClick={() => setEditing('new')}>
-              <Plus size={17} />
-              Add{' '}
-              {kind === 'levels'
-                ? 'level'
-                : kind === 'sections'
-                  ? 'section'
-                  : 'zone'}
-            </Button>
-          )}
-        </div>
-        <div className="panel-body">
-          <SearchToolbar
-            key={`${kind}-${params.search}`}
-            search={params.search}
-            onSearch={(search) => params.set({ search })}
-            placeholder={`Search ${kind}…`}
-          />
-        </div>
+      <PageHeading title="Locations">
+        {canManage && (
+          <Button onClick={() => setEditing({ kind: 'zones' })}>
+            <Plus size={17} />
+            Add zone
+          </Button>
+        )}
+      </PageHeading>
+      <SearchToolbar
+        key={params.search}
+        search={params.search}
+        onSearch={(search) => params.set({ search })}
+        placeholder="Search zones…"
+      />
+      <section className="panel" aria-label="Location hierarchy">
         {query.isPending ? (
           <Loading />
         ) : query.error ? (
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
         ) : !query.data.items.length ? (
-          <Empty
-            title={params.search ? `No matching ${kind}` : `No ${kind} yet`}
-          />
+          <Empty title={params.search ? 'No matching zones' : 'No zones yet'}>
+            Add a zone, then its sections and levels.
+          </Empty>
         ) : (
-          <div className="data-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{kind === 'levels' ? 'Level' : 'Name'}</th>
-                  {kind !== 'zones' && (
-                    <th>{kind === 'levels' ? 'Zone / section' : 'Zone'}</th>
-                  )}
-                  <th>Display order</th>
-                  {canManage && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.items.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div className="cell-leading">
-                        <span className="cell-icon">
-                          <MapPin size={17} />
-                        </span>
-                        <strong>{row.name}</strong>
-                      </div>
-                    </td>
-                    {kind !== 'zones' && <td>{row.parent}</td>}
-                    <td>{row.sortOrder}</td>
-                    {canManage && (
-                      <td>
-                        <div className="inline-actions">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Edit ${row.name}`}
-                            onClick={() => setEditing(row)}
-                          >
-                            <Pencil size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Delete ${row.name}`}
-                            onClick={() => {
-                              remove.reset();
-                              setDeleting(row);
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className={styles.tree}>
+            {query.data.items.map((row) => (
+              <LocationNode
+                key={row.id}
+                kind="zones"
+                row={row}
+                actions={actions}
+              />
+            ))}
+          </ul>
         )}
         {query.data && (
           <Pagination
@@ -161,23 +128,23 @@ function LocationList({ kind, title }: { kind: LocationKind; title: string }) {
         )}
       </section>
       {editing && (
-        <LocationEditor
-          kind={kind}
-          row={editing === 'new' ? undefined : editing}
-          close={() => setEditing(null)}
-        />
+        <LocationEditor {...editing} close={() => setEditing(null)} />
       )}
       <Dialog
         open={!!deleting}
         onOpenChange={(open) => {
           if (!open && !remove.isPending) setDeleting(null);
         }}
-        title={`Delete ${deleting?.name ?? ''}?`}
+        title={`Delete ${deleting?.row.name ?? ''}?`}
         description="Records in use cannot be deleted."
       >
         {remove.error && <ErrorNotice error={remove.error} />}
         <div className="form-actions">
-          <Button variant="outline" onClick={() => setDeleting(null)}>
+          <Button
+            variant="outline"
+            disabled={remove.isPending}
+            onClick={() => setDeleting(null)}
+          >
             Keep record
           </Button>
           <Button
@@ -192,20 +159,179 @@ function LocationList({ kind, title }: { kind: LocationKind; title: string }) {
     </>
   );
 }
+type TreeActions = {
+  canManage: boolean;
+  edit: (value: EditingLocation) => void;
+  remove: (kind: LocationKind, row: LocationRow) => void;
+};
+function LocationNode({
+  kind,
+  row,
+  actions,
+}: {
+  kind: LocationKind;
+  row: LocationRow;
+  actions: TreeActions;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const childKind =
+    kind === 'zones' ? 'sections' : kind === 'sections' ? 'levels' : null;
+  const Icon =
+    kind === 'zones' ? MapPin : kind === 'sections' ? Folder : Layers;
+  const address = [row.parent, row.name].filter(Boolean).join(' / ');
+  return (
+    <li className={styles.node}>
+      <div className={styles.row}>
+        {childKind ? (
+          <button
+            className={styles.label}
+            aria-label={`${row.name} ${singular[kind]}`}
+            aria-expanded={expanded}
+            aria-controls={`children-${row.id}`}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <Icon size={18} />
+            <strong>{row.name}</strong>
+            <span className={styles.kind}>{singular[kind]}</span>
+          </button>
+        ) : (
+          <div className={`${styles.label} ${styles.leaf}`}>
+            <Icon size={18} />
+            <strong>{row.name}</strong>
+            <span className={styles.kind}>level</span>
+          </div>
+        )}
+        {actions.canManage && (
+          <div className={styles.actions}>
+            {childKind && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setExpanded(true);
+                  actions.edit({ kind: childKind, parent: row });
+                }}
+                aria-label={`Add ${singular[childKind]} to ${address}`}
+              >
+                <Plus size={15} />
+                Add {singular[childKind]}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Edit ${singular[kind]} ${address}`}
+              onClick={() => actions.edit({ kind, row })}
+            >
+              <Pencil size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Delete ${singular[kind]} ${address}`}
+              onClick={() => actions.remove(kind, row)}
+            >
+              <Trash2 size={15} />
+            </Button>
+          </div>
+        )}
+      </div>
+      {childKind && (
+        <div
+          id={`children-${row.id}`}
+          hidden={!expanded}
+          className={styles.children}
+        >
+          {expanded && (
+            <LocationChildren kind={childKind} parent={row} actions={actions} />
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+function LocationChildren({
+  kind,
+  parent,
+  actions,
+}: {
+  kind: LocationKind;
+  parent: LocationRow;
+  actions: TreeActions;
+}) {
+  const query = useInfiniteQuery({
+    queryKey: [...locationsKey, 'children', kind, parent.id],
+    initialPageParam: 1,
+    queryFn: ({ signal, pageParam }) =>
+      listLocations(kind, '', pageParam, signal, parent.id),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+  });
+  return (
+    <>
+      {query.isPending ? (
+        <Loading />
+      ) : (
+        <>
+          {query.error && (
+            <ErrorNotice
+              error={query.error}
+              retry={() =>
+                void (query.isFetchNextPageError
+                  ? query.fetchNextPage()
+                  : query.refetch())
+              }
+            />
+          )}
+          {query.data &&
+            (query.data.pages[0]!.total === 0 ? (
+              <p className={styles.empty}>No {kind} yet.</p>
+            ) : (
+              <ul className={styles.tree}>
+                {query.data.pages
+                  .flatMap((page) => page.items)
+                  .map((row) => (
+                    <LocationNode
+                      key={row.id}
+                      kind={kind}
+                      row={row}
+                      actions={actions}
+                    />
+                  ))}
+              </ul>
+            ))}
+          {query.hasNextPage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={query.isFetchingNextPage}
+              onClick={() => void query.fetchNextPage()}
+            >
+              {query.isFetchingNextPage ? 'Loading…' : `Load more ${kind}`}
+            </Button>
+          )}
+        </>
+      )}
+    </>
+  );
+}
 function LocationEditor({
   kind,
   row,
   close,
+  parent,
 }: {
   kind: LocationKind;
   row?: LocationRow;
+  parent?: LocationRow;
   close: () => void;
 }) {
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: row?.name ?? '',
-      parentId: row?.parentId ?? '',
+      parentId: row?.parentId ?? parent?.id ?? '',
       sortOrder: row?.sortOrder ?? '0',
     },
   });
@@ -243,7 +369,14 @@ function LocationEditor({
             required
             maxLength={kind === 'zones' ? 120 : 40}
           />
-          {kind !== 'zones' && !row && (
+          {parent && (
+            <p>
+              {kind === 'levels' ? 'Section' : 'Zone'}:{' '}
+              {parent.parent ? `${parent.parent} / ` : ''}
+              {parent.name}
+            </p>
+          )}
+          {kind !== 'zones' && !row && !parent && (
             <Lookup
               label={kind === 'levels' ? 'Section' : 'Zone'}
               value={values.parentId}

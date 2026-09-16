@@ -1,100 +1,152 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LocationsScreen } from './locations-screen';
+import { listLocations, saveLocation } from './locations.api';
 
-const state = vi.hoisted(() => ({
-  params: '',
-  replace: vi.fn(),
-  canManage: true,
-}));
+const state = vi.hoisted(() => ({ canManage: true }));
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(state.params),
+  useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/locations',
-  useRouter: () => ({ replace: state.replace }),
+  useRouter: () => ({ replace: vi.fn() }),
 }));
 vi.mock('@/features/auth/auth-boundary', () => ({
   useCanManage: () => state.canManage,
 }));
-
+vi.mock('./locations.api', async (original) => ({
+  ...(await original<typeof import('./locations.api')>()),
+  listLocations: vi.fn(),
+  saveLocation: vi.fn(),
+}));
+const zone = {
+  id: 'zone-1',
+  name: 'Warehouse',
+  parent: '',
+  parentId: '',
+  sortOrder: '0',
+};
+const section = {
+  id: 'section-1',
+  name: 'A',
+  parent: 'Warehouse',
+  parentId: zone.id,
+  sortOrder: '0',
+};
+const level = {
+  id: 'level-1',
+  name: 'Top',
+  parent: 'Warehouse / A',
+  parentId: section.id,
+  sortOrder: '0',
+};
 beforeEach(() => {
-  state.params = '';
   state.canManage = true;
-  state.replace.mockClear();
+  vi.mocked(listLocations)
+    .mockReset()
+    .mockImplementation(async (kind, _search, page) => ({
+      items: [kind === 'zones' ? zone : kind === 'sections' ? section : level],
+      total: 1,
+      page,
+      pageSize: 25,
+    }));
+  vi.mocked(saveLocation).mockReset();
 });
-
 function showLocations() {
   const client = new QueryClient({
-    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    defaultOptions: { queries: { retry: false } },
   });
-  for (const kind of ['zones', 'sections', 'levels']) {
-    const params = new URLSearchParams(state.params);
-    client.setQueryData(
-      [
-        'locations',
-        kind,
-        params.get(`${kind}-search`) ?? '',
-        Number(params.get(`${kind}-page`) ?? 1),
-      ],
-      {
-        items: [
-          {
-            id: kind,
-            name: `${kind} example`,
-            parent: 'Warehouse / A',
-            parentId: 'parent',
-            sortOrder: '0',
-          },
-        ],
-        total: 60,
-      },
-    );
-  }
   render(
     <QueryClientProvider client={client}>
       <LocationsScreen />
     </QueryClientProvider>,
   );
 }
-
-it('shows all three location lists and their own creation controls together', () => {
-  showLocations();
-  for (const [title, singular] of [
-    ['Zones', 'zone'],
-    ['Sections', 'section'],
-    ['Levels', 'level'],
-  ] as const) {
-    const panel = within(screen.getByRole('region', { name: title }));
-    expect(panel.getByText(`${title.toLowerCase()} example`)).toBeVisible();
-    expect(
-      panel.getByRole('button', { name: `Add ${singular}` }),
-    ).toBeVisible();
-  }
-});
-
-it('changes only the selected list page and resets only its page when searching', async () => {
-  state.params = 'zones-page=2&sections-page=3&levels-search=upper';
+it('nests levels in their section and zone, with collapsible branches', async () => {
   showLocations();
   const user = userEvent.setup();
-  const zones = within(screen.getByRole('region', { name: 'Zones' }));
-  await user.click(zones.getByRole('button', { name: 'Next' }));
-  expect(state.replace).toHaveBeenLastCalledWith(
-    '/locations?zones-page=3&sections-page=3&levels-search=upper',
-    { scroll: false },
+  const leaf = await screen.findByText('Top');
+  const sectionBranch = screen
+    .getByRole('button', { name: 'A section' })
+    .closest('li')!;
+  const zoneBranch = screen
+    .getByRole('button', { name: 'Warehouse zone' })
+    .closest('li')!;
+  expect(sectionBranch).toContainElement(leaf);
+  expect(zoneBranch).toContainElement(sectionBranch);
+  expect(listLocations).toHaveBeenCalledWith(
+    'sections',
+    '',
+    1,
+    expect.any(AbortSignal),
+    zone.id,
   );
-  await user.type(zones.getByRole('searchbox'), 'Warehouse');
-  await user.click(zones.getByRole('button', { name: 'Search' }));
-  expect(state.replace).toHaveBeenLastCalledWith(
-    '/locations?sections-page=3&levels-search=upper&zones-search=Warehouse',
-    { scroll: false },
+  expect(listLocations).toHaveBeenCalledWith(
+    'levels',
+    '',
+    1,
+    expect.any(AbortSignal),
+    section.id,
+  );
+  await user.click(screen.getByRole('button', { name: 'A section' }));
+  expect(screen.queryByText('Top')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'A section' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
   );
 });
-
-it('keeps all location lists readable without management controls for employees', () => {
+it('creates a level using the section where Add level was clicked', async () => {
+  showLocations();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'Add level to Warehouse / A' }),
+  );
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByText('Section: Warehouse / A')).toBeVisible();
+  await user.type(dialog.getByLabelText('Level'), 'Bottom');
+  await user.click(dialog.getByRole('button', { name: 'Save record' }));
+  await waitFor(() =>
+    expect(saveLocation).toHaveBeenCalledWith('levels', undefined, {
+      name: 'Bottom',
+      parentId: section.id,
+      sortOrder: '0',
+    }),
+  );
+});
+it('loads additional children without dropping the existing branch', async () => {
+  vi.mocked(listLocations).mockImplementation(async (kind, _search, page) => ({
+    items: [
+      kind === 'zones'
+        ? zone
+        : kind === 'sections'
+          ? section
+          : page === 1
+            ? level
+            : { ...level, id: 'level-2', name: 'Bottom' },
+    ],
+    total: kind === 'levels' ? 26 : 1,
+    page,
+    pageSize: 25,
+  }));
+  showLocations();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'Load more levels' }),
+  );
+  expect(await screen.findByText('Bottom')).toBeVisible();
+  expect(screen.getByText('Top')).toBeVisible();
+  expect(listLocations).toHaveBeenCalledWith(
+    'levels',
+    '',
+    2,
+    expect.any(AbortSignal),
+    section.id,
+  );
+});
+it('allows employees to browse the hierarchy without management controls', async () => {
   state.canManage = false;
   showLocations();
-  expect(screen.getAllByRole('table')).toHaveLength(3);
+  expect(await screen.findByText('Top')).toBeVisible();
   expect(
     screen.queryByRole('button', { name: /Add|Edit|Delete/ }),
   ).not.toBeInTheDocument();

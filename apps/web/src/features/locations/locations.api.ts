@@ -16,8 +16,17 @@ export async function listLocations(
   search: string,
   page: number,
   signal?: AbortSignal,
+  parentId?: string,
 ) {
-  const url = path(kind) + queryString({ search, page, pageSize: 25 });
+  const url =
+    path(kind) +
+    queryString({
+      search,
+      page,
+      pageSize: 25,
+      ...(parentId && kind === 'sections' ? { zoneId: parentId } : {}),
+      ...(parentId && kind === 'levels' ? { sectionId: parentId } : {}),
+    });
   if (kind === 'zones') {
     const data = await api(url, s.locationZoneListSchema, { signal });
     return {
