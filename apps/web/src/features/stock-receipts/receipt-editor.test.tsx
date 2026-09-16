@@ -15,9 +15,15 @@ const { save, replace } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
 }));
-vi.mock('@/features/auth/auth-boundary', () => ({
-  useCurrentUser: () => ({ id: 'user-1' }),
-}));
+vi.mock('@/features/auth/auth-boundary', async () => {
+  const { defaultMeasurementUnits } = await import('@roller-bay/shared/users');
+  return {
+    useCurrentUser: () => ({
+      id: 'user-1',
+      measurementUnits: defaultMeasurementUnits,
+    }),
+  };
+});
 vi.mock('@/components/ui/lookup', () => ({
   Lookup: ({ label }: { label: string }) => <div>{label}</div>,
 }));

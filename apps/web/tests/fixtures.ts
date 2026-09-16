@@ -5,6 +5,7 @@ import {
   type StockReceiptDraftData,
 } from '@roller-bay/shared/stock-receipts';
 import { allocationDetailSchema } from '@roller-bay/shared/allocations';
+import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 export const ids = {
   user: '11111111-1111-4111-8111-111111111111',
   color: '22222222-2222-4222-8222-222222222222',
@@ -28,6 +29,7 @@ export const user = {
   role: 'admin',
   isActive: true,
   createdAt: timestamp,
+  measurementUnits: defaultMeasurementUnits,
 };
 export const color = {
   id: ids.color,

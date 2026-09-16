@@ -4,6 +4,8 @@ import { Plus, Trash2, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
+import { fieldSuffix } from '@/lib/measurements';
 import { type AllocationForm, emptyRequirement } from './allocation-form';
 import {
   catalogKey,
@@ -12,9 +14,11 @@ import {
 
 export function RequirementsEditor({
   form,
+  units,
   onChange,
 }: {
   form: UseFormReturn<AllocationForm>;
+  units: MeasurementUnits;
   onChange: () => void;
 }) {
   const requirements = useFieldArray({
@@ -105,19 +109,19 @@ export function RequirementsEditor({
                 load={lookupColors}
               />
               <TextField
-                label="Width (in)"
+                label={`Width (${fieldSuffix(units, 'blindWidth')})`}
                 type="number"
                 value={r.width}
                 onChange={(v) => change('width', v)}
               />
               <TextField
-                label="Finished drop (yd)"
+                label={`Finished drop (${fieldSuffix(units, 'finishedDrop')})`}
                 type="number"
                 value={r.length}
                 onChange={(v) => change('length', v)}
               />
               <TextField
-                label="Extra drop allowance (yd)"
+                label={`Extra drop allowance (${fieldSuffix(units, 'dropAllowance')})`}
                 type="number"
                 value={r.allowance}
                 onChange={(v) => change('allowance', v)}

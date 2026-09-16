@@ -12,6 +12,83 @@ export const emailSchema = z
   .toLowerCase()
   .pipe(z.email().max(254));
 
+export const lengthUnits = ['in', 'ft', 'yd', 'mm', 'cm', 'm'] as const;
+
+export const lengthUnitSchema = z.enum(lengthUnits);
+
+export type LengthUnit = z.infer<typeof lengthUnitSchema>;
+
+// Each measurement a user may present in a unit of their choice. Tube outer
+// diameter is deliberately absent: stock contracts store it as a multiple of
+// 5 mm, so it stays in millimetres everywhere.
+export const measurementFields = [
+  'rollWidth',
+  'rollLength',
+  'blindWidth',
+  'finishedDrop',
+  'dropAllowance',
+  'dropLength',
+  'edgeTrim',
+  'minimumRemnantWidth',
+  'minimumRemnantLength',
+  'thickness',
+  'radialDepth',
+] as const;
+
+export const measurementFieldSchema = z.enum(measurementFields);
+
+export type MeasurementField = z.infer<typeof measurementFieldSchema>;
+
+export const measurementUnitsSchema = z.record(
+  measurementFieldSchema,
+  lengthUnitSchema,
+);
+
+export type MeasurementUnits = z.infer<typeof measurementUnitsSchema>;
+
+export const defaultMeasurementUnits: MeasurementUnits = {
+  rollWidth: 'in',
+  rollLength: 'yd',
+  blindWidth: 'in',
+  finishedDrop: 'yd',
+  dropAllowance: 'yd',
+  dropLength: 'yd',
+  edgeTrim: 'in',
+  minimumRemnantWidth: 'in',
+  minimumRemnantLength: 'yd',
+  thickness: 'mm',
+  radialDepth: 'mm',
+};
+
+export const updateMeasurementUnitsSchema = z
+  .partialRecord(measurementFieldSchema, lengthUnitSchema)
+  .refine(
+    (value) => Object.keys(value).length > 0,
+    'Choose at least one measurement.',
+  );
+
+export type UpdateMeasurementUnits = z.infer<
+  typeof updateMeasurementUnitsSchema
+>;
+
+/**
+ * Combine a stored selection with the defaults. Stored values may be partial
+ * or predate a change to the offered units; anything unrecognized falls back
+ * per field instead of failing the whole user record.
+ */
+export function resolveMeasurementUnits(stored: unknown): MeasurementUnits {
+  const source: Record<string, unknown> =
+    typeof stored === 'object' && stored !== null
+      ? (stored as Record<string, unknown>)
+      : {};
+  const units = { ...defaultMeasurementUnits };
+  for (const field of measurementFields) {
+    const parsed = lengthUnitSchema.safeParse(source[field]);
+    if (parsed.success) units[field] = parsed.data;
+  }
+  return units;
+}
+
 export const userSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
@@ -19,6 +96,7 @@ export const userSchema = z.object({
   isActive: z.boolean(),
   email: emailSchema,
   createdAt: z.iso.datetime(),
+  measurementUnits: measurementUnitsSchema,
 });
 
 export type User = z.infer<typeof userSchema>;

@@ -9,6 +9,8 @@ import {
 } from '@roller-bay/shared/allocations';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { fieldSuffix } from '@/lib/measurements';
 import {
   locationsKey,
   lookupLocations,
@@ -41,13 +43,17 @@ export function CompletionEditor({
   close: () => void;
 }) {
   const user = useCurrentUser();
+  // Pin the units this form opened with: a session refetch must not relabel
+  // or reinterpret dirty input.
+  const liveUnits = useMeasurementUnits();
+  const [units] = useState(liveUnits);
   const scope = `completion:${user.id}:${allocation.id}:${allocation.revision}`;
   const recovery = completeAllocationSchema.safeParse(pendingPayload(scope));
   const form = useForm<CompletionForm>({
     resolver: zodResolver(completionFormSchema),
     defaultValues: recovery.success
-      ? completionRecovery(recovery.data, allocation)
-      : completionToForm(allocation),
+      ? completionRecovery(recovery.data, allocation, units)
+      : completionToForm(allocation, units),
   });
   const values = useWatch({ control: form.control }) as CompletionForm;
   const client = useQueryClient();
@@ -56,7 +62,7 @@ export function CompletionEditor({
   useUnsavedChanges(form.formState.isDirty);
   const mutation = useMutation({
     mutationFn: (value: CompletionForm) => {
-      const body = completionFromForm(value, allocation.revision);
+      const body = completionFromForm(value, allocation.revision, units);
       return completeAllocation(allocation.id, body, requestKey(scope, body));
     },
     onSuccess: async () => {
@@ -86,7 +92,7 @@ export function CompletionEditor({
       <form
         onSubmit={form.handleSubmit((value) => {
           try {
-            completionFromForm(value, allocation.revision);
+            completionFromForm(value, allocation.revision, units);
             setValidationError(null);
             setConfirm(true);
           } catch (error) {
@@ -148,7 +154,7 @@ export function CompletionEditor({
                         )}
                         {row.outcome === 'returned-roll' && (
                           <TextField
-                            label="Radial depth (mm)"
+                            label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
                             type="number"
                             value={row.depth}
                             onChange={(depth) =>
@@ -160,7 +166,7 @@ export function CompletionEditor({
                         {row.outcome === 'returned-remnant' && (
                           <>
                             <TextField
-                              label="Remaining width (in)"
+                              label={`Remaining width (${fieldSuffix(units, 'rollWidth')})`}
                               type="number"
                               value={row.width}
                               onChange={(width) =>
@@ -168,7 +174,7 @@ export function CompletionEditor({
                               }
                             />
                             <TextField
-                              label="Remaining length (yd)"
+                              label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
                               type="number"
                               value={row.length}
                               onChange={(length) =>
@@ -254,13 +260,13 @@ export function CompletionEditor({
                               </Button>
                             </div>
                             <TextField
-                              label="Width (in)"
+                              label={`Width (${fieldSuffix(units, 'rollWidth')})`}
                               type="number"
                               value={scrap.width}
                               onChange={(width) => update({ ...scrap, width })}
                             />
                             <TextField
-                              label="Length (yd)"
+                              label={`Length (${fieldSuffix(units, 'rollLength')})`}
                               type="number"
                               value={scrap.length}
                               onChange={(length) =>

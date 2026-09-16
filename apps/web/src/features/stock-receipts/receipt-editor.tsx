@@ -26,6 +26,8 @@ import {
   lookupLocations,
 } from '@/features/locations/locations.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { fieldSuffix } from '@/lib/measurements';
 import {
   pendingPayload,
   requestKey,
@@ -55,12 +57,17 @@ export function ReceiptEditor({
   onSubmitted?: () => void;
 }) {
   const user = useCurrentUser();
+  // Pin the units this form opened with: a session refetch must not relabel
+  // or reinterpret dirty input.
+  const liveUnits = useMeasurementUnits();
+  const [units] = useState(liveUnits);
   const scope = `receipt:${user.id}:new`;
   const recovery = stockReceiptDraftDataSchema.safeParse(pendingPayload(scope));
   const form = useForm<ReceiptForm>({
     resolver: zodResolver(receiptFormSchema),
     defaultValues: receiptToForm(
       initial?.data ?? (recovery.success ? recovery.data : undefined),
+      units,
     ),
   });
   const lines = useFieldArray({ control: form.control, name: 'items' });
@@ -80,7 +87,7 @@ export function ReceiptEditor({
     ]);
   const save = useMutation({
     mutationFn: async (value: ReceiptForm) => {
-      const data = receiptFromForm(value);
+      const data = receiptFromForm(value, units);
       return saved
         ? saveReceiptDraft(saved.id, saved.revision, data)
         : createReceiptDraft(data, requestKey(scope, data));
@@ -97,7 +104,7 @@ export function ReceiptEditor({
     onSuccess: async (draft) => {
       finishRequest(scope);
       setSaved(draft);
-      form.reset(receiptToForm(draft.data));
+      form.reset(receiptToForm(draft.data, units));
       client.setQueryData([...receiptKey, draft.id], draft);
       await refresh();
       if (!initial) router.replace(`/stock-receipts/${draft.id}`);
@@ -126,7 +133,7 @@ export function ReceiptEditor({
     onSuccess: (latest) => {
       if (latest.state === 'draft') {
         setSaved(latest);
-        form.reset(receiptToForm(latest.data));
+        form.reset(receiptToForm(latest.data, units));
       } else onSubmitted?.();
       save.reset();
       submit.reset();
@@ -144,7 +151,7 @@ export function ReceiptEditor({
   ) => form.setValue(`items.${index}.${name}`, value, { shouldDirty: true });
   function confirmSubmit() {
     try {
-      createStockReceiptSchema.parse(receiptFromForm(form.getValues()));
+      createStockReceiptSchema.parse(receiptFromForm(form.getValues(), units));
       setValidationError(null);
       setConfirmation('submit');
     } catch (error) {
@@ -225,13 +232,13 @@ export function ReceiptEditor({
                       load={lookupColors}
                     />
                     <TextField
-                      label="Width (in)"
+                      label={`Width (${fieldSuffix(units, 'rollWidth')})`}
                       type="number"
                       value={value.width}
                       onChange={(v) => field(index, 'width', v)}
                     />
                     <TextField
-                      label="Length per roll (yd)"
+                      label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
                       type="number"
                       value={value.length}
                       onChange={(v) => field(index, 'length', v)}
@@ -266,7 +273,7 @@ export function ReceiptEditor({
               type="button"
               variant="outline"
               onClick={() => {
-                form.reset(receiptToForm(recovery.data));
+                form.reset(receiptToForm(recovery.data, units));
                 save.reset();
               }}
             >

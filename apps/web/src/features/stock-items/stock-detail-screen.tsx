@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useCanManage } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import {
@@ -13,18 +14,14 @@ import {
   Loading,
   Status,
 } from '@/components/ui/feedback';
-import {
-  widthLabel,
-  lengthLabel,
-  dimension,
-  dateLabel,
-  shortId,
-} from '@/lib/format';
+import { dimension, dateLabel, shortId } from '@/lib/format';
+import { fieldLabel } from '@/lib/measurements';
 import { stockDetail, deleteStock, stockKey } from './stock-items.api';
 import { StockEditor } from './stock-editor';
 export function StockDetailScreen({ id }: { id: string }) {
   const query = useQuery(stockDetail(id));
   const admin = useCanManage();
+  const units = useMeasurementUnits();
   const client = useQueryClient();
   const router = useRouter();
   const [edit, setEdit] = useState(false);
@@ -40,9 +37,12 @@ export function StockDetailScreen({ id }: { id: string }) {
   if (!query.data) return <ErrorNotice error={query.error} />;
   const item = query.data;
   const details = [
-    ['Width', widthLabel(item.widthMm)],
-    ['Remaining length', lengthLabel(item.remainingLengthMm)],
-    ['Initial length', lengthLabel(item.initialLengthMm)],
+    ['Width', fieldLabel(units, 'rollWidth', item.widthMm)],
+    [
+      'Remaining length',
+      fieldLabel(units, 'rollLength', item.remainingLengthMm),
+    ],
+    ['Initial length', fieldLabel(units, 'rollLength', item.initialLengthMm)],
     [
       'Location',
       `${item.zoneName} / ${item.sectionLabel} / ${item.locationLabel}`,
@@ -59,7 +59,7 @@ export function StockDetailScreen({ id }: { id: string }) {
       'Radial depth',
       item.radialDepthMm === null
         ? 'Not measured'
-        : dimension(item.radialDepthMm),
+        : fieldLabel(units, 'radialDepth', item.radialDepthMm),
     ],
     ['Created', dateLabel(item.createdAt)],
   ];

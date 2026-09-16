@@ -7,7 +7,7 @@ export type CatalogRow = {
   parentId: string;
   parent: string;
   manufacturer: string;
-  thickness: string;
+  thicknessMm: number | null;
 };
 export const catalogKey = ['fabric-catalog'] as const;
 export async function listCatalog(
@@ -31,7 +31,7 @@ export async function listCatalog(
         parentId: i.materialId,
         parent: i.materialName,
         manufacturer: i.manufacturerName,
-        thickness: String(i.thicknessMm),
+        thicknessMm: i.thicknessMm,
       })),
     };
   }
@@ -49,7 +49,7 @@ export async function listCatalog(
         parentId: i.manufacturerId,
         parent: i.manufacturerName,
         manufacturer: i.manufacturerName,
-        thickness: '',
+        thicknessMm: null,
       })),
     };
   }
@@ -66,14 +66,14 @@ export async function listCatalog(
       parentId: '',
       parent: '',
       manufacturer: '',
-      thickness: '',
+      thicknessMm: null,
     })),
   };
 }
 export async function saveCatalog(
   kind: CatalogKind,
   id: string | undefined,
-  input: { name: string; parentId: string; thickness: string },
+  input: { name: string; parentId: string; thicknessMm: number | null },
 ) {
   const method = id ? 'PATCH' : 'POST';
   const path = `/fabric-catalog/${kind}${id ? `/${id}` : ''}`;
@@ -83,7 +83,7 @@ export async function saveCatalog(
       body: schemas.createFabricColorSchema.parse({
         code: input.name,
         materialId: input.parentId,
-        thicknessMm: Number(input.thickness),
+        thicknessMm: input.thicknessMm,
       }),
     });
   if (kind === 'materials')

@@ -12,7 +12,9 @@ import {
   PageHeading,
   Status,
 } from '@/components/ui/feedback';
-import { dateLabel, lengthLabel, widthLabel, shortId } from '@/lib/format';
+import { dateLabel, shortId } from '@/lib/format';
+import { fieldLabel } from '@/lib/measurements';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 export function ReceiptDetailScreen({ id }: { id: string }) {
   const query = useQuery(receiptDetail(id));
   if (query.isPending) return <Loading />;
@@ -31,6 +33,7 @@ function ReceiptRecord({
 }: {
   receipt: z.infer<typeof stockReceiptRecordSchema>;
 }) {
+  const units = useMeasurementUnits();
   // A background submission by another employee must not unmount unsaved input.
   const [draft, setDraft] = useState(
     receipt.state === 'draft' ? receipt : null,
@@ -71,8 +74,10 @@ function ReceiptRecord({
                   <td>
                     {line.stockItems[0]?.fabricColorCode ?? line.fabricColorId}
                   </td>
-                  <td>{widthLabel(line.widthMm)}</td>
-                  <td>{lengthLabel(line.initialLengthMm)}</td>
+                  <td>{fieldLabel(units, 'rollWidth', line.widthMm)}</td>
+                  <td>
+                    {fieldLabel(units, 'rollLength', line.initialLengthMm)}
+                  </td>
                   <td>{line.quantity}</td>
                   <td>
                     {line.stockItemIds.map((stock) => (

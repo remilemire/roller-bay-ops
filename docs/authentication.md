@@ -49,7 +49,7 @@ Microsoft returns to the configured callback; after validation, the API redirect
 
 This redirect behavior is scoped to browser login routes. Other API endpoints retain their HTTP/JSON errors, as do requests rejected by rate-limit or session middleware before a route runs.
 
-`GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt }`. `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
+`GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt, measurementUnits }`, where `measurementUnits` maps each measurement field to the unit the user chose (defaults fill in anything unset). `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
 
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
 
@@ -79,12 +79,15 @@ The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DE
 
 Roles form a hierarchy: `owner` inherits all `admin` permissions, and both inherit `user` access. Current database roles are checked on each protected request. User-management operations check the acting user again inside the database transaction, so an earlier guard result cannot authorize a stale role.
 
-| Endpoint                             | Allowed callers    | Behavior                                               |
-| ------------------------------------ | ------------------ | ------------------------------------------------------ |
-| `PATCH /api/users/:id/role`          | Admin or owner     | Set a non-owner's role to user or admin.               |
-| `POST /api/users/transfer-ownership` | Current owner only | Transfer ownership to `newOwnerId` from the JSON body. |
+| Endpoint                                | Allowed callers    | Behavior                                                      |
+| --------------------------------------- | ------------------ | ------------------------------------------------------------- |
+| `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to user or admin.                      |
+| `POST /api/users/transfer-ownership`    | Current owner only | Transfer ownership to `newOwnerId` from the JSON body.        |
+| `PATCH /api/users/me/measurement-units` | Any active user    | Set the caller's own unit for one or more measurement fields. |
 
 Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body must contain only `role`; assigning `owner` through this endpoint is rejected with 400. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
+
+Measurement unit updates accept a partial object such as `{ "blindWidth": "mm" }` whose keys are measurement fields and whose values are `in`, `ft`, `yd`, `mm`, `cm`, or `m`. The body must not be empty and may not name other fields; tube outer diameter is not configurable. Keys merge with earlier choices in a single statement, the target is always the signed-in user, and the response is the caller's public user record. Stored values that are no longer offered fall back to the default for that field. The `0011_add_user_measurement_units.sql` migration adds `measurement_units jsonb NOT NULL DEFAULT '{}'`, so existing users start with the defaults.
 
 Ownership transfer accepts `{ "newOwnerId": "<user UUID>" }` and returns `{ previousOwner, newOwner }` with both public user records. The recipient must be an existing active user or admin. Transferring to yourself or an inactive user returns 409; a missing recipient returns 404. The previous owner becomes an admin. Both updates commit atomically, and failure rolls both back. Concurrent transfers by the same owner have only one winner; the other request receives 403 after its owner permission is rechecked.
 

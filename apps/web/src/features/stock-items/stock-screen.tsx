@@ -14,12 +14,15 @@ import {
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
-import { lengthLabel, widthLabel, shortId } from '@/lib/format';
+import { shortId } from '@/lib/format';
+import { fieldLabel } from '@/lib/measurements';
 import { useCanManage } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { stockList } from './stock-items.api';
 import { StockEditor } from './stock-editor';
 export function StockScreen() {
   const params = useListParams();
+  const units = useMeasurementUnits();
   const consumed = params.get('state') === 'consumed';
   const remnant = params.get('kind') === 'remnant';
   const query = useQuery(
@@ -109,8 +112,10 @@ export function StockScreen() {
                         </span>
                       </Link>
                     </td>
-                    <td>{widthLabel(item.widthMm)}</td>
-                    <td>{lengthLabel(item.remainingLengthMm)}</td>
+                    <td>{fieldLabel(units, 'rollWidth', item.widthMm)}</td>
+                    <td>
+                      {fieldLabel(units, 'rollLength', item.remainingLengthMm)}
+                    </td>
                     <td>
                       {item.zoneName}
                       <small>

@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
-import type { UserRole } from '@roller-bay/shared/users';
+import type {
+  UpdateMeasurementUnits,
+  UserRole,
+} from '@roller-bay/shared/users';
 import { DatabaseService } from '../../database/database.service.js';
 import { users } from './users.table.js';
 import type { MicrosoftProfile } from './microsoft-profile.schema.js';
@@ -91,6 +94,21 @@ export class UsersRepository {
 
   setActivation(id: string, isActive: boolean) {
     return this.update(id, { isActive });
+  }
+
+  // A jsonb concatenation merges the patch in one statement, so concurrent
+  // changes to different fields never overwrite each other and no table lock
+  // is needed for a user's own preference.
+  async setMeasurementUnits(id: string, patch: UpdateMeasurementUnits) {
+    const [user] = await this.db
+      .update(users)
+      .set({
+        measurementUnits: sql`${users.measurementUnits} || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(eq(users.id, id))
+      .returning();
+    if (!user) throw new Error('The user no longer exists.');
+    return user;
   }
 
   async withLockedTransaction<T>(

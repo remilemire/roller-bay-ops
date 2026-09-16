@@ -5,7 +5,9 @@ import {
   createStockItemSchema,
   updateStockItemSchema,
 } from '@roller-bay/shared/stock-items';
+import type { LengthUnit } from '@roller-bay/shared/users';
 import { api, noContent, queryString } from '@/lib/api';
+import { measurementLabel } from '@/lib/measurements';
 export const stockKey = ['stock-items'] as const;
 export const stockList = (filters: Record<string, unknown> = {}) =>
   queryOptions({
@@ -32,21 +34,21 @@ export const saveStock = (body: unknown, id?: string) =>
   });
 export const deleteStock = (id: string) =>
   api(`/stock-items/${id}`, noContent, { method: 'DELETE' });
-export async function lookupStock(
-  search: string,
-  page: number,
-  signal: AbortSignal,
-) {
-  const data = await api(
-    `/stock-items${queryString({ search, page, pageSize: 25, isConsumed: false })}`,
-    stockItemListSchema,
-    { signal },
-  );
-  return {
-    total: data.total,
-    items: data.items.map((i) => ({
-      id: i.id,
-      label: `${i.fabricColorCode} · ${Number((i.widthMm / 25.4).toFixed(2))} in · ${i.id.slice(0, 8).toUpperCase()}`,
-    })),
+// Option labels show the roll width in the caller's unit; key the lookup
+// query by that unit so cached labels never show another unit.
+export const lookupStock =
+  (widthUnit: LengthUnit) =>
+  async (search: string, page: number, signal: AbortSignal) => {
+    const data = await api(
+      `/stock-items${queryString({ search, page, pageSize: 25, isConsumed: false })}`,
+      stockItemListSchema,
+      { signal },
+    );
+    return {
+      total: data.total,
+      items: data.items.map((i) => ({
+        id: i.id,
+        label: `${i.fabricColorCode} · ${measurementLabel(i.widthMm, widthUnit)} · ${i.id.slice(0, 8).toUpperCase()}`,
+      })),
+    };
   };
-}

@@ -25,6 +25,7 @@ import { TextField } from '@/components/ui/field';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import { stockKey } from '@/features/stock-items/stock-items.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import {
   pendingPayload,
   requestKey,
@@ -60,6 +61,10 @@ export function AllocationEditor({
   onSubmitted?: () => void;
 }) {
   const user = useCurrentUser();
+  // Pin the units this form opened with: a session refetch must not relabel
+  // or reinterpret dirty input.
+  const liveUnits = useMeasurementUnits();
+  const [units] = useState(liveUnits);
   const scope = `allocation:${user.id}:new`;
   const recovery = allocationDraftDataSchema.safeParse(pendingPayload(scope));
   const activeData = active
@@ -76,6 +81,7 @@ export function AllocationEditor({
       initial?.data ??
         activeData ??
         (recovery.success ? recovery.data : undefined),
+      units,
     ),
   });
   const values = useWatch({ control: form.control }) as AllocationForm;
@@ -97,7 +103,7 @@ export function AllocationEditor({
     ]);
   const save = useMutation({
     mutationFn: async (value: AllocationForm) => {
-      const data = allocationFromForm(value);
+      const data = allocationFromForm(value, units);
       if (active)
         return replaceAllocation(active.id, {
           ...data,
@@ -120,7 +126,7 @@ export function AllocationEditor({
       finishRequest(scope);
       if (record.state === 'draft') {
         setSaved(record);
-        form.reset(allocationToForm(record.data));
+        form.reset(allocationToForm(record.data, units));
       } else form.reset(form.getValues());
       client.setQueryData([...allocationKey, record.id], record);
       await refresh();
@@ -147,7 +153,7 @@ export function AllocationEditor({
   });
   const planning = useMutation({
     mutationFn: async (mode: 'optimize' | 'validate') => {
-      const data = allocationFromForm(form.getValues());
+      const data = allocationFromForm(form.getValues(), units);
       const target = active ?? saved;
       const context = {
         requirements: data.requirements,
@@ -164,10 +170,10 @@ export function AllocationEditor({
     onSuccess: (result) => {
       setPreview(result);
       if ('status' in result && result.status === 'feasible') {
-        const next = allocationToForm({
-          ...allocationFromForm(form.getValues()),
-          plan: result.plan,
-        });
+        const next = allocationToForm(
+          { ...allocationFromForm(form.getValues(), units), plan: result.plan },
+          units,
+        );
         // Optimization proposes form changes; it neither saves nor reserves stock.
         form.setValue('drops', next.drops, { shouldDirty: true });
       }
@@ -179,7 +185,7 @@ export function AllocationEditor({
     onSuccess: (latest) => {
       if (latest.state === 'draft') {
         setSaved(latest);
-        form.reset(allocationToForm(latest.data));
+        form.reset(allocationToForm(latest.data, units));
       } else onSubmitted?.();
       save.reset();
       submit.reset();
@@ -196,7 +202,7 @@ export function AllocationEditor({
     planning.isPending;
   function confirmSubmit() {
     try {
-      createAllocationSchema.parse(allocationFromForm(form.getValues()));
+      createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
       setValidationError(null);
       setConfirm('submit');
     } catch (error) {
@@ -237,8 +243,13 @@ export function AllocationEditor({
                 />
               </div>
             </section>
-            <RequirementsEditor form={form} onChange={() => setPreview(null)} />
+            <RequirementsEditor
+              form={form}
+              units={units}
+              onChange={() => setPreview(null)}
+            />
             <CuttingSettingsFields
+              units={units}
               value={values.settings}
               onChange={(value) => {
                 form.setValue('settings', value, { shouldDirty: true });
@@ -247,6 +258,7 @@ export function AllocationEditor({
             />
             <CutPlanEditor
               form={form}
+              units={units}
               onChange={() => setPreview(null)}
               onOptimize={() => planning.mutate('optimize')}
               onValidate={() => planning.mutate('validate')}
@@ -263,7 +275,7 @@ export function AllocationEditor({
               type="button"
               variant="outline"
               onClick={() => {
-                form.reset(allocationToForm(recovery.data));
+                form.reset(allocationToForm(recovery.data, units));
                 save.reset();
               }}
             >

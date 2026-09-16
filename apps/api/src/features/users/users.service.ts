@@ -8,7 +8,12 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { userSchema, type UserRole } from '@roller-bay/shared/users';
+import {
+  resolveMeasurementUnits,
+  userSchema,
+  type UpdateMeasurementUnits,
+  type UserRole,
+} from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
 import { UsersRepository, type UserRecord } from './users.repository.js';
 import {
@@ -122,6 +127,16 @@ export class UsersService {
     }
   }
 
+  async setMeasurementUnits(userId: string, patch: UpdateMeasurementUnits) {
+    try {
+      return this.toPublic(
+        await this.repository.setMeasurementUnits(userId, patch),
+      );
+    } catch (error) {
+      this.rethrowStorageError(error);
+    }
+  }
+
   private async requireUser(users: UsersRepository, id: string) {
     const user = await users.findById(id);
     if (!user) throw new NotFoundException('User not found.');
@@ -150,6 +165,7 @@ export class UsersService {
     return userSchema.parse({
       ...user,
       createdAt: user.createdAt.toISOString(),
+      measurementUnits: resolveMeasurementUnits(user.measurementUnits),
     });
   }
 }

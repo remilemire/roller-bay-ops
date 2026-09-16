@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { StockItem } from '@roller-bay/shared/stock-items';
@@ -15,13 +16,9 @@ import {
   lookupLocations,
   locationsKey,
 } from '@/features/locations/locations.api';
-import {
-  nullableNumber,
-  widthInput,
-  widthValue,
-  lengthInput,
-  lengthValue,
-} from '@/lib/format';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { nullableNumber } from '@/lib/format';
+import { fieldInput, fieldSuffix, fieldValue } from '@/lib/measurements';
 import { saveStock, stockKey } from './stock-items.api';
 export function StockEditor({
   item,
@@ -30,15 +27,27 @@ export function StockEditor({
   item?: StockItem;
   close: () => void;
 }) {
+  // Pin the units this form opened with: a session refetch must not relabel
+  // or reinterpret dirty input.
+  const liveUnits = useMeasurementUnits();
+  const [units] = useState(liveUnits);
   const form = useForm({
     defaultValues: {
       fabricColorId: item?.fabricColorId ?? '',
       locationId: item?.locationId ?? '',
       kind: item?.isRemnant ? 'remnant' : item?.isUsed ? 'used' : 'new',
-      width: widthInput(item?.widthMm ?? null),
-      initialLength: lengthInput(item?.initialLengthMm ?? null),
-      explicitLength: lengthInput(item?.explicitLengthMm ?? null),
-      depth: String(item?.radialDepthMm ?? ''),
+      width: fieldInput(units, 'rollWidth', item?.widthMm ?? null),
+      initialLength: fieldInput(
+        units,
+        'rollLength',
+        item?.initialLengthMm ?? null,
+      ),
+      explicitLength: fieldInput(
+        units,
+        'rollLength',
+        item?.explicitLengthMm ?? null,
+      ),
+      depth: fieldInput(units, 'radialDepth', item?.radialDepthMm ?? null),
       tube: String(item?.tubeOuterDiameterMm ?? ''),
       consumed: !!item?.consumedAt,
     },
@@ -52,12 +61,15 @@ export function StockEditor({
     mutationFn: (v: typeof values) => {
       const measurements = {
         locationId: v.locationId,
-        widthMm: widthValue(v.width),
-        initialLengthMm: lengthValue(v.initialLength),
+        widthMm: fieldValue(units, 'rollWidth', v.width),
+        initialLengthMm: fieldValue(units, 'rollLength', v.initialLength),
         isUsed: v.kind !== 'new',
         explicitLengthMm:
-          v.kind === 'remnant' ? lengthValue(v.explicitLength) : null,
-        radialDepthMm: v.kind === 'used' ? nullableNumber(v.depth) : null,
+          v.kind === 'remnant'
+            ? fieldValue(units, 'rollLength', v.explicitLength)
+            : null,
+        radialDepthMm:
+          v.kind === 'used' ? fieldValue(units, 'radialDepth', v.depth) : null,
         tubeOuterDiameterMm: v.kind === 'used' ? nullableNumber(v.tube) : null,
         consumedAt: v.consumed
           ? (item?.consumedAt ?? new Date().toISOString())
@@ -124,14 +136,14 @@ export function StockEditor({
           />
           <div className="form-grid">
             <TextField
-              label="Width (in)"
+              label={`Width (${fieldSuffix(units, 'rollWidth')})`}
               value={values.width}
               onChange={(v) => form.setValue('width', v)}
               type="number"
               required
             />
             <TextField
-              label="Initial length (yd)"
+              label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
               value={values.initialLength}
               onChange={(v) => form.setValue('initialLength', v)}
               type="number"
@@ -139,7 +151,7 @@ export function StockEditor({
             />
             {values.kind === 'remnant' && (
               <TextField
-                label="Remaining length (yd)"
+                label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
                 value={values.explicitLength}
                 onChange={(v) => form.setValue('explicitLength', v)}
                 type="number"
@@ -157,7 +169,7 @@ export function StockEditor({
                   hint="A positive multiple of 5."
                 />
                 <TextField
-                  label="Radial depth (mm)"
+                  label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
                   value={values.depth}
                   onChange={(v) => form.setValue('depth', v)}
                   type="number"

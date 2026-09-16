@@ -44,7 +44,7 @@ test('preview cards select all five palettes in light and dark mode and survive 
   const appearance = page.getByRole('region', { name: 'Appearance' });
   await expect(appearance.getByRole('radio')).toHaveCount(5);
   await expect(page.getByRole('banner').getByRole('radio')).toHaveCount(0);
-  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await expect(appearance.getByRole('combobox')).toHaveCount(0);
   for (const mode of ['light', 'dark'] as const) {
     await appearance
       .getByRole('button', {

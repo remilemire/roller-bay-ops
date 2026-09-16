@@ -3,13 +3,9 @@ import {
   completeAllocationSchema,
   type AllocationDetail,
 } from '@roller-bay/shared/allocations';
-import {
-  widthInput,
-  lengthInput,
-  widthValue,
-  lengthValue,
-  nullableNumber,
-} from '@/lib/format';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
+import { nullableNumber } from '@/lib/format';
+import { fieldInput, fieldValue } from '@/lib/measurements';
 export const completionFormSchema = z.object({
   items: z.array(
     z.object({
@@ -33,7 +29,12 @@ export const completionFormSchema = z.object({
   ),
 });
 export type CompletionForm = z.infer<typeof completionFormSchema>;
-export function completionToForm(allocation: AllocationDetail): CompletionForm {
+// Tube diameters stay in millimetres (the contract requires multiples of 5);
+// every other measurement follows the given units in both directions.
+export function completionToForm(
+  allocation: AllocationDetail,
+  units: MeasurementUnits,
+): CompletionForm {
   return {
     items: allocation.items.map(({ stockItem }) => ({
       stockItemId: stockItem.id,
@@ -41,7 +42,7 @@ export function completionToForm(allocation: AllocationDetail): CompletionForm {
       outcome: '',
       tube: String(stockItem.tubeOuterDiameterMm ?? ''),
       depth: '',
-      width: widthInput(stockItem.widthMm),
+      width: fieldInput(units, 'rollWidth', stockItem.widthMm),
       length: '',
       locationId: stockItem.locationId,
       scraps: [],
@@ -51,6 +52,7 @@ export function completionToForm(allocation: AllocationDetail): CompletionForm {
 export function completionFromForm(
   form: CompletionForm,
   expectedRevision: number,
+  units: MeasurementUnits,
 ) {
   return completeAllocationSchema.parse({
     expectedRevision,
@@ -64,20 +66,20 @@ export function completionFromForm(
           : {}
         : item.outcome === 'returned-roll'
           ? {
-              radialDepthMm: nullableNumber(item.depth),
+              radialDepthMm: fieldValue(units, 'radialDepth', item.depth),
               locationId: item.locationId,
               ...(item.tube.trim()
                 ? { tubeOuterDiameterMm: nullableNumber(item.tube) }
                 : {}),
             }
           : {
-              widthMm: widthValue(item.width),
-              explicitLengthMm: lengthValue(item.length),
+              widthMm: fieldValue(units, 'rollWidth', item.width),
+              explicitLengthMm: fieldValue(units, 'rollLength', item.length),
               locationId: item.locationId,
             }),
       scraps: item.scraps.map((s) => ({
-        widthMm: widthValue(s.width),
-        lengthMm: lengthValue(s.length),
+        widthMm: fieldValue(units, 'rollWidth', s.width),
+        lengthMm: fieldValue(units, 'rollLength', s.length),
         quantity: nullableNumber(s.quantity),
         locationId: s.locationId,
       })),
@@ -91,8 +93,9 @@ export function completionFromForm(
 export function completionRecovery(
   body: z.infer<typeof completeAllocationSchema>,
   allocation: AllocationDetail,
+  units: MeasurementUnits,
 ): CompletionForm {
-  const initial = completionToForm(allocation);
+  const initial = completionToForm(allocation, units);
   return {
     items: body.items.map((item) => {
       const base = initial.items.find(
@@ -107,14 +110,22 @@ export function completionRecovery(
           'tubeOuterDiameterMm' in item
             ? String(item.tubeOuterDiameterMm ?? '')
             : base.tube,
-        depth: 'radialDepthMm' in item ? String(item.radialDepthMm) : '',
-        width: 'widthMm' in item ? widthInput(item.widthMm) : base.width,
+        depth:
+          'radialDepthMm' in item
+            ? fieldInput(units, 'radialDepth', item.radialDepthMm)
+            : '',
+        width:
+          'widthMm' in item
+            ? fieldInput(units, 'rollWidth', item.widthMm)
+            : base.width,
         length:
-          'explicitLengthMm' in item ? lengthInput(item.explicitLengthMm) : '',
+          'explicitLengthMm' in item
+            ? fieldInput(units, 'rollLength', item.explicitLengthMm)
+            : '',
         locationId: 'locationId' in item ? item.locationId : base.locationId,
         scraps: item.scraps.map((s) => ({
-          width: widthInput(s.widthMm),
-          length: lengthInput(s.lengthMm),
+          width: fieldInput(units, 'rollWidth', s.widthMm),
+          length: fieldInput(units, 'rollLength', s.lengthMm),
           quantity: String(s.quantity),
           locationId: s.locationId,
         })),

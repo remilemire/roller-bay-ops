@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, mock, test } from 'node:test';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -66,6 +67,23 @@ test('repository translates only the named email constraint into a typed conflic
       ConflictException,
     );
   }
+});
+
+test('measurement unit updates report storage failures as unavailable', async () => {
+  failure = new Error('Connection failed');
+  const id = randomUUID();
+  await assert.rejects(
+    repository.setMeasurementUnits(id, { rollWidth: 'mm' }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.cause, failure);
+      return true;
+    },
+  );
+  await assert.rejects(
+    service.setMeasurementUnits(id, { rollWidth: 'mm' }),
+    ServiceUnavailableException,
+  );
 });
 
 test('other database failures are not mislabeled as email conflicts', async () => {

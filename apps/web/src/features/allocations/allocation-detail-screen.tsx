@@ -16,7 +16,9 @@ import {
   PageHeading,
   Status,
 } from '@/components/ui/feedback';
-import { dateLabel, shortId, widthLabel, lengthLabel } from '@/lib/format';
+import { dateLabel, shortId } from '@/lib/format';
+import { fieldLabel } from '@/lib/measurements';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import {
   allocationDetail,
   cancelAllocation,
@@ -43,6 +45,7 @@ function AllocationRecord({
   allocation: z.infer<typeof allocationRecordSchema>;
 }) {
   const id = allocation.id;
+  const units = useMeasurementUnits();
   // A background confirmation must not replace the employee's open draft form.
   const [draft, setDraft] = useState(
     allocation.state === 'draft' ? allocation : null,
@@ -138,7 +141,7 @@ function AllocationRecord({
                   <div className="form-row-header">
                     <h3>
                       Drop {index + 1} · {stock?.fabricColorCode} ·{' '}
-                      {lengthLabel(drop.lengthMm)}
+                      {fieldLabel(units, 'dropLength', drop.lengthMm)}
                     </h3>
                     <Link
                       className="text-link"
@@ -152,7 +155,7 @@ function AllocationRecord({
                     style={{ margin: '6px 0 12px', fontSize: 12 }}
                   >
                     {stock &&
-                      `${widthLabel(stock.widthMm)} ${stock.isRemnant ? 'remnant' : 'roll'} · ${stock.zoneName} / ${stock.sectionLabel} / ${stock.locationLabel}`}
+                      `${fieldLabel(units, 'rollWidth', stock.widthMm)} ${stock.isRemnant ? 'remnant' : 'roll'} · ${stock.zoneName} / ${stock.sectionLabel} / ${stock.locationLabel}`}
                   </p>
                   <div
                     className="plan-strip"
@@ -173,7 +176,12 @@ function AllocationRecord({
                         >
                           Blind {ri + 1} × {assignment.quantity}
                           <br />
-                          {requirement && widthLabel(requirement.widthMm)}
+                          {requirement &&
+                            fieldLabel(
+                              units,
+                              'blindWidth',
+                              requirement.widthMm,
+                            )}
                         </span>
                       );
                     })}
@@ -205,9 +213,11 @@ function AllocationRecord({
                 {allocation.requirements.map((r, i) => (
                   <tr key={r.id}>
                     <td>Blind {i + 1}</td>
-                    <td>{widthLabel(r.widthMm)}</td>
-                    <td>{lengthLabel(r.lengthMm)}</td>
-                    <td>{lengthLabel(r.lengthAllowanceMm)}</td>
+                    <td>{fieldLabel(units, 'blindWidth', r.widthMm)}</td>
+                    <td>{fieldLabel(units, 'finishedDrop', r.lengthMm)}</td>
+                    <td>
+                      {fieldLabel(units, 'dropAllowance', r.lengthAllowanceMm)}
+                    </td>
                     <td>{r.quantity}</td>
                   </tr>
                 ))}
@@ -223,18 +233,32 @@ function AllocationRecord({
             <div className="panel-body details-grid">
               <div>
                 <div className="detail-label">Trim per outside edge</div>
-                <strong>{widthLabel(allocation.settings.edgeTrimMm)}</strong>
+                <strong>
+                  {fieldLabel(
+                    units,
+                    'edgeTrim',
+                    allocation.settings.edgeTrimMm,
+                  )}
+                </strong>
               </div>
               <div>
                 <div className="detail-label">Minimum reusable width</div>
                 <strong>
-                  {widthLabel(allocation.settings.minimumRemnantWidthMm)}
+                  {fieldLabel(
+                    units,
+                    'minimumRemnantWidth',
+                    allocation.settings.minimumRemnantWidthMm,
+                  )}
                 </strong>
               </div>
               <div>
                 <div className="detail-label">Minimum reusable length</div>
                 <strong>
-                  {lengthLabel(allocation.settings.minimumRemnantLengthMm)}
+                  {fieldLabel(
+                    units,
+                    'minimumRemnantLength',
+                    allocation.settings.minimumRemnantLengthMm,
+                  )}
                 </strong>
               </div>
             </div>

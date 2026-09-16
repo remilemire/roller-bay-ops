@@ -5,6 +5,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { Pool } from 'pg';
 import request from 'supertest';
 import {
+  defaultMeasurementUnits,
   ownershipTransferResultSchema,
   userSchema,
 } from '@roller-bay/shared/users';
@@ -219,6 +220,87 @@ export async function testUserRoles(
         .set('Cookie', ownerCookie)
         .set('Origin', origin)
         .expect(204);
+    },
+  );
+
+  await t.test(
+    'users choose their own measurement units without affecting other accounts',
+    async () => {
+      const patchUnits = (
+        cookie: string | null,
+        body: unknown,
+        withOrigin = true,
+      ) => {
+        let call = request(server).patch('/api/users/me/measurement-units');
+        if (cookie) call = call.set('Cookie', cookie);
+        if (withOrigin) call = call.set('Origin', origin);
+        return call.send(body as object);
+      };
+      await patchUnits(null, { rollWidth: 'mm' }).expect(401);
+      await patchUnits(recipientCookie, { rollWidth: 'mm' }, false).expect(403);
+      for (const body of [
+        {},
+        [],
+        { tubeDiameter: 'mm' },
+        { rollWidth: 'inches' },
+        { rollWidth: null },
+        { rollWidth: 1 },
+        { rollWidth: 'mm', extra: true },
+      ])
+        await patchUnits(recipientCookie, body).expect(400);
+      const first = userSchema.parse(
+        (
+          await patchUnits(recipientCookie, {
+            rollWidth: 'mm',
+            finishedDrop: 'in',
+          }).expect(200)
+        ).body,
+      );
+      assert.equal(first.id, recipientId);
+      assert.deepEqual(first.measurementUnits, {
+        ...defaultMeasurementUnits,
+        rollWidth: 'mm',
+        finishedDrop: 'in',
+      });
+      // A later partial update merges with earlier choices.
+      const second = userSchema.parse(
+        (await patchUnits(recipientCookie, { rollWidth: 'cm' }).expect(200))
+          .body,
+      );
+      assert.deepEqual(second.measurementUnits, {
+        ...defaultMeasurementUnits,
+        rollWidth: 'cm',
+        finishedDrop: 'in',
+      });
+      assert.deepEqual(
+        (await me(recipientCookie)).measurementUnits,
+        second.measurementUnits,
+      );
+      assert.deepEqual(
+        (await me(adminCookie)).measurementUnits,
+        defaultMeasurementUnits,
+      );
+      const { rows } = await pool.query(
+        `SELECT measurement_units FROM "${schema}".users WHERE id=$1`,
+        [recipientId],
+      );
+      assert.deepEqual(rows[0].measurement_units, {
+        rollWidth: 'cm',
+        finishedDrop: 'in',
+      });
+      // Stored values that are no longer offered fall back per field.
+      await pool.query(
+        `UPDATE "${schema}".users SET measurement_units='{"rollWidth":"furlong","radialDepth":"in"}' WHERE id=$1`,
+        [recipientId],
+      );
+      assert.deepEqual((await me(recipientCookie)).measurementUnits, {
+        ...defaultMeasurementUnits,
+        radialDepth: 'in',
+      });
+      await pool.query(
+        `UPDATE "${schema}".users SET measurement_units='{}' WHERE id=$1`,
+        [recipientId],
+      );
     },
   );
 

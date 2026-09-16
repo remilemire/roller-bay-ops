@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "measurement_units" jsonb DEFAULT '{}'::jsonb NOT NULL;

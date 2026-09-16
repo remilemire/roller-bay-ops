@@ -1,7 +1,8 @@
-import { userRoles } from '@roller-bay/shared/users';
+import { userRoles, type MeasurementUnits } from '@roller-bay/shared/users';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -25,6 +26,11 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
+    // Only explicitly chosen fields are stored; the service merges defaults.
+    measurementUnits: jsonb('measurement_units')
+      .$type<Partial<MeasurementUnits>>()
+      .notNull()
+      .default({}),
   },
   (table) => [
     uniqueIndex('users_email_unique').on(sql`lower(${table.email})`),

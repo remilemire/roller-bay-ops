@@ -7,6 +7,10 @@ import {
 } from '@roller-bay/shared/allocations';
 import type { StockReceiptDraftData } from '@roller-bay/shared/stock-receipts';
 import {
+  defaultMeasurementUnits,
+  type MeasurementUnits,
+} from '@roller-bay/shared/users';
+import {
   ids,
   timestamp,
   user,
@@ -28,6 +32,8 @@ export async function mockApi(
     catalogWrites: [] as unknown[],
     allocationRequests: [] as { path: string; body: unknown }[],
     role: options.role ?? 'admin',
+    measurementUnits: { ...defaultMeasurementUnits } as MeasurementUnits,
+    unitRequests: [] as unknown[],
     receiptDraft: structuredClone(receiptDraft),
     receiptSubmitted: false,
     receiptConflict: false,
@@ -73,7 +79,11 @@ export async function mockApi(
     if (path === '/auth/me')
       return send(
         state.authenticated
-          ? { ...user, role: state.role }
+          ? {
+              ...user,
+              role: state.role,
+              measurementUnits: state.measurementUnits,
+            }
           : { message: 'Sign in required' },
         state.authenticated ? 200 : 401,
       );
@@ -82,6 +92,16 @@ export async function mockApi(
       return send(null, 204);
     }
     if (!state.authenticated) return send({ message: 'Session expired' }, 401);
+    if (path === '/users/me/measurement-units' && method === 'PATCH') {
+      const body = request.postDataJSON() as Partial<MeasurementUnits>;
+      state.unitRequests.push(body);
+      state.measurementUnits = { ...state.measurementUnits, ...body };
+      return send({
+        ...user,
+        role: state.role,
+        measurementUnits: state.measurementUnits,
+      });
+    }
     if (path === '/fabric-catalog/colors')
       return send(paged([state.catalogColor], url));
     if (path === `/fabric-catalog/colors/${ids.color}` && method === 'PATCH') {

@@ -3,6 +3,7 @@ import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { PageHeading, Status } from '@/components/ui/feedback';
 import { ColorThemePicker } from './color-theme-picker';
+import { MeasurementUnitsPanel } from './measurement-units-panel';
 export function SettingsScreen() {
   const user = useCurrentUser();
   return (
@@ -42,25 +43,7 @@ export function SettingsScreen() {
             </p>
           </div>
         </section>
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Measurements</h2>
-          </div>
-          <div className="panel-body details-grid">
-            <div>
-              <div className="detail-label">Fabric widths</div>
-              <div className="detail-value">Inches</div>
-            </div>
-            <div>
-              <div className="detail-label">Fabric lengths</div>
-              <div className="detail-value">Yards</div>
-            </div>
-            <div>
-              <div className="detail-label">Thickness, tube, and depth</div>
-              <div className="detail-value">Millimetres</div>
-            </div>
-          </div>
-        </section>
+        <MeasurementUnitsPanel />
       </div>
     </>
   );

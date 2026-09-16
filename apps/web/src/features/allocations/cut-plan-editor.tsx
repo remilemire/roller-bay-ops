@@ -4,16 +4,20 @@ import { Plus, Trash2, ArrowUp, Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
+import { fieldSuffix } from '@/lib/measurements';
 import { type AllocationForm } from './allocation-form';
 import { stockKey, lookupStock } from '@/features/stock-items/stock-items.api';
 
 export function CutPlanEditor({
   form,
+  units,
   onChange,
   onOptimize,
   onValidate,
 }: {
   form: UseFormReturn<AllocationForm>;
+  units: MeasurementUnits;
   onChange: () => void;
   onOptimize: () => void;
   onValidate: () => void;
@@ -105,11 +109,11 @@ export function CutPlanEditor({
                   label={`Stock item · drop ${index + 1}`}
                   value={drop.stockItemId}
                   onChange={(v) => change({ ...drop, stockItemId: v })}
-                  queryKey={stockKey}
-                  load={lookupStock}
+                  queryKey={[...stockKey, units.rollWidth]}
+                  load={lookupStock(units.rollWidth)}
                 />
                 <TextField
-                  label="Drop length (yd)"
+                  label={`Drop length (${fieldSuffix(units, 'dropLength')})`}
                   type="number"
                   value={drop.length}
                   onChange={(v) => change({ ...drop, length: v })}
@@ -135,7 +139,7 @@ export function CutPlanEditor({
                     }
                     options={values.requirements.map((r, i) => ({
                       value: r.id,
-                      label: `Blind ${i + 1} · ${r.width || '?'} in × ${r.length || '?'} yd`,
+                      label: `Blind ${i + 1} · ${r.width || '?'} ${fieldSuffix(units, 'blindWidth')} × ${r.length || '?'} ${fieldSuffix(units, 'finishedDrop')}`,
                     }))}
                   />
                   <div className="inline-actions">

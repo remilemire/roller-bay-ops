@@ -19,6 +19,13 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
 import { useCanManage } from '@/features/auth/auth-boundary';
+import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import {
+  fieldInput,
+  fieldLabel,
+  fieldSuffix,
+  fieldValue,
+} from '@/lib/measurements';
 import {
   catalogKey,
   listCatalog,
@@ -46,6 +53,7 @@ export function CatalogScreen() {
       listCatalog(kind, params.search, params.page, signal),
   });
   const canManage = useCanManage();
+  const units = useMeasurementUnits();
   const [editing, setEditing] = useState<CatalogRow | 'new' | null>(null);
   const [deleting, setDeleting] = useState<CatalogRow | null>(null);
   const client = useQueryClient();
@@ -133,7 +141,10 @@ export function CatalogScreen() {
                       </td>
                     )}
                     {kind === 'colors' && (
-                      <td>{Number(row.thickness).toFixed(3)} mm</td>
+                      <td>
+                        {row.thicknessMm !== null &&
+                          fieldLabel(units, 'thickness', row.thicknessMm)}
+                      </td>
                     )}
                     {canManage && (
                       <td>
@@ -215,12 +226,16 @@ function CatalogEditor({
   row?: CatalogRow;
   close: () => void;
 }) {
+  // Pin the units this form opened with: a session refetch must not relabel
+  // or reinterpret dirty input.
+  const liveUnits = useMeasurementUnits();
+  const [units] = useState(liveUnits);
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: row?.name ?? '',
       parentId: row?.parentId ?? '',
-      thickness: row?.thickness ?? '',
+      thickness: fieldInput(units, 'thickness', row?.thicknessMm ?? null),
     },
   });
   const values = useWatch({ control: form.control }) as z.infer<
@@ -229,7 +244,11 @@ function CatalogEditor({
   const client = useQueryClient();
   const mutation = useMutation({
     mutationFn: (data: z.infer<typeof formSchema>) =>
-      saveCatalog(kind, row?.id, data),
+      saveCatalog(kind, row?.id, {
+        name: data.name,
+        parentId: data.parentId,
+        thicknessMm: fieldValue(units, 'thickness', data.thickness),
+      }),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: catalogKey }),
@@ -279,12 +298,12 @@ function CatalogEditor({
           )}
           {kind === 'colors' && (
             <TextField
-              label="Thickness (mm)"
+              label={`Thickness (${fieldSuffix(units, 'thickness')})`}
               type="number"
               value={values.thickness}
               onChange={(v) => form.setValue('thickness', v)}
               required
-              hint="Accurate to 0.001 mm."
+              hint="Stored to the nearest 0.001 mm."
             />
           )}
         </div>

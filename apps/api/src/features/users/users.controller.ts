@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  updateMeasurementUnitsSchema,
+  type UpdateMeasurementUnits,
   updateUserActivationSchema,
   type UpdateUserActivation,
   updateUserRoleSchema,
@@ -24,6 +26,16 @@ import { UsersService } from './users.service.js';
 @Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
+
+  // Any active user may change their own units; the target is never a path id.
+  @Patch('me/measurement-units')
+  setMeasurementUnits(
+    @Req() request: Request,
+    @Body(new ZodValidationPipe(updateMeasurementUnitsSchema))
+    input: UpdateMeasurementUnits,
+  ) {
+    return this.users.setMeasurementUnits(request.currentUser!.id, input);
+  }
 
   @Patch(':id/activation')
   @Roles('admin')
