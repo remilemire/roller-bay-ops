@@ -115,6 +115,7 @@ export class StockItemsService {
     );
   }
 
+  /** Expand quantities into physical identities within the receipt's transaction. */
   receiveRolls(lines: ReceiveRollLine[], transaction: DatabaseTransaction) {
     return this.operation(async () => {
       if (

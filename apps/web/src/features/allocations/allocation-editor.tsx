@@ -168,6 +168,7 @@ export function AllocationEditor({
           ...allocationFromForm(form.getValues()),
           plan: result.plan,
         });
+        // Optimization proposes form changes; it neither saves nor reserves stock.
         form.setValue('drops', next.drops, { shouldDirty: true });
       }
     },

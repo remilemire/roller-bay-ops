@@ -6,6 +6,7 @@ import './session.types.js';
 
 export const SESSION_PREFIX = 'roller-bay:session:';
 
+// Derive TTL from the original deadline; persisting a session must not extend it.
 function sessionTtl(session: SessionData) {
   const expiresAt = session.auth?.expiresAt ?? session.expiresAt ?? 0;
   return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));

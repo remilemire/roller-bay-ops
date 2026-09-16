@@ -10,6 +10,10 @@ import {
 } from '@roller-bay/shared/stock-items';
 import { StockItemsRepository } from './stock-items.repository.js';
 
+/**
+ * Requires a transaction-bound repository so measurements and retained pieces
+ * commit together.
+ */
 export async function recordCuttingResults(
   repository: StockItemsRepository,
   outcomes: StockCuttingOutcome[],
@@ -95,6 +99,8 @@ export async function recordCuttingResults(
       );
     let thickness = current.measurementThicknessMm;
     if (outcome.outcome === 'returned-roll') {
+      // Each new measurement captures current catalog thickness; older stored
+      // balances must not change just because the catalog is edited later.
       const color = await repository.findColor(current.fabricColorId);
       if (!color) throw new NotFoundException('Fabric color no longer exists.');
       thickness = color.thicknessMm;

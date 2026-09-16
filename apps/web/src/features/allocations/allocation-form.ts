@@ -39,6 +39,8 @@ export const allocationFormSchema = z.object({
   ),
 });
 export type AllocationForm = z.infer<typeof allocationFormSchema>;
+// This ID survives draft saves and is referenced by cut assignments; it is
+// separate from React Hook Form's transient field-array key.
 export const emptyRequirement = () => ({
   id: crypto.randomUUID(),
   fabricColorId: '',

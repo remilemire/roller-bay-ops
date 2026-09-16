@@ -64,6 +64,7 @@ export function CutPlanEditor({
           </p>
         )}
         {drops.fields.map((row, index) => {
+          // Field-array changes can render before the watched values catch up.
           const drop = form.getValues(`drops.${index}`) ?? row;
           const change = (next: typeof drop) =>
             setDrops(values.drops.map((d, i) => (i === index ? next : d)));

@@ -93,6 +93,7 @@ export class UsersService {
           throw new ConflictException(
             'Activate the recipient before transferring ownership.',
           );
+        // Release the unique owner slot first; both role changes commit together.
         const previousOwner = await users.setRole(currentOwner.id, 'admin');
         const newOwner = await users.setRole(recipient.id, 'owner');
         return {

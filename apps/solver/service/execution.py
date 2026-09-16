@@ -1,4 +1,4 @@
-"""Owns a bounded solver child process and kills it on timeout or cancellation."""
+"""Runs solver work in a child process with output limits and cancellation cleanup."""
 
 import asyncio
 import json
@@ -13,6 +13,7 @@ MAX_BYTES = 4 * 1024 * 1024
 
 
 async def execute(payload: SolveRequest, *, provider_name: str) -> SolveResult:
+    """Use a disposable process so cancellation can stop the computation itself."""
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-u",
@@ -44,6 +45,8 @@ async def execute(payload: SolveRequest, *, provider_name: str) -> SolveResult:
         await process.stdin.drain()
         process.stdin.close()
 
+    # Drain both pipes while the worker runs; either pipe can fill and block its exit.
+    # Both readers charge the same output budget, including diagnostic output.
     tasks = [
         asyncio.create_task(send()),
         asyncio.create_task(read_bounded(process.stdout)),

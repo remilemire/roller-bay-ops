@@ -43,9 +43,12 @@ function AllocationRecord({
   allocation: z.infer<typeof allocationRecordSchema>;
 }) {
   const id = allocation.id;
+  // A background confirmation must not replace the employee's open draft form.
   const [draft, setDraft] = useState(
     allocation.state === 'draft' ? allocation : null,
   );
+  // Pin the record used to begin editing; refetches must not silently advance
+  // the revision against which the employee's changes will be checked.
   const [editingRecord, setEditingRecord] = useState<AllocationDetail | null>(
     null,
   );

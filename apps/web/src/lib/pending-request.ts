@@ -1,3 +1,7 @@
+/**
+ * Keeps an uncertain write's payload and key together so a lost response can
+ * be retried without duplicating the operation.
+ */
 import { z } from 'zod';
 import { ApiError } from './api';
 const prefix = 'roller-bay:pending:';

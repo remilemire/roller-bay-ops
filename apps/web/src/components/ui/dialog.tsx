@@ -15,6 +15,7 @@ export function Dialog({
   description: string;
   children: ReactNode;
 }) {
+  // Callers open dialogs without a Radix Trigger, so remember where focus belongs.
   const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <Primitive.Root open={open} onOpenChange={onOpenChange}>

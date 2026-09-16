@@ -180,6 +180,7 @@ export async function generatePatterns(
   let preparationSteps = 0;
   for (const stock of context.stockItems) {
     if (++preparationSteps % 128 === 0) {
+      // Abort events cannot be observed while this CPU work monopolizes the event loop.
       await setImmediate();
       checkCancellation(signal);
     }
@@ -209,6 +210,8 @@ export async function generatePatterns(
     );
     groups.set(key, group);
   }
+  // This check precedes candidate truncation: a blind that fits no available
+  // piece by itself cannot fit inside any combined drop either.
   if (covered.size !== context.requirements.length)
     return { assignments: [], complete: true, impossible: true };
   const colors = [...requirements.keys()].sort();

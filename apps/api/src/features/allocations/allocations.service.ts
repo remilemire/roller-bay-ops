@@ -1,4 +1,7 @@
-/** Allocation writes lock the header, then all involved stock IDs in sorted order before checking availability. */
+/**
+ * Reservation-changing writes lock the allocation header, then stock in a
+ * common order before checking availability.
+ */
 import { createHash } from 'node:crypto';
 import {
   BadRequestException,
@@ -119,6 +122,8 @@ export class AllocationsService {
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
         if (!header) throw new NotFoundException('Allocation not found.');
+        // Match the submitted draft revision before lifecycle checks so a lost
+        // response can be retried without reserving fabric again.
         if (!header.isDraft && header.submittedDraftRevision === revision)
           return this.detail(repository, tx, header);
         requireDraftRevision(header, revision);
@@ -216,6 +221,8 @@ export class AllocationsService {
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
         if (!header) throw new NotFoundException('Allocation not found.');
+        // Completion changes stock and creates remnants. Check its replay identity
+        // before checking the active revision, which the original commit advanced.
         if (
           header.completedAt &&
           header.completionKey === key &&
@@ -260,6 +267,8 @@ export class AllocationsService {
             affectedAllocationIds: [],
           },
         });
+        // Retire this order's reservations before looking for shortages in the
+        // remaining orders; observed measurements are kept even if stock is short.
         const affectedAllocationIds = await repository.affectedAllocations(ids);
         saved = await repository.saveCompletionFlags(id, {
           ...saved.completion!,
@@ -313,6 +322,8 @@ export class AllocationsService {
     const selected = [
       ...new Set(input.plan.drops.map((drop) => drop.stockItemId)),
     ];
+    // Replanning releases old stock as well as claiming new stock. Lock their
+    // union before excluding this order's existing reservation from availability.
     const locked = await this.stockItems.findForAllocation(tx, {
       stockIds: [...new Set([...selected, ...previousIds])],
       lock: true,

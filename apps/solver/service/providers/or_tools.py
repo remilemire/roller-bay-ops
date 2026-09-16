@@ -48,6 +48,7 @@ class OrToolsProvider(SolverProvider):
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = request.options.max_time_seconds
         solver.parameters.random_seed = request.options.random_seed
+        # A single search worker avoids parallel race-dependent search ordering.
         solver.parameters.num_search_workers = 1
         solver.parameters.log_search_progress = False
         status = solver.solve(model)
@@ -55,6 +56,8 @@ class OrToolsProvider(SolverProvider):
             values = {
                 name: solver.value(variable) for name, variable in variables.items()
             }
+            # Recompute the objective from integer values; the solver's reported
+            # objective is floating point and is not the exact wire representation.
             return SolutionResult(
                 status="optimal" if status == cp_model.OPTIMAL else "feasible",
                 values=values,

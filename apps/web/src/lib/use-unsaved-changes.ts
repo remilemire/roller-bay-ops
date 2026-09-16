@@ -1,5 +1,9 @@
 'use client';
 import { useEffect } from 'react';
+/**
+ * Warn on document unload and ordinary link clicks; client-side history
+ * changes are not intercepted.
+ */
 export function useUnsavedChanges(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;

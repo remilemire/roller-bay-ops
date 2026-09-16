@@ -11,6 +11,8 @@ Name = Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,99}$")]
 
 
 class StrictModel(BaseModel):
+    """Keep Python names idiomatic while preserving the camelCase wire contract."""
+
     model_config = ConfigDict(
         extra="forbid", alias_generator=to_camel, validate_by_name=True
     )
@@ -53,6 +55,7 @@ class SolverModel(StrictModel):
 
     @model_validator(mode="after")
     def validate_model(self):
+        """Check references and worst-case sums before crossing the integer boundary."""
         variables = {item.name: item for item in self.variables}
         if len(variables) != len(self.variables):
             raise ValueError("Variable names must be unique")
@@ -72,6 +75,7 @@ class SolverModel(StrictModel):
                 magnitude += abs(term.coefficient) * max(
                     abs(variable.lower_bound), abs(variable.upper_bound)
                 )
+            # Python integers are unbounded; the JavaScript caller's are not.
             if magnitude > SAFE:
                 raise ValueError("Expression exceeds safe integer range")
         for rule in self.constraints:

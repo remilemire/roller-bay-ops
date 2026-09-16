@@ -63,6 +63,8 @@ export async function api<T>(
         ? Number(retryAfter) * 1000
         : Math.max(0, Date.parse(retryAfter) - Date.now())
       : undefined;
+    // Let /auth/me publish its own signed-out result; broadcasting its 401
+    // would cancel the session query that needs to deliver that result.
     if (
       response.status === 401 &&
       path !== '/auth/me' &&

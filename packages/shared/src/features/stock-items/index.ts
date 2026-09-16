@@ -71,6 +71,8 @@ export const createStockItemSchema = z
     }
   });
 
+// Validate supplied fields here; cross-field rules need the current record and
+// are checked by the service after merging the patch under a row lock.
 export const updateStockItemSchema = z
   .strictObject(fields)
   .omit({ fabricColorId: true, isRemnant: true, sourceStockItemId: true })

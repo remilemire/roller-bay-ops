@@ -36,6 +36,7 @@ type AllocationDatabase = Pick<
   'select' | 'selectDistinct' | 'insert' | 'update' | 'delete' | 'transaction'
 >;
 export type AllocationRecord = typeof allocations.$inferSelect;
+// Only confirmed, unfinished orders reserve stock; draft selections are not claims.
 const active = () =>
   and(
     eq(allocations.isDraft, false),
@@ -54,6 +55,10 @@ export class AllocationsRepository {
     this.db = connection.db;
   }
 
+  /**
+   * Use one connection for allocation and stock work; read-only calls see a
+   * consistent snapshot.
+   */
   withTransaction<T>(
     operation: (
       repository: AllocationsRepository,
@@ -228,6 +233,7 @@ export class AllocationsRepository {
     await this.db.delete(allocations).where(eq(allocations.id, id));
   }
 
+  /** Replace the full child graph inside the caller's header-locked transaction. */
   async replacePlan(
     id: string,
     input: AllocationDraftData,
@@ -267,6 +273,7 @@ export class AllocationsRepository {
       await this.db.insert(allocationItems).values(values);
       batch.forEach((key, index) => byKey.set(key, values[index]!.id));
     }
+    // Preserve both the whole form's drop order and each stock item's cutting order.
     const positions = new Map<string, number>();
     const inputs = input.plan.drops.map((drop, index) => {
       const key = itemKeys[index]!;
@@ -324,6 +331,8 @@ export class AllocationsRepository {
 
   async affectedAllocations(stockIds?: string[], allocationIds?: string[]) {
     if (stockIds?.length === 0 || allocationIds?.length === 0) return [];
+    // Scope only the reported orders, not the total demand on each stock item.
+    // Without production priority, every active claimant on short stock needs review.
     const total = sql`(SELECT coalesce(sum(ai.reserved_length_mm), 0) FROM allocation_items ai JOIN allocations a ON a.id = ai.allocation_id
       WHERE ai.stock_item_id = ${stockItems.id} AND a.is_draft = false AND a.completed_at IS NULL AND a.cancelled_at IS NULL)`;
     const rows = await this.db

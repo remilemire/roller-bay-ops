@@ -72,6 +72,7 @@ export class CuttingPlanOptimizer {
         throw error;
       }
       checkCancellation(options.signal);
+      // This is a shared search budget, not an end-to-end HTTP deadline.
       remaining -= result.wallTimeSeconds;
       if (result.status === 'model_invalid')
         throw new CuttingOptimizationError(
@@ -84,6 +85,7 @@ export class CuttingPlanOptimizer {
             'invalid_solution',
             'Solver contradicted a previously validated incumbent.',
           );
+        // Failure in a truncated candidate set cannot establish that the order is impossible.
         return compiled.complete
           ? { status: 'infeasible' }
           : { status: 'unknown', reason: 'search_limit' };
@@ -96,6 +98,8 @@ export class CuttingPlanOptimizer {
           'invalid_solution',
           'Solver omitted the objective value.',
         );
+      // Lock only proven optima: later preferences must never trade away an
+      // earlier objective. A merely feasible result ends the search instead.
       compiled.model.constraints.push({
         terms,
         operator: '==',

@@ -61,7 +61,8 @@ export const stockReceiptDetailSchema = stockReceiptSummarySchema.extend({
     stockReceiptItemSchema.extend({ stockItems: z.array(stockItemSchema) }),
   ),
 });
-// Drafts retain typed values but permit fields that have not been filled in yet.
+// Full-replacement draft saves normalize omitted fields to null. Reusing the
+// submission schema's defaults would turn an unfinished quantity into a value.
 const draftField = <T extends z.ZodType>(schema: T) =>
   schema.nullish().transform((value) => value ?? null);
 export const stockReceiptDraftDataSchema = z

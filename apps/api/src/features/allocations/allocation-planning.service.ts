@@ -1,4 +1,7 @@
-/** Preview snapshots are read consistently, then the database transaction ends before any solver work. */
+/**
+ * Preview snapshots are read consistently, then released before solver work.
+ * They reserve nothing; confirmation must revalidate availability under stock locks.
+ */
 import {
   BadRequestException,
   ConflictException,

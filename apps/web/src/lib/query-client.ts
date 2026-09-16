@@ -15,6 +15,7 @@ export function createQueryClient() {
             ? error.retryAfterMs
             : Math.min(1000 * 2 ** attempt, 10000),
       },
+      // Writes need explicit recovery using the same payload and concurrency tokens.
       mutations: { retry: false },
     },
   });

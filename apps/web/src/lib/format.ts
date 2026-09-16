@@ -23,6 +23,8 @@ export const widthLabel = (mm: number) =>
   `${Number(mmToInches(mm).toFixed(3))} in`;
 export const lengthLabel = (mm: number) =>
   `${Number(mmToYards(mm).toFixed(3))} yd`;
+// Editable imperial values need more precision than labels so an unchanged
+// field round-trips to the same stored millimetre value.
 export const widthInput = (mm: number | null) =>
   mm === null ? '' : String(Number(mmToInches(mm).toFixed(6)));
 export const lengthInput = (mm: number | null) =>

@@ -70,6 +70,8 @@ export class StockReceiptsService {
   ) {
     return this.operation(() =>
       this.repository.withTransaction(async (repository, tx) => {
+        // Claim the creator/key pair in the same transaction as its contents.
+        // Concurrent retries then reuse the committed receipt instead of adding rolls.
         const header = await repository.create({
           purchaseOrderNumber: data.purchaseOrderNumber,
           createdByUserId: userId,
@@ -120,6 +122,8 @@ export class StockReceiptsService {
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
         if (!header) throw new NotFoundException('Stock receipt not found.');
+        // A successful commit may have lost its response. Replay that draft
+        // revision before rejecting changes to an already submitted receipt.
         if (!header.isDraft && header.submittedDraftRevision === revision)
           return this.detail(repository, tx, header);
         this.requireDraft(header, revision);

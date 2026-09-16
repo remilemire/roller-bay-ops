@@ -211,6 +211,8 @@ export class StockItemsRepository {
         : undefined,
       filter.colorIds ? isNull(stockItems.consumedAt) : undefined,
     );
+    // Lock stock alone before loading joined labels. A common ID order avoids
+    // reversed lock acquisition when allocations share several stock items.
     if (filter.lock)
       await transaction
         .select({ id: stockItems.id })

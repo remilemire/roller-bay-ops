@@ -48,6 +48,8 @@ function calculateOffcuts(plan: ResolvedCuttingPlan): Offcut[] {
     })),
   );
   for (const { stock, plannedLength } of plan.stockUsage) {
+    // Evaluate a remnant's tail after all its drops, not after each cut; the
+    // entire piece leaves the shelf even when only part of its length is cut.
     if (stock.isRemnant)
       offcuts.push({
         stockItemId: stock.id,
@@ -101,6 +103,7 @@ function calculateAreas(
     if (offcut.reusable) areas.reusable += area;
     else areas.waste += area;
   }
+  // Every part of the input must be assigned exactly once, including reusable offcuts.
   if (areas.input !== areas.required + areas.reusable + areas.waste)
     throw new Error('Cutting plan area accounting invariant failed.');
   return areas;

@@ -31,6 +31,7 @@ function ReceiptRecord({
 }: {
   receipt: z.infer<typeof stockReceiptRecordSchema>;
 }) {
+  // A background submission by another employee must not unmount unsaved input.
   const [draft, setDraft] = useState(
     receipt.state === 'draft' ? receipt : null,
   );

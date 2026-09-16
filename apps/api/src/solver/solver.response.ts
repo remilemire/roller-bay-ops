@@ -36,6 +36,8 @@ export function parseSolverResult(
       fail();
   }
   const values = result.values;
+  // Verify with exact arithmetic; a well-formed response can still violate the
+  // submitted model, independently of the domain validator's later checks.
   const evaluate = (terms: ParsedSolverModel['constraints'][number]['terms']) =>
     terms.reduce(
       (sum, term) =>

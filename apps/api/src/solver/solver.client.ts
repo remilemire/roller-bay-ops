@@ -67,6 +67,7 @@ export class SolverClient implements OnModuleDestroy {
       );
     const controller = new AbortController();
     let timedOut = false;
+    // Allow process startup and transport time beyond the solver's own search budget.
     const timer = setTimeout(
       () => {
         timedOut = true;

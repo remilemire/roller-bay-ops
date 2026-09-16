@@ -201,6 +201,7 @@ export function ReceiptEditor({
                 </p>
               )}
               {lines.fields.map((row, index) => {
+                // Field-array changes can render before the watched values catch up.
                 const value = form.getValues(`items.${index}`) ?? row;
                 return (
                   <div className="form-row" key={row.id}>

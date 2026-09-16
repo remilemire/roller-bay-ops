@@ -3,6 +3,10 @@ import { currentUserSchema } from '@roller-bay/shared/auth';
 import { ApiError, api } from '@/lib/api';
 import { clearPendingRequests } from '@/lib/pending-request';
 export const sessionKey = ['auth', 'me'] as const;
+/**
+ * Cancel private reads before eviction while keeping the session query
+ * available to drive sign-out.
+ */
 export async function clearPrivateData(client: QueryClient) {
   const privateQueries = {
     predicate: (query: { queryKey: readonly unknown[] }) =>

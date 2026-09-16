@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 const subscribe = () => () => {};
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
+  // The server cannot know the saved theme; defer selection state until hydration.
   const mounted = useSyncExternalStore(
     subscribe,
     () => true,

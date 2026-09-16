@@ -26,6 +26,11 @@ const directorySchema = z.object({
 });
 const PERSONAL_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
 
+/**
+ * Matches the directory account to the authenticated identity before applying
+ * access policy. The work sign-in domain comes from the UPN; contact email comes
+ * from the directory's mail field and need not be the same address.
+ */
 export function microsoftProfile(
   claims: unknown,
   directory: unknown,
@@ -66,6 +71,7 @@ export class MicrosoftService {
   constructor(private readonly config: ConfigService<Environment, true>) {}
 
   private getConfiguration() {
+    // Share in-flight discovery, but let a later login retry a failed lookup.
     if (!this.configuration) {
       const tenant = this.config.get('MICROSOFT_TENANT_ID', { infer: true });
       this.configuration = oidc

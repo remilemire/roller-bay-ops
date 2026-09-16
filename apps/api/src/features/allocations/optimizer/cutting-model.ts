@@ -67,6 +67,7 @@ class LinearModel {
         variable: term.variable,
         coefficient: safe(term.coefficient / divisor),
       }));
+    // Individually safe coefficients can still produce an unsafe expression sum.
     safe(
       result.reduce(
         (sum, term) =>
@@ -148,6 +149,7 @@ function compile(
       variable: item.variable,
       coefficient: 1n,
     }));
+    // Stock is selected exactly when at least one of its patterns is cut.
     builder.rule([...counts, { variable: used, coefficient: -1n }], '>=', 0n);
     builder.rule([...counts, { variable: used, coefficient: -100n }], '<=', 0n);
     const available =
@@ -181,6 +183,8 @@ function compile(
     if (toLengthUnits(stock.widthMm) >= minWidth && available >= minLength) {
       const reusable = builder.variable(`r${index}`, 1n);
       discarded = builder.variable(`w${index}`, capacity);
+      // Round the threshold upward in scaled integer units so equality remains
+      // reusable without admitting a tail below the physical minimum.
       const threshold = (minLength + lengthUnit - 1n) / lengthUnit;
       builder.rule(
         [

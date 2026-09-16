@@ -41,6 +41,8 @@ export const stockItems = pgTable(
       precision: 10,
       scale: 3,
     }),
+    // Winding cross-section area / fabric thickness gives length. For radial
+    // depth d and tube diameter D, the area simplifies to pi * d * (D + d).
     remainingLengthMm: numeric('remaining_length_mm', {
       precision: 12,
       scale: 3,

@@ -60,6 +60,7 @@ export function RequirementsEditor({
           <p className="muted">Add your first blind to start planning.</p>
         )}
         {requirements.fields.map((row, index) => {
+          // Field-array changes can render before the watched values catch up.
           const r = form.getValues(`requirements.${index}`) ?? row;
           const change = (key: keyof typeof r, value: string) => {
             form.setValue(`requirements.${index}.${key}`, value, {

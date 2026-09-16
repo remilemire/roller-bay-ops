@@ -1,4 +1,4 @@
-"""Private HTTP boundary: authenticates, validates, and admits one solve at a time."""
+"""Private HTTP boundary with one admitted solve per application instance."""
 
 import asyncio
 import json
@@ -60,6 +60,7 @@ def create_app(
                         return
 
             work = asyncio.create_task(executor(payload))
+            # A disconnected caller should release capacity and stop its solver work.
             connection = asyncio.create_task(disconnected())
             try:
                 completed, _ = await asyncio.wait(

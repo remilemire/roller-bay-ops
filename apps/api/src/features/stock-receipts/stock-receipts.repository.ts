@@ -25,6 +25,10 @@ export class StockReceiptsRepository {
     this.db = connection.db;
   }
 
+  /**
+   * Bind all receipt queries to one connection; read snapshots keep header,
+   * lines, and stock consistent.
+   */
   withTransaction<T>(
     operation: (
       repository: StockReceiptsRepository,

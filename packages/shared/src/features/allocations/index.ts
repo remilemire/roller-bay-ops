@@ -241,6 +241,8 @@ export const allocationDraftDataSchema = z
       .prefault({}),
   })
   .superRefine((value, ctx) => {
+    // Draft dimensions may be unfinished, but assignment links must already
+    // resolve within this draft so replacement saves preserve a coherent graph.
     const ids = new Set(value.requirements.map((item) => item.id));
     if (ids.size !== value.requirements.length)
       ctx.addIssue({

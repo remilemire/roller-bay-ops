@@ -84,6 +84,10 @@ export function completionFromForm(
     })),
   });
 }
+/**
+ * Recover the original stock revision tokens as well as measurements so
+ * retries preserve the request.
+ */
 export function completionRecovery(
   body: z.infer<typeof completeAllocationSchema>,
   allocation: AllocationDetail,

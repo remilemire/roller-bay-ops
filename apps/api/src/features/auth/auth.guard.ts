@@ -27,6 +27,8 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
+    // Check mutations even on public routes: CORS alone does not prevent a
+    // foreign page from sending a cookie-authenticated request.
     if (
       !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
       request.get('origin') !== this.config.get('WEB_ORIGIN', { infer: true })
@@ -48,6 +50,7 @@ export class AuthGuard implements CanActivate {
       auth.expiresAt <= Date.now()
     )
       throw new UnauthorizedException('Sign in required.');
+    // Read permissions afresh so deactivation and role changes affect existing sessions.
     const user = await this.users.findById(auth.userId);
     if (!user) throw new UnauthorizedException('Sign in required.');
     if (!user.isActive)

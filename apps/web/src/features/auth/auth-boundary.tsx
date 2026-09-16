@@ -16,6 +16,7 @@ export function SessionEvents() {
   }, [unavailable, client]);
   useEffect(() => {
     const expired = () => {
+      // An in-flight session response must not restore the user after expiry.
       void client.cancelQueries({ queryKey: sessionKey }).then(() => {
         client.setQueryData(sessionKey, null);
         return clearPrivateData(client);
@@ -33,6 +34,8 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     if (session.data === null) router.replace('/login');
   }, [session.data, router]);
   if (session.isPending || session.data === null) return <Loading />;
+  // Keep mounted forms through transient refetch failures when a session is
+  // already known; explicit loss of access still closes the workspace.
   if (
     session.error &&
     (!session.data ||

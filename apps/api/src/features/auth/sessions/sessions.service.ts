@@ -59,6 +59,7 @@ export class SessionsService {
   }
 
   async authenticate(request: Request, userId: string) {
+    // Discard the anonymous login session ID when crossing into authenticated state.
     await this.regenerate(request);
     const authenticatedAt = Date.now();
     const expiresAt =
@@ -93,6 +94,7 @@ export class SessionsService {
   }
 
   private async save(request: Request) {
+    // Persist before redirecting, so the next request can already find the session.
     await this.storage(
       () =>
         new Promise<void>((resolve, reject) =>
