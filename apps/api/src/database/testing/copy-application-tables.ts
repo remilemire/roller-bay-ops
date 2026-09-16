@@ -11,6 +11,11 @@ const tables = [
   'stock_receipts',
   'stock_receipt_items',
   'fabric_stock_items',
+  'allocations',
+  'allocation_requirements',
+  'allocation_items',
+  'allocation_cuts',
+  'allocation_cut_items',
 ];
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 

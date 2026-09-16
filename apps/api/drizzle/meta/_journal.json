@@ -57,6 +57,13 @@
       "when": 1789455679318,
       "tag": "0007_add_stock_receipt_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789528994624,
+      "tag": "0008_add_allocations",
+      "breakpoints": true
     }
   ]
 }
