@@ -33,13 +33,19 @@ const formSchema = z.object({
   sortOrder: z.string(),
 });
 export function LocationsScreen() {
-  const params = useListParams();
-  const kind: LocationKind =
-    params.get('view') === 'sections'
-      ? 'sections'
-      : params.get('view') === 'zones'
-        ? 'zones'
-        : 'levels';
+  return (
+    <>
+      <PageHeading title="Locations" />
+      <div className="stack">
+        <LocationList kind="zones" title="Zones" />
+        <LocationList kind="sections" title="Sections" />
+        <LocationList kind="levels" title="Levels" />
+      </div>
+    </>
+  );
+}
+function LocationList({ kind, title }: { kind: LocationKind; title: string }) {
+  const params = useListParams(kind);
   const query = useQuery({
     queryKey: [...locationsKey, kind, params.search, params.page],
     queryFn: ({ signal }) =>
@@ -58,46 +64,37 @@ export function LocationsScreen() {
   });
   return (
     <>
-      <PageHeading title="Locations">
-        {canManage && (
-          <Button onClick={() => setEditing('new')}>
-            <Plus size={17} />
-            Add{' '}
-            {kind === 'levels'
-              ? 'level'
-              : kind === 'sections'
-                ? 'section'
-                : 'zone'}
-          </Button>
-        )}
-      </PageHeading>
-      <SearchToolbar
-        key={`${kind}-${params.search}`}
-        search={params.search}
-        onSearch={(search) => params.set({ search })}
-        placeholder="Search locations…"
-      >
-        <div className="tabs">
-          {(['levels', 'sections', 'zones'] as const).map((tab) => (
-            <button
-              key={tab}
-              className={`tab ${tab === kind ? 'active' : ''}`}
-              onClick={() => params.set({ view: tab, search: '' })}
-            >
-              {tab[0]!.toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+      <section className="panel" aria-labelledby={`${kind}-heading`}>
+        <div className="panel-heading">
+          <h2 id={`${kind}-heading`}>{title}</h2>
+          {canManage && (
+            <Button onClick={() => setEditing('new')}>
+              <Plus size={17} />
+              Add{' '}
+              {kind === 'levels'
+                ? 'level'
+                : kind === 'sections'
+                  ? 'section'
+                  : 'zone'}
+            </Button>
+          )}
         </div>
-      </SearchToolbar>
-      <section className="panel">
+        <div className="panel-body">
+          <SearchToolbar
+            key={`${kind}-${params.search}`}
+            search={params.search}
+            onSearch={(search) => params.set({ search })}
+            placeholder={`Search ${kind}…`}
+          />
+        </div>
         {query.isPending ? (
           <Loading />
         ) : query.error ? (
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
         ) : !query.data.items.length ? (
-          <Empty title="Organize your storage">
-            Add zones, sections, then their fabric levels.
-          </Empty>
+          <Empty
+            title={params.search ? `No matching ${kind}` : `No ${kind} yet`}
+          />
         ) : (
           <div className="data-table-wrap">
             <table>
