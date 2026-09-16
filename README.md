@@ -6,7 +6,7 @@ See the [product brief](docs/product-brief.md) for the workflows, proposed featu
 
 The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The frontend is a placeholder; allocation and production-form workflows are not implemented yet. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning and cutting-result entry. The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
 
 ## Get started
 
@@ -52,7 +52,11 @@ The `session-redis` Compose service uses append-only persistence with a sync eve
 ```text
 apps/
   web/
-    src/app/                    # Next.js route entries, layouts, global styles
+    src/app/                    # Thin routes, layouts, providers, boundaries
+    src/features/               # Screens, API calls, forms, and feature tests
+    src/components/             # Shared UI primitives and dashboard shell
+    src/lib/                    # HTTP, query configuration, measurements
+    src/styles/                 # Theme tokens and shared styles
   api/
     src/features/
       auth/                     # Microsoft login, Redis sessions, access guard
@@ -132,7 +136,7 @@ npm run format:check
 
 The default tests verify user persistence errors, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
 
-Microsoft authentication is implemented in the backend. A frontend login screen and credentialed API calls are still a separate step. Catalog writes allow admins and the owner and catalog lists support pagination. Deployment remains future work.
+Microsoft sign-in and credentialed frontend requests use the existing backend sessions. Catalog, location, and stock corrections are available to admins and the owner. All active employees can work with receipts and allocations. The user directory requires a separately scoped backend listing endpoint; deployment remains future work. See [frontend verification](docs/frontend.md#verification) for unit and browser tests.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

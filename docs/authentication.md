@@ -2,7 +2,7 @@
 
 The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users are active and normally receive role `user`. The configured bootstrap email can become the initial owner when no owner exists; otherwise sign-in preserves role, activation status, and history. Administrators must keep Entra membership appropriate for employee access.
 
-The backend is implemented and tested. The frontend is a placeholder; the login screen and credentialed API calls are not yet implemented. Live Microsoft authentication requires your app registration and has not yet been exercised.
+The backend and [frontend authentication boundary](frontend.md#authentication-and-api-requests) are implemented. The frontend starts Microsoft login, loads the current session, and clears cached private data on sign-out or session expiry. Live Microsoft authentication requires your app registration; the frontend browser suite uses intercepted API responses and does not exercise Microsoft itself.
 
 ## Microsoft registration
 
