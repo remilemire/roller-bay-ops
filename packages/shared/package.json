@@ -27,6 +27,10 @@
     "./stock-receipts": {
       "types": "./dist/features/stock-receipts/index.d.ts",
       "default": "./dist/features/stock-receipts/index.js"
+    },
+    "./allocations": {
+      "types": "./dist/features/allocations/index.d.ts",
+      "default": "./dist/features/allocations/index.js"
     }
   },
   "files": [
