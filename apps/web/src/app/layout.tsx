@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Providers } from './providers';
+import { colorThemeScript } from '@/lib/color-themes';
 import '@/styles/globals.css';
 export const metadata: Metadata = {
   title: { default: 'Roller Bay · Operations', template: '%s · Roller Bay' },
@@ -10,6 +11,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: colorThemeScript }} />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

@@ -2,6 +2,7 @@
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { PageHeading, Status } from '@/components/ui/feedback';
+import { ColorThemePicker } from './color-theme-picker';
 export function SettingsScreen() {
   const user = useCurrentUser();
   return (
@@ -28,12 +29,13 @@ export function SettingsScreen() {
             </div>
           </div>
         </section>
-        <section className="panel">
+        <section className="panel" aria-labelledby="appearance-heading">
           <div className="panel-heading">
-            <h2>Appearance</h2>
+            <h2 id="appearance-heading">Appearance</h2>
             <ThemeSwitch />
           </div>
           <div className="panel-body">
+            <ColorThemePicker />
             <p className="muted">
               Saved in this browser. Reduced motion follows your device
               settings.
