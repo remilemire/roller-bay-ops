@@ -120,13 +120,13 @@ test('palette follows local storage across tabs and system mode stays independen
   );
   await other.evaluate(() => localStorage.removeItem('roller-bay-color-theme'));
   await expect(
-    appearance.getByRole('radio', { name: 'Sage', exact: true }),
+    appearance.getByRole('radio', { name: 'Slate', exact: true }),
   ).toBeChecked();
   await expect(page.locator('html')).toHaveClass('dark');
   await other.close();
 });
 
-test('saved palette is applied before React loads and invalid storage falls back to Sage', async ({
+test('saved palette is applied before React loads and invalid storage falls back to Slate', async ({
   page,
 }) => {
   await page.addInitScript(() =>
@@ -144,7 +144,7 @@ test('saved palette is applied before React loads and invalid storage falls back
   await page.goto('/login?invalid', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('html')).toHaveAttribute(
     'data-color-theme',
-    'sage',
+    'slate',
   );
 });
 
@@ -155,11 +155,15 @@ test('theme cards support keyboard selection and fit a narrow screen', async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/settings');
   const appearance = page.getByRole('region', { name: 'Appearance' });
-  const sage = appearance.getByRole('radio', { name: 'Sage', exact: true });
-  await sage.focus();
-  await sage.press('ArrowRight');
+  const slate = appearance.getByRole('radio', { name: 'Slate', exact: true });
+  await expect(appearance.getByRole('radio').first()).toHaveAccessibleName(
+    'Slate',
+  );
+  await expect(slate).toBeChecked();
+  await slate.focus();
+  await slate.press('ArrowRight');
   await expect(
-    appearance.getByRole('radio', { name: 'Slate', exact: true }),
+    appearance.getByRole('radio', { name: 'Sage', exact: true }),
   ).toBeChecked();
   expect(
     await page.evaluate(

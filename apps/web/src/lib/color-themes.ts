@@ -1,13 +1,13 @@
 export const colorThemes = [
-  { value: 'sage', label: 'Sage' },
   { value: 'slate', label: 'Slate' },
+  { value: 'sage', label: 'Sage' },
   { value: 'ocean', label: 'Ocean' },
   { value: 'sand', label: 'Sand' },
   { value: 'plum', label: 'Plum' },
 ] as const;
 
 export type ColorTheme = (typeof colorThemes)[number]['value'];
-export const defaultColorTheme: ColorTheme = 'sage';
+export const defaultColorTheme: ColorTheme = 'slate';
 export const colorThemeStorageKey = 'roller-bay-color-theme';
 
 export function parseColorTheme(value: unknown): ColorTheme {

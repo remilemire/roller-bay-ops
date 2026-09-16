@@ -41,7 +41,7 @@ test('workspace renders real-contract data and persists accessible light/dark pr
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('body')).toHaveCSS(
     'background-color',
-    'rgb(17, 29, 27)',
+    'rgb(23, 28, 36)',
   );
   await page.screenshot({
     path: `/tmp/roller-bay-${testInfo.project.name}-dark.png`,
@@ -51,9 +51,9 @@ test('workspace renders real-contract data and persists accessible light/dark pr
   await expect(page.locator('html')).toHaveClass('light');
   await expect(page.locator('body')).toHaveCSS(
     'background-color',
-    'rgb(242, 245, 245)',
+    'rgb(242, 244, 247)',
   );
-  await expect(page.locator('body')).toHaveCSS('color', 'rgb(33, 53, 50)');
+  await expect(page.locator('body')).toHaveCSS('color', 'rgb(38, 49, 63)');
   await page.screenshot({
     path: `/tmp/roller-bay-${testInfo.project.name}-light.png`,
     fullPage: true,

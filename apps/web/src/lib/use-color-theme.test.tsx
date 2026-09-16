@@ -9,12 +9,17 @@ afterEach(() => {
 });
 
 it('bootstraps a saved palette and falls back for an unknown value', () => {
+  new Function(colorThemeScript)();
+  expect(document.documentElement.dataset.colorTheme).toBe('slate');
+  localStorage.setItem(colorThemeStorageKey, 'sage');
+  new Function(colorThemeScript)();
+  expect(document.documentElement.dataset.colorTheme).toBe('sage');
   localStorage.setItem(colorThemeStorageKey, 'ocean');
   new Function(colorThemeScript)();
   expect(document.documentElement.dataset.colorTheme).toBe('ocean');
   localStorage.setItem(colorThemeStorageKey, 'not-a-theme');
   new Function(colorThemeScript)();
-  expect(document.documentElement.dataset.colorTheme).toBe('sage');
+  expect(document.documentElement.dataset.colorTheme).toBe('slate');
 });
 
 it('updates all subscribers and persists independently of light/dark mode', () => {
@@ -45,10 +50,10 @@ it('syncs changes and resets from other tabs, ignoring session storage', () => {
   storageEvent('ocean', sessionStorage);
   expect(result.current.colorTheme).toBe('sand');
   storageEvent('unknown');
-  expect(result.current.colorTheme).toBe('sage');
-  storageEvent('slate');
+  expect(result.current.colorTheme).toBe('slate');
+  storageEvent('ocean');
   storageEvent(null, localStorage, null);
-  expect(result.current.colorTheme).toBe('sage');
+  expect(result.current.colorTheme).toBe('slate');
 });
 
 it('remains usable if browser storage is blocked', () => {
