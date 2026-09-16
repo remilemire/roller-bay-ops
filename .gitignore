@@ -11,3 +11,8 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Python app environments and caches
+.venv/
+__pycache__/
+.ruff_cache/

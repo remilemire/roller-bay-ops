@@ -1,0 +1,11 @@
+{
+  "name": "@roller-bay/solver",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": ".venv/bin/python -m service.main",
+    "start": ".venv/bin/python -m service.main",
+    "test": ".venv/bin/python -m unittest discover -s tests",
+    "lint": ".venv/bin/python -m ruff check service tests && .venv/bin/python -m ruff format --check service tests"
+  }
+}

@@ -26,7 +26,12 @@
         "AUTH_SESSION_SECRET",
         "AUTH_SESSION_TTL_SECONDS",
         "TRUSTED_PROXY_IPS",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "SOLVER_URL",
+        "SOLVER_API_KEY",
+        "SOLVER_HOST",
+        "SOLVER_PORT",
+        "SOLVER_PROVIDER"
       ]
     },
     "start": {
@@ -45,11 +50,21 @@
         "AUTH_SESSION_SECRET",
         "AUTH_SESSION_TTL_SECONDS",
         "TRUSTED_PROXY_IPS",
-        "NEXT_PUBLIC_API_URL"
+        "NEXT_PUBLIC_API_URL",
+        "SOLVER_URL",
+        "SOLVER_API_KEY",
+        "SOLVER_HOST",
+        "SOLVER_PORT",
+        "SOLVER_PROVIDER"
       ]
     },
-    "typecheck": { "dependsOn": ["^build"] },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "lint": {},
-    "test": { "dependsOn": ["^build"], "outputs": [] }
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
   }
 }
