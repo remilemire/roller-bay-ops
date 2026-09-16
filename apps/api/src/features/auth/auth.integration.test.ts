@@ -61,6 +61,10 @@ test(
     url.searchParams.set('options', `-csearch_path=${schema},public`);
     const config = environmentSchema.parse({
       NODE_ENV: 'test',
+      CUTTING_EDGE_TRIM_MM: 1,
+      CUTTING_MINIMUM_REMNANT_WIDTH_MM: 100,
+      CUTTING_MINIMUM_REMNANT_LENGTH_MM: 100,
+      CUTTING_DROP_ALLOWANCE_MM: 0,
       SOLVER_API_KEY: 'integration-solver-key-at-least-32-characters',
       SOLVER_URL: 'http://127.0.0.1:1',
       DATABASE_URL: url.href,

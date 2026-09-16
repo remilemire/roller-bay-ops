@@ -106,7 +106,6 @@ export async function testAllocationDrafts(
         );
         const preview = {
           requirements: complete.requirements,
-          settings: complete.settings,
           plan: complete.plan,
         };
         assert.equal(

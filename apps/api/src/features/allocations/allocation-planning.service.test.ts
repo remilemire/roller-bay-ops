@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { CuttingRulesService } from './cutting-rules.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -42,9 +44,16 @@ function optimizeWith(failure: unknown) {
     repository,
     stockItems,
     optimizer,
+    new CuttingRulesService(
+      new ConfigService({
+        CUTTING_EDGE_TRIM_MM: 1,
+        CUTTING_MINIMUM_REMNANT_WIDTH_MM: 100,
+        CUTTING_MINIMUM_REMNANT_LENGTH_MM: 100,
+        CUTTING_DROP_ALLOWANCE_MM: 0,
+      }),
+    ),
   ).optimize({
     requirements: context.requirements,
-    settings: context.settings,
     maxTimeSeconds: 5,
   });
 }

@@ -16,7 +16,6 @@ import {
 } from 'drizzle-orm';
 import type {
   AllocationQuery,
-  CreateAllocation,
   AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import {
@@ -111,7 +110,7 @@ export class AllocationsRepository {
   }
   async initializePlan(
     id: string,
-    settings: CreateAllocation['settings'],
+    settings: AllocationDraftData['settings'],
     plannedSummary: CuttingPlanSummary,
   ) {
     const [row] = await this.db

@@ -19,22 +19,22 @@ export const allocationDetail = (id: string) =>
       api(`/allocations/${id}`, s.allocationRecordSchema, { signal }),
   });
 export const createAllocationDraft = (
-  data: s.AllocationDraftData,
+  data: s.AllocationDraftInput,
   key: string,
 ) =>
   api('/allocations/drafts', s.allocationDraftSchema, {
     method: 'POST',
-    body: { data: s.allocationDraftDataSchema.parse(data) },
+    body: { data: s.allocationDraftInputSchema.parse(data) },
     key,
   });
 export const saveAllocationDraft = (
   id: string,
   expectedRevision: number,
-  data: s.AllocationDraftData,
+  data: s.AllocationDraftInput,
 ) =>
   api(`/allocations/${id}/draft`, s.allocationDraftSchema, {
     method: 'PUT',
-    body: { expectedRevision, data: s.allocationDraftDataSchema.parse(data) },
+    body: { expectedRevision, data: s.allocationDraftInputSchema.parse(data) },
   });
 export const submitAllocation = (id: string, expectedRevision: number) =>
   api(`/allocations/${id}/submit`, s.allocationDetailSchema, {

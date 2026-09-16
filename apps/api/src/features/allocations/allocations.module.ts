@@ -9,10 +9,12 @@ import { AllocationsController } from './allocations.controller.js';
 import { AllocationsRepository } from './allocations.repository.js';
 import { AllocationsService } from './allocations.service.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
+import { CuttingRulesService } from './cutting-rules.service.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 
 @Module({
   imports: [
+    ConfigModule,
     DatabaseModule,
     StockItemsModule,
     SolverModule.registerAsync({
@@ -28,6 +30,7 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
   ],
   controllers: [AllocationsController],
   providers: [
+    CuttingRulesService,
     AllocationsRepository,
     AllocationsService,
     AllocationPlanningService,

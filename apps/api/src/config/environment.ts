@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  cuttingSettingsSchema,
+  cuttingRequirementSchema,
+} from '@roller-bay/shared/allocations';
 import { emailSchema } from '@roller-bay/shared/users';
 
 const httpUrl = z.url().refine((value) => {
@@ -31,6 +35,27 @@ export const environmentSchema = z
         (value) => ['redis:', 'rediss:'].includes(new URL(value).protocol),
         'REDIS_URL must be a Redis connection URL (redis:// or rediss://).',
       ),
+    CUTTING_EDGE_TRIM_MM: z.coerce
+      .number()
+      .pipe(cuttingSettingsSchema.shape.edgeTrimMm)
+      .default(25.4),
+    CUTTING_MINIMUM_REMNANT_WIDTH_MM: z.coerce
+      .number()
+      .pipe(cuttingSettingsSchema.shape.minimumRemnantWidthMm)
+      .default(1524),
+    CUTTING_MINIMUM_REMNANT_LENGTH_MM: z.coerce
+      .number()
+      .pipe(cuttingSettingsSchema.shape.minimumRemnantLengthMm)
+      .default(1524),
+    CUTTING_DROP_ALLOWANCE_MM: z
+      .preprocess(
+        (value) =>
+          typeof value === 'string' && value.trim() === '' ? NaN : value,
+        z.coerce
+          .number()
+          .pipe(cuttingRequirementSchema.shape.lengthAllowanceMm),
+      )
+      .default(254),
     SOLVER_URL: httpUrl
       .default('http://127.0.0.1:8001')
       .refine(

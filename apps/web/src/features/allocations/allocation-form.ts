@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
-  allocationDraftDataSchema,
-  type AllocationDraftData,
+  allocationDraftInputSchema,
+  type AllocationDraftInput,
 } from '@roller-bay/shared/allocations';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { nullableText, nullableNumber } from '@/lib/format';
@@ -14,15 +14,9 @@ export const allocationFormSchema = z.object({
       fabricColorId: z.string(),
       width: z.string(),
       length: z.string(),
-      allowance: z.string(),
       quantity: z.string(),
     }),
   ),
-  settings: z.object({
-    edgeTrim: z.string(),
-    remnantWidth: z.string(),
-    remnantLength: z.string(),
-  }),
   drops: z.array(
     z.object({
       stockItemId: z.string(),
@@ -41,13 +35,12 @@ export const emptyRequirement = () => ({
   fabricColorId: '',
   width: '',
   length: '',
-  allowance: '',
   quantity: '',
 });
 // Form strings are expressed in the given units; callers must convert back
 // with the same units so a saved value never drifts.
 export function allocationToForm(
-  data: AllocationDraftData | undefined,
+  data: AllocationDraftInput | undefined,
   units: MeasurementUnits,
 ): AllocationForm {
   return {
@@ -58,26 +51,8 @@ export function allocationToForm(
         fabricColorId: i.fabricColorId ?? '',
         width: fieldInput(units, 'blindWidth', i.widthMm),
         length: fieldInput(units, 'finishedDrop', i.lengthMm),
-        allowance: fieldInput(units, 'dropAllowance', i.lengthAllowanceMm),
         quantity: String(i.quantity ?? ''),
       })) ?? [],
-    settings: {
-      edgeTrim: fieldInput(
-        units,
-        'edgeTrim',
-        data?.settings.edgeTrimMm ?? null,
-      ),
-      remnantWidth: fieldInput(
-        units,
-        'minimumRemnantWidth',
-        data?.settings.minimumRemnantWidthMm ?? null,
-      ),
-      remnantLength: fieldInput(
-        units,
-        'minimumRemnantLength',
-        data?.settings.minimumRemnantLengthMm ?? null,
-      ),
-    },
     drops:
       data?.plan.drops.map((d) => ({
         stockItemId: d.stockItemId ?? '',
@@ -92,30 +67,16 @@ export function allocationToForm(
 export function allocationFromForm(
   form: AllocationForm,
   units: MeasurementUnits,
-): AllocationDraftData {
-  return allocationDraftDataSchema.parse({
+): AllocationDraftInput {
+  return allocationDraftInputSchema.parse({
     orderNumber: nullableText(form.orderNumber),
     requirements: form.requirements.map((r) => ({
       id: r.id,
       fabricColorId: nullableText(r.fabricColorId),
       widthMm: fieldValue(units, 'blindWidth', r.width),
       lengthMm: fieldValue(units, 'finishedDrop', r.length),
-      lengthAllowanceMm: fieldValue(units, 'dropAllowance', r.allowance),
       quantity: nullableNumber(r.quantity),
     })),
-    settings: {
-      edgeTrimMm: fieldValue(units, 'edgeTrim', form.settings.edgeTrim),
-      minimumRemnantWidthMm: fieldValue(
-        units,
-        'minimumRemnantWidth',
-        form.settings.remnantWidth,
-      ),
-      minimumRemnantLengthMm: fieldValue(
-        units,
-        'minimumRemnantLength',
-        form.settings.remnantLength,
-      ),
-    },
     plan: {
       drops: form.drops.map((d) => ({
         stockItemId: nullableText(d.stockItemId),

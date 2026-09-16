@@ -9,15 +9,12 @@ import {
   emptyRequirement,
 } from './allocation-form';
 const units = defaultMeasurementUnits;
-it('preserves requirement identity, assignment ordering, and incomplete cut settings', () => {
+it('preserves requirement identity, assignment ordering, and incomplete fields', () => {
   const r = emptyRequirement();
   const data = allocationFromForm(
     {
       orderNumber: '',
-      requirements: [
-        { ...r, width: '22', length: '1.5', allowance: '0.5', quantity: '2' },
-      ],
-      settings: { edgeTrim: '1', remnantWidth: '', remnantLength: '' },
+      requirements: [{ ...r, width: '22', length: '1.5', quantity: '2' }],
       drops: [
         {
           stockItemId: '',
@@ -32,7 +29,6 @@ it('preserves requirement identity, assignment ordering, and incomplete cut sett
     id: r.id,
     widthMm: 558.8,
     lengthMm: 1371.6,
-    lengthAllowanceMm: 457.2,
     quantity: 2,
   });
   expect(data.plan.drops[0]).toMatchObject({
@@ -40,11 +36,8 @@ it('preserves requirement identity, assignment ordering, and incomplete cut sett
     lengthMm: null,
     items: [{ requirementId: r.id, quantity: null }],
   });
-  expect(data.settings).toEqual({
-    edgeTrimMm: 25.4,
-    minimumRemnantWidthMm: null,
-    minimumRemnantLengthMm: null,
-  });
+  expect(data).not.toHaveProperty('settings');
+  expect(data.requirements[0]).not.toHaveProperty('lengthAllowanceMm');
   expect(allocationFromForm(allocationToForm(data, units), units)).toEqual(
     data,
   );
@@ -78,10 +71,7 @@ it('lets blind drops use inches while other fields keep their own units', () => 
   const data = allocationFromForm(
     {
       orderNumber: 'RB-1',
-      requirements: [
-        { ...r, width: '22', length: '72', allowance: '2', quantity: '1' },
-      ],
-      settings: { edgeTrim: '25.4', remnantWidth: '10', remnantLength: '' },
+      requirements: [{ ...r, width: '22', length: '72', quantity: '1' }],
       drops: [{ stockItemId: '', length: '2.7432', items: [] }],
     },
     inchDrops,
@@ -89,21 +79,15 @@ it('lets blind drops use inches while other fields keep their own units', () => 
   expect(data.requirements[0]).toMatchObject({
     widthMm: 558.8,
     lengthMm: 1828.8,
-    lengthAllowanceMm: 50.8,
   });
-  expect(data.settings).toEqual({
-    edgeTrimMm: 25.4,
-    minimumRemnantWidthMm: 254,
-    minimumRemnantLengthMm: null,
-  });
+  expect(data).not.toHaveProperty('settings');
+  expect(data.requirements[0]).not.toHaveProperty('lengthAllowanceMm');
   expect(data.plan.drops[0]!.lengthMm).toBe(2743.2);
   expect(allocationToForm(data, inchDrops).requirements[0]).toMatchObject({
     length: '72',
-    allowance: '2',
   });
   expect(allocationToForm(data, units)).toMatchObject({
-    requirements: [{ length: '2', allowance: '0.055556' }],
-    settings: { edgeTrim: '1' },
+    requirements: [{ length: '2' }],
     drops: [{ length: '3' }],
   });
 });

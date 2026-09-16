@@ -2,7 +2,6 @@
 import { ApiError } from '@/lib/api';
 import { RequirementsEditor } from './requirements-editor';
 import { CutPlanEditor } from './cut-plan-editor';
-import { CuttingSettingsFields } from './cutting-settings-fields';
 import { PlanPreview } from './plan-preview';
 import { useRef, useState, useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -12,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import {
   allocationDraftSchema,
-  allocationDraftDataSchema,
+  allocationDraftInputSchema,
   createAllocationSchema,
   type AllocationDetail,
   type AllocationOptimization,
@@ -66,12 +65,19 @@ export function AllocationEditor({
   const liveUnits = useMeasurementUnits();
   const [units] = useState(liveUnits);
   const scope = `allocation:${user.id}:new`;
-  const recovery = allocationDraftDataSchema.safeParse(pendingPayload(scope));
+  const recovery = allocationDraftInputSchema.safeParse(pendingPayload(scope));
   const activeData = active
-    ? allocationDraftDataSchema.parse({
+    ? allocationDraftInputSchema.parse({
         orderNumber: active.orderNumber,
-        requirements: active.requirements,
-        settings: active.settings ?? {},
+        requirements: active.requirements.map(
+          ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
+            id,
+            fabricColorId,
+            widthMm,
+            lengthMm,
+            quantity,
+          }),
+        ),
         plan: active.plan,
       })
     : undefined;
@@ -157,7 +163,6 @@ export function AllocationEditor({
       const target = active ?? saved;
       const context = {
         requirements: data.requirements,
-        settings: data.settings,
         ...(target
           ? { allocationId: target.id, expectedRevision: target.revision }
           : {}),
@@ -247,14 +252,6 @@ export function AllocationEditor({
               form={form}
               units={units}
               onChange={() => setPreview(null)}
-            />
-            <CuttingSettingsFields
-              units={units}
-              value={values.settings}
-              onChange={(value) => {
-                form.setValue('settings', value, { shouldDirty: true });
-                setPreview(null);
-              }}
             />
             <CutPlanEditor
               form={form}

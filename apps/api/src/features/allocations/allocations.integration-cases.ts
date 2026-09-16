@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import type { Environment } from '../../config/environment.js';
 import { testAllocationDrafts } from './allocation-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -48,11 +50,6 @@ export async function testAllocations(
     section: randomUUID(),
     location: randomUUID(),
   };
-  const settings = {
-    edgeTrimMm: 1,
-    minimumRemnantWidthMm: 100,
-    minimumRemnantLengthMm: 100,
-  };
   const seed = async (length = 10000, remnant = false) => {
     const id = randomUUID();
     await pool.query(
@@ -72,11 +69,9 @@ export async function testAllocations(
           fabricColorId: ids.color,
           widthMm: 500,
           lengthMm: length,
-          lengthAllowanceMm: 0,
           quantity: 1,
         },
       ],
-      settings,
       plan: {
         drops: [
           {
@@ -113,7 +108,7 @@ export async function testAllocations(
         (item) =>
           item.consumedAt === null &&
           item.remainingLengthMm - item.reservedLengthMm >=
-            requirement.lengthMm,
+            requirement.lengthMm + requirement.lengthAllowanceMm,
       )!;
       if (!stock) return { status: 'infeasible' as const };
       const plan = {
@@ -200,16 +195,14 @@ export async function testAllocations(
         const stockId = await seed(1000);
         const body = input(stockId);
         const allocation = await create(body);
-        const { requirements, settings, plan } = body;
+        const { requirements, plan } = body;
         const blocked = await post(`${path}/validate`, {
           requirements,
-          settings,
           plan,
         }).expect(200);
         assert.equal(blocked.body.valid, false);
         const valid = await post(`${path}/validate`, {
           requirements,
-          settings,
           plan,
           allocationId: allocation.id,
           expectedRevision: 1,
@@ -218,13 +211,11 @@ export async function testAllocations(
         assert.equal(valid.body.stockItems[0].locationLabel, '1');
         await post(`${path}/validate`, {
           requirements,
-          settings,
           plan,
           stockItems: [],
         }).expect(400);
         await post(`${path}/optimize`, {
           requirements,
-          settings,
           allocationId: allocation.id,
           expectedRevision: 1,
         }).expect(200);
@@ -236,13 +227,142 @@ export async function testAllocations(
         );
         await post(`${path}/optimize`, {
           requirements,
-          settings,
           allocationId: allocation.id,
           expectedRevision: 999,
         }).expect(409);
         const after = await get(`${path}/${allocation.id}`).expect(200);
         assert.equal(after.body.revision, 1);
         assert.equal(after.body.items[0].stockItem.remainingLengthMm, 1000);
+      },
+    );
+
+    await t.test(
+      'configured rules are server-owned and saved across previews, draft submission, edits, and retries',
+      async () => {
+        const config = app.get<ConfigService<Environment, true>>(ConfigService);
+        const original = {
+          CUTTING_EDGE_TRIM_MM: config.getOrThrow('CUTTING_EDGE_TRIM_MM', {
+            infer: true,
+          }),
+          CUTTING_MINIMUM_REMNANT_WIDTH_MM: config.getOrThrow(
+            'CUTTING_MINIMUM_REMNANT_WIDTH_MM',
+            { infer: true },
+          ),
+          CUTTING_MINIMUM_REMNANT_LENGTH_MM: config.getOrThrow(
+            'CUTTING_MINIMUM_REMNANT_LENGTH_MM',
+            { infer: true },
+          ),
+          CUTTING_DROP_ALLOWANCE_MM: config.getOrThrow(
+            'CUTTING_DROP_ALLOWANCE_MM',
+            { infer: true },
+          ),
+        };
+        try {
+          config.set('CUTTING_EDGE_TRIM_MM', 25.4);
+          config.set('CUTTING_MINIMUM_REMNANT_WIDTH_MM', 1524);
+          config.set('CUTTING_MINIMUM_REMNANT_LENGTH_MM', 1524);
+          config.set('CUTTING_DROP_ALLOWANCE_MM', 254);
+          const body = input(await seed());
+          const { requirements } = body;
+          const invalid = await post(`${path}/validate`, {
+            requirements,
+            plan: body.plan,
+          }).expect(200);
+          assert.equal(invalid.body.valid, false);
+          body.plan.drops[0]!.lengthMm += 254;
+          const preview = await post(`${path}/validate`, {
+            requirements,
+            plan: body.plan,
+          }).expect(200);
+          assert.equal(preview.body.valid, true);
+          await post(`${path}/optimize`, { requirements }).expect(200);
+          assert.equal(
+            optimizedContexts.at(-1)!.requirements[0]!.lengthAllowanceMm,
+            254,
+          );
+          assert.deepEqual(optimizedContexts.at(-1)!.settings, {
+            edgeTrimMm: 25.4,
+            minimumRemnantWidthMm: 1524,
+            minimumRemnantLengthMm: 1524,
+          });
+          const key = randomUUID();
+          const created = await create(body, key);
+          assert.equal(created.requirements[0]!.lengthAllowanceMm, 254);
+          assert.equal(created.items[0]!.reservedLengthMm, 1254);
+          assert.deepEqual(created.plannedSummary, preview.body.summary);
+          assert.deepEqual(created.settings, {
+            edgeTrimMm: 25.4,
+            minimumRemnantWidthMm: 1524,
+            minimumRemnantLengthMm: 1524,
+            dropAllowanceMm: 254,
+          });
+          const draftBody = input(body.plan.drops[0]!.stockItemId);
+          draftBody.plan.drops[0]!.lengthMm += 254;
+          const draftKey = randomUUID();
+          const draft = (
+            await post(`${path}/drafts`, { data: draftBody }, draftKey).expect(
+              201,
+            )
+          ).body;
+          config.set('CUTTING_EDGE_TRIM_MM', 400);
+          config.set('CUTTING_DROP_ALLOWANCE_MM', 508);
+          assert.deepEqual(await create(body, key), created);
+          assert.deepEqual(
+            (
+              await post(
+                `${path}/drafts`,
+                { data: draftBody },
+                draftKey,
+              ).expect(201)
+            ).body,
+            draft,
+          );
+          for (const [id, data] of [
+            [created.id, body],
+            [draft.id, draftBody],
+          ] as const) {
+            const result = await post(`${path}/validate`, {
+              requirements: data.requirements,
+              plan: data.plan,
+              allocationId: id,
+              expectedRevision: 1,
+            }).expect(200);
+            assert.equal(result.body.valid, true);
+          }
+          const current = await post(`${path}/validate`, {
+            requirements,
+            plan: body.plan,
+          }).expect(200);
+          assert.equal(current.body.valid, false);
+          await request(server)
+            .put(`${path}/${draft.id}/draft`)
+            .set('Cookie', cookie)
+            .set('Origin', origin)
+            .send({ expectedRevision: 1, data: draftBody })
+            .expect(200);
+          const submitted = (
+            await post(`${path}/${draft.id}/submit`, {
+              expectedRevision: 2,
+            }).expect(200)
+          ).body;
+          assert.deepEqual(submitted.settings, created.settings);
+          assert.equal(submitted.requirements[0].lengthAllowanceMm, 254);
+          const replaced = (
+            await put(created.id, { ...body, expectedRevision: 1 }).expect(200)
+          ).body;
+          assert.deepEqual(replaced.settings, created.settings);
+          assert.equal(replaced.items[0].reservedLengthMm, 1254);
+          for (const extra of [
+            { ...body, settings: created.settings },
+            { ...body, requirements: created.requirements },
+          ]) {
+            await post(path, extra).expect(400);
+            await post(`${path}/drafts`, { data: extra }).expect(400);
+          }
+        } finally {
+          for (const [key, value] of Object.entries(original))
+            config.set(key as keyof typeof original, value);
+        }
       },
     );
 

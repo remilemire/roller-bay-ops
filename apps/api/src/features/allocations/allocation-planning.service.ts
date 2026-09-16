@@ -23,6 +23,7 @@ import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
+import { CuttingRulesService } from './cutting-rules.service.js';
 import { SolverError } from '../../solver/solver.errors.js';
 
 @Injectable()
@@ -32,6 +33,7 @@ export class AllocationPlanningService {
     private readonly stockItems: StockItemsService,
     @Inject(CuttingPlanOptimizer)
     private readonly optimizer: CuttingPlanOptimizer | null,
+    private readonly cuttingRules: CuttingRulesService,
   ) {}
 
   async optimize(input: OptimizeAllocation, signal?: AbortSignal) {
@@ -102,11 +104,21 @@ export class AllocationPlanningService {
   ) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        if (input.allocationId)
-          requirePlanningRevision(
-            await repository.findById(input.allocationId),
-            input.expectedRevision,
-          );
+        const header = input.allocationId
+          ? requirePlanningRevision(
+              await repository.findById(input.allocationId),
+              input.expectedRevision,
+            )
+          : undefined;
+        const configured = this.cuttingRules.apply(
+          input.requirements,
+          header
+            ? {
+                settings: header.settings,
+                requirements: await repository.requirements(header.id),
+              }
+            : undefined,
+        );
         await this.stockItems.requireColors(
           input.requirements.map((item) => item.fabricColorId),
           tx,
@@ -128,7 +140,7 @@ export class AllocationPlanningService {
           input.allocationId,
         );
         return {
-          context: buildCuttingContext(input, stock, reservations),
+          context: buildCuttingContext(configured, stock, reservations),
           stock,
         };
       }, true),

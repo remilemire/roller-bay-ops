@@ -8,7 +8,11 @@ export function buildCuttingContext(
 ): CuttingContext {
   return {
     requirements: input.requirements,
-    settings: input.settings,
+    settings: {
+      edgeTrimMm: input.settings.edgeTrimMm,
+      minimumRemnantWidthMm: input.settings.minimumRemnantWidthMm,
+      minimumRemnantLengthMm: input.settings.minimumRemnantLengthMm,
+    },
     stockItems: stock.map((item) => ({
       id: item.id,
       fabricColorId: item.fabricColorId,

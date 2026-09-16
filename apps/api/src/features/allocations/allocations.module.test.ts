@@ -29,11 +29,11 @@ test('allocation module starts without solver credentials and only optimization 
   try {
     assert.ok(module.get(AllocationsController));
     assert.equal(module.get(SolverClient), null);
-    const { requirements, settings } = fixture();
+    const { requirements } = fixture();
     await assert.rejects(
       module
         .get(AllocationPlanningService)
-        .optimize({ requirements, settings, maxTimeSeconds: 5 }),
+        .optimize({ requirements, maxTimeSeconds: 5 }),
       ServiceUnavailableException,
     );
   } finally {

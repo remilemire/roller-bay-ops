@@ -3,7 +3,7 @@ import {
   allocationDraftSchema,
   allocationDetailSchema,
   allocationOptimizationSchema,
-  type AllocationDraftData,
+  type AllocationDraftInput,
 } from '@roller-bay/shared/allocations';
 import type { StockReceiptDraftData } from '@roller-bay/shared/stock-receipts';
 import {
@@ -272,6 +272,7 @@ export async function mockApi(
             drops: [
               {
                 ...allocation.plan.drops[0],
+                lengthMm: 2540,
                 items: [{ requirementId: requirement.id, quantity: 1 }],
               },
             ],
@@ -283,7 +284,7 @@ export async function mockApi(
                 dropIndex: 0,
                 kind: 'left-edge',
                 widthMm: 25.4,
-                lengthMm: 2743.2,
+                lengthMm: 2540,
                 quantity: 1,
                 reusable: false,
               },
@@ -292,18 +293,16 @@ export async function mockApi(
                 dropIndex: 0,
                 kind: 'right-edge',
                 widthMm: 1600.2,
-                lengthMm: 2743.2,
+                lengthMm: 2540,
                 quantity: 1,
                 reusable: true,
               },
             ],
-            reservations: [
-              { stockItemId: ids.stock, reservedLengthMm: 2743.2 },
-            ],
-            inputAreaMm2: (2997.2 * 2743.2).toFixed(6),
-            requiredAreaMm2: (1371.6 * 2743.2).toFixed(6),
-            reusableAreaMm2: (1600.2 * 2743.2).toFixed(6),
-            wasteAreaMm2: (25.4 * 2743.2).toFixed(6),
+            reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2540 }],
+            inputAreaMm2: (2997.2 * 2540).toFixed(6),
+            requiredAreaMm2: (1371.6 * 2540).toFixed(6),
+            reusableAreaMm2: (1600.2 * 2540).toFixed(6),
+            wasteAreaMm2: (25.4 * 2540).toFixed(6),
             dropCount: 1,
             stockItemCount: 1,
             newRollCount: 1,
@@ -312,7 +311,20 @@ export async function mockApi(
       );
     }
     if (path === `/allocations/${ids.allocation}/draft` && method === 'PUT') {
-      const data = request.postDataJSON().data as AllocationDraftData;
+      const input = request.postDataJSON().data as AllocationDraftInput;
+      const data = {
+        ...input,
+        settings: {
+          edgeTrimMm: 25.4,
+          minimumRemnantWidthMm: 1524,
+          minimumRemnantLengthMm: 1524,
+          dropAllowanceMm: 254,
+        },
+        requirements: input.requirements.map((item) => ({
+          ...item,
+          lengthAllowanceMm: 254,
+        })),
+      };
       state.allocationDraft = allocationDraftSchema.parse({
         ...state.allocationDraft,
         orderNumber: data.orderNumber,
@@ -332,7 +344,20 @@ export async function mockApi(
       return send(state.allocation);
     }
     if (path === '/allocations/drafts') {
-      const data = request.postDataJSON().data as AllocationDraftData;
+      const input = request.postDataJSON().data as AllocationDraftInput;
+      const data = {
+        ...input,
+        settings: {
+          edgeTrimMm: 25.4,
+          minimumRemnantWidthMm: 1524,
+          minimumRemnantLengthMm: 1524,
+          dropAllowanceMm: 254,
+        },
+        requirements: input.requirements.map((item) => ({
+          ...item,
+          lengthAllowanceMm: 254,
+        })),
+      };
       state.allocationDraft = allocationDraftSchema.parse({
         ...allocation,
         state: 'draft',

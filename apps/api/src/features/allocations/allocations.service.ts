@@ -14,7 +14,7 @@ import {
   allocationDraftSchema,
   allocationDraftDataSchema,
   createAllocationSchema,
-  type AllocationDraftData,
+  type AllocationDraftInput,
   type AllocationQuery,
   type CreateAllocation,
   type ReplaceAllocation,
@@ -34,6 +34,10 @@ import {
 } from './allocation.rules.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
+import {
+  CuttingRulesService,
+  type ConfiguredAllocationPlan,
+} from './cutting-rules.service.js';
 import { toLengthUnits } from './cutting-plan/cutting-dimensions.js';
 
 const hash = (value: unknown) =>
@@ -44,6 +48,7 @@ export class AllocationsService {
   constructor(
     private readonly repository: AllocationsRepository,
     private readonly stockItems: StockItemsService,
+    private readonly cuttingRules: CuttingRulesService,
   ) {}
 
   create(input: CreateAllocation, userId: string, key: string) {
@@ -64,18 +69,28 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
-        return this.confirmPlan(repository, tx, header, input, false);
+        return this.confirmPlan(
+          repository,
+          tx,
+          header,
+          { ...input, ...this.cuttingRules.apply(input.requirements) },
+          false,
+        );
       }),
     );
   }
 
-  createDraft(data: AllocationDraftData, userId: string, key: string) {
+  createDraft(data: AllocationDraftInput, userId: string, key: string) {
     const requestHash = hash({ mode: 'draft', data });
+    const configured = {
+      ...data,
+      ...this.cuttingRules.apply(data.requirements),
+    };
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.create({
           orderNumber: data.orderNumber,
-          settings: data.settings,
+          settings: configured.settings,
           createdByUserId: userId,
           idempotencyKey: key,
           requestHash,
@@ -88,20 +103,30 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
-        await repository.replacePlan(header.id, data);
+        await repository.replacePlan(header.id, configured);
         return this.detail(repository, tx, header);
       }),
     );
   }
 
-  updateDraft(id: string, revision: number, data: AllocationDraftData) {
+  updateDraft(id: string, revision: number, data: AllocationDraftInput) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        requireDraftRevision(await repository.findById(id, true), revision);
-        await repository.replacePlan(id, data);
+        const previous = requireDraftRevision(
+          await repository.findById(id, true),
+          revision,
+        );
+        const configured = {
+          ...data,
+          ...this.cuttingRules.apply(data.requirements, {
+            settings: previous.settings,
+            requirements: await repository.requirements(id),
+          }),
+        };
+        await repository.replacePlan(id, configured);
         const header = await repository.update(id, {
           orderNumber: data.orderNumber,
-          settings: data.settings,
+          settings: configured.settings,
         });
         return this.detail(repository, tx, header);
       }),
@@ -127,15 +152,35 @@ export class AllocationsService {
         if (!header.isDraft && header.submittedDraftRevision === revision)
           return this.detail(repository, tx, header);
         requireDraftRevision(header, revision);
-        const input = createAllocationSchema.safeParse(
-          await this.formData(repository, header),
-        );
+        const saved = await this.formData(repository, header);
+        const input = createAllocationSchema.safeParse({
+          orderNumber: saved.orderNumber,
+          requirements: saved.requirements.map(
+            ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
+              id,
+              fabricColorId,
+              widthMm,
+              lengthMm,
+              quantity,
+            }),
+          ),
+          plan: saved.plan,
+        });
         if (!input.success)
           throw new BadRequestException({
             message: 'Complete all allocation fields before submitting.',
             issues: input.error.issues,
           });
-        return this.confirmPlan(repository, tx, header, input.data, true);
+        return this.confirmPlan(
+          repository,
+          tx,
+          header,
+          {
+            ...input.data,
+            ...this.cuttingRules.apply(input.data.requirements, saved),
+          },
+          true,
+        );
       }),
     );
   }
@@ -144,7 +189,7 @@ export class AllocationsService {
     repository: AllocationsRepository,
     tx: DatabaseTransaction,
     header: AllocationRecord,
-    input: CreateAllocation,
+    input: ConfiguredAllocationPlan,
     fromDraft: boolean,
   ) {
     const summary = await this.validateForWrite(
@@ -173,18 +218,25 @@ export class AllocationsService {
           await repository.findById(id, true),
           input.expectedRevision,
         );
+        const configured = {
+          ...input,
+          ...this.cuttingRules.apply(input.requirements, {
+            settings: header.settings,
+            requirements: await repository.requirements(id),
+          }),
+        };
         const current = await repository.items(id);
         const summary = await this.validateForWrite(
           repository,
           tx,
-          input,
+          configured,
           header.id,
           current.map((item) => item.stockItemId!),
         );
-        await repository.replacePlan(id, input, summary);
+        await repository.replacePlan(id, configured, summary);
         const saved = await repository.update(id, {
           orderNumber: input.orderNumber,
-          settings: input.settings,
+          settings: configured.settings,
           plannedSummary: summary,
         });
         return this.detail(repository, tx, saved);
@@ -311,7 +363,7 @@ export class AllocationsService {
   private async validateForWrite(
     repository: AllocationsRepository,
     tx: DatabaseTransaction,
-    input: CreateAllocation,
+    input: ConfiguredAllocationPlan,
     excludeId?: string,
     previousIds: string[] = [],
   ) {

@@ -23,8 +23,15 @@ function submission() {
   const context = fixture();
   return {
     orderNumber: ' ORDER-1 ',
-    requirements: context.requirements,
-    settings: context.settings,
+    requirements: context.requirements.map(
+      ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
+        id,
+        fabricColorId,
+        widthMm,
+        lengthMm,
+        quantity,
+      }),
+    ),
     plan: {
       drops: [
         {
@@ -50,11 +57,10 @@ test('allocation contracts normalize keys, require revisions, and reject client-
     createAllocationSchema.safeParse({ ...input, stockItems: [] }).success,
     false,
   );
-  const { requirements, settings } = input;
+  const { requirements } = input;
   assert.equal(
     optimizeAllocationSchema.safeParse({
       requirements,
-      settings,
       allocationId: randomUUID(),
     }).success,
     false,
@@ -62,7 +68,6 @@ test('allocation contracts normalize keys, require revisions, and reject client-
   assert.equal(
     optimizeAllocationSchema.safeParse({
       requirements,
-      settings,
       expectedRevision: 1,
     }).success,
     false,
@@ -70,7 +75,6 @@ test('allocation contracts normalize keys, require revisions, and reject client-
   assert.equal(
     optimizeAllocationSchema.safeParse({
       requirements,
-      settings,
       allocationId: randomUUID(),
       expectedRevision: 1,
     }).success,

@@ -92,9 +92,16 @@ export const cuttingPlanSummarySchema = z.object({
   stockItemCount: z.number().int().nonnegative(),
   newRollCount: z.number().int().nonnegative(),
 });
+export const allocationRequirementInputSchema = cuttingRequirementSchema.omit({
+  lengthAllowanceMm: true,
+});
+// Stored plans retain the rules they were prepared with. Older snapshots lack
+// the global allowance; their per-requirement allowances remain authoritative.
+export const allocationSettingsSchema = cuttingSettingsSchema.extend({
+  dropAllowanceMm: dimension.optional(),
+});
 const planningFields = {
-  requirements: cuttingContextSchema.shape.requirements,
-  settings: cuttingSettingsSchema,
+  requirements: z.array(allocationRequirementInputSchema).min(1).max(1000),
 };
 const revision = z.number().int().positive().max(2147483646);
 const previewFields = {
@@ -180,7 +187,7 @@ export const allocationCompletionSchema = z.object({
 export const allocationDetailSchema = allocationSummarySchema.extend({
   requirements: z.array(cuttingRequirementSchema),
   plan: cuttingPlanSchema,
-  settings: cuttingSettingsSchema.nullable(),
+  settings: allocationSettingsSchema.nullable(),
   plannedSummary: cuttingPlanSummarySchema.nullable(),
   items: z.array(
     z.object({
@@ -215,6 +222,7 @@ export const allocationDraftDataSchema = z
         edgeTrimMm: draftField(dimension.positive()),
         minimumRemnantWidthMm: draftField(dimension.positive()),
         minimumRemnantLengthMm: draftField(dimension.positive()),
+        dropAllowanceMm: dimension.optional(),
       })
       .prefault({}),
     plan: z
@@ -240,46 +248,71 @@ export const allocationDraftDataSchema = z
       })
       .prefault({}),
   })
-  .superRefine((value, ctx) => {
-    // Draft dimensions may be unfinished, but assignment links must already
-    // resolve within this draft so replacement saves preserve a coherent graph.
-    const ids = new Set(value.requirements.map((item) => item.id));
-    if (ids.size !== value.requirements.length)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['requirements'],
-        message: 'Requirement IDs must be unique.',
-      });
-    let assignments = 0;
-    value.plan.drops.forEach((drop, i) => {
-      const assigned = new Set<string>();
-      drop.items.forEach((item, j) => {
-        if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
-          ctx.addIssue({
-            code: 'custom',
-            path: ['plan', 'drops', i, 'items', j, 'requirementId'],
-            message:
-              'Assignments must reference a unique requirement in this draft.',
-          });
-        assigned.add(item.requirementId);
-        assignments++;
-      });
+  .superRefine(validateDraftAssignments);
+
+function validateDraftAssignments(
+  value: {
+    requirements: { id: string }[];
+    plan: { drops: { items: { requirementId: string }[] }[] };
+  },
+  ctx: z.RefinementCtx,
+) {
+  // Draft dimensions may be unfinished, but assignment links must already
+  // resolve within this draft so replacement saves preserve a coherent graph.
+  const ids = new Set(value.requirements.map((item) => item.id));
+  if (ids.size !== value.requirements.length)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['requirements'],
+      message: 'Requirement IDs must be unique.',
     });
-    if (assignments > 10000)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['plan'],
-        message: 'An allocation may contain at most 10,000 cut assignments.',
-      });
+  let assignments = 0;
+  value.plan.drops.forEach((drop, i) => {
+    const assigned = new Set<string>();
+    drop.items.forEach((item, j) => {
+      if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['plan', 'drops', i, 'items', j, 'requirementId'],
+          message:
+            'Assignments must reference a unique requirement in this draft.',
+        });
+      assigned.add(item.requirementId);
+      assignments++;
+    });
   });
+  if (assignments > 10000)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['plan'],
+      message: 'An allocation may contain at most 10,000 cut assignments.',
+    });
+}
+
+export const allocationDraftInputSchema = z
+  .strictObject({
+    orderNumber: allocationDraftDataSchema.shape.orderNumber,
+    requirements: z
+      .array(
+        allocationDraftDataSchema.shape.requirements
+          .unwrap()
+          .element.omit({ lengthAllowanceMm: true }),
+      )
+      .max(1000)
+      .default([]),
+    plan: allocationDraftDataSchema.shape.plan,
+  })
+  .superRefine(validateDraftAssignments);
+export type AllocationDraftInput = z.infer<typeof allocationDraftInputSchema>;
+
 export const createAllocationDraftSchema = z.strictObject({
-  data: allocationDraftDataSchema,
+  data: allocationDraftInputSchema,
 });
 export const allocationDraftRevisionSchema = z.strictObject({
   expectedRevision: revision,
 });
 export const updateAllocationDraftSchema = allocationDraftRevisionSchema.extend(
-  { data: allocationDraftDataSchema },
+  { data: allocationDraftInputSchema },
 );
 export const allocationDraftSummarySchema = z.object({
   id,

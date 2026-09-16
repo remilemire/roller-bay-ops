@@ -45,7 +45,10 @@ export function RequirementsEditor({
       <div className="panel-heading">
         <div>
           <h2>Required blinds</h2>
-          <p>Finished sizes, quantities, and any extra length for the drop.</p>
+          <p>
+            Enter finished sizes. The configured drop allowance is added
+            automatically.
+          </p>
         </div>
         <Button
           variant="outline"
@@ -119,13 +122,6 @@ export function RequirementsEditor({
                 type="number"
                 value={r.length}
                 onChange={(v) => change('length', v)}
-              />
-              <TextField
-                label={`Extra drop allowance (${fieldSuffix(units, 'dropAllowance')})`}
-                type="number"
-                value={r.allowance}
-                onChange={(v) => change('allowance', v)}
-                hint="Enter 0 when no extra length is needed."
               />
               <TextField
                 label="Quantity"

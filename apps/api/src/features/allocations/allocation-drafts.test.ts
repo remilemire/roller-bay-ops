@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { CuttingRulesService } from './cutting-rules.service.js';
 import { AllocationsService } from './allocations.service.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import assert from 'node:assert/strict';
@@ -153,6 +155,14 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
   const service = new AllocationsService(
     repository as unknown as AllocationsRepository,
     stock as unknown as StockItemsService,
+    new CuttingRulesService(
+      new ConfigService({
+        CUTTING_EDGE_TRIM_MM: 1,
+        CUTTING_MINIMUM_REMNANT_WIDTH_MM: 100,
+        CUTTING_MINIMUM_REMNANT_LENGTH_MM: 100,
+        CUTTING_DROP_ALLOWANCE_MM: 0,
+      }),
+    ),
   );
   await assert.rejects(service.submitDraft(draft.id, 1), BadRequestException);
   assert.equal(writes, 0);
