@@ -31,6 +31,16 @@ export const environmentSchema = z
         (value) => ['redis:', 'rediss:'].includes(new URL(value).protocol),
         'REDIS_URL must be a Redis connection URL (redis:// or rediss://).',
       ),
+    SOLVER_URL: httpUrl
+      .default('http://127.0.0.1:8001')
+      .refine(
+        (value) => new URL(value).pathname === '/',
+        'SOLVER_URL must contain only an origin.',
+      ),
+    SOLVER_API_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(32).optional(),
+    ),
     WEB_ORIGIN: httpUrl
       .default('http://localhost:3000')
       .refine(
