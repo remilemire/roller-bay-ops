@@ -3,12 +3,25 @@ import { ArrowUpRight, Layers3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import type { LoginErrorCode } from '@roller-bay/shared/auth';
 import { API_URL } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { sessionQuery } from './auth.queries';
-export function LoginScreen() {
+const loginErrors: Record<LoginErrorCode, string> = {
+  account_not_eligible:
+    'This Microsoft account is not eligible to sign in. Choose your company Microsoft account and try again.',
+  account_inactive:
+    'Your account is deactivated. Contact an administrator to restore access.',
+  account_conflict:
+    'Your Microsoft profile conflicts with an existing account. Contact an administrator.',
+  sign_in_failed:
+    'Sign-in could not be completed or has expired. Choose your company Microsoft account and try again.',
+  unavailable: 'Sign-in is temporarily unavailable. Please try again shortly.',
+};
+
+export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
   const session = useQuery(sessionQuery());
   const router = useRouter();
   useEffect(() => {
@@ -35,6 +48,11 @@ export function LoginScreen() {
           All in one thoughtfully connected workspace.
         </p>
         {session.error && <ErrorNotice error={session.error} />}
+        {loginError && (
+          <div className="notice notice-error" role="alert">
+            {loginErrors[loginError]}
+          </div>
+        )}
         <Button asChild className="login-button">
           <a href={`${API_URL}/auth/login`}>
             <span className="microsoft-mark" aria-hidden="true">

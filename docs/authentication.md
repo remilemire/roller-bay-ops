@@ -43,7 +43,11 @@ Run `npm run services:up`, apply the database migrations with `npm run db:migrat
 
 ## Routes and browser integration
 
-Navigate the browser to `http://localhost:3001/api/auth/login` to start login. Microsoft returns to the configured callback; after validation, the API redirects to `WEB_ORIGIN`. Failures return a generic HTTP error without provider tokens or profile details. There is no arbitrary return-URL parameter.
+Navigate the browser to `http://localhost:3001/api/auth/login` to start login. Each attempt requests Microsoft's [account chooser](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code) using `prompt=select_account`, so an existing Microsoft session does not silently select an account. The frontend link navigates in the same tab.
+
+Microsoft returns to the configured callback; after validation, the API redirects to `WEB_ORIGIN`. Errors handled by the login and callback routes redirect to `WEB_ORIGIN/login?error=<code>`. The login screen displays a fixed message for an ineligible account, deactivated account, profile conflict, failed/expired sign-in, or temporary unavailability. Unknown or repeated error parameters get a generic sign-in failure message. No provider error text, profile details, authorization codes, or tokens are copied into the redirect, and there is no arbitrary return-URL parameter. Both failure responses and callbacks disable caching and referrer forwarding.
+
+This redirect behavior is scoped to browser login routes. Other API endpoints retain their HTTP/JSON errors, as do requests rejected by rate-limit or session middleware before a route runs.
 
 `GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt }`. `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
 
@@ -67,7 +71,7 @@ Admins and the owner can call `PATCH /api/users/:id/activation` with `{ "isActiv
 
 A successful update returns 200 with the public user profile, including `isActive`. Repeating the current state also succeeds. Invalid input returns 400, missing users return 404, and unauthorized roles return 403.
 
-Deactivated users receive 403 when completing Microsoft sign-in, before an authenticated session is created. Signing in never changes their activation status. The global guard also checks activation on every protected request, so existing sessions lose access on their next request. Logout remains available. Reactivation permits sign-in again; an existing unexpired session can also resume because the activation check is live, rather than permanent session revocation.
+Deactivated users are redirected to the login screen with an account-deactivated message when completing Microsoft sign-in, before an authenticated session is created. Signing in never changes their activation status. The global guard also checks activation on every protected request, so existing sessions lose access on their next request. Logout remains available. Reactivation permits sign-in again; an existing unexpired session can also resume because the activation check is live, rather than permanent session revocation.
 
 The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DEFAULT true`, preserving access for existing users. Apply pending migrations before running the updated backend.
 

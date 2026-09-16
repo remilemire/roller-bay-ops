@@ -6,6 +6,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseFilters,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
@@ -14,6 +15,7 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
 import { UsersService } from '../users/users.service.js';
 import { MicrosoftService } from './microsoft.service.js';
+import { LoginRedirectFilter } from './login-redirect.filter.js';
 import { SessionsService } from './sessions/sessions.service.js';
 import {
   OAuthTransactionsService,
@@ -32,6 +34,7 @@ export class AuthController {
 
   @Public()
   @Get('login')
+  @UseFilters(LoginRedirectFilter)
   async login(@Req() request: Request, @Res() response: Response) {
     response.setHeader('Cache-Control', 'no-store');
     const { url, transaction } = await this.microsoft.begin();
@@ -45,6 +48,7 @@ export class AuthController {
 
   @Public()
   @Get('callback')
+  @UseFilters(LoginRedirectFilter)
   async callback(@Req() request: Request, @Res() response: Response) {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('Referrer-Policy', 'no-referrer');

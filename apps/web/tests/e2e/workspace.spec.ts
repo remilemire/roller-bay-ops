@@ -81,6 +81,39 @@ test('an unauthenticated visitor sees the Microsoft sign-in screen', async ({
     0,
   );
 });
+test('Microsoft account rejection is shown on the login screen with a same-tab retry', async ({
+  page,
+}, testInfo) => {
+  await mockApi(page, { signedIn: false });
+  await page.goto('/login?error=account_not_eligible');
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+    'This Microsoft account is not eligible to sign in. Choose your company Microsoft account and try again.',
+  );
+  const retry = page.getByRole('link', { name: 'Continue with Microsoft' });
+  await expect(retry).toHaveAttribute('href', /\/api\/auth\/login$/);
+  expect(await retry.getAttribute('target')).toBeNull();
+  await page.screenshot({ path: testInfo.outputPath('sign-in-error.png') });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+test('unknown and repeated login errors use a safe fallback message', async ({
+  page,
+}) => {
+  await mockApi(page, { signedIn: false });
+  for (const query of [
+    'error=private-provider-message',
+    'error=account_not_eligible&error=unavailable',
+  ]) {
+    await page.goto(`/login?${query}`);
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+      'Sign-in could not be completed or has expired. Choose your company Microsoft account and try again.',
+    );
+    await expect(page.getByText('private-provider-message')).toHaveCount(0);
+  }
+});
 test('receipt drafts preserve partial imperial input and unsaved edits on conflict', async ({
   page,
 }) => {

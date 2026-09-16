@@ -183,6 +183,7 @@ async function login(overrides: Record<string, unknown> = {}) {
   const { url, transaction } = await service.begin();
   const authorization = new URL(url);
   assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(authorization.searchParams.get('prompt'), 'select_account');
   assert.equal(
     authorization.searchParams.get('scope'),
     'openid profile User.Read',

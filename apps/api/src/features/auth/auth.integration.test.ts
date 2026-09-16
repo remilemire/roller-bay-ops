@@ -16,10 +16,14 @@ import { randomUUID, createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Pool } from 'pg';
 import request from 'supertest';
-import { currentUserSchema } from '@roller-bay/shared/auth';
+import {
+  currentUserSchema,
+  type LoginErrorCode,
+} from '@roller-bay/shared/auth';
 import { environmentSchema } from '../../config/environment.js';
 import { RedisService } from '../../redis/redis.service.js';
 import { RateLimitingModule } from '../../rate-limiting/rate-limiting.module.js';
@@ -28,6 +32,7 @@ import { UsersService } from '../users/users.service.js';
 import { HealthModule } from '../health/health.module.js';
 import { AuthModule } from './auth.module.js';
 import { MicrosoftService } from './microsoft.service.js';
+import { MicrosoftAccountNotEligibleException } from './microsoft.errors.js';
 import { SessionsService } from './sessions/sessions.service.js';
 import {
   SESSION_PREFIX,
@@ -74,6 +79,7 @@ test(
       email: ' Employee@Example.COM ',
     };
     let completions = 0;
+    let providerFailure: Error | undefined;
     const module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -108,6 +114,7 @@ test(
         },
         complete: async () => {
           completions++;
+          if (providerFailure) throw providerFailure;
           return profile;
         },
       })
@@ -148,6 +155,14 @@ test(
       return request(app.getHttpServer())
         .get(`/api/auth/callback?code=fixture&state=${login.state}`)
         .set('Cookie', login.cookie);
+    }
+    function rejectedCallback(
+      login: { cookie: string; state: string },
+      code: LoginErrorCode = 'sign_in_failed',
+    ) {
+      return callback(login)
+        .expect(302)
+        .expect('Location', `${config.WEB_ORIGIN}/login?error=${code}`);
     }
     async function signIn() {
       const login = await start();
@@ -271,21 +286,88 @@ test(
       );
 
       await t.test(
+        'login startup failures return to the frontend, and malformed callbacks never reach Microsoft',
+        async (t) => {
+          const begin = t.mock.method(
+            app.get(MicrosoftService),
+            'begin',
+            async () => {
+              throw new ServiceUnavailableException(
+                'Provider discovery failed.',
+              );
+            },
+          );
+          try {
+            await request(app.getHttpServer())
+              .get('/api/auth/login')
+              .expect(302)
+              .expect(
+                'Location',
+                `${config.WEB_ORIGIN}/login?error=unavailable`,
+              );
+          } finally {
+            begin.mock.restore();
+          }
+          const before = completions;
+          for (const query of [
+            'code=private',
+            'code=private&state=one&state=two',
+          ])
+            await request(app.getHttpServer())
+              .get(`/api/auth/callback?${query}`)
+              .expect(302)
+              .expect(
+                'Location',
+                `${config.WEB_ORIGIN}/login?error=sign_in_failed`,
+              );
+          assert.equal(completions, before);
+        },
+      );
+
+      await t.test(
+        'an ineligible Microsoft account returns to the login screen without authenticating',
+        async () => {
+          const login = await start();
+          providerFailure = new MicrosoftAccountNotEligibleException();
+          try {
+            await rejectedCallback(login, 'account_not_eligible')
+              .expect('Cache-Control', 'no-store')
+              .expect('Referrer-Policy', 'no-referrer');
+            await request(app.getHttpServer())
+              .get('/api/auth/me')
+              .set('Cookie', login.cookie)
+              .expect(401);
+          } finally {
+            providerFailure = undefined;
+          }
+          await rejectedCallback(login);
+        },
+      );
+
+      await t.test(
         'callback is browser-bound and one-time even under concurrent replay',
         async () => {
           const login = await start();
           const attacker = await start();
-          await callback({ ...login, cookie: attacker.cookie }).expect(401);
+          await rejectedCallback({ ...login, cookie: attacker.cookie });
           const before = completions;
           const responses = await Promise.all([
             callback(login),
             callback(login),
           ]);
-          assert.deepEqual(responses.map((r) => r.status).sort(), [302, 401]);
+          assert.deepEqual(
+            responses.map((r) => r.status),
+            [302, 302],
+          );
+          assert.deepEqual(responses.map((r) => r.headers.location).sort(), [
+            config.WEB_ORIGIN,
+            `${config.WEB_ORIGIN}/login?error=sign_in_failed`,
+          ]);
           for (const response of responses)
-            if (response.status === 302) remember(cookieFrom(response));
+            if (response.headers.location === config.WEB_ORIGIN)
+              remember(cookieFrom(response));
           assert.equal(completions, before + 1);
-          await callback(login).expect(401);
+          await rejectedCallback(login);
           const expired = await start();
           const key = [...keys].find((value) =>
             value.endsWith(`:${expired.state}`),
@@ -296,7 +378,7 @@ test(
             JSON.stringify({ ...value, expiresAt: Date.now() - 1 }),
             { expiration: { type: 'EX', value: 10 } },
           );
-          await callback(expired).expect(401);
+          await rejectedCallback(expired);
 
           const expiredBrowser = await start();
           const sessionKey = SESSION_PREFIX + sid(expiredBrowser.cookie);
@@ -309,7 +391,7 @@ test(
           });
           // Even if a rounded Redis TTL leaves the key present, browser-session
           // expiry must deny a callback whose transaction is otherwise valid.
-          await callback(expiredBrowser).expect(401);
+          await rejectedCallback(expiredBrowser);
         },
       );
 
@@ -339,7 +421,7 @@ test(
           assert.equal(me.body.role, 'admin');
           profile = { ...profile, microsoftSubjectId: 'different-subject' };
           const conflict = await start();
-          await callback(conflict).expect(409);
+          await rejectedCallback(conflict, 'account_conflict');
           assert.equal(
             (await pool.query(`SELECT count(*) FROM "${schema}".users`)).rows[0]
               .count,
@@ -356,7 +438,7 @@ test(
             microsoftSubjectId: 'initial-subject',
             name: 'Must not update',
           };
-          await callback(await start()).expect(409);
+          await rejectedCallback(await start(), 'account_conflict');
           assert.equal(
             (await app.get(UsersService).findById(userId))?.name,
             'Updated Name',
@@ -473,16 +555,16 @@ test(
           await change({ isActive: true }, targetLogin.authenticated).expect(
             403,
           );
-          await callback(pendingLogin).expect(403);
+          await rejectedCallback(pendingLogin, 'account_inactive');
           const rejectedSession = JSON.parse(
             (await redis.client.get(
               SESSION_PREFIX + sid(pendingLogin.cookie),
             ))!,
           );
           assert.equal(rejectedSession.auth, undefined);
-          await callback(pendingLogin).expect(401);
+          await rejectedCallback(pendingLogin);
           const anotherLogin = await start();
-          await callback(anotherLogin).expect(403);
+          await rejectedCallback(anotherLogin, 'account_inactive');
           assert.equal(
             (await app.get(UsersService).findById(target.id))?.isActive,
             false,
@@ -520,7 +602,7 @@ test(
         },
         signIn,
         async () => {
-          await callback(await start()).expect(403);
+          await rejectedCallback(await start(), 'account_inactive');
         },
       );
       profile = savedOwnershipProfile;

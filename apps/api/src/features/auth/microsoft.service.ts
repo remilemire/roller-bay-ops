@@ -10,6 +10,7 @@ import { emailSchema } from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
 import { microsoftProfileSchema } from '../users/microsoft-profile.schema.js';
 import type { OAuthTransaction } from './oauth-transactions/oauth-transaction.schema.js';
+import { MicrosoftAccountNotEligibleException } from './microsoft.errors.js';
 
 const identitySchema = z.object({
   sub: z.string().min(1),
@@ -48,9 +49,7 @@ export function microsoftProfile(
     identity.data.idp?.includes(PERSONAL_TENANT) ||
     user.data.userPrincipalName.split('@')[1] !== domain
   ) {
-    throw new UnauthorizedException(
-      'This Microsoft account is not eligible to sign in.',
-    );
+    throw new MicrosoftAccountNotEligibleException();
   }
   const profile = microsoftProfileSchema.safeParse({
     microsoftSubjectId: identity.data.sub,
@@ -103,6 +102,7 @@ export class MicrosoftService {
       redirect_uri: this.config.get('MICROSOFT_CALLBACK_URL', { infer: true }),
       scope: 'openid profile User.Read',
       response_mode: 'query',
+      prompt: 'select_account',
       code_challenge: await oidc.calculatePKCECodeChallenge(
         transaction.verifier,
       ),
