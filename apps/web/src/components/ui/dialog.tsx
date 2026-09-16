@@ -12,7 +12,7 @@ export function Dialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
 }) {
   // Callers open dialogs without a Radix Trigger, so remember where focus belongs.
@@ -23,6 +23,7 @@ export function Dialog({
         <Primitive.Overlay className="dialog-overlay" />
         <Primitive.Content
           className="dialog-content"
+          {...(!description ? { 'aria-describedby': undefined } : {})}
           onOpenAutoFocus={() => {
             returnFocus.current =
               document.activeElement instanceof HTMLElement
@@ -39,7 +40,9 @@ export function Dialog({
           <div className="dialog-heading">
             <div>
               <Primitive.Title>{title}</Primitive.Title>
-              <Primitive.Description>{description}</Primitive.Description>
+              {description && (
+                <Primitive.Description>{description}</Primitive.Description>
+              )}
             </div>
             <Primitive.Close
               className="button button-ghost button-icon"

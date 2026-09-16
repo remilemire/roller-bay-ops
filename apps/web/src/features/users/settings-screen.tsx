@@ -6,15 +6,11 @@ export function SettingsScreen() {
   const user = useCurrentUser();
   return (
     <>
-      <PageHeading
-        eyebrow="MAKE IT YOURS"
-        title="Workspace settings"
-        description="Your account and the way you see your workspace."
-      />
+      <PageHeading title="Settings" />
       <div className="stack">
         <section className="panel">
           <div className="panel-heading">
-            <h2>Your account</h2>
+            <h2>Account</h2>
             <Status value={user.role} />
           </div>
           <div className="panel-body details-grid">
@@ -34,16 +30,13 @@ export function SettingsScreen() {
         </section>
         <section className="panel">
           <div className="panel-heading">
-            <div>
-              <h2>Appearance</h2>
-              <p>Follow your device, or choose your own light or dark theme.</p>
-            </div>
+            <h2>Appearance</h2>
             <ThemeSwitch />
           </div>
           <div className="panel-body">
             <p className="muted">
-              Your preference is remembered in this browser. Motion follows your
-              device’s accessibility settings.
+              Saved in this browser. Reduced motion follows your device
+              settings.
             </p>
           </div>
         </section>

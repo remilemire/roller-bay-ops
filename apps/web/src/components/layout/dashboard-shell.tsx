@@ -4,9 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowUpRight,
   Box,
-  ClipboardList,
   Layers3,
   LayoutDashboard,
   LogOut,
@@ -54,10 +52,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <Layers3 size={23} />
         </span>
         <span>
-          roller bay<span className="brand-caption">OPERATIONS WORKSPACE</span>
+          roller bay<span className="brand-caption">OPERATIONS</span>
         </span>
       </Link>
-      <div className="nav-section-label">WORKSPACE</div>
       <nav aria-label="Main navigation">
         {navigation.map(({ href, label, Icon }) => {
           const active =
@@ -78,24 +75,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         })}
       </nav>
       <div className="sidebar-bottom">
-        <div className="sidebar-note">
-          <ClipboardList size={20} />
-          <strong>Pick up where you left off.</strong>
-          <p>Receipt and allocation drafts are shared with your team.</p>
-          <Link
-            href="/stock-receipts?state=draft"
-            onClick={() => setMobileOpen(false)}
-          >
-            View receipt drafts <ArrowUpRight size={15} />
-          </Link>
-        </div>
         <Link
           className={`nav-link ${pathname === '/settings' ? 'active' : ''}`}
           href="/settings"
           onClick={() => setMobileOpen(false)}
         >
           <Settings2 size={20} />
-          Workspace settings
+          Settings
         </Link>
         <button
           className="user-card"
@@ -128,12 +114,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <aside className="sidebar glass">{nav}</aside>
-      <Dialog
-        open={mobileOpen}
-        onOpenChange={setMobileOpen}
-        title="Your workspace"
-        description="Navigate Roller Bay Operations."
-      >
+      <Dialog open={mobileOpen} onOpenChange={setMobileOpen} title="Navigation">
         <div className="mobile-nav">{nav}</div>
       </Dialog>
       <div className="workspace-main">
@@ -149,7 +130,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <Menu size={22} />
             </Button>
             <span className="breadcrumb">
-              Workspace <span>/</span>{' '}
               <strong>
                 {navigation.find(
                   (n) => n.href !== '/' && pathname.startsWith(n.href),
@@ -159,20 +139,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="topbar-actions">
-            <span className="workspace-pill">
-              <span />
-              Team workspace
-            </span>
             <ThemeSwitch />
           </div>
         </header>
         <main id="workspace-content" className="workspace-content">
           {children}
         </main>
-        <footer className="workspace-footer">
-          <span>Roller Bay Operations</span>
-          <span>Every roll, accounted for.</span>
-        </footer>
       </div>
       <Dialog
         open={signOutOpen}

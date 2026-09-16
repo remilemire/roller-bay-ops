@@ -1,5 +1,5 @@
 'use client';
-import { ArrowUpRight, Layers3 } from 'lucide-react';
+import { Layers3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -39,16 +39,8 @@ export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
           <Layers3 size={27} />
         </div>
         <div className="eyebrow">ROLLER BAY · OPERATIONS</div>
-        <h1>
-          A clearer view
-          <br />
-          of every roll.
-        </h1>
-        <p>
-          Your fabric, your floor, your workflow.
-          <br />
-          All in one thoughtfully connected workspace.
-        </p>
+        <h1>Sign in</h1>
+        <p>Use your company Microsoft account.</p>
         {hydrated && session.error && <ErrorNotice error={session.error} />}
         {loginError && (
           <div className="notice notice-error" role="alert">
@@ -64,12 +56,9 @@ export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
               <i />
             </span>
             Continue with Microsoft
-            <ArrowUpRight size={18} />
           </a>
         </Button>
-        <small>Sign in with your company Microsoft account.</small>
       </section>
-      <span className="login-footer">Made for the way you work.</span>
     </main>
   );
 }

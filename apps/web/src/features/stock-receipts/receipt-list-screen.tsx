@@ -27,11 +27,7 @@ export function ReceiptListScreen() {
   );
   return (
     <>
-      <PageHeading
-        eyebrow="COMING INTO STOCK"
-        title="Stock receipts"
-        description="From incoming delivery to individually tracked rolls."
-      >
+      <PageHeading title="Stock receipts">
         <Button asChild>
           <Link href="/stock-receipts/new">
             <Plus size={17} />

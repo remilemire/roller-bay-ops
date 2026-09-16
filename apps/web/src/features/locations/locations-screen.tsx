@@ -58,11 +58,7 @@ export function LocationsScreen() {
   });
   return (
     <>
-      <PageHeading
-        eyebrow="FIND YOUR FABRIC"
-        title="Locations"
-        description="The sections and levels behind every roll."
-      >
+      <PageHeading title="Locations">
         {canManage && (
           <Button onClick={() => setEditing('new')}>
             <Plus size={17} />

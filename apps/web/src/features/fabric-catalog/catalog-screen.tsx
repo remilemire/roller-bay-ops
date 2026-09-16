@@ -58,11 +58,7 @@ export function CatalogScreen() {
   });
   return (
     <>
-      <PageHeading
-        eyebrow="REFERENCE LIBRARY"
-        title="Fabric catalog"
-        description="The materials and colors behind every roll."
-      >
+      <PageHeading title="Fabric catalog">
         {canManage && (
           <Button onClick={() => setEditing('new')}>
             <Plus size={17} />
@@ -250,7 +246,6 @@ function CatalogEditor({
         if (!open && !mutation.isPending) close();
       }}
       title={`${row ? 'Edit' : 'Add'} ${kind === 'colors' ? 'color' : kind === 'materials' ? 'material' : 'manufacturer'}`}
-      description="Keep your fabric library accurate and easy to find."
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
         <div className="stack">

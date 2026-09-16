@@ -34,11 +34,7 @@ export function StockScreen() {
   const [adding, setAdding] = useState(false);
   return (
     <>
-      <PageHeading
-        eyebrow="YOUR INVENTORY"
-        title="Fabric stock"
-        description="Find the right fabric, and know exactly where it lives."
-      >
+      <PageHeading title="Fabric stock">
         {canManage && (
           <Button onClick={() => setAdding(true)}>
             <Plus size={17} />

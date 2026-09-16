@@ -27,11 +27,7 @@ export function AllocationListScreen() {
   );
   return (
     <>
-      <PageHeading
-        eyebrow="ON THE CUTTING FLOOR"
-        title="Allocations"
-        description="Plan the cuts. Reserve the fabric. Record what remains."
-      >
+      <PageHeading title="Allocations">
         <Button asChild>
           <Link href="/allocations/new">
             <Plus size={17} />

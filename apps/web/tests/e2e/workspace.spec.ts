@@ -15,11 +15,11 @@ test('session bootstrap and reload hydrate without recoverable React errors', as
   await mockApi(page);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Welcome back, Jamie.' }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole('heading', { name: 'Welcome back, Jamie.' }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -29,7 +29,7 @@ test('workspace renders real-contract data and persists accessible light/dark pr
   await mockApi(page);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Welcome back, Jamie.' }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   await expect(page.getByText('248', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Dark mode', exact: true }).click();
@@ -76,7 +76,7 @@ test('touch navigation and role visibility follow the current session', async ({
   await mockApi(page, { role: 'user' });
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: /Welcome back/ }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   if (testInfo.project.name === 'tablet')
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -229,7 +229,7 @@ test('expired sessions unmount private workflows and return to sign-in', async (
   const state = await mockApi(page);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: /Welcome back/ }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   state.authenticated = false;
   if (testInfo.project.name === 'tablet')
@@ -249,7 +249,7 @@ test('logging out closes the workspace and clears pending submissions', async ({
   await mockApi(page);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: /Welcome back/ }),
+    page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible();
   await page.evaluate(() =>
     sessionStorage.setItem('roller-bay:pending:example', 'private'),
