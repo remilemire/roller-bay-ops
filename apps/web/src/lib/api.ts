@@ -1,26 +1,33 @@
 import { z } from 'zod';
+import {
+  apiErrorSchema,
+  errorIssueSchema,
+  type ErrorIssue,
+} from '@roller-bay/shared/errors';
 export const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
 ).replace(/\/$/, '');
 export const SESSION_EXPIRED_EVENT = 'roller-bay:session-expired';
 export class ApiError extends Error {
+  readonly issues: ErrorIssue[];
   constructor(
     public readonly status: number,
     message: string,
     public readonly retryAfterMs?: number,
+    issues: ErrorIssue[] = [],
   ) {
     super(message);
     this.name = 'ApiError';
+    this.issues = issues;
   }
 }
-export function errorMessage(error: unknown): string {
-  if (error instanceof z.ZodError)
-    return error.issues
-      .map((issue) => `${issue.path.join('.') || 'Form'}: ${issue.message}`)
-      .join(' · ');
-  if (error instanceof ApiError) return error.message;
-  return 'Something went wrong. Your changes have not been discarded. Please try again.';
-}
+// The HTTP status is authoritative, so a body without `statusCode` (a proxy
+// page, an intercepted test response) still yields its message, and malformed
+// details never hide it.
+const errorBodySchema = apiErrorSchema.extend({
+  statusCode: apiErrorSchema.shape.statusCode.optional(),
+  issues: z.array(errorIssueSchema).catch([]),
+});
 export function queryString(values: Record<string, unknown>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
@@ -54,9 +61,7 @@ export async function api<T>(
   });
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null);
-    const message = z
-      .object({ message: z.union([z.string(), z.array(z.string())]) })
-      .safeParse(payload);
+    const body = errorBodySchema.safeParse(payload);
     const retryAfter = response.headers.get('Retry-After');
     const retryAfterMs = retryAfter
       ? /^\d+$/.test(retryAfter)
@@ -73,10 +78,11 @@ export async function api<T>(
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     throw new ApiError(
       response.status,
-      message.success
-        ? [message.data.message].flat().join(' · ')
+      body.success
+        ? body.data.message
         : `Request failed (${response.status}). Please try again.`,
       Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+      body.success ? body.data.issues : [],
     );
   }
   const value: unknown =

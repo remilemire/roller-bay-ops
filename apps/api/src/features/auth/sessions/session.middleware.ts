@@ -14,7 +14,9 @@ export class SessionMiddleware implements NestMiddleware {
     this.sessions.middleware(request, response, (error?: unknown) => {
       next(
         error
-          ? new ServiceUnavailableException('Session storage is unavailable.')
+          ? new ServiceUnavailableException('Session storage is unavailable.', {
+              cause: error,
+            })
           : undefined,
       );
     });

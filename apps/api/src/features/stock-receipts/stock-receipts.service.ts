@@ -306,13 +306,14 @@ export class StockReceiptsService {
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error instanceof StockReceiptConflictError)
-        throw new ConflictException(error.message);
+        throw new ConflictException(error.message, { cause: error });
       if (error instanceof StockReceiptReferenceNotFoundError)
-        throw new NotFoundException(error.message);
+        throw new NotFoundException(error.message, { cause: error });
       if (error instanceof InvalidStockReceiptError)
-        throw new BadRequestException(error.message);
+        throw new BadRequestException(error.message, { cause: error });
       throw new ServiceUnavailableException(
         'Stock-receipt storage is unavailable.',
+        { cause: error },
       );
     }
   }

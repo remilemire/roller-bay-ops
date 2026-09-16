@@ -57,7 +57,8 @@ export class CuttingPlanOptimizer {
       if (!parsed.success)
         throw new CuttingOptimizationError(
           'invalid_model',
-          parsed.error.message,
+          'Generated cutting model failed validation.',
+          { cause: parsed.error },
         );
       let result;
       try {

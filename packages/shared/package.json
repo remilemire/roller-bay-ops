@@ -31,6 +31,10 @@
     "./allocations": {
       "types": "./dist/features/allocations/index.d.ts",
       "default": "./dist/features/allocations/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "default": "./dist/errors/index.js"
     }
   },
   "files": [

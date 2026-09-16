@@ -12,8 +12,9 @@ export class SolverError extends Error {
   constructor(
     readonly code: SolverErrorCode,
     message: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'SolverError';
   }
 }

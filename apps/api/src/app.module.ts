@@ -10,10 +10,12 @@ import { AuthModule } from './features/auth/auth.module.js';
 import { LocationsModule } from './features/locations/locations.module.js';
 import { StockItemsModule } from './features/stock-items/stock-items.module.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
+import { ErrorsModule } from './common/errors/errors.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
+    ErrorsModule,
     RedisModule,
     RateLimitingModule,
     AuthModule,

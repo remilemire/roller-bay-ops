@@ -11,6 +11,7 @@ import { solverModelSchema } from '../../../solver/solver.contracts.js';
 import { CuttingPlanOptimizer } from './cutting-plan-optimizer.js';
 import { generatePatterns } from './pattern-generation.js';
 import { buildCuttingModel, modelFitsTransport } from './cutting-model.js';
+import { CuttingOptimizationError } from './optimization.errors.js';
 import { parseOptimizationContext } from './optimization.input.js';
 import { fixture, id } from './optimizer.fixtures.js';
 
@@ -113,9 +114,6 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
     (c: ReturnType<typeof fixture>) => {
       c.stockItems[0]!.reservedLengthMm = 10;
     },
-    (c: ReturnType<typeof fixture>) => {
-      c.requirements[0]!.widthMm = 0.0001;
-    },
   ]) {
     const invalid = fixture();
     change(invalid);
@@ -123,6 +121,17 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
       code: 'invalid_input',
     });
   }
+  // A schema failure on the assembled context is an internal fault, not an
+  // order-level problem: the code differs and the message carries no detail.
+  const malformed = fixture();
+  malformed.requirements[0]!.widthMm = 0.0001;
+  await assert.rejects(optimizer.optimize(malformed), (error: unknown) => {
+    assert.ok(error instanceof CuttingOptimizationError);
+    assert.equal(error.code, 'invalid_context');
+    assert.doesNotMatch(error.message, /widthMm|multiple/);
+    assert.ok(error.cause instanceof Error);
+    return true;
+  });
   assert.equal(spy.mock.callCount(), 0);
 });
 

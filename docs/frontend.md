@@ -10,7 +10,7 @@ The Next.js App Router app in `apps/web` provides the operational workspace. It 
 | `features/`                    | Domain screens, API operations, query keys, form conversion, and tests.                                               |
 | `components/ui/`               | Locally owned shadcn-style primitives using Radix, CVA, and Tailwind, adapted to the workspace theme.                 |
 | `components/layout/`           | Dashboard shell, navigation, account menu, and theme control.                                                         |
-| `lib/`                         | Credentialed HTTP client, query defaults, formatting, measurement conversion, and pending submission keys.            |
+| `lib/`                         | Credentialed HTTP client, error descriptions, query defaults, formatting, measurement conversion, and pending keys.   |
 | `styles/`                      | Semantic light/dark tokens in `theme.css`; shared layout, components, responsive styles, and motion in `globals.css`. |
 
 The `(auth)` and `(dashboard)` route groups select layouts without changing URLs. Layouts remain server components; authenticated workflows mount inside a client authentication boundary. Shared components accept data and callbacks without importing domain features. Features can consume another feature's exported API queries or lookup functions.
@@ -36,7 +36,7 @@ Admins and the owner can modify catalog, locations, and stock records. All activ
 
 `NEXT_PUBLIC_API_URL` is the public API base URL, including `/api`, and is embedded at build time. It defaults to `http://localhost:3001/api`. The browser navigates to `/auth/login`; OAuth, domain restrictions, HttpOnly cookies, and Redis sessions stay in the backend. `/auth/me` supplies the current user. The web app never reads access tokens or session cookies.
 
-Every API call uses `credentials: 'include'`. Mutation requests send JSON and, where required, `Idempotency-Key`. Response schemas validate successful API data. A 401 from a protected request ends the client session and clears private queries, mutation results, and pending submission payloads. The session query handles its own signed-out response without cancelling itself. A deactivated account receives an access error. An ordinary 403 on a feature operation remains a permission error.
+Every API call uses `credentials: 'include'`. Mutation requests send JSON and, where required, `Idempotency-Key`. Response schemas validate successful API data. A 401 from a protected request ends the client session and clears private queries, mutation results, and pending submission payloads. The session query handles its own signed-out response without cancelling itself. A deactivated account receives an access error. An ordinary 403 on a feature operation remains a permission error. Error bodies are parsed with the shared [error envelope](errors.md); `ApiError` carries `status`, `message`, optional `retryAfterMs`, and `issues`. `ErrorNotice` shows the API's curated message and lists field issues with readable labels; text from any other exception is replaced by generic copy.
 
 TanStack Query owns server data. Queries stay fresh for 30 seconds by default; session data uses 15 seconds and refreshes on window focus. Network, 429, and server failures receive at most two query retries with backoff; `Retry-After` is respected when supplied. Mutations never retry automatically. Successful writes invalidate affected feature queries. There are no optimistic stock, reservation, or submission updates.
 
@@ -79,6 +79,6 @@ npx playwright install chromium
 npm run test:e2e --workspace=@roller-bay/web
 ```
 
-Vitest and React Testing Library cover API errors, cache clearing, query retries, imperial conversions, nullable drafts, assignment validation, submission-key reuse, retained completion results, and preservation of dirty forms/revisions during background updates. Playwright covers desktop and tablet navigation, theme persistence/transitions/reduced motion, session expiry/logout/deactivation, permissions, catalog editing, receipt conflicts and submission retries, allocation optimization/draft confirmation, and completion measurements.
+Vitest and React Testing Library cover API errors, error envelope parsing, issue labelling, the error notice, cache clearing, query retries, imperial conversions, nullable drafts, assignment validation, submission-key reuse, retained completion results, and preservation of dirty forms/revisions during background updates. Playwright covers desktop and tablet navigation, theme persistence/transitions/reduced motion, session expiry/logout/deactivation, permissions, catalog editing, receipt conflicts and submission retries, allocation optimization/draft confirmation, and completion measurements.
 
 Browser tests intercept API requests using fixtures shaped by the real shared contracts. They verify the browser's behavior and outgoing requests without changing a database. They do not replace the backend's PostgreSQL/Redis/solver integration suites or live Microsoft tenant testing. Trace files, screenshots, and browser reports are ignored by Git.

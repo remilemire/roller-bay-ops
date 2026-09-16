@@ -21,22 +21,29 @@ export async function allocationOperation<T>(
         if (cause.code === '23503')
           throw new NotFoundException(
             'A referenced allocation, fabric, stock item, or location no longer exists.',
+            { cause: error },
           );
         if (cause.code === '23505')
           throw new ConflictException(
             'An allocation identifier or retry key is already in use.',
+            { cause: error },
           );
         if (['23514', '22003'].includes(String(cause.code)))
           throw new BadRequestException(
             'Allocation values violate storage constraints.',
+            { cause: error },
           );
         if (['40001', '40P01', '55P03'].includes(String(cause.code)))
           throw new ConflictException(
             'Stock or allocation changed concurrently; refresh and retry.',
+            { cause: error },
           );
       }
       cause = 'cause' in cause ? cause.cause : undefined;
     }
-    throw new ServiceUnavailableException('Allocation storage is unavailable.');
+    throw new ServiceUnavailableException(
+      'Allocation storage is unavailable.',
+      { cause: error },
+    );
   }
 }

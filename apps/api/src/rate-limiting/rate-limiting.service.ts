@@ -89,7 +89,9 @@ export class RateLimitingService implements OnModuleInit {
     void limiter(request, response, (error?: unknown) => {
       next(
         error
-          ? new ServiceUnavailableException('Rate limiting is unavailable.')
+          ? new ServiceUnavailableException('Rate limiting is unavailable.', {
+              cause: error,
+            })
           : undefined,
       );
     });

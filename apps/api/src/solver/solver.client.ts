@@ -47,7 +47,13 @@ export class SolverClient implements OnModuleDestroy {
       throw new SolverError('closed', 'Solver client is closed.');
     const model = solverModelSchema.safeParse(modelInput);
     if (!model.success)
-      throw new SolverError('invalid_model', model.error.message);
+      throw new SolverError(
+        'invalid_model',
+        'Solver model failed validation.',
+        {
+          cause: model.error,
+        },
+      );
     const { signal, ...solverOptions } = options;
     const parsedOptions = solveOptionsSchema.safeParse(solverOptions);
     if (
@@ -95,6 +101,7 @@ export class SolverClient implements OnModuleDestroy {
       throw new SolverError(
         'unavailable',
         'Could not reach the Solver service.',
+        { cause: error },
       );
     } finally {
       clearTimeout(timer);

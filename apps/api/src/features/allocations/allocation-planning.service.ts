@@ -60,24 +60,29 @@ export class AllocationPlanningService {
             : [],
       });
     } catch (error) {
+      // Only order-level codes carry text meant for the requester. Schema,
+      // model, and solver faults keep their detail in the cause for the log.
       if (
         error instanceof CuttingOptimizationError &&
-        ['invalid_input', 'invalid_options', 'numeric_range'].includes(
-          error.code,
-        )
+        ['invalid_input', 'numeric_range'].includes(error.code)
       )
-        throw new BadRequestException(error.message);
+        throw new BadRequestException(error.message, { cause: error });
       if (error instanceof SolverError && error.code === 'busy')
         throw new ConflictException(
           'The optimizer is busy; try again shortly.',
+          { cause: error },
         );
       if (
         (error instanceof CuttingOptimizationError ||
           error instanceof SolverError) &&
         error.code === 'cancelled'
       )
-        throw new ConflictException('Optimization cancelled.');
-      throw new ServiceUnavailableException('Optimization is unavailable.');
+        throw new ConflictException('Optimization cancelled.', {
+          cause: error,
+        });
+      throw new ServiceUnavailableException('Optimization is unavailable.', {
+        cause: error,
+      });
     }
   }
 

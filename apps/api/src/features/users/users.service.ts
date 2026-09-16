@@ -141,7 +141,9 @@ export class UsersService {
 
   private rethrowStorageError(error: unknown): never {
     if (error instanceof HttpException) throw error;
-    throw new ServiceUnavailableException('User storage is unavailable.');
+    throw new ServiceUnavailableException('User storage is unavailable.', {
+      cause: error,
+    });
   }
 
   private toPublic(user: UserRecord) {

@@ -17,6 +17,7 @@ import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServiceUnavailableException } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -28,6 +29,8 @@ import { environmentSchema } from '../../config/environment.js';
 import { RedisService } from '../../redis/redis.service.js';
 import { RateLimitingModule } from '../../rate-limiting/rate-limiting.module.js';
 import { RATE_LIMIT_KEY_PREFIX } from '../../rate-limiting/rate-limiting.service.js';
+import { ErrorsModule } from '../../common/errors/errors.module.js';
+import { PassthroughExpressAdapter } from '../../common/errors/express.adapter.js';
 import { UsersService } from '../users/users.service.js';
 import { HealthModule } from '../health/health.module.js';
 import { AuthModule } from './auth.module.js';
@@ -87,6 +90,7 @@ test(
           ignoreEnvFile: true,
           load: [() => config],
         }),
+        ErrorsModule,
         RateLimitingModule,
         AuthModule,
         HealthModule,
@@ -119,8 +123,11 @@ test(
         },
       })
       .compile();
-    const app = module.createNestApplication({ logger: false });
-    app.setGlobalPrefix('api');
+    const app = module.createNestApplication<NestExpressApplication>(
+      new PassthroughExpressAdapter(),
+      { logger: false },
+    );
+    app.setGlobalPrefix('/api');
     app.enableCors({ origin: config.WEB_ORIGIN, credentials: true });
     const keys = new Set<string>();
     const redis = app.get(RedisService);

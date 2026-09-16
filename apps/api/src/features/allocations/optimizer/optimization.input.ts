@@ -21,8 +21,14 @@ const optionsSchema = z.strictObject({
 
 export function parseOptimizationOptions(options: CuttingOptimizationOptions) {
   const result = optionsSchema.safeParse(options);
+  // Options come from server code (the controller already bounds maxTimeSeconds),
+  // so a schema failure is a fault to log, not text to show.
   if (!result.success)
-    throw new CuttingOptimizationError('invalid_options', result.error.message);
+    throw new CuttingOptimizationError(
+      'invalid_options',
+      'Optimization options are invalid.',
+      { cause: result.error },
+    );
   return result.data;
 }
 
@@ -30,8 +36,15 @@ export function parseOptimizationContext(
   input: CuttingContext,
 ): CuttingContext {
   const result = cuttingContextSchema.safeParse(input);
+  // The context is assembled by the server from validated input and stock rows;
+  // a schema failure here is an internal inconsistency, unlike the order-level
+  // checks below whose messages are meant for the requester.
   if (!result.success)
-    throw new CuttingOptimizationError('invalid_input', result.error.message);
+    throw new CuttingOptimizationError(
+      'invalid_context',
+      'Optimization context is invalid.',
+      { cause: result.error },
+    );
   const context = result.data;
   if (
     context.requirements.reduce((sum, item) => sum + item.quantity, 0) >

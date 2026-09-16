@@ -70,6 +70,78 @@ describe('API boundary', () => {
     });
     window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   });
+  it('carries curated field issues from the shared envelope and tolerates malformed ones', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              statusCode: 400,
+              message: 'Validation failed',
+              issues: [
+                {
+                  code: 'too_small',
+                  path: ['items', 0, 'widthMm'],
+                  message: 'Too small: expected number to be >0',
+                },
+                {
+                  code: 'length_capacity',
+                  path: 'plan.drops.0',
+                  message: 'Drop exceeds remaining length.',
+                },
+              ],
+            }),
+            { status: 400 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response('{"message":"Receipt changed","issues":"nope"}', {
+            status: 409,
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            '{"statusCode":429,"error":"Too Many Requests","message":"Too many requests. Try again later."}',
+            { status: 429 },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response('<html>upstream secret</html>', { status: 502 }),
+        ),
+    );
+    await expect(api('/item', z.unknown())).rejects.toMatchObject({
+      status: 400,
+      message: 'Validation failed',
+      issues: [
+        {
+          code: 'too_small',
+          path: ['items', 0, 'widthMm'],
+          message: 'Too small: expected number to be >0',
+        },
+        {
+          code: 'length_capacity',
+          path: 'plan.drops.0',
+          message: 'Drop exceeds remaining length.',
+        },
+      ],
+    });
+    await expect(api('/item', z.unknown())).rejects.toMatchObject({
+      status: 409,
+      message: 'Receipt changed',
+      issues: [],
+    });
+    await expect(api('/item', z.unknown())).rejects.toMatchObject({
+      status: 429,
+      message: 'Too many requests. Try again later.',
+    });
+    await expect(api('/item', z.unknown())).rejects.toMatchObject({
+      status: 502,
+      message: 'Request failed (502). Please try again.',
+      issues: [],
+    });
+  });
   it('never automatically retries mutations or access errors', () => {
     const defaults = createQueryClient().getDefaultOptions();
     expect(defaults.mutations?.retry).toBe(false);

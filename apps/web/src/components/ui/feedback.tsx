@@ -1,7 +1,7 @@
 import { AlertCircle, ArrowRight, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { errorMessage } from '@/lib/api';
+import { describeError } from '@/lib/errors';
 import { Button } from './button';
 export function ErrorNotice({
   error,
@@ -10,11 +10,19 @@ export function ErrorNotice({
   error: unknown;
   retry?: () => void;
 }) {
+  const { message, details } = describeError(error);
   return (
     <div className="notice notice-error" role="alert">
       <AlertCircle size={19} />
       <div>
-        {errorMessage(error)}
+        <div>{message}</div>
+        {details.length > 0 && (
+          <ul className="notice-details">
+            {details.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
         {retry && (
           <Button variant="ghost" size="sm" onClick={retry}>
             Try again

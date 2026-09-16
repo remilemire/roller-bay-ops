@@ -3,14 +3,20 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { PassthroughExpressAdapter } from './common/errors/express.adapter.js';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Environment } from './config/environment.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    new PassthroughExpressAdapter(),
+  );
   const config = app.get(ConfigService<Environment, true>);
 
-  app.setGlobalPrefix('api');
+  // Leading slash required: Nest mounts its JSON not-found handler at the raw
+  // prefix, and Express 5 never matches a mount path without one.
+  app.setGlobalPrefix('/api');
   app.set('trust proxy', config.get('TRUSTED_PROXY_IPS', { infer: true }));
   app.enableCors({
     origin: config.get('WEB_ORIGIN', { infer: true }),

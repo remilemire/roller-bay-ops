@@ -8,6 +8,8 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import { ErrorsModule } from '../common/errors/errors.module.js';
+import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
 import { RedisService } from '../redis/redis.service.js';
 import { RateLimitingModule } from './rate-limiting.module.js';
 import { RATE_LIMIT_KEY_PREFIX } from './rate-limiting.service.js';
@@ -49,6 +51,7 @@ test(
               }),
             ],
           }),
+          ErrorsModule,
           RateLimitingModule,
         ],
         controllers: [ProbeController],
@@ -56,10 +59,11 @@ test(
         .overrideProvider(RATE_LIMIT_KEY_PREFIX)
         .useValue(prefix)
         .compile();
-      const app = module.createNestApplication<NestExpressApplication>({
-        logger: false,
-      });
-      app.setGlobalPrefix('api');
+      const app = module.createNestApplication<NestExpressApplication>(
+        new PassthroughExpressAdapter(),
+        { logger: false },
+      );
+      app.setGlobalPrefix('/api');
       // Same explicit-proxy configuration used by main.ts; no proxies trusted.
       app.set('trust proxy', []);
       // Parallel requests share a listener instead of starting/stopping it themselves.

@@ -21,9 +21,11 @@ export async function locationsOperation<T>(
       error instanceof LocationLabelConflictError ||
       error instanceof LocationInUseError
     )
-      throw new ConflictException(error.message);
+      throw new ConflictException(error.message, { cause: error });
     if (error instanceof LocationReferenceNotFoundError)
-      throw new NotFoundException(error.message);
-    throw new ServiceUnavailableException('Location storage is unavailable.');
+      throw new NotFoundException(error.message, { cause: error });
+    throw new ServiceUnavailableException('Location storage is unavailable.', {
+      cause: error,
+    });
   }
 }

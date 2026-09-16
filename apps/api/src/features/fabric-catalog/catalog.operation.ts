@@ -21,9 +21,11 @@ export async function catalogOperation<T>(
       error instanceof CatalogCodeConflictError ||
       error instanceof CatalogInUseError
     )
-      throw new ConflictException(error.message);
+      throw new ConflictException(error.message, { cause: error });
     if (error instanceof CatalogReferenceNotFoundError)
-      throw new NotFoundException(error.message);
-    throw new ServiceUnavailableException('Catalog storage is unavailable.');
+      throw new NotFoundException(error.message, { cause: error });
+    throw new ServiceUnavailableException('Catalog storage is unavailable.', {
+      cause: error,
+    });
   }
 }

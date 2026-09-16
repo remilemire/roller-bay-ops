@@ -6,7 +6,7 @@ See the [product brief](docs/product-brief.md) for the workflows, proposed featu
 
 The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning and cutting-result entry. The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership).
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning and cutting-result entry. The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership). API failures share one [error envelope](docs/errors.md).
 
 ## Get started
 
@@ -76,12 +76,14 @@ apps/
     src/rate-limiting/          # API and login request budgets backed by Redis
     src/config/                 # Environment validation
     src/common/pipes/           # Reusable HTTP validation
+    src/common/errors/          # Error envelope filter and request-error curation
     drizzle/                    # Generated SQL migrations and metadata
 packages/
   shared/
     src/features/users/         # Roles, normalized email, public user schema
     src/features/auth/          # Current-user response contract
     src/features/fabric-catalog/ # Catalog request and response contracts
+    src/errors/                 # Error envelope shared by the API and the web app
 ```
 
 ## Adding a feature

@@ -245,12 +245,14 @@ export class StockItemsService {
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error instanceof StockItemReferenceNotFoundError)
-        throw new NotFoundException(error.message);
+        throw new NotFoundException(error.message, { cause: error });
       if (error instanceof StockItemInUseError)
-        throw new ConflictException(error.message);
+        throw new ConflictException(error.message, { cause: error });
       if (error instanceof InvalidStockItemError)
-        throw new BadRequestException(error.message);
-      throw new ServiceUnavailableException('Stock storage is unavailable.');
+        throw new BadRequestException(error.message, { cause: error });
+      throw new ServiceUnavailableException('Stock storage is unavailable.', {
+        cause: error,
+      });
     }
   }
 }
