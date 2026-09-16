@@ -13,7 +13,8 @@
     "test:integration": "tsc -p tsconfig.test.json && AUTH_INTEGRATION_TESTS=1 node --test \".test-dist/**/*.integration.test.js\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:solver": "tsc -p tsconfig.test.json && SOLVER_INTEGRATION_TESTS=1 node --env-file-if-exists=../solver/.env --test .test-dist/solver/solver.integration.test.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
