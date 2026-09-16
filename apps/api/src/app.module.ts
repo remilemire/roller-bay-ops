@@ -1,3 +1,4 @@
+import { AllocationsModule } from './features/allocations/allocations.module.js';
 import { StockReceiptsModule } from './features/stock-receipts/stock-receipts.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -21,6 +22,7 @@ import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
     LocationsModule,
     StockItemsModule,
     StockReceiptsModule,
+    AllocationsModule,
   ],
 })
 export class AppModule {}

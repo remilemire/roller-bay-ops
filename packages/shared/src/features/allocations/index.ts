@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  stockItemSchema,
+  stockCuttingOutcomeSchema,
+} from '../stock-items/index.js';
 
 const dimension = z.number().nonnegative().max(999999999.999).multipleOf(0.001);
 const id = z.uuid().transform((value) => value.toLowerCase());
@@ -55,3 +59,178 @@ export const cuttingPlanSchema = z.strictObject({
 
 export type CuttingContext = z.infer<typeof cuttingContextSchema>;
 export type CuttingPlan = z.infer<typeof cuttingPlanSchema>;
+
+export const cuttingSettingsSchema = cuttingContextSchema.shape.settings;
+export const allocationIdempotencyKeySchema = id;
+export const cuttingPlanSummarySchema = z.object({
+  leftovers: z.array(
+    z.object({
+      stockItemId: id,
+      dropIndex: z.number().int().nonnegative().nullable(),
+      kind: z.enum(['left-edge', 'right-edge', 'shortening', 'remnant-tail']),
+      widthMm: dimension,
+      lengthMm: dimension,
+      quantity: z.number().int().positive(),
+      reusable: z.boolean(),
+    }),
+  ),
+  reservations: z.array(
+    z.object({ stockItemId: id, reservedLengthMm: dimension }),
+  ),
+  inputAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
+  requiredAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
+  reusableAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
+  wasteAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
+  dropCount: z.number().int().nonnegative(),
+  stockItemCount: z.number().int().nonnegative(),
+  newRollCount: z.number().int().nonnegative(),
+});
+const planningFields = {
+  requirements: cuttingContextSchema.shape.requirements,
+  settings: cuttingSettingsSchema,
+};
+const revision = z.number().int().positive().max(2147483646);
+const previewFields = {
+  ...planningFields,
+  allocationId: id.optional(),
+  expectedRevision: revision.optional(),
+};
+const previewRevision = (value: {
+  allocationId?: string;
+  expectedRevision?: number;
+}) =>
+  (value.allocationId === undefined) === (value.expectedRevision === undefined);
+export const optimizeAllocationSchema = z
+  .strictObject({
+    ...previewFields,
+    maxTimeSeconds: z.number().positive().max(60).default(5),
+  })
+  .refine(
+    previewRevision,
+    'Provide allocationId and expectedRevision together.',
+  );
+export const validateAllocationSchema = z
+  .strictObject({ ...previewFields, plan: cuttingPlanSchema })
+  .refine(
+    previewRevision,
+    'Provide allocationId and expectedRevision together.',
+  );
+const allocationSubmission = z.strictObject({
+  orderNumber: z.string().trim().min(1).max(50),
+  ...planningFields,
+  plan: cuttingPlanSchema,
+});
+export const createAllocationSchema = allocationSubmission.refine(
+  (value) =>
+    value.plan.drops.reduce((total, drop) => total + drop.items.length, 0) <=
+    10000,
+  'An allocation may contain at most 10,000 cut assignments.',
+);
+export const replaceAllocationSchema = createAllocationSchema.safeExtend({
+  expectedRevision: revision,
+});
+export const cancelAllocationSchema = z.strictObject({
+  expectedRevision: revision,
+});
+export const completeAllocationSchema = z
+  .strictObject({
+    expectedRevision: revision,
+    items: z.array(stockCuttingOutcomeSchema).min(1).max(10000),
+  })
+  .refine(
+    (value) =>
+      value.items.reduce(
+        (sum, item) =>
+          sum + item.scraps.reduce((n, scrap) => n + scrap.quantity, 0),
+        0,
+      ) <= 1000,
+    'A completion may create at most 1,000 retained scraps.',
+  );
+export const allocationQuerySchema = z.strictObject({
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().max(50).optional(),
+  state: z.enum(['active', 'completed', 'cancelled']).optional(),
+});
+export const allocationSummarySchema = z.object({
+  id,
+  orderNumber: z.string(),
+  createdByUserId: id,
+  revision,
+  state: z.enum(['active', 'completed', 'cancelled']),
+  needsReplanning: z.boolean(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  completedAt: z.iso.datetime().nullable(),
+  cancelledAt: z.iso.datetime().nullable(),
+});
+export const allocationCompletionSchema = z.object({
+  submittedByUserId: id,
+  items: z.array(stockCuttingOutcomeSchema),
+  createdStockItemIds: z.array(id),
+  affectedAllocationIds: z.array(id),
+});
+export const allocationDetailSchema = allocationSummarySchema.extend({
+  requirements: z.array(cuttingRequirementSchema),
+  plan: cuttingPlanSchema,
+  settings: cuttingSettingsSchema.nullable(),
+  plannedSummary: cuttingPlanSummarySchema.nullable(),
+  items: z.array(
+    z.object({
+      id,
+      stockItemId: id,
+      reservedLengthMm: dimension,
+      stockItem: stockItemSchema,
+    }),
+  ),
+  completion: allocationCompletionSchema.nullable(),
+});
+export const allocationListSchema = z.object({
+  items: z.array(allocationSummarySchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+});
+export type OptimizeAllocation = z.infer<typeof optimizeAllocationSchema>;
+export type ValidateAllocation = z.infer<typeof validateAllocationSchema>;
+export type CreateAllocation = z.infer<typeof createAllocationSchema>;
+export type ReplaceAllocation = z.infer<typeof replaceAllocationSchema>;
+export type CompleteAllocation = z.infer<typeof completeAllocationSchema>;
+export type AllocationQuery = z.infer<typeof allocationQuerySchema>;
+export type AllocationCompletion = z.infer<typeof allocationCompletionSchema>;
+
+const planningStock = z.array(stockItemSchema);
+export const allocationValidationSchema = z.discriminatedUnion('valid', [
+  z.object({
+    valid: z.literal(true),
+    summary: cuttingPlanSummarySchema,
+    stockItems: planningStock,
+  }),
+  z.object({
+    valid: z.literal(false),
+    issues: z.array(
+      z.object({ code: z.string(), path: z.string(), message: z.string() }),
+    ),
+    stockItems: planningStock,
+  }),
+]);
+export const allocationOptimizationSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('feasible'),
+    plan: cuttingPlanSchema,
+    summary: cuttingPlanSummarySchema,
+    stockItems: planningStock,
+  }),
+  z.object({ status: z.literal('infeasible'), stockItems: planningStock }),
+  z.object({
+    status: z.literal('unknown'),
+    reason: z.enum(['search_limit', 'model_limit']),
+    stockItems: planningStock,
+  }),
+]);
+export type AllocationDetail = z.infer<typeof allocationDetailSchema>;
+export type AllocationList = z.infer<typeof allocationListSchema>;
+export type AllocationValidation = z.infer<typeof allocationValidationSchema>;
+export type AllocationOptimization = z.infer<
+  typeof allocationOptimizationSchema
+>;

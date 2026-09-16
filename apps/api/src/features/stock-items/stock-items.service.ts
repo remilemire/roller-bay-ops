@@ -1,3 +1,6 @@
+import { stockItemsQuery } from './stock-items.persistence.js';
+import { recordCuttingResults } from './stock-items.cutting.js';
+import type { StockCuttingOutcome } from '@roller-bay/shared/stock-items';
 import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
   BadRequestException,
@@ -143,6 +146,41 @@ export class StockItemsService {
     return this.operation(async () =>
       (await this.repository.findByStockReceiptItemIds(ids, transaction)).map(
         (row) => this.toPublic(row),
+      ),
+    );
+  }
+
+  findForAllocation(
+    transaction: DatabaseTransaction,
+    filter: { stockIds?: string[]; colorIds?: string[]; lock?: boolean },
+  ) {
+    return this.operation(async () => {
+      const rows = await this.repository.findForAllocation(transaction, filter);
+      if (rows.length > 10000)
+        throw new BadRequestException(
+          'Too many candidate stock items; narrow the fabric requirements.',
+        );
+      return rows.map((row) => this.toPublic(row));
+    });
+  }
+
+  async requireColors(ids: string[], transaction: DatabaseTransaction) {
+    if (!(await this.repository.colorsExist(ids, transaction)))
+      throw new NotFoundException('A requested fabric color does not exist.');
+  }
+
+  recordCuttingResults(
+    outcomes: StockCuttingOutcome[],
+    transaction: DatabaseTransaction,
+    now: Date,
+  ) {
+    return this.operation(() =>
+      stockItemsQuery(() =>
+        recordCuttingResults(
+          new StockItemsRepository({ db: transaction }),
+          outcomes,
+          now,
+        ),
       ),
     );
   }

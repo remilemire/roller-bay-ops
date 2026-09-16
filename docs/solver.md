@@ -2,7 +2,7 @@
 
 `apps/solver` is an independently runnable Python HTTP app. It owns strict request validation, execution capacity, solver subprocesses, and cancellation. Its `SolverProvider` interface currently has an `OrToolsProvider` implementation using OR-Tools' Python API; the Nest backend does not install Python, start the service, or locate worker scripts.
 
-`apps/api/src/solver` is the top-level Nest wrapper. `SolverModule.register({ baseUrl, apiKey })` provides an injectable `SolverClient`. It validates requests, sends HTTP calls, maps transport errors, and verifies returned assignments against the submitted mathematical model. It has no fabric/allocation types. The cutting optimizer receives a client directly; the module is not yet registered in the running API because no allocation endpoint has been added.
+`apps/api/src/solver` is the top-level Nest wrapper. `SolverModule.register({ baseUrl, apiKey })` provides an injectable `SolverClient`. It validates requests, sends HTTP calls, maps transport errors, and verifies returned assignments against the submitted mathematical model. It has no fabric/allocation types. The allocations module configures a client through `SolverModule.registerAsync()` and passes it to the cutting optimizer. Configure `SOLVER_URL` and `SOLVER_API_KEY` in the API environment. When the key is absent, the API still starts and manual allocations work; optimization previews return 503.
 
 `SOLVER_PROVIDER` selects the implementation inside the Python service and defaults to `or-tools`. The backend knows only the generic solving contract. Additional providers must implement that same contract; fabric-specific optimization lives in the allocations feature.
 

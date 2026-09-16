@@ -64,6 +64,13 @@
       "when": 1789528994624,
       "tag": "0008_add_allocations",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789546398976,
+      "tag": "0009_allocation_workflow",
+      "breakpoints": true
     }
   ]
 }

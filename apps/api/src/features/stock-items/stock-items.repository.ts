@@ -198,6 +198,41 @@ export class StockItemsRepository {
     }, true);
   }
 
+  async findForAllocation(
+    transaction: DatabaseTransaction,
+    filter: { stockIds?: string[]; colorIds?: string[]; lock?: boolean },
+  ) {
+    if (filter.stockIds?.length === 0 || filter.colorIds?.length === 0)
+      return [];
+    const where = and(
+      filter.stockIds ? inArray(stockItems.id, filter.stockIds) : undefined,
+      filter.colorIds
+        ? inArray(stockItems.fabricColorId, filter.colorIds)
+        : undefined,
+      filter.colorIds ? isNull(stockItems.consumedAt) : undefined,
+    );
+    if (filter.lock)
+      await transaction
+        .select({ id: stockItems.id })
+        .from(stockItems)
+        .where(where)
+        .orderBy(asc(stockItems.id))
+        .for('update');
+    return this.select(transaction)
+      .where(where)
+      .orderBy(asc(stockItems.id))
+      .limit(10001);
+  }
+
+  async colorsExist(ids: string[], transaction: DatabaseTransaction) {
+    if (!ids.length) return true;
+    const rows = await transaction
+      .select({ id: fabricColors.id })
+      .from(fabricColors)
+      .where(inArray(fabricColors.id, ids));
+    return rows.length === new Set(ids).size;
+  }
+
   private select(db: StockItemsDatabase = this.db) {
     return db
       .select({

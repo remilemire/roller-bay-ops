@@ -4,13 +4,13 @@
 
 `allocation_items` reserves a positive `reserved_length_mm` amount from a specific stock item. Length is stored in millimetres as `numeric(12,3)`. A unique index on `(allocation_id, stock_item_id)` allows one combined reservation per stock item in an allocation. Each line has creation/update timestamps. Foreign keys restrict deletion of referenced users, allocations, and stock items.
 
-Color, width, and current location come from the linked stock item. Reservations do not change its measured remaining length. Available length will be calculated as remaining length minus reservations belonging to active allocations. The future service must lock stock items and validate aggregate reservations in a transaction; these table checks alone do not prevent over-allocation or reservations against consumed stock.
+Color, width, and current location come from the linked stock item. Reservations do not change its measured remaining length. Available length is calculated as remaining length minus reservations belonging to active allocations. The service locks stock items and validates aggregate reservations in a transaction; these table checks alone do not prevent over-allocation or reservations against consumed stock.
 
 Completion means cutting results have been entered and reconciled. Cancellation releases the reservation without deleting its history.
 
 ## Plan tables
 
-The feature defines five tables:
+The feature defines five tables in `features/allocations/tables/`:
 
 | Table                     | Responsibility                                                                          |
 | ------------------------- | --------------------------------------------------------------------------------------- |
@@ -24,11 +24,11 @@ All dimensions use `numeric(12,3)` millimetres with non-NaN checks. Widths, leng
 
 Cuts have unique positive `position` values within each allocation item. Cut items have unique positive positions within each cut, preserving left-to-right layout. Positions are one-based and may have gaps. Each assignment's copies are adjacent. `edge_trim_mm` is the saved allowance for one outside edge, matching the validator; it is not the total of both edges. `planned_length_mm` is validated against the longest assigned adjusted drop. Roll reservations equal summed drop lengths; remnant reservations cover the entire selected piece.
 
-The future allocation service must validate that assigned requirements belong to the same allocation as the cut, that colors match, and that quantities and geometry satisfy the cutting validator. Ordinary foreign keys only enforce reference existence; they do not enforce those cross-table relationships or aggregate totals. Saving the header, requirements, reservations, cuts, and assignments must be atomic. No persistence service or endpoint has been implemented yet.
+The allocation service validates that assigned requirements belong to the same allocation as the cut, that colors match, and that quantities and geometry satisfy the cutting validator. Ordinary foreign keys only enforce reference existence; they do not enforce those cross-table relationships or aggregate totals. The allocation service persists the header, requirements, reservations, cuts, and assignments atomically as described below.
 
 The cutting-plan validator belongs to the allocations feature as a pure domain function: it validates order requirements and their proposed use of available stock. It does not belong to stock persistence or to the solver; both manually prepared and optimized plans should use it. A separate Nest module is unnecessary at this stage.
 
-Migration `0008_add_allocations` creates the five allocation tables. No allocation endpoints or reservation-writing workflow have been added.
+Migration `0008_add_allocations` creates the five allocation tables. Migration `0009_allocation_workflow` extends the header with revision, planning snapshots, idempotency records, and completion results.
 
 ## Cutting-plan validation
 
@@ -42,7 +42,7 @@ Each requirement specifies finished width, finished length, quantity, and extra 
 
 The positive `edgeTrimMm` applies to each original outside edge, not to each blind. Width fit requires the sum of blind widths plus two trims; shared internal edges need no extra allowance. The canonical layout places one trim-width strip on the left and all remaining width on the right. Existing remnants use the same conservative edge rule. There is no separate blade-kerf allowance in this model.
 
-The validator requires exact requirement quantities, matching colors, known unique identifiers, unconsumed stock, and enough remaining length after active reservations. It aggregates all drops per stock item. A remnant with any positive reservation is unavailable; a selected remnant reserves its entire remaining length. Multiple drops may come from the same selected remnant. The future caller must supply authoritative reservation totals and revalidate under stock locks when saving; this function cannot guarantee that a snapshot is still current.
+The validator requires exact requirement quantities, matching colors, known unique identifiers, unconsumed stock, and enough remaining length after active reservations. It aggregates all drops per stock item. A remnant with any positive reservation is unavailable; a selected remnant reserves its entire remaining length. Multiple drops may come from the same selected remnant. The allocation service supplies authoritative reservation totals and revalidates under stock locks when saving; this function cannot guarantee that a snapshot is still current.
 
 Leftovers are reconstructed as left/right strips, shortening offcuts, and remnant tails. Each physical rectangle is reusable when its width and length both meet the configured inclusive thresholds without rotation; quantities do not combine separate pieces into a larger remnant. Thresholds refer to the physical offcut dimensions, not guaranteed finished-blind dimensions after a future trim. No drop allowance is added again when classifying leftovers. Actual usability remains an estimate for cutters to confirm.
 
@@ -52,7 +52,7 @@ Input limits are 1,000 requirement lines, 10,000 candidate stock items, 10,000 d
 
 ## Bounded cutting optimization
 
-`features/allocations/optimizer/` contains the concrete `CuttingPlanOptimizer`, which receives the generic `SolverClient` directly. It accepts an authoritative `CuttingContext` snapshot and returns proposed cuts without writing reservations. The Python service retains the mathematical solver provider interface; fabric-specific model construction stays in the backend. No allocation endpoint or application-module registration has been added.
+`features/allocations/optimizer/` contains the concrete `CuttingPlanOptimizer`, which receives the generic `SolverClient` directly. It accepts an authoritative `CuttingContext` snapshot and returns proposed cuts without writing reservations. The Python service retains the mathematical solver provider interface; fabric-specific model construction stays in the backend. The allocations module exposes this through the optimization preview endpoint.
 
 The optimizer supports at most 100 individual blinds, counting quantities. It validates schemas, normalized identifier uniqueness, and reservation totals before generating candidates. Consumed stock and reserved remnants are excluded, and roll reservations reduce available length. A requirement that fits no eligible stock proves infeasibility without calling the solver. Otherwise aggregate stock capacity is checked by the mathematical model.
 
@@ -74,8 +74,50 @@ A separate solve is used for each nonconstant tie-breaker. Only an objective pro
 
 A `feasible` result contains a complete `CuttingPlan` and independently validated `CuttingPlanSummary`. It makes no global-optimality claim. `infeasible` is returned only for a necessary feasibility failure or solver proof after complete pattern and stock-assignment coverage. When truncated candidates or the search deadline prevent establishing a result, the optimizer returns `unknown` with reason `search_limit`. It never returns a partial order. Invalid input/options, cancellation, unsafe numbers, invalid models/solutions, and operational solver failures remain exceptions; a solver deadline without an incumbent returns `unknown`.
 
-Model building returns explicit assignment metadata for decoding. Each returned plan passes `validateCuttingPlan()`, and all four modeled objectives are compared against its independently calculated summary. Future persistence must still revalidate availability under stock locks.
+Model building returns explicit assignment metadata for decoding. Each returned plan passes `validateCuttingPlan()`, and all four modeled objectives are compared against its independently calculated summary. Saving an allocation revalidates availability under stock locks.
 
 ### Verification
 
 Unit tests cover candidate limits, deterministic selection, cancellation, objective locking, search budgets, result/error handling, and numeric/model limits. `npm run test:solver --workspace=@roller-bay/api` runs serial HTTP integration tests against the standalone solver, including the allocator example, a 100-blind order, and tiny exhaustive reference searches that independently partition blinds and try stock assignments. These compare the complete objective priority order, including remnant-tail accounting, decimal allowances, and reservations.
+
+## Allocation workflow API
+
+All routes are under `/api/allocations`, require an active authenticated user, and allow users, admins, and the owner. Mutations use the existing Origin/CSRF checks and shared rate limiting. There is no draft state: creating an allocation confirms its plan and reserves stock. Reservations affect availability, not measured stock length.
+
+| Method | Route                       | Behavior                                                                                                                                      |
+| ------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/allocations`              | Paginated list with optional `search` (order number) and `state` (`active`, `completed`, `cancelled`).                                        |
+| GET    | `/allocations/:id`          | Requirements, saved plan/settings/summary, reservations, current stock locations and measurements, completion results, and `needsReplanning`. |
+| POST   | `/allocations/optimize`     | Suggest a plan using a database availability snapshot; no writes.                                                                             |
+| POST   | `/allocations/validate`     | Validate an edited plan against current stock; no writes. Returns `valid`, summary or issues, and selected stock details.                     |
+| POST   | `/allocations`              | Create the allocation and reservations atomically; requires `Idempotency-Key`.                                                                |
+| PUT    | `/allocations/:id`          | Replace an active allocation's order number, requirements, settings, and plan atomically.                                                     |
+| POST   | `/allocations/:id/cancel`   | Cancel an active allocation and release reservations. Repeating cancellation is safe.                                                         |
+| POST   | `/allocations/:id/complete` | Apply observed stock outcomes, create retained scraps, and complete atomically; requires `Idempotency-Key`.                                   |
+
+Creation takes `{ orderNumber, requirements, settings, plan }`. Requirement IDs are client-generated UUIDs, allowing plans to reference unsaved form rows; they become persisted requirement IDs on submission. Replacement includes the same complete payload plus `expectedRevision`. Cancellation takes `{ expectedRevision }`. The header starts at revision 1 and each successful replacement, cancellation, or completion increments it. Completed and cancelled allocations cannot be edited or completed again. Stale revisions and unavailable reservations return 409. Order numbers remain nonunique; the retry key protects repeated submissions, not independently entered duplicate orders.
+
+Previews accept `requirements` and `settings`; validation also requires `plan`. Optimization optionally accepts `maxTimeSeconds`. When revising an existing allocation, provide both `allocationId` and `expectedRevision` so its own reservations are excluded. Request bodies cannot supply stock measurements or reservation totals. Preview reads use a consistent database snapshot, then release the transaction before solver work. A preview never guarantees availability at submission time. Valid plans are saved only after locking the header and involved stock rows and rechecking reservations. All stock locks are acquired in sorted ID order.
+
+Optimization requires `SOLVER_URL` (defaults to `http://127.0.0.1:8001`) and `SOLVER_API_KEY` in the API environment, using the same key configured in the Python service. Missing configuration returns 503 only from optimization; manual workflow endpoints remain available. A disconnected preview request cancels its solver request. Solver busy responses become 409; optimizer search/model limits retain their `unknown` result and reason.
+
+### Cutting completion
+
+Completion takes `{ expectedRevision, items }`, with exactly one outcome per allocated stock item. Every item includes `stockItemId`, `expectedUpdatedAt` from the current stock response, and optionally `scraps`. A stock timestamp mismatch returns 409 so results cannot silently overwrite a newer measurement.
+
+- `outcome: "returned-roll"`: positive `radialDepthMm`, `locationId`, and `tubeOuterDiameterMm` if not already known. Depth is the one-sided reading `(outer − tube) / 2`. The current catalog thickness is saved with the measurement and the database calculates remaining length.
+- `outcome: "returned-remnant"`: positive `widthMm`, `explicitLengthMm`, and `locationId`. Width cannot exceed the original width. Roll measurement fields are not accepted.
+- `outcome: "consumed"`: marks the existing stock item consumed. A previously unused roll still requires its tube diameter, including when fully consumed, to satisfy the established used-roll invariant. Its remaining length becomes zero; its last location remains recorded.
+- `scraps`: retained pieces, each with positive `widthMm`, `lengthMm`, `locationId`, and optional `quantity` (default 1). Each piece becomes a distinct used remnant with the source fabric color and `sourceStockItemId`. At most 1,000 pieces may be created by one completion.
+
+Known tube diameters cannot change through completion and must be positive multiples of 5 mm. To turn a remaining roll into flat pieces, mark the roll consumed and enter the pieces as scraps. Estimated cut lengths are never subtracted from measured balances, and calculated plan leftovers are never automatically added to inventory.
+
+Completion records actual measurements even when they are below other active reservations. Its report includes `affectedAllocationIds`, and list/detail responses dynamically expose `needsReplanning` for active allocations referencing consumed or over-reserved stock. All allocations sharing a shortage are flagged because the app has no production-priority policy for selecting a winner. Revising or cancelling reservations clears the flag when availability is sufficient again. Current flags are derived; the completion report preserves which allocations were affected at submission time.
+
+### Retries, persistence, and verification
+
+Creation keys are UUIDs scoped to the submitting user. Completion keys are scoped to the allocation and completing user. Identical normalized requests replay without additional writes; reusing a key with a changed payload returns 409. Replays return the allocation's current detail, including live stock fields, while saved planning and completion snapshots remain unchanged. Failed transactions do not consume retry keys. Every stock write and retained scrap is rolled back if any part of completion fails.
+
+The header saves planning settings and the estimated summary, plus completion outcomes and created remnant IDs. Snapshot columns are nullable for older records; no historical settings or measurements are invented. List and detail use repeatable-read transactions. The workflow is designed for one completion form per allocation; partial completion, production priority, correction of finalized records, and substitution of different stock at completion are not implemented.
+
+Contract tests run in the normal backend suite. Database/HTTP cases are part of `npm run test:integration` and use the migrated schema with isolated rows, real sessions, and real PostgreSQL transactions. They cover normal-user access, authoritative previews, concurrent reservation conflicts, same-key replay, stale edits, rollback, measurement entry, retained scraps, and replanning flags. The preview optimizer is stubbed in this workflow suite; actual solver behavior is covered separately by `npm run test:solver`.

@@ -1,3 +1,5 @@
+import { AllocationsModule } from '../allocations/allocations.module.js';
+import { testAllocations } from '../allocations/allocations.integration-cases.js';
 import { testStockReceipts } from '../stock-receipts/stock-receipts.integration-cases.js';
 import { StockReceiptsModule } from '../stock-receipts/stock-receipts.module.js';
 import 'reflect-metadata';
@@ -51,6 +53,8 @@ test(
     url.searchParams.set('options', `-csearch_path=${schema},public`);
     const config = environmentSchema.parse({
       NODE_ENV: 'test',
+      SOLVER_API_KEY: 'integration-solver-key-at-least-32-characters',
+      SOLVER_URL: 'http://127.0.0.1:1',
       DATABASE_URL: url.href,
       REDIS_URL: process.env.TEST_REDIS_URL,
       MICROSOFT_TENANT_ID: '11111111-1111-4111-8111-111111111111',
@@ -84,6 +88,7 @@ test(
         LocationsModule,
         StockItemsModule,
         StockReceiptsModule,
+        AllocationsModule,
       ],
     })
       .overrideProvider(RATE_LIMIT_KEY_PREFIX)
@@ -246,6 +251,16 @@ test(
       );
 
       await testStockReceipts(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testAllocations(
         t,
         app,
         pool,

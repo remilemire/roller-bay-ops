@@ -7,7 +7,7 @@ import {
   pgTable,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
+import { fabricColors } from '../../fabric-catalog/colors/fabric-colors.table.js';
 import { allocations } from './allocations.table.js';
 
 export const allocationRequirements = pgTable(

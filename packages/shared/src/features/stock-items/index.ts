@@ -137,3 +137,37 @@ export type UpdateStockItem = z.infer<typeof updateStockItemSchema>;
 export type StockItemQuery = z.infer<typeof stockItemQuerySchema>;
 export type StockItem = z.infer<typeof stockItemSchema>;
 export type StockItemList = z.infer<typeof stockItemListSchema>;
+
+const retainedScrapSchema = z.strictObject({
+  widthMm: positiveDimension,
+  lengthMm: positiveDimension,
+  locationId: z.uuid().transform((value) => value.toLowerCase()),
+  quantity: z.number().int().min(1).max(100).default(1),
+});
+const cuttingOutcomeFields = {
+  stockItemId: z.uuid().transform((value) => value.toLowerCase()),
+  expectedUpdatedAt: z.iso.datetime(),
+  scraps: z.array(retainedScrapSchema).max(100).default([]),
+};
+export const stockCuttingOutcomeSchema = z.discriminatedUnion('outcome', [
+  z.strictObject({
+    ...cuttingOutcomeFields,
+    outcome: z.literal('consumed'),
+    tubeOuterDiameterMm: tubeDiameter.unwrap().optional(),
+  }),
+  z.strictObject({
+    ...cuttingOutcomeFields,
+    outcome: z.literal('returned-roll'),
+    radialDepthMm: positiveDimension,
+    tubeOuterDiameterMm: tubeDiameter.unwrap().optional(),
+    locationId: z.uuid().transform((value) => value.toLowerCase()),
+  }),
+  z.strictObject({
+    ...cuttingOutcomeFields,
+    outcome: z.literal('returned-remnant'),
+    widthMm: positiveDimension,
+    explicitLengthMm: positiveDimension,
+    locationId: z.uuid().transform((value) => value.toLowerCase()),
+  }),
+]);
+export type StockCuttingOutcome = z.infer<typeof stockCuttingOutcomeSchema>;
