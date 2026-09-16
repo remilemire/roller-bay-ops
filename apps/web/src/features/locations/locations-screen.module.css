@@ -70,3 +70,58 @@ button.label {
     margin-right: 6px;
   }
 }
+
+.node {
+  position: relative;
+}
+.dragging {
+  z-index: 10;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow:
+    var(--glass-shadow),
+    0 12px 32px -10px #0004;
+  outline: 1px solid var(--border);
+}
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+.dragHandle:hover {
+  background: var(--muted-surface);
+  color: var(--foreground);
+}
+.dragHandle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.dragHandle:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.dragging .dragHandle {
+  cursor: grabbing;
+}
+.row > .label {
+  flex: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .node,
+  .dragHandle {
+    transition: none !important;
+  }
+}

@@ -24,6 +24,14 @@ PATCH accepts only name/label and `sortOrder`, and requires at least one field. 
 
 Zone names are trimmed and limited to 1–120 characters. Section and level labels are trimmed and limited to 1–40 characters. Case is preserved for display, but uniqueness is case-insensitive: globally for zone names, within the parent for section and level labels. `sortOrder` defaults to zero and must be an integer from zero to 2,147,483,647. Ties are permitted.
 
+## Reordering in the workspace
+
+Admins reorder zones, sections, and levels by dragging their row handles. Sibling rows animate into place; the dragged branch retains its children. Handles also support Space to pick up/drop, Up/Down to move, and Escape to cancel. Reduced-motion preferences disable the transitions. Forms do not expose numeric ordering, and editing a label preserves its saved order.
+
+Zones and child lists support loading more siblings before dragging across page boundaries. Zone reordering is disabled during search. Rows stay within their current parent, and failed saves restore the server order and display an error.
+
+`POST <base path>/:id/move` accepts `{ targetId, position: "before" | "after" }` and returns 204. It requires admin/owner access and the configured Origin. The server orders the complete sibling list, including unloaded rows, and normalizes its internal `sortOrder` values in one transaction. A short table write lock serializes moves with other moves and existing CRUD writes; readers remain unblocked. A missing source returns 404; a missing destination or destination in another parent returns 409. Repeating a placement leaves the row adjacent to the same target.
+
 ## Responses and ordering
 
 Creation returns 201; reads and updates return 200. All records include `id`, `sortOrder`, `createdAt`, and `updatedAt`. Sections additionally include `zoneId` and `zoneName`. Locations include `sectionId`, `sectionLabel`, `zoneId`, and `zoneName`, so clients can display the complete address. Names reflect the current parent records.

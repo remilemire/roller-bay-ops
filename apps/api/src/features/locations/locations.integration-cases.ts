@@ -64,6 +64,10 @@ export async function testLocations(
           await post(path, {}).expect(403);
           await patch(`${path}/${randomUUID()}`, {}).expect(403);
           await remove(`${path}/${randomUUID()}`).expect(403);
+          await post(`${path}/${randomUUID()}/move`, {
+            targetId: randomUUID(),
+            position: 'before',
+          }).expect(403);
         }
         await role('owner');
         const zone = (await post(zones, { name: 'Owner zone' }).expect(201))
@@ -325,6 +329,126 @@ export async function testLocations(
         ).expect(204);
         await remove(`${sections}/${section.id}`).expect(204);
         await remove(`${zones}/${zone.id}`).expect(204);
+      },
+    );
+    await t.test(
+      'relative moves order all siblings atomically and reject other parents',
+      async () => {
+        await role('admin');
+        const zone = (await post(zones, { name: 'Move zone' }).expect(201))
+          .body;
+        const section = (
+          await post(sections, {
+            zoneId: zone.id,
+            label: 'Move section',
+          }).expect(201)
+        ).body;
+        const otherSection = (
+          await post(sections, {
+            zoneId: zone.id,
+            label: 'Other section',
+          }).expect(201)
+        ).body;
+        const foreign = (
+          await post(levels, {
+            sectionId: otherSection.id,
+            label: 'Foreign',
+          }).expect(201)
+        ).body;
+        const rows: { id: string }[] = [];
+        for (let i = 0; i < 27; i++)
+          rows.push(
+            (
+              await post(levels, {
+                sectionId: section.id,
+                label: String(i).padStart(2, '0'),
+              }).expect(201)
+            ).body,
+          );
+        const ordered = async () =>
+          (
+            await get(`${levels}?sectionId=${section.id}&pageSize=100`).expect(
+              200,
+            )
+          ).body.items as { id: string; sortOrder: number }[];
+        const move = (id: string, targetId: string, position = 'before') =>
+          post(`${levels}/${id}/move`, { targetId, position });
+        await move(rows[26]!.id, rows[0]!.id).expect(204);
+        let result = await ordered();
+        assert.deepEqual(
+          result.map((row) => row.id),
+          [rows[26]!.id, ...rows.slice(0, 26).map((row) => row.id)],
+        );
+        assert.deepEqual(
+          result.map((row) => row.sortOrder),
+          Array.from({ length: 27 }, (_, i) => i),
+        );
+        await move(rows[26]!.id, rows[0]!.id).expect(204); // Safe replay of the same placement.
+        assert.deepEqual(await ordered(), result);
+        await move(rows[0]!.id, foreign.id).expect(409);
+        await move(randomUUID(), rows[0]!.id).expect(404);
+        await move(rows[0]!.id, rows[1]!.id, 'sideways').expect(400);
+        assert.deepEqual(await ordered(), result);
+        await request(server)
+          .post(`${levels}/${rows[0]!.id}/move`)
+          .set('Cookie', cookie)
+          .send({ targetId: rows[1]!.id, position: 'before' })
+          .expect(403);
+        await Promise.all([
+          move(rows[5]!.id, rows[26]!.id).expect(204),
+          move(rows[6]!.id, rows[26]!.id).expect(204),
+        ]);
+        result = await ordered();
+        assert.equal(new Set(result.map((row) => row.sortOrder)).size, 27);
+        assert.deepEqual(
+          new Set(result.slice(0, 2).map((row) => row.id)),
+          new Set([rows[5]!.id, rows[6]!.id]),
+        );
+        // A database failure during the write must leave every sibling unchanged.
+        await pool.query(
+          `CREATE FUNCTION "${schema}".reject_location_move() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated write failure'; END $$`,
+        );
+        await pool.query(
+          `CREATE TRIGGER reject_location_move BEFORE UPDATE ON "${schema}".locations FOR EACH ROW EXECUTE FUNCTION "${schema}".reject_location_move()`,
+        );
+        try {
+          await move(rows[25]!.id, rows[0]!.id).expect(503);
+          assert.deepEqual(await ordered(), result);
+        } finally {
+          await pool.query(
+            `DROP TRIGGER reject_location_move ON "${schema}".locations`,
+          );
+          await pool.query(`DROP FUNCTION "${schema}".reject_location_move()`);
+        }
+        await post(`${sections}/${otherSection.id}/move`, {
+          targetId: section.id,
+          position: 'before',
+        }).expect(204);
+        const sectionList = (
+          await get(`${sections}?zoneId=${zone.id}`).expect(200)
+        ).body.items;
+        assert.equal(sectionList[0].id, otherSection.id);
+        const zone2 = (
+          await post(zones, { name: 'Move second zone' }).expect(201)
+        ).body;
+        await post(`${zones}/${zone2.id}/move`, {
+          targetId: zone.id,
+          position: 'after',
+        }).expect(204);
+        const zoneList = (await get(`${zones}?pageSize=100`).expect(200)).body
+          .items;
+        assert.equal(
+          zoneList[
+            zoneList.findIndex((row: { id: string }) => row.id === zone.id) + 1
+          ].id,
+          zone2.id,
+        );
+        for (const row of [...rows, foreign])
+          await remove(`${levels}/${row.id}`).expect(204);
+        for (const row of [section, otherSection])
+          await remove(`${sections}/${row.id}`).expect(204);
+        for (const row of [zone, zone2])
+          await remove(`${zones}/${row.id}`).expect(204);
       },
     );
   } finally {

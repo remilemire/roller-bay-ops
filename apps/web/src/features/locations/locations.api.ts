@@ -68,17 +68,18 @@ export async function listLocations(
 export async function saveLocation(
   kind: LocationKind,
   id: string | undefined,
-  input: { name: string; parentId: string; sortOrder: string },
+  input: { name: string; parentId: string },
 ) {
   const method = id ? 'PATCH' : 'POST';
   const url = `${path(kind)}${id ? `/${id}` : ''}`;
-  const order = Number(input.sortOrder);
   if (kind === 'zones')
     return api(url, s.locationZoneSchema, {
       method,
-      body: s.createLocationZoneSchema.parse({
+      body: (id
+        ? s.updateLocationZoneSchema
+        : s.createLocationZoneSchema
+      ).parse({
         name: input.name,
-        sortOrder: order,
       }),
     });
   if (kind === 'sections')
@@ -87,21 +88,18 @@ export async function saveLocation(
       body: id
         ? s.updateLocationSectionSchema.parse({
             label: input.name,
-            sortOrder: order,
           })
         : s.createLocationSectionSchema.parse({
             label: input.name,
-            sortOrder: order,
             zoneId: input.parentId,
           }),
     });
   return api(url, s.locationSchema, {
     method,
     body: id
-      ? s.updateLocationSchema.parse({ label: input.name, sortOrder: order })
+      ? s.updateLocationSchema.parse({ label: input.name })
       : s.createLocationSchema.parse({
           label: input.name,
-          sortOrder: order,
           sectionId: input.parentId,
         }),
   });
@@ -122,3 +120,13 @@ export async function lookupLocations(
     })),
   };
 }
+
+export const moveLocation = (
+  kind: LocationKind,
+  id: string,
+  input: s.MoveLocation,
+) =>
+  api(`${path(kind)}/${id}/move`, noContent, {
+    method: 'POST',
+    body: s.moveLocationSchema.parse(input),
+  });

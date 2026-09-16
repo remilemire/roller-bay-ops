@@ -8,6 +8,12 @@ const editableLocation = { label: labelSchema, sortOrder: sortOrderSchema };
 const nonempty = (value: object) =>
   Object.values(value).some((field) => field !== undefined);
 
+export const moveLocationSchema = z.strictObject({
+  targetId: z.uuid(),
+  position: z.enum(['before', 'after']),
+});
+export type MoveLocation = z.infer<typeof moveLocationSchema>;
+
 export const createLocationZoneSchema = z.strictObject({
   ...editableZone,
   sortOrder: sortOrderSchema.default(0),

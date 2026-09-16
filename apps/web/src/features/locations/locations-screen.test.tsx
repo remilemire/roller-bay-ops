@@ -102,6 +102,7 @@ it('creates a level using the section where Add level was clicked', async () => 
     await screen.findByRole('button', { name: 'Add level to Warehouse / A' }),
   );
   const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.queryByLabelText('Display order')).not.toBeInTheDocument();
   expect(dialog.getByText('Section: Warehouse / A')).toBeVisible();
   await user.type(dialog.getByLabelText('Level'), 'Bottom');
   await user.click(dialog.getByRole('button', { name: 'Save record' }));
@@ -109,7 +110,6 @@ it('creates a level using the section where Add level was clicked', async () => 
     expect(saveLocation).toHaveBeenCalledWith('levels', undefined, {
       name: 'Bottom',
       parentId: section.id,
-      sortOrder: '0',
     }),
   );
 });

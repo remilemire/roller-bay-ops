@@ -11,6 +11,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  moveLocationSchema,
+  type MoveLocation,
   createLocationSectionSchema,
   updateLocationSectionSchema,
   locationSectionQuerySchema,
@@ -18,13 +20,17 @@ import {
   type UpdateLocationSection,
   type LocationSectionQuery,
 } from '@roller-bay/shared/locations';
+import { LocationOrderService } from '../location-order.service.js';
 import { Roles } from '../../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe.js';
 import { LocationSectionsService } from './location-sections.service.js';
 
 @Controller('locations/sections')
 export class LocationSectionsController {
-  constructor(private readonly service: LocationSectionsService) {}
+  constructor(
+    private readonly service: LocationSectionsService,
+    private readonly ordering: LocationOrderService,
+  ) {}
   @Get()
   list(
     @Query(new ZodValidationPipe(locationSectionQuerySchema))
@@ -52,6 +58,15 @@ export class LocationSectionsController {
     input: UpdateLocationSection,
   ) {
     return this.service.update(id, input);
+  }
+  @Post(':id/move')
+  @Roles('admin')
+  @HttpCode(204)
+  move(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(moveLocationSchema)) input: MoveLocation,
+  ) {
+    return this.ordering.move('sections', id, input);
   }
   @Delete(':id')
   @Roles('admin')
