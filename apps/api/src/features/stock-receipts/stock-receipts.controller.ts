@@ -1,11 +1,14 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
   Headers,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -13,6 +16,10 @@ import {
 import type { Request } from 'express';
 import {
   createStockReceiptSchema,
+  createStockReceiptDraftSchema,
+  updateStockReceiptDraftSchema,
+  stockReceiptDraftRevisionSchema,
+  type StockReceiptDraftData,
   idempotencyKeySchema,
   stockReceiptQuerySchema,
   type CreateStockReceipt,
@@ -24,6 +31,59 @@ import { StockReceiptsService } from './stock-receipts.service.js';
 @Controller('stock-receipts')
 export class StockReceiptsController {
   constructor(private readonly service: StockReceiptsService) {}
+
+  @Post('drafts')
+  createDraft(
+    @Body(new ZodValidationPipe(createStockReceiptDraftSchema))
+    input: { data: StockReceiptDraftData },
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: Request,
+  ) {
+    if (!request.currentUser) throw new UnauthorizedException();
+    const validatedKey = new ZodValidationPipe(idempotencyKeySchema).transform(
+      key,
+    );
+    return this.service.createDraft(
+      input.data,
+      request.currentUser.id,
+      validatedKey,
+    );
+  }
+
+  @Put(':id/draft')
+  updateDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateStockReceiptDraftSchema))
+    input: { expectedRevision: number; data: StockReceiptDraftData },
+  ) {
+    return this.service.updateDraft(id, input.expectedRevision, input.data);
+  }
+
+  @Delete(':id/draft')
+  @HttpCode(204)
+  deleteDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(stockReceiptDraftRevisionSchema))
+    input: { expectedRevision: number },
+  ) {
+    return this.service.deleteDraft(id, input.expectedRevision);
+  }
+
+  @Post(':id/submit')
+  @HttpCode(200)
+  submitDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(stockReceiptDraftRevisionSchema))
+    input: { expectedRevision: number },
+    @Req() request: Request,
+  ) {
+    if (!request.currentUser) throw new UnauthorizedException();
+    return this.service.submitDraft(
+      id,
+      input.expectedRevision,
+      request.currentUser.id,
+    );
+  }
 
   @Post()
   create(

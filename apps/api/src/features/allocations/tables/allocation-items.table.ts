@@ -18,15 +18,15 @@ export const allocationItems = pgTable(
     allocationId: uuid('allocation_id')
       .notNull()
       .references(() => allocations.id, { onDelete: 'restrict' }),
-    stockItemId: uuid('stock_item_id')
-      .notNull()
-      .references(() => stockItems.id, { onDelete: 'restrict' }),
+    stockItemId: uuid('stock_item_id').references(() => stockItems.id, {
+      onDelete: 'restrict',
+    }),
     // Sum of planned drops for rolls; whole remaining length for remnants.
     // A reservation never changes the measured stock balance.
     reservedLengthMm: numeric('reserved_length_mm', {
       precision: 12,
       scale: 3,
-    }).notNull(),
+    }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),

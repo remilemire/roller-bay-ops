@@ -15,7 +15,7 @@ import {
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import { AllocationsRepository } from './allocations.repository.js';
 import { allocationOperation } from './allocations.operation.js';
-import { requireActiveRevision } from './allocation.rules.js';
+import { requirePlanningRevision } from './allocation.rules.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
@@ -95,7 +95,7 @@ export class AllocationPlanningService {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         if (input.allocationId)
-          requireActiveRevision(
+          requirePlanningRevision(
             await repository.findById(input.allocationId),
             input.expectedRevision,
           );

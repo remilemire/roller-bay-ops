@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
@@ -7,8 +8,8 @@ import {
   eq,
   ilike,
   inArray,
-  isNotNull,
   isNull,
+  isNotNull,
   ne,
   sql,
   type SQL,
@@ -16,6 +17,7 @@ import {
 import type {
   AllocationQuery,
   CreateAllocation,
+  AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import {
   DatabaseService,
@@ -35,7 +37,11 @@ type AllocationDatabase = Pick<
 >;
 export type AllocationRecord = typeof allocations.$inferSelect;
 const active = () =>
-  and(isNull(allocations.completedAt), isNull(allocations.cancelledAt));
+  and(
+    eq(allocations.isDraft, false),
+    isNull(allocations.completedAt),
+    isNull(allocations.cancelledAt),
+  );
 const batches = <T>(values: T[]): T[][] =>
   Array.from({ length: Math.ceil(values.length / 1000) }, (_, index) =>
     values.slice(index * 1000, (index + 1) * 1000),
@@ -84,7 +90,8 @@ export class AllocationsRepository {
           eq(allocations.createdByUserId, userId),
           eq(allocations.idempotencyKey, key),
         ),
-      );
+      )
+      .for('update');
     return row;
   }
   async create(values: typeof allocations.$inferInsert) {
@@ -104,7 +111,12 @@ export class AllocationsRepository {
   ) {
     const [row] = await this.db
       .update(allocations)
-      .set({ settings, plannedSummary })
+      .set({
+        settings,
+        plannedSummary,
+        confirmedAt: new Date(),
+        isDraft: false,
+      })
       .where(eq(allocations.id, id))
       .returning();
     return row!;
@@ -144,7 +156,7 @@ export class AllocationsRepository {
       .select()
       .from(allocationRequirements)
       .where(eq(allocationRequirements.allocationId, id))
-      .orderBy(asc(allocationRequirements.id));
+      .orderBy(asc(allocationRequirements.position));
   }
 
   async plan(id: string) {
@@ -156,7 +168,7 @@ export class AllocationsRepository {
         eq(allocationCuts.allocationItemId, allocationItems.id),
       )
       .where(eq(allocationItems.allocationId, id))
-      .orderBy(asc(allocationItems.stockItemId), asc(allocationCuts.position));
+      .orderBy(asc(allocationCuts.planPosition), asc(allocationCuts.id));
     const items = rows.length
       ? await this.db
           .select()
@@ -178,7 +190,8 @@ export class AllocationsRepository {
     return {
       drops: rows.map(({ cut, stockItemId }) => ({
         stockItemId,
-        lengthMm: Number(cut.plannedLengthMm),
+        lengthMm:
+          cut.plannedLengthMm === null ? null : Number(cut.plannedLengthMm),
         items: (byCut.get(cut.id) ?? []).map((item) => ({
           requirementId: item.allocationRequirementId,
           quantity: item.quantity,
@@ -187,11 +200,7 @@ export class AllocationsRepository {
     };
   }
 
-  async replacePlan(
-    id: string,
-    input: CreateAllocation,
-    summary: CuttingPlanSummary,
-  ) {
+  async clearPlan(id: string) {
     const itemIds = this.db
       .select({ id: allocationItems.id })
       .from(allocationItems)
@@ -212,68 +221,82 @@ export class AllocationsRepository {
     await this.db
       .delete(allocationRequirements)
       .where(eq(allocationRequirements.allocationId, id));
-    for (const batch of batches(input.requirements))
-      await this.db.insert(allocationRequirements).values(
-        batch.map((item) => ({
-          ...item,
-          allocationId: id,
-          widthMm: item.widthMm.toFixed(3),
-          lengthMm: item.lengthMm.toFixed(3),
-          lengthAllowanceMm: item.lengthAllowanceMm.toFixed(3),
-        })),
-      );
-    const itemRows: (typeof allocationItems.$inferSelect)[] = [];
-    for (const batch of batches(summary.reservations))
-      itemRows.push(
-        ...(await this.db
-          .insert(allocationItems)
-          .values(
-            batch.map((item) => ({
-              allocationId: id,
-              stockItemId: item.stockItemId,
-              reservedLengthMm: item.reservedLengthMm.toFixed(3),
-            })),
-          )
-          .returning()),
-      );
-    const byStock = new Map(
-      itemRows.map((item) => [item.stockItemId, item.id]),
+  }
+
+  async delete(id: string) {
+    await this.clearPlan(id);
+    await this.db.delete(allocations).where(eq(allocations.id, id));
+  }
+
+  async replacePlan(
+    id: string,
+    input: AllocationDraftData,
+    summary?: CuttingPlanSummary,
+  ) {
+    await this.clearPlan(id);
+    const requirements = input.requirements.map((item, index) => ({
+      ...item,
+      allocationId: id,
+      position: index + 1,
+      widthMm: item.widthMm?.toFixed(3) ?? null,
+      lengthMm: item.lengthMm?.toFixed(3) ?? null,
+      lengthAllowanceMm: item.lengthAllowanceMm?.toFixed(3) ?? null,
+    }));
+    for (const batch of batches(requirements))
+      await this.db.insert(allocationRequirements).values(batch);
+
+    // Unassigned drops each get a placeholder; selected stock is shared across its drops.
+    const itemKeys = input.plan.drops.map(
+      (drop, index) => drop.stockItemId ?? `unassigned:${index}`,
     );
+    const uniqueKeys = [...new Set(itemKeys)];
+    const reservations = new Map(
+      summary?.reservations.map((item) => [
+        item.stockItemId,
+        item.reservedLengthMm,
+      ]),
+    );
+    const byKey = new Map<string, string>();
+    for (const batch of batches(uniqueKeys)) {
+      const values = batch.map((key) => ({
+        id: crypto.randomUUID(),
+        allocationId: id,
+        stockItemId: key.startsWith('unassigned:') ? null : key,
+        reservedLengthMm: reservations.get(key)?.toFixed(3) ?? null,
+      }));
+      await this.db.insert(allocationItems).values(values);
+      batch.forEach((key, index) => byKey.set(key, values[index]!.id));
+    }
     const positions = new Map<string, number>();
-    const inputs = input.plan.drops.map((drop) => {
-      const position = (positions.get(drop.stockItemId) ?? 0) + 1;
-      positions.set(drop.stockItemId, position);
+    const inputs = input.plan.drops.map((drop, index) => {
+      const key = itemKeys[index]!;
+      const position = (positions.get(key) ?? 0) + 1;
+      positions.set(key, position);
       return {
         drop,
         values: {
-          allocationItemId: byStock.get(drop.stockItemId)!,
+          id: crypto.randomUUID(),
+          allocationItemId: byKey.get(key)!,
           position,
-          plannedLengthMm: drop.lengthMm.toFixed(3),
-          edgeTrimMm: input.settings.edgeTrimMm.toFixed(3),
+          planPosition: index + 1,
+          plannedLengthMm: drop.lengthMm?.toFixed(3) ?? null,
+          edgeTrimMm: input.settings.edgeTrimMm?.toFixed(3) ?? null,
         },
       };
     });
-    const cutItemValues: (typeof allocationCutItems.$inferInsert)[] = [];
-    for (const batch of batches(inputs)) {
-      const cuts = await this.db
+    for (const batch of batches(inputs))
+      await this.db
         .insert(allocationCuts)
-        .values(batch.map((entry) => entry.values))
-        .returning();
-      const cutMap = new Map(
-        cuts.map((cut) => [`${cut.allocationItemId}:${cut.position}`, cut.id]),
-      );
-      for (const { drop, values } of batch)
-        for (const [index, item] of drop.items.entries())
-          cutItemValues.push({
-            allocationCutId: cutMap.get(
-              `${values.allocationItemId}:${values.position}`,
-            )!,
-            allocationRequirementId: item.requirementId,
-            position: index + 1,
-            quantity: item.quantity,
-          });
-    }
-    for (const batch of batches(cutItemValues))
+        .values(batch.map((entry) => entry.values));
+    const assignments = inputs.flatMap(({ drop, values }) =>
+      drop.items.map((item, index) => ({
+        allocationCutId: values.id,
+        allocationRequirementId: item.requirementId,
+        position: index + 1,
+        quantity: item.quantity,
+      })),
+    );
+    for (const batch of batches(assignments))
       await this.db.insert(allocationCutItems).values(batch);
   }
 
@@ -296,13 +319,13 @@ export class AllocationsRepository {
         ),
       )
       .groupBy(allocationItems.stockItemId);
-    return new Map(rows.map((row) => [row.stockItemId, row.reserved]));
+    return new Map(rows.map((row) => [row.stockItemId!, row.reserved]));
   }
 
   async affectedAllocations(stockIds?: string[], allocationIds?: string[]) {
     if (stockIds?.length === 0 || allocationIds?.length === 0) return [];
     const total = sql`(SELECT coalesce(sum(ai.reserved_length_mm), 0) FROM allocation_items ai JOIN allocations a ON a.id = ai.allocation_id
-      WHERE ai.stock_item_id = ${stockItems.id} AND a.completed_at IS NULL AND a.cancelled_at IS NULL)`;
+      WHERE ai.stock_item_id = ${stockItems.id} AND a.is_draft = false AND a.completed_at IS NULL AND a.cancelled_at IS NULL)`;
     const rows = await this.db
       .selectDistinct({ id: allocations.id })
       .from(allocations)
@@ -323,14 +346,19 @@ export class AllocationsRepository {
   }
 
   async list(query: AllocationQuery) {
-    const state: SQL | undefined =
-      query.state === 'active'
-        ? active()
-        : query.state === 'completed'
-          ? isNotNull(allocations.completedAt)
-          : query.state === 'cancelled'
-            ? isNotNull(allocations.cancelledAt)
-            : undefined;
+    const state: SQL =
+      query.state === 'draft'
+        ? eq(allocations.isDraft, true)
+        : and(
+            eq(allocations.isDraft, false),
+            query.state === 'active'
+              ? active()
+              : query.state === 'completed'
+                ? isNotNull(allocations.completedAt)
+                : query.state === 'cancelled'
+                  ? isNotNull(allocations.cancelledAt)
+                  : undefined,
+          )!;
     const where = and(
       state,
       query.search
@@ -344,7 +372,14 @@ export class AllocationsRepository {
       .select()
       .from(allocations)
       .where(where)
-      .orderBy(desc(allocations.createdAt), desc(allocations.id))
+      .orderBy(
+        desc(
+          query.state === 'draft'
+            ? allocations.updatedAt
+            : allocations.createdAt,
+        ),
+        desc(allocations.id),
+      )
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
     const [total] = await this.db

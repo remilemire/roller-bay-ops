@@ -2,7 +2,9 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  integer,
   pgTable,
+  boolean,
   timestamp,
   uuid,
   uniqueIndex,
@@ -14,22 +16,43 @@ export const stockReceipts = pgTable(
   'stock_receipts',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    isDraft: boolean('is_draft').default(true).notNull(),
     // Nullable together for receipts created before idempotent submission existed.
     idempotencyKey: uuid('idempotency_key'),
     requestHash: varchar('request_hash', { length: 64 }),
-    purchaseOrderNumber: varchar('purchase_order_number', {
-      length: 50,
-    }).notNull(),
-    submittedByUserId: uuid('submitted_by_user_id')
+    createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
-    submittedAt: timestamp('submitted_at', { withTimezone: true })
+    createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    revision: integer('revision').default(1).notNull(),
+    submittedDraftRevision: integer('submitted_draft_revision'),
+    purchaseOrderNumber: varchar('purchase_order_number', {
+      length: 50,
+    }),
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('stock_receipts_submitter_key_unique').on(
-      table.submittedByUserId,
+    check('stock_receipts_revision_positive', sql`${table.revision} > 0`),
+    check(
+      'stock_receipts_submission_valid',
+      sql`(${table.isDraft} AND ${table.submittedAt} IS NULL AND ${table.submittedByUserId} IS NULL AND ${table.submittedDraftRevision} IS NULL) OR (NOT ${table.isDraft} AND ${table.submittedAt} IS NOT NULL AND ${table.submittedByUserId} IS NOT NULL AND ${table.purchaseOrderNumber} IS NOT NULL)`,
+    ),
+    check(
+      'stock_receipts_submitted_revision_valid',
+      sql`${table.submittedDraftRevision} IS NULL OR (${table.submittedDraftRevision} > 0 AND ${table.submittedDraftRevision} < ${table.revision})`,
+    ),
+
+    uniqueIndex('stock_receipts_creator_key_unique').on(
+      table.createdByUserId,
       table.idempotencyKey,
     ),
     check(

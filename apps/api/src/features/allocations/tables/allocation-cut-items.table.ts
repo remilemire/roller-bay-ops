@@ -22,7 +22,7 @@ export const allocationCutItems = pgTable(
       .references(() => allocationRequirements.id, { onDelete: 'restrict' }),
     // One-based left-to-right order; copies of a requirement are adjacent.
     position: integer('position').notNull(),
-    quantity: integer('quantity').default(1).notNull(),
+    quantity: integer('quantity').default(1),
   },
   (table) => [
     primaryKey({

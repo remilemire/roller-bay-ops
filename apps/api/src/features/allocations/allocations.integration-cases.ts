@@ -1,3 +1,4 @@
+import { testAllocationDrafts } from './allocation-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { TestContext } from 'node:test';
@@ -568,6 +569,16 @@ export async function testAllocations(
         assert.equal(unchanged.state, 'active');
         assert.equal(unchanged.items[0].stockItem.consumedAt, null);
       },
+    );
+    await testAllocationDrafts(
+      t,
+      app,
+      pool,
+      schema,
+      cookie,
+      origin,
+      seed,
+      input,
     );
   } finally {
     mock.mock.restore();

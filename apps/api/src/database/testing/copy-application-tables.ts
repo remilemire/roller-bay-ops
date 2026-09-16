@@ -89,6 +89,22 @@ export async function copyApplicationTables(pool: Pool, schema: string) {
         `ALTER TABLE ${target}.${identifier(constraint.table_name)} ADD CONSTRAINT ${identifier(constraint.constraint_name)} ${definition}`,
       );
     }
+    // LIKE also omits user triggers. These functions resolve their data through
+    // TG_TABLE_SCHEMA, so reuse the migrated functions on the isolated tables.
+    const triggers = await client.query<{ definition: string }>(
+      `SELECT pg_get_triggerdef(trigger.oid) AS definition
+       FROM pg_trigger trigger
+       JOIN pg_class t ON t.oid = trigger.tgrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE n.nspname = 'public' AND t.relname = ANY($1)
+         AND NOT trigger.tgisinternal`,
+      [tables],
+    );
+    for (const { definition } of triggers.rows) {
+      if (!definition.includes(' ON public.'))
+        throw new Error('Expected a schema-qualified trigger table.');
+      await client.query(definition.replace(' ON public.', ` ON ${target}.`));
+    }
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

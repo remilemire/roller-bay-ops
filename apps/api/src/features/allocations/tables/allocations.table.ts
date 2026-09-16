@@ -6,13 +6,14 @@ import {
   jsonb,
   uniqueIndex,
   pgTable,
+  boolean,
   timestamp,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 import type {
   AllocationCompletion,
-  CuttingContext,
+  AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
 import { users } from '../../users/users.table.js';
@@ -21,7 +22,8 @@ export const allocations = pgTable(
   'allocations',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    orderNumber: varchar('order_number', { length: 50 }).notNull(),
+    isDraft: boolean('is_draft').default(true).notNull(),
+    orderNumber: varchar('order_number', { length: 50 }),
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -32,8 +34,10 @@ export const allocations = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    submittedDraftRevision: integer('submitted_draft_revision'),
     revision: integer('revision').default(1).notNull(),
-    settings: jsonb('settings').$type<CuttingContext['settings']>(),
+    settings: jsonb('settings').$type<AllocationDraftData['settings']>(),
     plannedSummary: jsonb('planned_summary').$type<CuttingPlanSummary>(),
     idempotencyKey: uuid('idempotency_key'),
     requestHash: varchar('request_hash', { length: 64 }),
@@ -44,6 +48,15 @@ export const allocations = pgTable(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   },
   (table) => [
+    check(
+      'allocations_confirmation_valid',
+      sql`(${table.isDraft} AND ${table.confirmedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.submittedDraftRevision} IS NULL) OR (NOT ${table.isDraft} AND ${table.confirmedAt} IS NOT NULL AND ${table.orderNumber} IS NOT NULL)`,
+    ),
+    check(
+      'allocations_submitted_revision_valid',
+      sql`${table.submittedDraftRevision} IS NULL OR (${table.submittedDraftRevision} > 0 AND ${table.submittedDraftRevision} < ${table.revision})`,
+    ),
+
     uniqueIndex('allocations_creator_idempotency_unique').on(
       table.createdByUserId,
       table.idempotencyKey,
@@ -55,7 +68,7 @@ export const allocations = pgTable(
       'allocations_order_number_format',
       sql`length(${table.orderNumber}) > 0 AND ${table.orderNumber} !~ '^[[:space:]]|[[:space:]]$'`,
     ),
-    // Both null means active; completion and cancellation are mutually exclusive.
+    // Non-draft allocations are active until completed or cancelled.
     check(
       'allocations_completion_or_cancellation',
       sql`${table.completedAt} IS NULL OR ${table.cancelledAt} IS NULL`,

@@ -1,5 +1,6 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
   Headers,
@@ -20,6 +21,10 @@ import {
   cancelAllocationSchema,
   completeAllocationSchema,
   createAllocationSchema,
+  createAllocationDraftSchema,
+  updateAllocationDraftSchema,
+  allocationDraftRevisionSchema,
+  type AllocationDraftData,
   optimizeAllocationSchema,
   replaceAllocationSchema,
   validateAllocationSchema,
@@ -40,6 +45,56 @@ export class AllocationsController {
     private readonly service: AllocationsService,
     private readonly planning: AllocationPlanningService,
   ) {}
+
+  @Post('drafts')
+  createDraft(
+    @Body(new ZodValidationPipe(createAllocationDraftSchema))
+    input: { data: AllocationDraftData },
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: Request,
+  ) {
+    if (!request.currentUser) throw new UnauthorizedException();
+    const validatedKey = new ZodValidationPipe(
+      allocationIdempotencyKeySchema,
+    ).transform(key);
+    return this.service.createDraft(
+      input.data,
+      request.currentUser.id,
+      validatedKey,
+    );
+  }
+
+  @Put(':id/draft')
+  updateDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateAllocationDraftSchema))
+    input: { expectedRevision: number; data: AllocationDraftData },
+  ) {
+    return this.service.updateDraft(id, input.expectedRevision, input.data);
+  }
+
+  @Delete(':id/draft')
+  @HttpCode(204)
+  deleteDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(allocationDraftRevisionSchema))
+    input: { expectedRevision: number },
+  ) {
+    return this.service.deleteDraft(id, input.expectedRevision);
+  }
+
+  @Post(':id/submit')
+  @HttpCode(200)
+  submitDraft(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(allocationDraftRevisionSchema))
+    input: { expectedRevision: number },
+    @Req() request: Request,
+  ) {
+    if (!request.currentUser) throw new UnauthorizedException();
+    return this.service.submitDraft(id, input.expectedRevision);
+  }
+
   @Get()
   list(
     @Query(new ZodValidationPipe(allocationQuerySchema)) query: AllocationQuery,

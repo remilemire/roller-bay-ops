@@ -1,3 +1,4 @@
+import { testStockReceiptDrafts } from './stock-receipt-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { TestContext } from 'node:test';
@@ -393,6 +394,16 @@ export async function testStockReceipts(
           key,
         ).expect(201);
       },
+    );
+    await testStockReceiptDrafts(
+      t,
+      app,
+      pool,
+      schema,
+      cookie,
+      userId,
+      origin,
+      line,
     );
   } finally {
     await role('user');

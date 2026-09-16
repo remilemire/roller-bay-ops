@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  uniqueIndex,
   integer,
   numeric,
   pgTable,
@@ -17,22 +18,29 @@ export const allocationRequirements = pgTable(
     allocationId: uuid('allocation_id')
       .notNull()
       .references(() => allocations.id, { onDelete: 'restrict' }),
-    fabricColorId: uuid('fabric_color_id')
-      .notNull()
-      .references(() => fabricColors.id, { onDelete: 'restrict' }),
-    widthMm: numeric('width_mm', { precision: 12, scale: 3 }).notNull(),
+    position: integer('position').notNull(),
+    fabricColorId: uuid('fabric_color_id').references(() => fabricColors.id, {
+      onDelete: 'restrict',
+    }),
+    widthMm: numeric('width_mm', { precision: 12, scale: 3 }),
     // Finished drop before the extra allowance.
-    lengthMm: numeric('length_mm', { precision: 12, scale: 3 }).notNull(),
+    lengthMm: numeric('length_mm', { precision: 12, scale: 3 }),
     // Includes bottom bars, tube attachment, and drop straightening.
     lengthAllowanceMm: numeric('length_allowance_mm', {
       precision: 12,
       scale: 3,
-    })
-      .default('0')
-      .notNull(),
-    quantity: integer('quantity').default(1).notNull(),
+    }).default('0'),
+    quantity: integer('quantity').default(1),
   },
   (table) => [
+    uniqueIndex('allocation_requirements_position_unique').on(
+      table.allocationId,
+      table.position,
+    ),
+    check(
+      'allocation_requirements_position_positive',
+      sql`${table.position} > 0`,
+    ),
     index('allocation_requirements_allocation_id_idx').on(table.allocationId),
     index('allocation_requirements_fabric_color_id_idx').on(
       table.fabricColorId,

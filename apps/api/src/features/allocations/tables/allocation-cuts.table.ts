@@ -16,17 +16,23 @@ export const allocationCuts = pgTable(
     allocationItemId: uuid('allocation_item_id')
       .notNull()
       .references(() => allocationItems.id, { onDelete: 'restrict' }),
+    // One-based order across the whole plan, including unassigned draft drops.
+    planPosition: integer('plan_position').notNull(),
     // One-based drop order within the selected stock item.
     position: integer('position').notNull(),
     // Calculated by the validator from assigned requirements, not a SQL generated column.
     plannedLengthMm: numeric('planned_length_mm', {
       precision: 12,
       scale: 3,
-    }).notNull(),
+    }),
     // Snapshot of the universal allowance for ONE original outside edge.
-    edgeTrimMm: numeric('edge_trim_mm', { precision: 12, scale: 3 }).notNull(),
+    edgeTrimMm: numeric('edge_trim_mm', { precision: 12, scale: 3 }),
   },
   (table) => [
+    check(
+      'allocation_cuts_plan_position_positive',
+      sql`${table.planPosition} > 0`,
+    ),
     uniqueIndex('allocation_cuts_item_position_unique').on(
       table.allocationItemId,
       table.position,

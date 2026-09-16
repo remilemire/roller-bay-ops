@@ -1,5 +1,6 @@
 import {
   InvalidStockReceiptError,
+  StockReceiptConflictError,
   StockReceiptReferenceNotFoundError,
 } from './stock-receipts.errors.js';
 
@@ -14,6 +15,11 @@ export async function stockReceiptsQuery<T>(
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {
       seen.add(cause);
       if ('code' in cause) {
+        if (['23505', '40001', '40P01', '55P03'].includes(String(cause.code)))
+          throw new StockReceiptConflictError(
+            'Receipt changed concurrently; refresh and retry.',
+            { cause: error },
+          );
         if (cause.code === '23503')
           throw new StockReceiptReferenceNotFoundError(
             'A referenced user, fabric color, or location does not exist.',

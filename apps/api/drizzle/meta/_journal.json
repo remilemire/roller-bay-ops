@@ -71,6 +71,13 @@
       "when": 1789546398976,
       "tag": "0009_allocation_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789552278430,
+      "tag": "0010_typed_drafts",
+      "breakpoints": true
     }
   ]
 }

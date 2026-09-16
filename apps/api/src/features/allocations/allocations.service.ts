@@ -8,6 +8,10 @@ import {
 } from '@nestjs/common';
 import {
   allocationDetailSchema,
+  allocationDraftSchema,
+  allocationDraftDataSchema,
+  createAllocationSchema,
+  type AllocationDraftData,
   type AllocationQuery,
   type CreateAllocation,
   type ReplaceAllocation,
@@ -21,7 +25,10 @@ import {
 } from './allocations.repository.js';
 import { allocationOperation } from './allocations.operation.js';
 import { allocationSummary } from './allocations.presenter.js';
-import { requireActiveRevision } from './allocation.rules.js';
+import {
+  requireActiveRevision,
+  requireDraftRevision,
+} from './allocation.rules.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 import { toLengthUnits } from './cutting-plan/cutting-dimensions.js';
@@ -54,17 +61,104 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
-        const summary = await this.validateForWrite(repository, tx, input);
-        await repository.replacePlan(header.id, input, summary);
-        // Creation starts at revision 1; subsequent changes increment it.
-        const saved = await repository.initializePlan(
-          header.id,
-          input.settings,
-          summary,
-        );
-        return this.detail(repository, tx, saved);
+        return this.confirmPlan(repository, tx, header, input, false);
       }),
     );
+  }
+
+  createDraft(data: AllocationDraftData, userId: string, key: string) {
+    const requestHash = hash({ mode: 'draft', data });
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.create({
+          orderNumber: data.orderNumber,
+          settings: data.settings,
+          createdByUserId: userId,
+          idempotencyKey: key,
+          requestHash,
+        });
+        if (!header) {
+          const previous = await repository.findByKey(userId, key);
+          if (!previous || previous.requestHash !== requestHash)
+            throw new ConflictException(
+              'This Idempotency-Key was used for a different allocation.',
+            );
+          return this.detail(repository, tx, previous);
+        }
+        await repository.replacePlan(header.id, data);
+        return this.detail(repository, tx, header);
+      }),
+    );
+  }
+
+  updateDraft(id: string, revision: number, data: AllocationDraftData) {
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        requireDraftRevision(await repository.findById(id, true), revision);
+        await repository.replacePlan(id, data);
+        const header = await repository.update(id, {
+          orderNumber: data.orderNumber,
+          settings: data.settings,
+        });
+        return this.detail(repository, tx, header);
+      }),
+    );
+  }
+
+  deleteDraft(id: string, revision: number) {
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository) => {
+        requireDraftRevision(await repository.findById(id, true), revision);
+        await repository.delete(id);
+      }),
+    );
+  }
+
+  submitDraft(id: string, revision: number) {
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.findById(id, true);
+        if (!header) throw new NotFoundException('Allocation not found.');
+        if (!header.isDraft && header.submittedDraftRevision === revision)
+          return this.detail(repository, tx, header);
+        requireDraftRevision(header, revision);
+        const input = createAllocationSchema.safeParse(
+          await this.formData(repository, header),
+        );
+        if (!input.success)
+          throw new BadRequestException({
+            message: 'Complete all allocation fields before submitting.',
+            issues: input.error.issues,
+          });
+        return this.confirmPlan(repository, tx, header, input.data, true);
+      }),
+    );
+  }
+
+  private async confirmPlan(
+    repository: AllocationsRepository,
+    tx: DatabaseTransaction,
+    header: AllocationRecord,
+    input: CreateAllocation,
+    fromDraft: boolean,
+  ) {
+    const summary = await this.validateForWrite(
+      repository,
+      tx,
+      input,
+      header.id,
+    );
+    await repository.replacePlan(header.id, input, summary);
+    const saved = fromDraft
+      ? await repository.update(header.id, {
+          isDraft: false,
+          confirmedAt: new Date(),
+          submittedDraftRevision: header.revision,
+          settings: input.settings,
+          plannedSummary: summary,
+        })
+      : await repository.initializePlan(header.id, input.settings, summary);
+    return this.detail(repository, tx, saved);
   }
 
   replace(id: string, input: ReplaceAllocation) {
@@ -80,7 +174,7 @@ export class AllocationsService {
           tx,
           input,
           header.id,
-          current.map((item) => item.stockItemId),
+          current.map((item) => item.stockItemId!),
         );
         await repository.replacePlan(id, input, summary);
         const saved = await repository.update(id, {
@@ -102,13 +196,15 @@ export class AllocationsService {
         requireActiveRevision(header, revision);
         const items = await repository.items(id);
         await this.stockItems.findForAllocation(tx, {
-          stockIds: items.map((item) => item.stockItemId),
+          stockIds: items.map((item) => item.stockItemId!),
           lock: true,
         });
         return this.detail(
           repository,
           tx,
-          await repository.update(id, { cancelledAt: new Date() }),
+          await repository.update(id, {
+            cancelledAt: new Date(),
+          }),
         );
       }),
     );
@@ -133,7 +229,7 @@ export class AllocationsService {
         }
         requireActiveRevision(header, input.expectedRevision);
         const allocated = await repository.items(id);
-        const ids = allocated.map((item) => item.stockItemId);
+        const ids = allocated.map((item) => item.stockItemId!);
         if (
           new Set(input.items.map((item) => item.stockItemId)).size !==
             input.items.length ||
@@ -259,14 +355,41 @@ export class AllocationsService {
     return result.summary;
   }
 
+  private async formData(
+    repository: AllocationsRepository,
+    header: AllocationRecord,
+  ) {
+    return allocationDraftDataSchema.parse({
+      orderNumber: header.orderNumber,
+      requirements: (await repository.requirements(header.id)).map((item) => ({
+        id: item.id,
+        fabricColorId: item.fabricColorId,
+        quantity: item.quantity,
+        widthMm: item.widthMm === null ? null : Number(item.widthMm),
+        lengthMm: item.lengthMm === null ? null : Number(item.lengthMm),
+        lengthAllowanceMm:
+          item.lengthAllowanceMm === null
+            ? null
+            : Number(item.lengthAllowanceMm),
+      })),
+      settings: header.settings ?? {},
+      plan: await repository.plan(header.id),
+    });
+  }
+
   private async detail(
     repository: AllocationsRepository,
     tx: DatabaseTransaction,
     header: AllocationRecord,
   ) {
+    if (header.isDraft)
+      return allocationDraftSchema.parse({
+        ...allocationSummary(header, false),
+        data: await this.formData(repository, header),
+      });
     const items = await repository.items(header.id);
     const stock = await this.stockItems.findForAllocation(tx, {
-      stockIds: items.map((item) => item.stockItemId),
+      stockIds: items.map((item) => item.stockItemId!),
     });
     const byId = new Map(stock.map((item) => [item.id, item]));
     const affected = await repository.affectedAllocations(undefined, [
@@ -289,7 +412,7 @@ export class AllocationsService {
       items: items.map((item) => ({
         ...item,
         reservedLengthMm: Number(item.reservedLengthMm),
-        stockItem: byId.get(item.stockItemId),
+        stockItem: byId.get(item.stockItemId!),
       })),
     });
   }

@@ -4,6 +4,13 @@ import {
   stockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
 
+export const allocationStateSchema = z.enum([
+  'draft',
+  'active',
+  'completed',
+  'cancelled',
+]);
+
 const dimension = z.number().nonnegative().max(999999999.999).multipleOf(0.001);
 const id = z.uuid().transform((value) => value.toLowerCase());
 const quantity = z.number().int().min(1).max(10000);
@@ -150,14 +157,14 @@ export const allocationQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(50).optional(),
-  state: z.enum(['active', 'completed', 'cancelled']).optional(),
+  state: allocationStateSchema.optional(),
 });
 export const allocationSummarySchema = z.object({
   id,
   orderNumber: z.string(),
   createdByUserId: id,
   revision,
-  state: z.enum(['active', 'completed', 'cancelled']),
+  state: allocationStateSchema.exclude(['draft']),
   needsReplanning: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -185,8 +192,120 @@ export const allocationDetailSchema = allocationSummarySchema.extend({
   ),
   completion: allocationCompletionSchema.nullable(),
 });
+const draftField = <T extends z.ZodType>(schema: T) =>
+  schema.nullish().transform((value) => value ?? null);
+export const allocationDraftDataSchema = z
+  .strictObject({
+    orderNumber: draftField(z.string().trim().min(1).max(50)),
+    requirements: z
+      .array(
+        z.strictObject({
+          id,
+          fabricColorId: draftField(id),
+          widthMm: draftField(dimension.positive()),
+          lengthMm: draftField(dimension.positive()),
+          lengthAllowanceMm: draftField(dimension),
+          quantity: draftField(quantity),
+        }),
+      )
+      .max(1000)
+      .default([]),
+    settings: z
+      .strictObject({
+        edgeTrimMm: draftField(dimension.positive()),
+        minimumRemnantWidthMm: draftField(dimension.positive()),
+        minimumRemnantLengthMm: draftField(dimension.positive()),
+      })
+      .prefault({}),
+    plan: z
+      .strictObject({
+        drops: z
+          .array(
+            z.strictObject({
+              stockItemId: draftField(id),
+              lengthMm: draftField(dimension.positive()),
+              items: z
+                .array(
+                  z.strictObject({
+                    requirementId: id,
+                    quantity: draftField(quantity),
+                  }),
+                )
+                .max(1000)
+                .default([]),
+            }),
+          )
+          .max(10000)
+          .default([]),
+      })
+      .prefault({}),
+  })
+  .superRefine((value, ctx) => {
+    const ids = new Set(value.requirements.map((item) => item.id));
+    if (ids.size !== value.requirements.length)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['requirements'],
+        message: 'Requirement IDs must be unique.',
+      });
+    let assignments = 0;
+    value.plan.drops.forEach((drop, i) => {
+      const assigned = new Set<string>();
+      drop.items.forEach((item, j) => {
+        if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['plan', 'drops', i, 'items', j, 'requirementId'],
+            message:
+              'Assignments must reference a unique requirement in this draft.',
+          });
+        assigned.add(item.requirementId);
+        assignments++;
+      });
+    });
+    if (assignments > 10000)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['plan'],
+        message: 'An allocation may contain at most 10,000 cut assignments.',
+      });
+  });
+export const createAllocationDraftSchema = z.strictObject({
+  data: allocationDraftDataSchema,
+});
+export const allocationDraftRevisionSchema = z.strictObject({
+  expectedRevision: revision,
+});
+export const updateAllocationDraftSchema = allocationDraftRevisionSchema.extend(
+  { data: allocationDraftDataSchema },
+);
+export const allocationDraftSummarySchema = z.object({
+  id,
+  state: z.literal('draft'),
+  orderNumber: z.string().nullable(),
+  createdByUserId: id,
+  revision,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  completedAt: z.null(),
+  cancelledAt: z.null(),
+  needsReplanning: z.literal(false),
+});
+export const allocationDraftSchema = allocationDraftSummarySchema.extend({
+  data: allocationDraftDataSchema,
+});
+export const allocationRecordSchema = z.discriminatedUnion('state', [
+  allocationDetailSchema,
+  allocationDraftSchema,
+]);
+export type AllocationDraftData = z.infer<typeof allocationDraftDataSchema>;
 export const allocationListSchema = z.object({
-  items: z.array(allocationSummarySchema),
+  items: z.array(
+    z.discriminatedUnion('state', [
+      allocationSummarySchema,
+      allocationDraftSummarySchema,
+    ]),
+  ),
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),

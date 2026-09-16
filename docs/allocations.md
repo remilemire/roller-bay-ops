@@ -1,8 +1,8 @@
 # Allocations
 
-`allocations` identifies the production order using `order_number` (1–50 characters, nonempty, with no leading or trailing whitespace). It records the creating user, creation/update timestamps, and nullable completion/cancellation timestamps. Both lifecycle timestamps being null means active; a check prohibits setting both. Order numbers are indexed; uniqueness has not been enforced pending confirmation of the order-number rules.
+`allocations` identifies the production order using `order_number` (1–50 characters, nonempty, with no leading or trailing whitespace). It records the creating user, creation/update timestamps, and nullable completion/cancellation timestamps. The persisted `is_draft` boolean identifies drafts. For non-drafts, completion/cancellation timestamps determine the API state (`active`, `completed`, or `cancelled`). Header checks require an order number and confirmation timestamp outside draft state, prohibit lifecycle timestamps while drafting, and keep completion and cancellation mutually exclusive. Order numbers are indexed; uniqueness has not been enforced pending confirmation of the order-number rules.
 
-`allocation_items` reserves a positive `reserved_length_mm` amount from a specific stock item. Length is stored in millimetres as `numeric(12,3)`. A unique index on `(allocation_id, stock_item_id)` allows one combined reservation per stock item in an allocation. Each line has creation/update timestamps. Foreign keys restrict deletion of referenced users, allocations, and stock items.
+`allocation_items` records selected stock and, after confirmation, a positive `reserved_length_mm` reservation. Draft selections have null reservation lengths and may have no stock selected yet. Length is stored in millimetres as `numeric(12,3)`. A unique index on `(allocation_id, stock_item_id)` allows one combined reservation per stock item in an allocation. Each line has creation/update timestamps. Foreign keys restrict deletion of referenced users, allocations, and stock items.
 
 Color, width, and current location come from the linked stock item. Reservations do not change its measured remaining length. Available length is calculated as remaining length minus reservations belonging to active allocations. The service locks stock items and validates aggregate reservations in a transaction; these table checks alone do not prevent over-allocation or reservations against consumed stock.
 
@@ -20,7 +20,7 @@ The feature defines five tables in `features/allocations/tables/`:
 | `allocation_cuts`         | Full-width drops from a selected stock item, planned length, and per-edge trim snapshot |
 | `allocation_cut_items`    | Requirements assigned to each drop and their quantities                                 |
 
-All dimensions use `numeric(12,3)` millimetres with non-NaN checks. Widths, lengths, trim allowances, and quantities are positive; extra drop allowance may be zero. Requirement quantities default to one and extra drop allowance to zero. Foreign keys restrict deletion. Cut assignments have a composite primary key on cut and requirement, preventing duplicate assignments of the same requirement within a drop.
+All dimensions use `numeric(12,3)` millimetres with non-NaN checks. Unfinished draft business fields may be null. Supplied widths, lengths, trim allowances, and quantities are positive; extra drop allowance may be zero. Draft API writes explicitly preserve missing quantities and allowances as null; submission requires complete values. Foreign keys restrict deletion. Cut assignments have a composite primary key on cut and requirement, preventing duplicate assignments of the same requirement within a drop.
 
 Cuts have unique positive `position` values within each allocation item. Cut items have unique positive positions within each cut, preserving left-to-right layout. Positions are one-based and may have gaps. Each assignment's copies are adjacent. `edge_trim_mm` is the saved allowance for one outside edge, matching the validator; it is not the total of both edges. `planned_length_mm` is validated against the longest assigned adjusted drop. Roll reservations equal summed drop lengths; remnant reservations cover the entire selected piece.
 
@@ -82,11 +82,11 @@ Unit tests cover candidate limits, deterministic selection, cancellation, object
 
 ## Allocation workflow API
 
-All routes are under `/api/allocations`, require an active authenticated user, and allow users, admins, and the owner. Mutations use the existing Origin/CSRF checks and shared rate limiting. There is no draft state: creating an allocation confirms its plan and reserves stock. Reservations affect availability, not measured stock length.
+All routes are under `/api/allocations`, require an active authenticated user, and allow users, admins, and the owner. Mutations use the existing Origin/CSRF checks and shared rate limiting. Direct creation confirms the plan and reserves stock; the draft endpoints below save incomplete plans without reservations. Reservations affect availability, not measured stock length.
 
 | Method | Route                       | Behavior                                                                                                                                      |
 | ------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/allocations`              | Paginated list with optional `search` (order number) and `state` (`active`, `completed`, `cancelled`).                                        |
+| GET    | `/allocations`              | Paginated list with optional `search` (order number) and `state` (`draft`, `active`, `completed`, `cancelled`); defaults exclude drafts.      |
 | GET    | `/allocations/:id`          | Requirements, saved plan/settings/summary, reservations, current stock locations and measurements, completion results, and `needsReplanning`. |
 | POST   | `/allocations/optimize`     | Suggest a plan using a database availability snapshot; no writes.                                                                             |
 | POST   | `/allocations/validate`     | Validate an edited plan against current stock; no writes. Returns `valid`, summary or issues, and selected stock details.                     |
@@ -121,3 +121,36 @@ Creation keys are UUIDs scoped to the submitting user. Completion keys are scope
 The header saves planning settings and the estimated summary, plus completion outcomes and created remnant IDs. Snapshot columns are nullable for older records; no historical settings or measurements are invented. List and detail use repeatable-read transactions. The workflow is designed for one completion form per allocation; partial completion, production priority, correction of finalized records, and substitution of different stock at completion are not implemented.
 
 Contract tests run in the normal backend suite. Database/HTTP cases are part of `npm run test:integration` and use the migrated schema with isolated rows, real sessions, and real PostgreSQL transactions. They cover normal-user access, authoritative previews, concurrent reservation conflicts, same-key replay, stale edits, rollback, measurement entry, retained scraps, and replanning flags. The preview optimizer is stubbed in this workflow suite; actual solver behavior is covered separately by `npm run test:solver`.
+
+## Shared typed drafts
+
+Apply `0010_typed_drafts` before running the draft APIs.
+
+Drafts are new allocations with `is_draft = true` and null `confirmed_at`, sharing the same header and child tables as confirmed allocations. No separate draft table or JSON draft payload is used. Any active employee can resume a draft; the original creator remains recorded. Active allocation edits and cutting-completion forms do not have drafts.
+
+| Method | Path                           | Behavior                                                                   |
+| ------ | ------------------------------ | -------------------------------------------------------------------------- |
+| POST   | `/api/allocations/drafts`      | Create from `{ data }`; UUID `Idempotency-Key` required.                   |
+| GET    | `/api/allocations?state=draft` | List shared drafts by latest update.                                       |
+| GET    | `/api/allocations/:id`         | Draft metadata plus `data`, or confirmed allocation detail.                |
+| PUT    | `/api/allocations/:id/draft`   | Replace form with `{ expectedRevision, data }`.                            |
+| DELETE | `/api/allocations/:id/draft`   | Delete draft header and children with `{ expectedRevision }`; returns 204. |
+| POST   | `/api/allocations/:id/submit`  | Validate and confirm saved form with `{ expectedRevision }`; returns 200.  |
+
+`data` contains `orderNumber`, `requirements`, `settings`, and `plan`. Unfinished business fields may be omitted or null; arrays may be empty. Blank controls should send null. Each requirement must have a unique UUID, and each assignment must identify a requirement within the same draft. A drop may be unassigned or have no assignments yet. Supplied IDs must exist, numeric precision/ranges still apply, and duplicate assignments within a drop are rejected. Full replacement turns omitted fields into null and omitted arrays into empty arrays rather than retaining old values. Missing quantities and allowances are not defaulted. Complete geometry and stock availability are checked on submission, not draft saves.
+
+Requirements use saved positions. Cuts use a whole-plan position in addition to their existing per-stock positions; this preserves interleaved and unassigned drops. Drops selecting the same stock share an allocation item, while each unassigned drop has its own placeholder item. All draft reservation lengths stay null. Header settings retain their existing typed JSON representation, with unfinished fields allowed to be null.
+
+Only non-draft allocations with neither completion nor cancellation timestamps count in reservation totals and shortage queries, including correlated SQL. Drafts never reserve stock and always report `needsReplanning: false`. Validation/optimization previews accept a draft ID plus its current revision; preview input must still satisfy the complete validator/optimizer contract.
+
+All saves lock the header and check its revision. Confirmation revalidates the entire saved plan against current stock under sorted stock locks, calculates reservations and summary, sets `is_draft = false` and `confirmed_at`, and increments the revision atomically. Incomplete forms return 400; unavailable stock and stale revisions return 409. Failed confirmation leaves the draft unchanged. The allocation and requirement IDs are retained. Other internal planning-row IDs may be regenerated when replacing or confirming the plan.
+
+Submission records the prior draft revision. Retrying that revision returns the current allocation without additional reservations, even if it has subsequently progressed through its lifecycle. Other revisions and direct-created allocations return 409. Drafts cannot use active replacement, cancellation, or completion endpoints; confirmed records cannot use draft editing/deletion. Shared contracts expose `allocationRecordSchema` for state-discriminated detail; the existing confirmed-detail schema retains strict fields.
+
+### Migration and database enforcement
+
+`0010_typed_drafts` backfills existing `confirmed_at` from `created_at` and sets `is_draft = false`, preserving completion/cancellation timestamps, revisions, and stock links. Requirement positions follow UUID order per allocation; whole-plan cut positions follow the previous stock-ID/per-stock-position order. Positions become required after backfill, and submitted-draft revisions start null. Receipt metadata and ordering are backfilled in the same migration.
+
+Header checks enforce lifecycle consistency. Deferred constraint triggers enforce the previously required requirement, selected-stock, cut, and assignment fields whenever the parent is confirmed. Child changes write an unchanged parent revision to serialize against concurrent confirmation without incrementing the public revision. The checks inspect final transaction contents, so replacing a confirmed plan remains atomic. Service validation still owns complete settings, geometry, availability, and useful input errors. The hand-written trigger definitions live in the migration, outside Drizzle's generated table metadata.
+
+Unit tests cover partial contracts, lifecycle rules, and SQL filtering out drafts. Database/HTTP tests cover partial typed rows, placeholders, ordering, shared access, idempotency, revisions, concurrent reservation conflicts, deletion, and submission rollback. Raw-SQL tests verify each conditionally required planning field and reject confirming incomplete children. Fixtures copy the real migrated tables and triggers, with no test-only schema alterations.

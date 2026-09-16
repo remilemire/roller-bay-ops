@@ -11,7 +11,7 @@ import { stockReceiptsQuery } from './stock-receipts.persistence.js';
 
 type StockReceiptsDatabase = Pick<
   DatabaseService['db'],
-  'select' | 'insert' | 'transaction'
+  'select' | 'insert' | 'update' | 'delete' | 'transaction'
 >;
 export type StockReceiptRecord = typeof stockReceipts.$inferSelect;
 export type StockReceiptItemRecord = typeof stockReceiptItems.$inferSelect;
@@ -51,7 +51,7 @@ export class StockReceiptsRepository {
       .insert(stockReceipts)
       .values(input)
       .onConflictDoNothing({
-        target: [stockReceipts.submittedByUserId, stockReceipts.idempotencyKey],
+        target: [stockReceipts.createdByUserId, stockReceipts.idempotencyKey],
       })
       .returning();
     return row;
@@ -63,23 +63,27 @@ export class StockReceiptsRepository {
       .from(stockReceipts)
       .where(
         and(
-          eq(stockReceipts.submittedByUserId, userId),
+          eq(stockReceipts.createdByUserId, userId),
           eq(stockReceipts.idempotencyKey, key),
         ),
-      );
+      )
+      .for('update');
     return row;
   }
 
-  async findById(id: string) {
-    const [row] = await this.db
+  async findById(id: string, lock = false) {
+    const query = this.db
       .select()
       .from(stockReceipts)
       .where(eq(stockReceipts.id, id));
+    const [row] = await (lock ? query.for('update') : query);
     return row;
   }
 
   createItems(values: (typeof stockReceiptItems.$inferInsert)[]) {
-    return this.db.insert(stockReceiptItems).values(values).returning();
+    return values.length
+      ? this.db.insert(stockReceiptItems).values(values).returning()
+      : Promise.resolve([]);
   }
 
   findItems(id: string) {
@@ -87,21 +91,61 @@ export class StockReceiptsRepository {
       .select()
       .from(stockReceiptItems)
       .where(eq(stockReceiptItems.stockReceiptId, id))
-      .orderBy(asc(stockReceiptItems.id));
+      .orderBy(asc(stockReceiptItems.position));
+  }
+
+  async update(
+    id: string,
+    values: Partial<typeof stockReceipts.$inferInsert>,
+    incrementRevision = true,
+  ) {
+    const [row] = await this.db
+      .update(stockReceipts)
+      .set({
+        ...values,
+        updatedAt: new Date(),
+        ...(incrementRevision
+          ? { revision: sql`${stockReceipts.revision} + 1` }
+          : {}),
+      })
+      .where(eq(stockReceipts.id, id))
+      .returning();
+    return row!;
+  }
+
+  deleteItems(id: string) {
+    return this.db
+      .delete(stockReceiptItems)
+      .where(eq(stockReceiptItems.stockReceiptId, id));
+  }
+
+  delete(id: string) {
+    return this.db.delete(stockReceipts).where(eq(stockReceipts.id, id));
   }
 
   async list(query: StockReceiptQuery) {
-    const where = query.search
+    const search = query.search
       ? ilike(
           stockReceipts.purchaseOrderNumber,
           `%${query.search.replace(/[\\%_]/g, '\\$&')}%`,
         )
       : undefined;
+    const where = and(
+      search,
+      eq(stockReceipts.isDraft, query.state === 'draft'),
+    );
     const items = await this.db
       .select()
       .from(stockReceipts)
       .where(where)
-      .orderBy(desc(stockReceipts.submittedAt), desc(stockReceipts.id))
+      .orderBy(
+        desc(
+          query.state === 'draft'
+            ? stockReceipts.updatedAt
+            : stockReceipts.submittedAt,
+        ),
+        desc(stockReceipts.id),
+      )
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
     const [result] = await this.db
