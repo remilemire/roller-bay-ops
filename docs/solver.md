@@ -2,9 +2,9 @@
 
 `apps/solver` is an independently runnable Python HTTP app. It owns strict request validation, execution capacity, solver subprocesses, and cancellation. Its `SolverProvider` interface currently has an `OrToolsProvider` implementation using OR-Tools' Python API; the Nest backend does not install Python, start the service, or locate worker scripts.
 
-`apps/api/src/solver` is the top-level Nest wrapper. `SolverModule.register({ baseUrl, apiKey })` provides an injectable `SolverClient`. It validates requests, sends HTTP calls, maps transport errors, and verifies returned assignments against the submitted mathematical model. It has no fabric/allocation types. The module is not yet imported by an application feature; the fabric optimizer remains future work.
+`apps/api/src/solver` is the top-level Nest wrapper. `SolverModule.register({ baseUrl, apiKey })` provides an injectable `SolverClient`. It validates requests, sends HTTP calls, maps transport errors, and verifies returned assignments against the submitted mathematical model. It has no fabric/allocation types. The cutting optimizer receives a client directly; the module is not yet registered in the running API because no allocation endpoint has been added.
 
-`SOLVER_PROVIDER` selects the implementation inside the Python service and defaults to `or-tools`. The backend knows only the generic solving contract. Additional providers must implement that same contract; fabric-specific optimization belongs in a future domain component.
+`SOLVER_PROVIDER` selects the implementation inside the Python service and defaults to `or-tools`. The backend knows only the generic solving contract. Additional providers must implement that same contract; fabric-specific optimization lives in the allocations feature.
 
 Python fields and attributes use snake_case. Pydantic aliases translate camelCase JSON at HTTP and subprocess boundaries; wire requests continue to require camelCase.
 
@@ -35,7 +35,7 @@ Run a single Uvicorn worker per service instance. Concurrency is enforced by the
 
 The model accepts bounded integer variables, linear constraints (`<=`, `==`, `>=`), optional Boolean enforcement literals, and an optional linear minimize/maximize objective. Enforcement lists are conjunctions; Boolean domains have bounds within 0 and 1. Omitting the objective requests feasibility only.
 
-This is an app-agnostic subset of integer constraint solving, not a universal optimization framework. Max/product equalities, scheduling constraints, multiple objectives, and hints are not exposed yet. A future fabric optimizer will translate requirements into supported solver models and validate its cutting plans separately.
+This is an app-agnostic subset of integer constraint solving, not a universal optimization framework. Max/product equalities, scheduling constraints, multiple objectives, and hints are not exposed yet. The bounded cutting optimizer translates requirements into supported solver models and validates its cutting plans separately; see [allocations](allocations.md).
 
 All numeric model values must be safe JavaScript integers. A conservative sum of absolute term bounds must also fit that range. Variable names are unique ASCII identifiers beginning with a letter, up to 100 characters. Duplicate expression terms must be combined; unknown references and non-Boolean enforcement variables fail validation in both the wrapper and service. The service validates independently even if callers bypass Nest.
 

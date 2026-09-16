@@ -6,8 +6,8 @@ import type {
   CuttingLeftover,
   CuttingPlanSummary,
   ResolvedCuttingPlan,
-  ResolvedDrop,
 } from './cutting-plan.types.js';
+import { dropOffcuts, isReusableOffcut } from './cutting-offcuts.js';
 import {
   toLengthUnits,
   toMillimetres,
@@ -34,44 +34,18 @@ interface AreaTotals {
   waste: bigint;
 }
 
-function dropOffcuts(drop: ResolvedDrop, trim: bigint): Offcut[] {
-  const stockItemId = drop.stock.id;
-  const dropIndex = drop.index;
-  const occupiedWidth = drop.assignments.reduce(
-    (total, item) => total + item.width * BigInt(item.quantity),
-    0n,
-  );
-  return [
-    ...drop.assignments.map((item): Offcut => ({
-      stockItemId,
-      dropIndex,
-      kind: 'shortening',
-      width: item.width,
-      length: drop.length - item.length,
-      quantity: item.quantity,
-    })),
-    {
-      stockItemId,
-      dropIndex,
-      kind: 'left-edge',
-      width: trim,
-      length: drop.length,
-      quantity: 1,
-    },
-    {
-      stockItemId,
-      dropIndex,
-      kind: 'right-edge',
-      width: toLengthUnits(drop.stock.widthMm) - trim - occupiedWidth,
-      length: drop.length,
-      quantity: 1,
-    },
-  ];
-}
-
 function calculateOffcuts(plan: ResolvedCuttingPlan): Offcut[] {
-  const offcuts = plan.drops.flatMap((drop) =>
-    dropOffcuts(drop, toLengthUnits(plan.settings.edgeTrimMm)),
+  const offcuts: Offcut[] = plan.drops.flatMap((drop) =>
+    dropOffcuts(
+      toLengthUnits(drop.stock.widthMm),
+      drop.length,
+      drop.assignments,
+      toLengthUnits(plan.settings.edgeTrimMm),
+    ).map((offcut) => ({
+      ...offcut,
+      stockItemId: drop.stock.id,
+      dropIndex: drop.index,
+    })),
   );
   for (const { stock, plannedLength } of plan.stockUsage) {
     if (stock.isRemnant)
@@ -97,7 +71,7 @@ function classifyOffcuts(
     ...identity,
     width,
     length,
-    reusable: width >= minWidth && length >= minLength,
+    reusable: isReusableOffcut(width, length, minWidth, minLength),
   }));
 }
 

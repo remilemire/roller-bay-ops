@@ -32,7 +32,7 @@ Migration `0008_add_allocations` creates the five allocation tables. No allocati
 
 ## Cutting-plan validation
 
-`validateCuttingPlan(context, plan)` is a pure backend function. Shared Zod contracts are exported from `@roller-bay/shared/allocations`. The context contains requirements, an application-supplied stock availability snapshot, and explicit universal trim and minimum reusable-remnant dimensions. The plan contains ordered full-width drops and their ordered requirement quantities. No fabric solver is implemented; the app-agnostic [Solver service and backend wrapper](solver.md) are separate from allocations.
+`validateCuttingPlan(context, plan)` is a pure backend function. Shared Zod contracts are exported from `@roller-bay/shared/allocations`. The context contains requirements, an application-supplied stock availability snapshot, and explicit universal trim and minimum reusable-remnant dimensions. The plan contains ordered full-width drops and their ordered requirement quantities. The bounded cutting optimizer described below proposes plans; the app-agnostic [Solver service and backend wrapper](solver.md) are separate from allocations.
 
 The backend implementation and its tests live in `features/allocations/cutting-plan/`. The validator follows three stages: resolve inputs, check rules, then calculate a summary. Resolution parses the inputs, rejects duplicate or unknown IDs, and produces a named `ResolvedCuttingPlan` containing stock/requirement references, exact dimensions, and planned lengths per stock. Resolution failures return issues without forwarding a partial plan or generating secondary geometry errors.
 
@@ -48,4 +48,34 @@ Leftovers are reconstructed as left/right strips, shortening offcuts, and remnan
 
 All geometry and area accounting use integer thousandths of a millimetre and `bigint`. Successful results include reservations, leftover rectangles, drop/stock/new-roll counts, and exact decimal-string areas in square millimetres. Input area equals required cutting-piece area (including allowance), reusable area, and waste area. Uncut roll balance is excluded; selected remnants include their whole area and classify the tail. Invalid results contain structured issue codes and paths and no usable summary. Solver-provided totals and unsupported layout fields are rejected rather than trusted.
 
-Input limits are 1,000 requirement lines, 10,000 candidate stock items, 10,000 drops, 1,000 entries per drop, and quantity 10,000 per entry. Dimensions retain the stock contract's maximum of 999,999,999.999 mm. These are validation bounds, not solver performance guarantees. A future integer constraint solving adapter must independently guard its signed-64-bit arithmetic; this validator's exact `bigint` accounting has no such solver limitation.
+Input limits are 1,000 requirement lines, 10,000 candidate stock items, 10,000 drops, 1,000 entries per drop, and quantity 10,000 per entry. Dimensions retain the stock contract's maximum of 999,999,999.999 mm. These are validation bounds, not solver performance guarantees. The integer constraint solving adapter independently guards its safe-integer arithmetic; this validator's exact `bigint` accounting has no such solver limitation.
+
+## Bounded cutting optimization
+
+`features/allocations/optimizer/` contains the concrete `CuttingPlanOptimizer`, which receives the generic `SolverClient` directly. It accepts an authoritative `CuttingContext` snapshot and returns proposed cuts without writing reservations. The Python service retains the mathematical solver provider interface; fabric-specific model construction stays in the backend. No allocation endpoint or application-module registration has been added.
+
+The optimizer supports at most 100 individual blinds, counting quantities. It validates schemas, normalized identifier uniqueness, and reservation totals before generating candidates. Consumed stock and reserved remnants are excluded, and roll reservations reduce available length. A requirement that fits no eligible stock proves infeasibility without calling the solver. Otherwise aggregate stock capacity is checked by the mathematical model.
+
+### Patterns and mathematical model
+
+A pattern is one full-width drop containing quantities of compatible requirements. Patterns respect fixed orientation, both outside trims, and the maximum adjusted requirement length. Single-blind patterns seed the search, followed by greedy combinations ordered by descending adjusted length and width, then bounded enumeration. Width groups take turns within each fabric color. Each pattern gets a stock candidate before receiving another; remnants and used rolls are considered before new rolls when candidate selection is limited.
+
+Pattern generation and stock assignment selection have internal limits of 2,000 patterns, 100,000 generation steps, and 6,000 stock-pattern assignments, divided across required fabric colors. Generation yields periodically for cancellation. These limits intentionally trade exhaustive coverage for bounded work; 100 blinds is an input limit, not a guarantee of finding a plan within the search budget.
+
+The integer model selects counts of each stock-pattern assignment, requires exact requirement quantities, and enforces aggregate available length. Boolean variables track selected stock. Selected remnants account for their entire remaining length: a tail is calculated after all drops, and its waste is charged once, only when it fails the inclusive reuse thresholds. Unselected remnants have no modeled tail. Drop scoring and final accounting share pure offcut geometry and reuse classification in `cutting-plan/cutting-offcuts.ts`. New offcuts cannot feed additional drops within the same plan.
+
+All dimensions and area coefficients are constructed with exact integer arithmetic. Length and area coefficients are divided by exact common factors before conversion to solver numbers. Unsafe integer ranges raise an explicit error rather than rounding. Models exceeding the existing variable, constraint, or request-size limits return `unknown` with reason `model_limit`.
+
+### Objectives, results, and deadlines
+
+The optimizer minimizes, in order: discarded area, new rolls opened, full-width drops, and stock items handled. Reusable offcuts do not count as waste; therefore this objective may create reusable scraps to reduce discarded material. There is no additional preference for remnant consumption beyond these objectives.
+
+A separate solve is used for each nonconstant tie-breaker. Only an objective proven optimal within the generated model is locked before advancing. A feasible-but-unproven result ends refinement. `maxTimeSeconds` defaults to five seconds, accepts up to 60 seconds, and is shared across passes using reported solver time. Candidate generation is separately bounded; network and worker-startup overhead add elapsed time. `AbortSignal` cancellation is observed during generation and solving. A later unknown result or solver deadline preserves an already validated incumbent.
+
+A `feasible` result contains a complete `CuttingPlan` and independently validated `CuttingPlanSummary`. It makes no global-optimality claim. `infeasible` is returned only for a necessary feasibility failure or solver proof after complete pattern and stock-assignment coverage. When truncated candidates or the search deadline prevent establishing a result, the optimizer returns `unknown` with reason `search_limit`. It never returns a partial order. Invalid input/options, cancellation, unsafe numbers, invalid models/solutions, and operational solver failures remain exceptions; a solver deadline without an incumbent returns `unknown`.
+
+Model building returns explicit assignment metadata for decoding. Each returned plan passes `validateCuttingPlan()`, and all four modeled objectives are compared against its independently calculated summary. Future persistence must still revalidate availability under stock locks.
+
+### Verification
+
+Unit tests cover candidate limits, deterministic selection, cancellation, objective locking, search budgets, result/error handling, and numeric/model limits. `npm run test:solver --workspace=@roller-bay/api` runs serial HTTP integration tests against the standalone solver, including the allocator example, a 100-blind order, and tiny exhaustive reference searches that independently partition blinds and try stock assignments. These compare the complete objective priority order, including remnant-tail accounting, decimal allowances, and reservations.

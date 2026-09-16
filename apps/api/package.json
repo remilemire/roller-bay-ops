@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test:solver": "tsc -p tsconfig.test.json && SOLVER_INTEGRATION_TESTS=1 node --env-file-if-exists=../solver/.env --test .test-dist/solver/solver.integration.test.js"
+    "test:solver": "tsc -p tsconfig.test.json && SOLVER_INTEGRATION_TESTS=1 node --env-file-if-exists=../solver/.env --test --test-concurrency=1 .test-dist/solver/solver.integration.test.js .test-dist/features/allocations/optimizer/cutting-plan-optimizer.integration.test.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
