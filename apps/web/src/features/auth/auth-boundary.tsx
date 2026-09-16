@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError, SESSION_EXPIRED_EVENT } from '@/lib/api';
 import { ErrorNotice, Loading } from '@/components/ui/feedback';
+import { useHydrated } from '@/lib/use-hydrated';
 import { clearPrivateData, sessionKey, sessionQuery } from './auth.queries';
 export function SessionEvents() {
   const client = useQueryClient();
@@ -28,12 +29,16 @@ export function SessionEvents() {
   return null;
 }
 export function AuthBoundary({ children }: { children: ReactNode }) {
+  const hydrated = useHydrated();
   const session = useQuery(sessionQuery());
   const router = useRouter();
   useEffect(() => {
     if (session.data === null) router.replace('/login');
   }, [session.data, router]);
-  if (session.isPending || session.data === null) return <Loading />;
+  // SessionEvents may fill the cache before this Suspense subtree hydrates.
+  // Match the server's loading screen until hydration has finished.
+  if (!hydrated || session.isPending || session.data === null)
+    return <Loading />;
   // Keep mounted forms through transient refetch failures when a session is
   // already known; explicit loss of access still closes the workspace.
   if (

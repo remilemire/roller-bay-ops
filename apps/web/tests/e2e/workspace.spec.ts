@@ -1,5 +1,28 @@
 import { test, expect } from '@playwright/test';
 import { mockApi, ids } from './fixtures';
+test('session bootstrap and reload hydrate without recoverable React errors', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (
+      message.type() === 'error' &&
+      /hydration|Minified React error #(?:418|423)/i.test(message.text())
+    )
+      errors.push(message.text());
+  });
+  await mockApi(page);
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Welcome back, Jamie.' }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome back, Jamie.' }),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
 test('workspace renders real-contract data and persists accessible light/dark preferences', async ({
   page,
 }, testInfo) => {

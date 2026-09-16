@@ -1,16 +1,11 @@
 'use client';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useSyncExternalStore } from 'react';
-const subscribe = () => () => {};
+import { useHydrated } from '@/lib/use-hydrated';
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
   // The server cannot know the saved theme; defer selection state until hydration.
-  const mounted = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
+  const mounted = useHydrated();
   return (
     <div className="theme-switch" role="group" aria-label="Appearance">
       {[

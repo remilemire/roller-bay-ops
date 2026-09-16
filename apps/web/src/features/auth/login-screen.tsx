@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import type { LoginErrorCode } from '@roller-bay/shared/auth';
 import { API_URL } from '@/lib/api';
+import { useHydrated } from '@/lib/use-hydrated';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
@@ -22,6 +23,7 @@ const loginErrors: Record<LoginErrorCode, string> = {
 };
 
 export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
+  const hydrated = useHydrated();
   const session = useQuery(sessionQuery());
   const router = useRouter();
   useEffect(() => {
@@ -47,7 +49,7 @@ export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
           <br />
           All in one thoughtfully connected workspace.
         </p>
-        {session.error && <ErrorNotice error={session.error} />}
+        {hydrated && session.error && <ErrorNotice error={session.error} />}
         {loginError && (
           <div className="notice notice-error" role="alert">
             {loginErrors[loginError]}
