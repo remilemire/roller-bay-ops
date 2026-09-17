@@ -369,8 +369,16 @@ test('catalog editing normalizes color codes and retains thousandth-mm thickness
 }) => {
   const state = await mockApi(page);
   await page.goto('/fabric-catalog');
-  const edit = page.getByRole('button', { name: 'Edit C1-000', exact: true });
-  await edit.click();
+  // Colors load once their material branch is opened.
+  await page
+    .getByRole('button', { name: 'Linen voile material', exact: true })
+    .click();
+  await page
+    .getByRole('button', {
+      name: 'Edit color Textile House / Linen voile / C1-000',
+      exact: true,
+    })
+    .click();
   await page.getByLabel('Color code', { exact: true }).fill('c2-001');
   await page.getByLabel('Thickness (mm)').fill('0.357');
   await page
@@ -383,13 +391,13 @@ test('catalog editing normalizes color codes and retains thousandth-mm thickness
     materialId: ids.material,
     thicknessMm: 0.357,
   });
-  await expect(
-    page.getByRole('cell', { name: 'C2-001', exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Edit C2-001', exact: true }).click();
+  const edited = page.getByRole('button', {
+    name: 'Edit color Textile House / Linen voile / C2-001',
+    exact: true,
+  });
+  await expect(edited).toBeVisible();
+  await edited.click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(
-    page.getByRole('button', { name: 'Edit C2-001', exact: true }),
-  ).toBeFocused();
+  await expect(edited).toBeFocused();
 });

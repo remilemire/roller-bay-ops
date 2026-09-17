@@ -15,8 +15,15 @@ export async function listCatalog(
   search: string,
   page: number,
   signal?: AbortSignal,
+  parentId?: string,
 ) {
-  const suffix = queryString({ search, page, pageSize: 25 });
+  const suffix = queryString({
+    search,
+    page,
+    pageSize: 25,
+    ...(parentId && kind === 'materials' ? { manufacturerId: parentId } : {}),
+    ...(parentId && kind === 'colors' ? { materialId: parentId } : {}),
+  });
   if (kind === 'colors') {
     const data = await api(
       `/fabric-catalog/colors${suffix}`,
@@ -25,7 +32,7 @@ export async function listCatalog(
     );
     return {
       ...data,
-      items: data.items.map((i) => ({
+      items: data.items.map((i): CatalogRow => ({
         id: i.id,
         name: i.code,
         parentId: i.materialId,
@@ -43,7 +50,7 @@ export async function listCatalog(
     );
     return {
       ...data,
-      items: data.items.map((i) => ({
+      items: data.items.map((i): CatalogRow => ({
         id: i.id,
         name: i.name,
         parentId: i.manufacturerId,
@@ -60,7 +67,7 @@ export async function listCatalog(
   );
   return {
     ...data,
-    items: data.items.map((i) => ({
+    items: data.items.map((i): CatalogRow => ({
       id: i.id,
       name: i.name,
       parentId: '',

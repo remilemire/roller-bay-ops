@@ -1,10 +1,24 @@
 'use client';
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  infiniteQueryOptions,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, SwatchBook } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Factory,
+  Layers,
+  SwatchBook,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/field';
@@ -14,9 +28,9 @@ import {
   ErrorNotice,
   Loading,
   PageHeading,
-  Pagination,
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
+import styles from '@/components/ui/tree.module.css';
 import { useListParams } from '@/lib/use-list-params';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -39,170 +53,114 @@ const formSchema = z.object({
   parentId: z.string(),
   thickness: z.string(),
 });
+type EditingCatalog = {
+  kind: CatalogKind;
+  row?: CatalogRow;
+  parent?: CatalogRow;
+};
+const singular = {
+  manufacturers: 'manufacturer',
+  materials: 'material',
+  colors: 'color',
+};
+const treeQuery = (kind: CatalogKind, parentId: string, search: string) =>
+  infiniteQueryOptions({
+    queryKey: [...catalogKey, 'tree', kind, parentId, search],
+    initialPageParam: 1,
+    queryFn: ({ signal, pageParam }) =>
+      listCatalog(kind, search, pageParam, signal, parentId),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+  });
 export function CatalogScreen() {
   const params = useListParams();
-  const kind: CatalogKind =
-    params.get('view') === 'materials'
-      ? 'materials'
-      : params.get('view') === 'manufacturers'
-        ? 'manufacturers'
-        : 'colors';
-  const query = useQuery({
-    queryKey: [...catalogKey, kind, params.search, params.page],
-    queryFn: ({ signal }) =>
-      listCatalog(kind, params.search, params.page, signal),
-  });
   const canManage = useCanManage();
-  const units = useMeasurementUnits();
-  const [editing, setEditing] = useState<CatalogRow | 'new' | null>(null);
-  const [deleting, setDeleting] = useState<CatalogRow | null>(null);
+  const [editing, setEditing] = useState<EditingCatalog | null>(null);
+  const [deleting, setDeleting] = useState<{
+    kind: CatalogKind;
+    row: CatalogRow;
+  } | null>(null);
   const client = useQueryClient();
+  const query = useInfiniteQuery(treeQuery('manufacturers', '', params.search));
   const remove = useMutation({
-    mutationFn: () => deleteCatalog(kind, deleting!.id),
+    mutationFn: () => deleteCatalog(deleting!.kind, deleting!.row.id),
     onSuccess: async () => {
       setDeleting(null);
       await client.invalidateQueries({ queryKey: catalogKey });
     },
   });
+  const actions: TreeActions = {
+    canManage,
+    edit: setEditing,
+    remove: (kind, row) => {
+      remove.reset();
+      setDeleting({ kind, row });
+    },
+  };
   return (
     <>
       <PageHeading title="Fabric catalog">
         {canManage && (
-          <Button onClick={() => setEditing('new')}>
+          <Button onClick={() => setEditing({ kind: 'manufacturers' })}>
             <Plus size={17} />
-            Add{' '}
-            {kind === 'colors'
-              ? 'color'
-              : kind === 'materials'
-                ? 'material'
-                : 'manufacturer'}
+            Add manufacturer
           </Button>
         )}
       </PageHeading>
       <SearchToolbar
-        key={`${kind}-${params.search}`}
+        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
-        placeholder="Search the catalog…"
-      >
-        <div className="tabs">
-          {(['colors', 'materials', 'manufacturers'] as const).map((tab) => (
-            <button
-              key={tab}
-              className={`tab ${tab === kind ? 'active' : ''}`}
-              onClick={() => params.set({ view: tab, search: '' })}
-            >
-              {tab[0]!.toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-      </SearchToolbar>
-      <section className="panel">
+        placeholder="Search manufacturers…"
+      />
+      <section className="panel" aria-label="Catalog hierarchy">
         {query.isPending ? (
           <Loading />
         ) : query.error ? (
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
-        ) : !query.data.items.length ? (
-          <Empty title="Your catalog starts here">
-            Add manufacturers, materials, then their fabric colors.
+        ) : !query.data.pages[0]!.total ? (
+          <Empty
+            title={
+              params.search
+                ? 'No matching manufacturers'
+                : 'No manufacturers yet'
+            }
+          >
+            Add a manufacturer, then its materials and colors.
           </Empty>
         ) : (
-          <div className="data-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{kind === 'colors' ? 'Color code' : 'Name'}</th>
-                  {kind !== 'manufacturers' && (
-                    <th>
-                      {kind === 'colors'
-                        ? 'Material / manufacturer'
-                        : 'Manufacturer'}
-                    </th>
-                  )}
-                  {kind === 'colors' && <th>Thickness</th>}
-                  {canManage && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.items.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div className="cell-leading">
-                        <span className="cell-icon">
-                          <SwatchBook size={17} />
-                        </span>
-                        <strong>{row.name}</strong>
-                      </div>
-                    </td>
-                    {kind !== 'manufacturers' && (
-                      <td>
-                        {row.parent}
-                        {kind === 'colors' && <small>{row.manufacturer}</small>}
-                      </td>
-                    )}
-                    {kind === 'colors' && (
-                      <td>
-                        {row.thicknessMm !== null &&
-                          fieldLabel(units, 'thickness', row.thicknessMm)}
-                      </td>
-                    )}
-                    {canManage && (
-                      <td>
-                        <div className="inline-actions">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Edit ${row.name}`}
-                            onClick={() => setEditing(row)}
-                          >
-                            <Pencil size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Delete ${row.name}`}
-                            onClick={() => {
-                              remove.reset();
-                              setDeleting(row);
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {query.data && (
-          <Pagination
-            page={params.page}
-            total={query.data.total}
-            onPage={(page) => params.set({ page })}
+          <CatalogTree
+            kind="manufacturers"
+            rows={query.data.pages.flatMap((page) => page.items)}
+            actions={actions}
           />
         )}
+        {query.hasNextPage && (
+          <Button
+            variant="ghost"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            {query.isFetchingNextPage ? 'Loading…' : 'Load more manufacturers'}
+          </Button>
+        )}
       </section>
-      {editing && (
-        <CatalogEditor
-          kind={kind}
-          row={editing === 'new' ? undefined : editing}
-          close={() => setEditing(null)}
-        />
-      )}
+      {editing && <CatalogEditor {...editing} close={() => setEditing(null)} />}
       <Dialog
         open={!!deleting}
         onOpenChange={(open) => {
           if (!open && !remove.isPending) setDeleting(null);
         }}
-        title={`Delete ${deleting?.name ?? ''}?`}
+        title={`Delete ${deleting?.row.name ?? ''}?`}
         description="Records in use cannot be deleted."
       >
         {remove.error && <ErrorNotice error={remove.error} />}
         <div className="form-actions">
-          <Button variant="outline" onClick={() => setDeleting(null)}>
+          <Button
+            variant="outline"
+            disabled={remove.isPending}
+            onClick={() => setDeleting(null)}
+          >
             Keep record
           </Button>
           <Button
@@ -217,13 +175,187 @@ export function CatalogScreen() {
     </>
   );
 }
+type TreeActions = {
+  canManage: boolean;
+  edit: (value: EditingCatalog) => void;
+  remove: (kind: CatalogKind, row: CatalogRow) => void;
+};
+function CatalogTree({
+  kind,
+  rows,
+  actions,
+}: {
+  kind: CatalogKind;
+  rows: CatalogRow[];
+  actions: TreeActions;
+}) {
+  return (
+    <ul className={styles.tree}>
+      {rows.map((row) => (
+        <CatalogNode key={row.id} kind={kind} row={row} actions={actions} />
+      ))}
+    </ul>
+  );
+}
+function CatalogNode({
+  kind,
+  row,
+  actions,
+}: {
+  kind: CatalogKind;
+  row: CatalogRow;
+  actions: TreeActions;
+}) {
+  const units = useMeasurementUnits();
+  // Every open branch is a request on load and after each save. Materials
+  // start closed so a full catalog stays well inside the API rate limit.
+  const [expanded, setExpanded] = useState(kind === 'manufacturers');
+  const childKind =
+    kind === 'manufacturers'
+      ? 'materials'
+      : kind === 'materials'
+        ? 'colors'
+        : null;
+  const Icon =
+    kind === 'manufacturers'
+      ? Factory
+      : kind === 'materials'
+        ? Layers
+        : SwatchBook;
+  const address = [kind === 'colors' && row.manufacturer, row.parent, row.name]
+    .filter(Boolean)
+    .join(' / ');
+  return (
+    <li className={styles.node}>
+      <div className={styles.row}>
+        {childKind ? (
+          <button
+            className={styles.label}
+            aria-label={`${row.name} ${singular[kind]}`}
+            aria-expanded={expanded}
+            aria-controls={`children-${row.id}`}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <Icon size={18} />
+            <strong>{row.name}</strong>
+            <span className={styles.kind}>{singular[kind]}</span>
+          </button>
+        ) : (
+          <div className={`${styles.label} ${styles.leaf}`}>
+            <Icon size={18} />
+            <strong>{row.name}</strong>
+            <span className={styles.kind}>
+              color
+              {row.thicknessMm !== null &&
+                ` · ${fieldLabel(units, 'thickness', row.thicknessMm)}`}
+            </span>
+          </div>
+        )}
+        {actions.canManage && (
+          <div className={styles.actions}>
+            {childKind && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setExpanded(true);
+                  actions.edit({ kind: childKind, parent: row });
+                }}
+                aria-label={`Add ${singular[childKind]} to ${address}`}
+              >
+                <Plus size={15} />
+                Add {singular[childKind]}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Edit ${singular[kind]} ${address}`}
+              onClick={() => actions.edit({ kind, row })}
+            >
+              <Pencil size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Delete ${singular[kind]} ${address}`}
+              onClick={() => actions.remove(kind, row)}
+            >
+              <Trash2 size={15} />
+            </Button>
+          </div>
+        )}
+      </div>
+      {childKind && (
+        <div
+          id={`children-${row.id}`}
+          hidden={!expanded}
+          className={styles.children}
+        >
+          {expanded && (
+            <CatalogChildren kind={childKind} parent={row} actions={actions} />
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+function CatalogChildren({
+  kind,
+  parent,
+  actions,
+}: {
+  kind: CatalogKind;
+  parent: CatalogRow;
+  actions: TreeActions;
+}) {
+  const query = useInfiniteQuery(treeQuery(kind, parent.id, ''));
+  if (query.isPending) return <Loading />;
+  return (
+    <>
+      {query.error && (
+        <ErrorNotice
+          error={query.error}
+          retry={() =>
+            void (query.isFetchNextPageError
+              ? query.fetchNextPage()
+              : query.refetch())
+          }
+        />
+      )}
+      {query.data &&
+        (query.data.pages[0]!.total === 0 ? (
+          <p className={styles.empty}>No {kind} yet.</p>
+        ) : (
+          <CatalogTree
+            kind={kind}
+            rows={query.data.pages.flatMap((page) => page.items)}
+            actions={actions}
+          />
+        ))}
+      {query.hasNextPage && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          {query.isFetchingNextPage ? 'Loading…' : `Load more ${kind}`}
+        </Button>
+      )}
+    </>
+  );
+}
 function CatalogEditor({
   kind,
   row,
+  parent,
   close,
 }: {
   kind: CatalogKind;
   row?: CatalogRow;
+  parent?: CatalogRow;
   close: () => void;
 }) {
   // Pin the units this form opened with: a session refetch must not relabel
@@ -234,7 +366,7 @@ function CatalogEditor({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: row?.name ?? '',
-      parentId: row?.parentId ?? '',
+      parentId: row?.parentId ?? parent?.id ?? '',
       thickness: fieldInput(units, 'thickness', row?.thicknessMm ?? null),
     },
   });
@@ -264,7 +396,7 @@ function CatalogEditor({
       onOpenChange={(open) => {
         if (!open && !mutation.isPending) close();
       }}
-      title={`${row ? 'Edit' : 'Add'} ${kind === 'colors' ? 'color' : kind === 'materials' ? 'material' : 'manufacturer'}`}
+      title={`${row ? 'Edit' : 'Add'} ${singular[kind]}`}
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
         <div className="stack">
@@ -275,12 +407,21 @@ function CatalogEditor({
             required
             maxLength={kind === 'colors' ? 10 : 120}
           />
-          {kind !== 'manufacturers' && (
+          {parent && (
+            <p>
+              {kind === 'colors' ? 'Material' : 'Manufacturer'}:{' '}
+              {parent.parent ? `${parent.parent} / ` : ''}
+              {parent.name}
+            </p>
+          )}
+          {/* New records take the branch they were added from; existing
+              ones can move, because the API accepts a new parent on PATCH. */}
+          {kind !== 'manufacturers' && row && (
             <Lookup
               label={kind === 'colors' ? 'Material' : 'Manufacturer'}
               value={values.parentId}
               onChange={(v) => form.setValue('parentId', v)}
-              selectedLabel={row?.parent}
+              selectedLabel={row.parent}
               queryKey={[...catalogKey, parentKind]}
               load={async (search, page, signal) => {
                 const data = await listCatalog(

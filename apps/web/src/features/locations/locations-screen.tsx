@@ -59,7 +59,7 @@ import {
   type LocationKind,
   type LocationRow,
 } from './locations.api';
-import styles from './locations-screen.module.css';
+import styles from '@/components/ui/tree.module.css';
 const formSchema = z.object({
   name: z.string().trim().min(1, 'Enter a name or label.'),
   parentId: z.string(),

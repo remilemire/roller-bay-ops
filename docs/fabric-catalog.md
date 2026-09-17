@@ -48,6 +48,12 @@ List responses contain `items`, `total`, `page`, and `pageSize`. `total` counts 
 
 All records include `id` and `createdAt` as an ISO timestamp. Material responses include `manufacturerId` and `manufacturerName`. Color responses include `materialId`, `materialName`, `manufacturerId`, and `manufacturerName`. Shared request and response schemas are exported through `@roller-bay/shared/fabric-catalog`.
 
+## Browsing in the workspace
+
+The catalog page shows one tree: manufacturers, their materials, then each material's colors with thickness in the user's unit. Children load per branch through the `manufacturerId` and `materialId` list filters, 25 at a time with a load-more control. Manufacturers open by default; materials start closed so a large catalog does not request every color list on load and after each save. Search matches manufacturer names only.
+
+Admins add a material or color from its parent row, which fixes the new record's parent. Editing a material or color can still move it to another parent. The catalog sorts by name or code, so unlike [locations](locations.md) there is no drag reordering.
+
 ## Errors and deletion
 
 - 400: invalid input, UUID, query, or empty PATCH.
