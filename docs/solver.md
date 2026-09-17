@@ -18,13 +18,13 @@ apps/solver/.venv/bin/python -m pip install -r apps/solver/requirements-dev.txt
 cp apps/solver/.env.example apps/solver/.env
 ```
 
-Set `SOLVER_API_KEY` in that ignored file to a random value of at least 32 characters. Supply the same key to the backend module's `apiKey` option and set its `baseUrl` to `http://127.0.0.1:8001`. The local service environment has already been created in this workspace; do not overwrite it with the example unless reconfiguring. The key is not committed.
+Set `SOLVER_API_KEY` in that ignored file to a random value of at least 32 characters. Set the same `SOLVER_API_KEY` and `SOLVER_URL=http://127.0.0.1:8001` in `apps/api/.env`. If either environment file already exists, update it instead of copying over it. Keys belong only in ignored environment files.
 
 ```sh
 npm run dev --workspace=@roller-bay/solver
 ```
 
-The root `npm run dev` also includes the service through the workspace scripts. `SOLVER_HOST` defaults to `127.0.0.1`; `SOLVER_PORT` defaults to `8001`. The app loads its own `.env`. Production can install `requirements.txt` without development tools and run `python -m service.main` from `apps/solver`. Python 3.14/macOS ARM64 was used for validation.
+The root `npm run dev` also includes the service through the workspace scripts. `SOLVER_HOST` defaults to `127.0.0.1`; `SOLVER_PORT` defaults to `8001`. The app loads its own `.env`. Production can install `requirements.txt` without development tools and run `python -m service.main` from `apps/solver`.
 
 Run a single Uvicorn worker per service instance. Concurrency is enforced by the service, shared across backend clients: one admitted request and one solver thread at a time. Extra requests return HTTP 409 (`busy`), with no hidden queue. Separate deployed instances each have their own capacity. Keep the service on a private network; it is not a browser-facing API.
 
@@ -45,7 +45,7 @@ Results distinguish `optimal`, `feasible`, `infeasible`, `unknown`, and `model_i
 
 Requests and worker output are limited to 4 MiB; the HTTP wrapper also limits response size. Authenticated body uploads have a 10-second deadline. Solver search defaults to five seconds and is configurable up to 60 seconds. The service adds 30 seconds for interpreter imports/model construction; the client adds 35 seconds to allow response overhead. These are process/request deadlines distinct from the solver's search limit. `wallTimeSeconds` reports solver time, not HTTP latency.
 
-The service keeps CPU work in a child process. A deadline or client disconnect cancels execution, kills/reaps the child, and then releases capacity. Client cancellation uses `AbortSignal`; cancellation and Nest shutdown abort HTTP requests. The wrapper no longer owns execution slots or OS processes, so a new request can briefly receive `busy` while the service observes a disconnect and cleans up. No automatic retries occur.
+The service keeps CPU work in a child process. A deadline or client disconnect cancels execution, kills/reaps the child, and then releases capacity. Client cancellation uses `AbortSignal`; cancellation and Nest shutdown abort HTTP requests. The wrapper does not own execution slots or OS processes, so a new request can briefly receive `busy` while the service observes a disconnect and cleans up. No automatic retries occur.
 
 Typed client errors include `invalid_model`, `invalid_options`, `busy`, `unavailable`, `timeout`, `cancelled`, `protocol_error`, and `closed`. Service errors never return worker tracebacks. A process deadline maps to HTTP 504 / `timeout`; malformed inputs to 422 / `invalid_model`; auth and runtime failures to `unavailable` in the wrapper. These limits do not enforce a hard RAM cap; host/container resource limits remain a deployment concern.
 

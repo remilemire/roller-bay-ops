@@ -26,7 +26,7 @@ Cuts have unique positive `position` values within each allocation item. Cut ite
 
 The allocation service validates that assigned requirements belong to the same allocation as the cut, that colors match, and that quantities and geometry satisfy the cutting validator. Ordinary foreign keys only enforce reference existence; they do not enforce those cross-table relationships or aggregate totals. The allocation service persists the header, requirements, reservations, cuts, and assignments atomically as described below.
 
-The cutting-plan validator belongs to the allocations feature as a pure domain function: it validates order requirements and their proposed use of available stock. It does not belong to stock persistence or to the solver; both manually prepared and optimized plans should use it. A separate Nest module is unnecessary at this stage.
+The cutting-plan validator belongs to the allocations feature as a pure domain function: it validates order requirements and their proposed use of available stock. Both manually prepared and optimized plans pass through this validator before confirmation.
 
 Migration `0008_add_allocations` creates the five allocation tables. Migration `0009_allocation_workflow` extends the header with revision, planning snapshots, idempotency records, and completion results.
 

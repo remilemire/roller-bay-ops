@@ -37,7 +37,7 @@ Generate a cookie-signing secret locally, then paste it into `AUTH_SESSION_SECRE
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Do not put these backend settings in `NEXT_PUBLIC_` variables. API startup rejects missing settings. Discovery of Microsoft's endpoints happens on login, so startup does not require Microsoft to be reachable. Existing local environment files are preserved; add the new fields to yours.
+Do not put these backend settings in `NEXT_PUBLIC_` variables. API startup rejects missing settings. Discovery of Microsoft's endpoints happens on login, so startup does not require Microsoft to be reachable. If a local environment file already exists, update its settings instead of replacing it with the example.
 
 Run `npm run services:up`, apply the database migrations with `npm run db:migrate`, then start the applications. Auth adds no PostgreSQL session table; it uses the existing users table and Redis.
 
@@ -54,6 +54,12 @@ This redirect behavior is scoped to browser login routes. Other API endpoints re
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
 
 For the Vercel/Render deployment, the browser stays on one origin: Vercel forwards `/api/*` to Render, and the registered callback is `https://YOUR_DOMAIN/api/auth/callback`. See [deployment](deployment.md) for configuration and proxy verification.
+
+## Sign-in and session behavior
+
+Microsoft sign-in uses authorization code flow with PKCE, state, and nonce. The backend validates the ID token through `openid-client`, checks the configured tenant, and matches the token's `oid` to the Microsoft Graph profile ID before applying membership and sign-in-domain restrictions. The stored user identity is the validated `sub`, scoped to the configured tenant and client. Microsoft tokens are discarded after validation and the profile request.
+
+Redis stores sessions under `roller-bay:session:`. Authenticated sessions hold the internal user ID and authentication/expiry timestamps; protected requests load the current user and role from PostgreSQL. The default lifetime is seven days, with an absolute deadline: activity and subsequent session saves do not extend it. Login regenerates the session ID and saves it before redirecting. Redis failures deny access rather than falling back to an in-memory session store.
 
 ## Rate limiting
 
