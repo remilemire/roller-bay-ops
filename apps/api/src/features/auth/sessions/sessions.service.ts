@@ -30,6 +30,11 @@ export class SessionsService {
       rolling: false,
       resave: false,
       saveUninitialized: false,
+      // The host terminates TLS, and no proxy addresses are trusted, so
+      // Express reports the connection as insecure and the Secure cookie
+      // would silently never be sent. X-Forwarded-Proto only decides whether
+      // to emit a cookie the browser already restricts to HTTPS.
+      proxy: secure,
       cookie: this.cookieOptions,
     });
   }
