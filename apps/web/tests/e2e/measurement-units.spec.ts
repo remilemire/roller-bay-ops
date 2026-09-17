@@ -6,7 +6,7 @@ test('units chosen per field in Settings relabel forms and lists while requests 
 }) => {
   const state = await mockApi(page);
   await page.goto('/settings');
-  const measurements = page.getByRole('region', { name: 'Measurements' });
+  const measurements = page.getByRole('region', { name: 'Measurement units' });
   // A label wrapping a select also contains the option text, so query by role.
   const blindWidth = measurements.getByRole('combobox', {
     name: 'Blind width',
@@ -27,10 +27,13 @@ test('units chosen per field in Settings relabel forms and lists while requests 
   ]);
   await expect(
     measurements.getByRole('combobox', { name: 'Finished drop', exact: true }),
-  ).toHaveValue('yd');
+  ).toHaveValue('in');
   await expect(
-    measurements.getByText('Millimetres, multiples of 5'),
-  ).toBeVisible();
+    measurements.getByRole('combobox', {
+      name: 'Tube outer diameter',
+      exact: true,
+    }),
+  ).toHaveValue('mm');
 
   await page.goto('/allocations/new');
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
@@ -38,7 +41,7 @@ test('units chosen per field in Settings relabel forms and lists while requests 
     .getByLabel('Color · blind 1', { exact: true })
     .selectOption(ids.color);
   await page.getByLabel('Width (mm)', { exact: true }).fill('1371.6');
-  await page.getByLabel('Finished drop (yd)', { exact: true }).fill('2.5');
+  await page.getByLabel('Finished drop (in)', { exact: true }).fill('90');
   await page.getByLabel('Quantity', { exact: true }).fill('1');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/allocations/${ids.allocation}$`));

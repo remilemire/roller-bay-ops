@@ -68,7 +68,7 @@ export function MeasurementUnitsPanel() {
     <section className="panel" aria-labelledby="measurements-heading">
       <div className="panel-heading">
         <div>
-          <h2 id="measurements-heading">Measurements</h2>
+          <h2 id="measurements-heading">Measurement units</h2>
           <p>Choose the unit for entering and reading each measurement.</p>
         </div>
         <Button
@@ -113,9 +113,7 @@ export function MeasurementUnitsPanel() {
           ))}
         </fieldset>
         {change.error && <ErrorNotice error={change.error} />}
-        <p className="muted">
-          Saved to your account. Records keep millimetres to 0.001 mm.
-        </p>
+        <p className="muted">Saved to your account.</p>
       </div>
     </section>
   );
