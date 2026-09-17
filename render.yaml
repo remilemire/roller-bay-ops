@@ -68,5 +68,5 @@ services:
           type: pserv
           name: roller-bay-solver
           property: hostport
-      - key: TRUSTED_PROXY_IPS
+      - key: API_PROXY_SECRET
         sync: false

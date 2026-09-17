@@ -2,27 +2,28 @@
 
 The frontend runs on Vercel. The Nest API runs as a public Render Node service, and the Python solver runs as a private Render service. PostgreSQL and Redis remain external. No application Dockerfiles, Nginx, or process supervisor are required; Docker Compose remains useful for the local database and Redis.
 
-The browser uses `https://mydomain.com/api/*`. Vercel rewrites those requests to the API's public Render HTTPS address, preserving the `/api` prefix, path, and query string. The solver is reachable only through Render's private network. The API still requires authentication and enforces permissions and Origin checks regardless of how it is reached.
+The browser uses `https://mydomain.com/api/*`. The frontend's `src/proxy.ts` forwards those requests to the API's public Render HTTPS address, preserving the `/api` prefix, path, and query string, and adds a shared secret plus the client address Vercel observed. The API rejects requests without that secret, so its public Render address serves only health checks directly. The solver is reachable only through Render's private network. The API still requires authentication and enforces permissions and Origin checks.
 
 ## Vercel frontend
 
 Import this repository as a Next.js project with **Root Directory `apps/web`** and **Node.js 24.x**. Make the workspace files outside that directory available to the build. `apps/web/vercel.json` installs only the web/shared workspaces plus root build tools, then builds shared contracts before Next.js.
 
-Set the Vercel environment variable:
+Set the Vercel environment variables, in every environment that builds (Production and Preview):
 
 ```text
 API_ORIGIN=https://YOUR_API_SERVICE.onrender.com
+API_PROXY_SECRET=THE_SAME_VALUE_AS_THE_API
 ```
 
-Use the actual public API origin, with no `/api` suffix. This is server-side build configuration; it is not a `NEXT_PUBLIC_*` variable. Vercel builds fail if it is missing or is not an HTTPS origin. Rebuild the frontend after changing it.
+Use the actual public API origin, with no `/api` suffix. Generate the secret with `openssl rand -base64 48`; it must be at least 32 printable characters without whitespace. Both are server-side settings, never `NEXT_PUBLIC_*` variables. Vercel builds fail if either is missing or malformed. Redeploy the frontend after changing them.
 
 Leave `NEXT_PUBLIC_API_URL` unset on Vercel (or set it to `/api`). Local development retains the direct `http://localhost:3001/api` override from `.env.example`. Do not copy local environment files into the hosting configuration.
 
-Point the public custom domain to Vercel. External rewrite caching is explicitly disabled for `/api/*`, with private/no-store response headers, because inventory and session responses are private and change frequently. No application proxy route or Vercel function is needed to forward requests.
+Point the public custom domain to Vercel. External rewrite caching is explicitly disabled for `/api/*`, with private/no-store response headers, because inventory and session responses are private and change frequently. The proxy runs as a Vercel function on every `/api/*` request; it only rewrites the request and never reads the body. Proxied responses carry an `x-middleware-rewrite` header naming the Render address, which is harmless because direct requests are rejected.
 
 For staging, use a dedicated frontend domain, staging API and backing services, and a matching Microsoft callback. A random Vercel preview URL is not automatically authorized by the production API's exact Origin policy.
 
-Sources: [Vercel monorepos](https://vercel.com/docs/monorepos), [external rewrites and caching](https://vercel.com/docs/rewrites), [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites).
+Sources: [Vercel monorepos](https://vercel.com/docs/monorepos), [external rewrites and caching](https://vercel.com/docs/rewrites), [Next.js proxy](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
 
 ## Render API and solver
 
@@ -34,13 +35,13 @@ The solver builds from `apps/solver`, installs the pinned `requirements.txt`, an
 
 Supply the API settings from [authentication](authentication.md) and `apps/api/.env.example`. In particular:
 
-| Setting                     | Production value                                       |
-| --------------------------- | ------------------------------------------------------ |
-| `WEB_ORIGIN`                | `https://mydomain.com` (the Vercel frontend)           |
-| `MICROSOFT_CALLBACK_URL`    | `https://mydomain.com/api/auth/callback`               |
-| `DATABASE_URL`, `REDIS_URL` | Authenticated production connections                   |
-| `AUTH_SESSION_SECRET`       | A stable, private session secret                       |
-| `TRUSTED_PROXY_IPS`         | Verified proxy IPs/CIDRs for the deployed request path |
+| Setting                     | Production value                                    |
+| --------------------------- | --------------------------------------------------- |
+| `WEB_ORIGIN`                | `https://mydomain.com` (the Vercel frontend)        |
+| `MICROSOFT_CALLBACK_URL`    | `https://mydomain.com/api/auth/callback`            |
+| `DATABASE_URL`, `REDIS_URL` | Authenticated production connections                |
+| `AUTH_SESSION_SECRET`       | A stable, private session secret                    |
+| `API_PROXY_SECRET`          | The same value as the frontend's `API_PROXY_SECRET` |
 
 Register the same callback in Microsoft Entra as a **Web** redirect URI. Login begins through the frontend's `/api/auth/login`; the API exchanges the code and redirects back to `WEB_ORIGIN`. Keep Microsoft and database credentials exclusively on the API.
 
@@ -74,12 +75,16 @@ See [Render pre-deploy commands](https://render.com/docs/deploys#pre-deploy-comm
 
 Check these through the public Vercel origin as well as directly on the Render API. The private solver uses Render's TCP health checks. Readiness does not verify migration completeness or perform an optimization.
 
-Before production, verify the actual Vercel → Render forwarding chain. Scope `TRUSTED_PROXY_IPS` to verified proxies; do not use blanket trust or guess a hop count. The API must recognize HTTPS for Secure cookies and identify real client addresses for rate limiting. An empty trust list safely ignores forwarded headers, but is not the final production proxy configuration.
+Neither Vercel nor Render publishes proxy addresses, and the API's Render address is publicly reachable, so the API authenticates the frontend proxy by `API_PROXY_SECRET` instead of trusting addresses or a hop count. Leave `TRUSTED_PROXY_IPS` unset on Render so forwarded IP headers stay ignored. The API refuses to start in production without the secret. Health endpoints stay reachable directly because Render probes the service itself.
 
-Verify real Microsoft sign-in, logout, `__Host-roller_bay.sid` cookie attributes, authenticated reads/writes, wrong-Origin rejection, and forwarding-header spoof rejection. Confirm two distinct clients do not share a proxy-wide rate-limit bucket. Check that session and inventory responses are not cached by Vercel. Test a realistic long optimization through `/api`, dependency outages and recovery, and that the API remains responsive during a solve.
+Deploy the frontend with the secret first, then set it on the API: the API ignores the extra header until its own secret is configured, while the reverse order rejects all traffic. Rotating the secret needs a short maintenance window for the same reason; update the API and redeploy the frontend together.
 
-Run the shared/API/web checks and solver tests described in [repository guidance](../AGENTS.md). The frontend has focused tests for API URL selection and rewrite configuration. Local tests do not establish Vercel edge behavior, Render networking, real Microsoft login, or production capacity; complete those checks in staging.
+Before production, verify the actual Vercel → Render chain: a direct request to the Render address returns 403 while `/api/health` still answers; browser responses contain no `x-middleware-request-*` headers; a forged `x-roller-bay-client-ip` or `X-Forwarded-For` does not change the rate-limit identity; and two distinct clients do not share a rate-limit bucket. Verify real Microsoft sign-in, logout, `__Host-roller_bay.sid` cookie attributes (Secure is emitted only when Render reports HTTPS through `X-Forwarded-Proto`), authenticated reads/writes, and wrong-Origin rejection. Check that session and inventory responses are not cached by Vercel. Test a realistic long optimization through `/api`, dependency outages and recovery, and that the API remains responsive during a solve.
+
+Run the shared/API/web checks and solver tests described in [repository guidance](../AGENTS.md). The frontend has focused tests for API URL selection, deployment configuration, and the proxy's forwarded headers. Local tests do not establish Vercel edge behavior, Render networking, real Microsoft login, or production capacity; complete those checks in staging.
 
 Local verification on 2026-09-16: API/web typechecks and lint, 94 API tests (4 integration suites skipped without opt-in), 61 frontend tests, and 10 solver tests passed. The exact native API and frontend build commands passed in clean Linux ARM64 Node 24 environments. A production Next.js server forwarded paths, queries, request bodies, cookies, Origin/idempotency headers, and callback redirects to a local HTTPS fixture. Render validated the Blueprint. No hosted deployment, real Microsoft sign-in, or migration application was performed; these checks do not validate the Vercel edge or Render ingress chain.
+
+Local verification of the frontend proxy on 2026-09-17: API/web typechecks and lint, 103 API tests (4 opt-in suites skipped), the PostgreSQL/Redis integration suites (76 tests, 2 solver suites skipped), 70 frontend tests, the frontend production build, and 61 browser tests passed. With a production Next.js server forwarding to a second local API instance configured with a secret, direct API requests returned 403 with or without forged proxy headers while health checks still answered; proxied requests reached the API with the path, encoded query, request body, Origin header, login redirect, and session cookie intact, a forged secret header was replaced, and no `x-middleware-request-*` header reached the client. The solver tests, the clean Linux builds, and Render's Blueprint validation were not repeated after this change. Vercel forwarding the proxy's request headers, Vercel's `x-real-ip`, and Render's `X-Forwarded-Proto` remain unverified until a hosted deployment.
 
 Backups remain a separate operational increment: managed PostgreSQL recovery, independent encrypted exports, and practiced restoration are still needed. Native hosting does not replace a tested recovery process.

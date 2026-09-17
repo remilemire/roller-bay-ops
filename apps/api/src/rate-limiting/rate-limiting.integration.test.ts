@@ -7,9 +7,14 @@ import { Controller, Get, Post } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import {
+  FRONTEND_PROXY_CLIENT_IP_HEADER,
+  FRONTEND_PROXY_SECRET_HEADER,
+} from '@roller-bay/shared/frontend-proxy';
 import request from 'supertest';
 import { ErrorsModule } from '../common/errors/errors.module.js';
 import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
+import { FrontendProxyModule } from '../frontend-proxy/frontend-proxy.module.js';
 import { RedisService } from '../redis/redis.service.js';
 import { RateLimitingModule } from './rate-limiting.module.js';
 import { RATE_LIMIT_KEY_PREFIX } from './rate-limiting.service.js';
@@ -36,7 +41,8 @@ test(
   async (t) => {
     assert.ok(process.env.TEST_REDIS_URL);
     const prefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
-    async function createApp() {
+    const proxySecret = 'proxy-secret-that-is-at-least-32-characters';
+    async function createApp(extra: Record<string, unknown> = {}) {
       const module = await Test.createTestingModule({
         imports: [
           ConfigModule.forRoot({
@@ -48,10 +54,13 @@ test(
                 RATE_LIMIT_WINDOW_SECONDS: 60,
                 RATE_LIMIT_API_LIMIT: 6,
                 RATE_LIMIT_LOGIN_LIMIT: 2,
+                ...extra,
               }),
             ],
           }),
           ErrorsModule,
+          // Same relative order as AppModule.
+          FrontendProxyModule,
           RateLimitingModule,
         ],
         controllers: [ProbeController],
@@ -72,6 +81,7 @@ test(
     }
     const first = await createApp();
     const second = await createApp();
+    const proxied = await createApp({ API_PROXY_SECRET: proxySecret });
     const redis = first.get(RedisService);
     async function clearCounters() {
       for await (const keys of redis.client.scanIterator({
@@ -189,6 +199,63 @@ test(
       );
 
       await t.test(
+        'an authenticated frontend proxy reports the client address; IPv6 addresses share a subnet budget',
+        async () => {
+          const login = (ip: string) =>
+            request(proxied.getHttpServer())
+              .get('/api/auth/login')
+              .set(FRONTEND_PROXY_SECRET_HEADER, proxySecret)
+              .set(FRONTEND_PROXY_CLIENT_IP_HEADER, ip)
+              // Still untrusted, and must not override the reported address.
+              .set('X-Forwarded-For', '203.0.113.9');
+          for (const ip of ['198.51.100.4', '198.51.100.5']) {
+            await login(ip).expect(200);
+            await login(ip).expect(200);
+          }
+          await login('198.51.100.4').expect(429);
+          await login('2001:db8:abcd:3400::1').expect(200);
+          await login('2001:db8:abcd:34ff::2').expect(200);
+          await login('2001:db8:abcd:34aa::3').expect(429);
+          await clearCounters();
+        },
+      );
+
+      await t.test(
+        'requests that bypass the frontend proxy are rejected before spending budget',
+        async () => {
+          for (const presented of [undefined, `${proxySecret}x`]) {
+            const direct = request(proxied.getHttpServer())
+              .get('/api/auth/login')
+              .set(FRONTEND_PROXY_CLIENT_IP_HEADER, '198.51.100.6');
+            if (presented) direct.set(FRONTEND_PROXY_SECRET_HEADER, presented);
+            const response = await direct.expect(403);
+            assert.equal(response.body.statusCode, 403);
+            assert.equal(response.headers.ratelimit, undefined);
+          }
+          assert.deepEqual(await redis.client.keys(`${prefix}*`), []);
+          // The host's probes call the service directly.
+          await request(proxied.getHttpServer()).get('/api/health').expect(200);
+        },
+      );
+
+      await t.test(
+        'without a configured secret a reported client address is ignored',
+        async () => {
+          for (const ip of ['198.51.100.7', '198.51.100.8'])
+            await request(first.getHttpServer())
+              .get('/api/auth/login')
+              .set(FRONTEND_PROXY_SECRET_HEADER, proxySecret)
+              .set(FRONTEND_PROXY_CLIENT_IP_HEADER, ip)
+              .expect(200);
+          await request(first.getHttpServer())
+            .get('/api/auth/login')
+            .set(FRONTEND_PROXY_CLIENT_IP_HEADER, '198.51.100.9')
+            .expect(429);
+          await clearCounters();
+        },
+      );
+
+      await t.test(
         'Redis failures deny traffic with 503 and recover without a memory fallback',
         async () => {
           redis.client.destroy();
@@ -205,7 +272,7 @@ test(
       );
     } finally {
       if (redis.client.isReady) await clearCounters();
-      await Promise.all([first.close(), second.close()]);
+      await Promise.all([first.close(), second.close(), proxied.close()]);
     }
   },
 );

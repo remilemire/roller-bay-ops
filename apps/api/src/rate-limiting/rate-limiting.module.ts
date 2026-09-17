@@ -4,6 +4,7 @@ import {
   type MiddlewareConsumer,
   type NestModule,
 } from '@nestjs/common';
+import { HEALTH_ROUTES } from '../features/health/health.routes.js';
 import { RedisModule } from '../redis/redis.module.js';
 import {
   ApiRateLimitMiddleware,
@@ -27,11 +28,7 @@ export class RateLimitingModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(ApiRateLimitMiddleware)
-      .exclude(
-        { path: 'health', method: RequestMethod.GET },
-        { path: 'health/ready', method: RequestMethod.GET },
-        { path: 'health/solver', method: RequestMethod.GET },
-      )
+      .exclude(...HEALTH_ROUTES)
       .forRoutes({ path: '{*path}', method: RequestMethod.ALL });
     consumer
       .apply(LoginRateLimitMiddleware)

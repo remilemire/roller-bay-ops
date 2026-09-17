@@ -6,9 +6,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NextFunction, Request, Response } from 'express';
-import { rateLimit, type RateLimitRequestHandler } from 'express-rate-limit';
+import {
+  ipKeyGenerator,
+  rateLimit,
+  type RateLimitRequestHandler,
+} from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import type { Environment } from '../config/environment.js';
+import '../frontend-proxy/frontend-proxy.types.js';
 import { RedisService } from '../redis/redis.service.js';
 
 export const RATE_LIMIT_KEY_PREFIX = Symbol('RATE_LIMIT_KEY_PREFIX');
@@ -59,7 +64,11 @@ export class RateLimitingService implements OnModuleInit {
       requestPropertyName: `${name}RateLimit`,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      ipv6Subnet: 56,
+      // Prefer the address vouched for by the frontend proxy. IPv6 clients
+      // share a /56 budget. The library inspects this function's source and
+      // reports an error if request.ip appears without ipKeyGenerator.
+      keyGenerator: (request) =>
+        ipKeyGenerator(request.verifiedClientIp ?? request.ip ?? '', 56),
       passOnStoreError: false,
       skip: (request) => request.method === 'OPTIONS',
       message: {

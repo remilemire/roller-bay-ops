@@ -30,6 +30,7 @@ Complete `apps/api/.env` using the fields in `.env.example`:
 | `REDIS_URL`                | Session store, locally `redis://localhost:6380`.                                                                                     |
 | `WEB_ORIGIN`               | Exact frontend origin allowed for credentialed CORS, mutation requests, and the post-login redirect.                                 |
 | `TRUSTED_PROXY_IPS`        | Optional comma-separated proxy IPs/CIDRs. Empty trusts no proxy. Configure only the actual reverse proxy addresses.                  |
+| `API_PROXY_SECRET`         | Secret shared with the frontend proxy, at least 32 printable characters without whitespace. Required in production; blank locally.   |
 
 Generate a cookie-signing secret locally, then paste it into `AUTH_SESSION_SECRET`:
 
@@ -51,9 +52,9 @@ This redirect behavior is scoped to browser login routes. Other API endpoints re
 
 `GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt, measurementUnits }`, where `measurementUnits` maps each measurement field to the unit the user chose (defaults fill in anything unset). `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
 
-Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
+Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. In production the session middleware reads `X-Forwarded-Proto` itself, because the host terminates TLS and publishes no proxy addresses to trust; the header only decides whether the Secure cookie is emitted. Never trust forwarded headers for client identity.
 
-For the Vercel/Render deployment, the browser stays on one origin: Vercel forwards `/api/*` to Render, and the registered callback is `https://YOUR_DOMAIN/api/auth/callback`. See [deployment](deployment.md) for configuration and proxy verification.
+For the Vercel/Render deployment, the browser stays on one origin: the frontend proxy forwards `/api/*` to Render with `API_PROXY_SECRET`, and the registered callback is `https://YOUR_DOMAIN/api/auth/callback`. See [deployment](deployment.md) for configuration and proxy verification.
 
 ## Sign-in and session behavior
 
@@ -63,7 +64,7 @@ Redis stores sessions under `roller-bay:session:`. Authenticated sessions hold t
 
 ## Rate limiting
 
-`RateLimitingModule` runs before session middleware and authentication. All API paths share a per-IP budget of 600 requests per 60-second window. Login and callback additionally share a separate, stricter budget of 30 requests per window (a normal sign-in uses two). Failed requests also count. GET health checks and OPTIONS preflights are exempt.
+`FrontendProxyModule` runs first, then `RateLimitingModule`, both before session middleware and authentication. When `API_PROXY_SECRET` is configured, a request without the exact secret gets 403 before it spends any budget; GET health checks are exempt. All API paths share a per-IP budget of 600 requests per 60-second window. Login and callback additionally share a separate, stricter budget of 30 requests per window (a normal sign-in uses two). Failed requests also count. GET health checks and OPTIONS preflights are exempt.
 
 Configure `RATE_LIMIT_API_LIMIT`, `RATE_LIMIT_LOGIN_LIMIT`, and `RATE_LIMIT_WINDOW_SECONDS` in the backend environment. Defaults apply when omitted; limits must be positive integers up to 1,000,000, and windows must be 1–3,600 seconds. Employees sharing a public IP share these budgets. IPv6 addresses are grouped by /56 subnet to prevent bypass by rotating addresses. Tune limits for the company's shared network usage.
 
@@ -71,7 +72,7 @@ The implementation uses [express-rate-limit](https://express-rate-limit.mintlify
 
 Exhausted budgets return 429 with a JSON error and `Retry-After` in seconds. `RateLimit` and `RateLimit-Policy` report the applicable budgets. CORS exposes these headers and `Retry-After` to the configured frontend. Redis failures return 503 without a memory fallback; GET `/api/health` remains available. Redis script initialization must succeed before the API serves traffic.
 
-Client addresses come from Express's `request.ip`. The existing `TRUSTED_PROXY_IPS` setting must identify only actual proxies; with an empty setting, forwarded IP headers cannot change the rate-limit identity. This protects API routes, not the separately hosted Next.js frontend or network-level traffic.
+The client address is the one reported by the authenticated frontend proxy (`x-roller-bay-client-ip`, which the proxy overwrites with the address Vercel observed). That header is ignored unless the secret is configured and matches. Otherwise the address is Express's `request.ip`: `TRUSTED_PROXY_IPS` must identify only actual proxies, and with an empty setting forwarded IP headers cannot change the rate-limit identity. This protects API routes, not the separately hosted Next.js frontend or network-level traffic.
 
 ## User activation
 
@@ -139,7 +140,7 @@ npm run test:integration
 
 This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, activation permissions, blocked sign-in and existing-session access for inactive users, reactivation, owner bootstrap, database owner uniqueness, role-management permissions, concurrent ownership transfer, service-level rollback after a simulated recipient-update failure, and lock timeout recovery, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
 
-The rate-limiting integration suite uses two API instances sharing a random Redis key prefix. It verifies shared and concurrent budgets, login/callback limits, request-method coverage, retry headers, expiry, proxy and IPv6 behavior, health/preflight exemptions, and outage recovery. Cleanup deletes only that suite's keys. The auth suite also loads rate limiting, with higher budgets to exercise its existing scenarios.
+The rate-limiting integration suite uses API instances sharing a random Redis key prefix. It verifies shared and concurrent budgets, login/callback limits, request-method coverage, retry headers, expiry, trusted-proxy and IPv6 behavior, client addresses reported by the frontend proxy, rejection of requests without its secret before any budget is spent, health/preflight exemptions, and outage recovery. Cleanup deletes only that suite's keys. The auth suite also loads rate limiting, with higher budgets to exercise its existing scenarios.
 
 ## Current limits
 

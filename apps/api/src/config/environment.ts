@@ -130,8 +130,27 @@ export const environmentSchema = z
           .filter(Boolean),
       )
       .pipe(z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]))),
+    // Shared with the frontend proxy. Printable ASCII without whitespace: the
+    // proxy sends it as a header value, where padding would be trimmed and
+    // the comparison here would then reject every request.
+    API_PROXY_SECRET: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .regex(/^[\x21-\x7e]{32,}$/)
+        .optional(),
+    ),
   })
   .superRefine((value, ctx) => {
+    // The hosting platforms publish no proxy addresses to trust, so without
+    // the secret nothing separates proxied requests from direct ones.
+    if (value.NODE_ENV === 'production' && !value.API_PROXY_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_PROXY_SECRET'],
+        message: 'API_PROXY_SECRET is required in production.',
+      });
+    }
     for (const key of ['WEB_ORIGIN', 'MICROSOFT_CALLBACK_URL'] as const) {
       const url = new URL(value[key]);
       if (

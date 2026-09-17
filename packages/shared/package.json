@@ -36,6 +36,10 @@
       "types": "./dist/errors/index.d.ts",
       "default": "./dist/errors/index.js"
     },
+    "./frontend-proxy": {
+      "types": "./dist/frontend-proxy/index.d.ts",
+      "default": "./dist/frontend-proxy/index.js"
+    },
     "./audit": {
       "types": "./dist/features/audit/index.d.ts",
       "default": "./dist/features/audit/index.js"

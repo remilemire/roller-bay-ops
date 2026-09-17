@@ -6,7 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_API_URL", "API_ORIGIN", "VERCEL"]
+      "env": ["NEXT_PUBLIC_API_URL", "API_ORIGIN", "API_PROXY_SECRET", "VERCEL"]
     },
     "dev": {
       "dependsOn": ["^build"],
@@ -38,6 +38,7 @@
         "SOLVER_PORT",
         "SOLVER_PROVIDER",
         "API_ORIGIN",
+        "API_PROXY_SECRET",
         "VERCEL"
       ]
     },
@@ -69,6 +70,7 @@
         "SOLVER_PORT",
         "SOLVER_PROVIDER",
         "API_ORIGIN",
+        "API_PROXY_SECRET",
         "VERCEL"
       ]
     },

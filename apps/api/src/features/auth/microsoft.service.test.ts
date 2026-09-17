@@ -116,6 +116,34 @@ test('auth configuration requires explicit credentials and rejects unsafe URLs a
     );
 });
 
+test('the frontend proxy secret is required in production and must survive as a header value', () => {
+  const production = {
+    ...settings,
+    NODE_ENV: 'production',
+    WEB_ORIGIN: 'https://ops.example.com',
+    MICROSOFT_CALLBACK_URL: 'https://ops.example.com/api/auth/callback',
+  };
+  const secret = 'proxy-secret-that-is-at-least-32-characters';
+  assert.equal(environmentSchema.safeParse(production).success, false);
+  assert.equal(
+    environmentSchema.parse({ ...production, API_PROXY_SECRET: secret })
+      .API_PROXY_SECRET,
+    secret,
+  );
+  // Blank means unset, which local development relies on.
+  assert.equal(
+    environmentSchema.parse({ ...settings, API_PROXY_SECRET: '' })
+      .API_PROXY_SECRET,
+    undefined,
+  );
+  for (const invalid of ['too-short', `${secret}\n`, `with space ${secret}`])
+    assert.equal(
+      environmentSchema.safeParse({ ...settings, API_PROXY_SECRET: invalid })
+        .success,
+      false,
+    );
+});
+
 let signingKey: Awaited<ReturnType<typeof generateKeyPair>>;
 let otherKey: Awaited<ReturnType<typeof generateKeyPair>>;
 let tokenClaims: Record<string, unknown> = {};
