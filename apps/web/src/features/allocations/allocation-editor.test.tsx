@@ -1,5 +1,11 @@
-import { expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { allocation } from '../../../tests/fixtures';
@@ -68,4 +74,27 @@ it('keeps the active plan revision and edited values when a background refresh b
     'Allocation changed',
   );
   expect(screen.getByLabelText('Order number')).toHaveValue('LOCAL-PLAN');
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+it('never autosaves an active plan, because saving it changes reservations', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+  });
+  client.setQueryData([...allocationKey, allocation.id], allocation);
+  render(
+    <QueryClientProvider client={client}>
+      <AllocationDetailScreen id={allocation.id} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Edit plan' }));
+  fireEvent.change(screen.getByLabelText('Order number'), {
+    target: { value: 'LOCAL-PLAN' },
+  });
+  await act(() => vi.advanceTimersByTimeAsync(10_000));
+  expect(replace).not.toHaveBeenCalled();
+  expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
 });

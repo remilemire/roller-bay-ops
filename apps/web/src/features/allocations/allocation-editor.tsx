@@ -30,6 +30,7 @@ import {
   requestKey,
   finishRequest,
 } from '@/lib/pending-request';
+import { useAutosave } from '@/lib/use-autosave';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import {
   allocationFormSchema,
@@ -108,7 +109,12 @@ export function AllocationEditor({
       client.invalidateQueries({ queryKey: stockKey }),
     ]);
   const save = useMutation({
-    mutationFn: async (value: AllocationForm) => {
+    mutationFn: async ({
+      value,
+    }: {
+      value: AllocationForm;
+      auto?: boolean;
+    }) => {
       const data = allocationFromForm(value, units);
       if (active)
         return replaceAllocation(active.id, {
@@ -128,11 +134,16 @@ export function AllocationEditor({
       )
         finishRequest(scope);
     },
-    onSuccess: async (record) => {
+    onSuccess: async (record, { value, auto }) => {
       finishRequest(scope);
       if (record.state === 'draft') {
         setSaved(record);
-        form.reset(allocationToForm(record.data, units));
+        // An autosave leaves the inputs alone: the employee may still be
+        // typing, and anything entered since the request was sent must stay
+        // dirty.
+        form.reset(auto ? value : allocationToForm(record.data, units), {
+          keepValues: auto,
+        });
       } else form.reset(form.getValues());
       client.setQueryData([...allocationKey, record.id], record);
       await refresh();
@@ -179,7 +190,8 @@ export function AllocationEditor({
           { ...allocationFromForm(form.getValues(), units), plan: result.plan },
           units,
         );
-        // Optimization proposes form changes; it neither saves nor reserves stock.
+        // Optimization proposes form changes and never reserves stock; a saved
+        // draft autosaves the proposal like any other edit.
         form.setValue('drops', next.drops, { shouldDirty: true });
       }
     },
@@ -200,11 +212,29 @@ export function AllocationEditor({
   const conflict = [save.error, submit.error].some(
     (error) => error instanceof ApiError && error.status === 409,
   );
+  // An autosave must not disable the inputs being typed into; it only holds
+  // back the actions that would race it with the same revision.
+  const autosaving = save.isPending && save.variables.auto === true;
   const busy =
-    save.isPending ||
+    (save.isPending && !autosaving) ||
     submit.isPending ||
     remove.isPending ||
     planning.isPending;
+  // Creating a draft stays explicit: its request key is bound to one payload.
+  // Active plans never autosave because saving them changes reservations.
+  useAutosave(
+    values,
+    Boolean(saved) &&
+      !active &&
+      form.formState.isDirty &&
+      !save.isPending &&
+      !submit.isPending &&
+      !remove.isPending &&
+      !planning.isPending &&
+      !conflict &&
+      confirm === null,
+    (value) => save.mutateAsync({ value, auto: true }),
+  );
   function confirmSubmit() {
     try {
       createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
@@ -231,9 +261,9 @@ export function AllocationEditor({
               ? 'Allocation draft'
               : 'New allocation'
         }
-        description="Enter the required blinds, then build or optimize a cutting plan."
+        description={`Enter the required blinds, then build or optimize a cutting plan.${active ? '' : ' Saved drafts update automatically.'}`}
       />
-      <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
+      <form onSubmit={form.handleSubmit((value) => save.mutate({ value }))}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="stack">
             <section className="panel">
@@ -257,6 +287,7 @@ export function AllocationEditor({
               form={form}
               units={units}
               onChange={() => setPreview(null)}
+              planningDisabled={autosaving}
               onOptimize={() => planning.mutate('optimize')}
               onValidate={() => planning.mutate('validate')}
             />
@@ -281,13 +312,15 @@ export function AllocationEditor({
           )}
           <div className="form-actions">
             <span className="draft-state">
-              {form.formState.isDirty
-                ? 'Unsaved changes'
-                : saved
-                  ? 'All changes saved'
-                  : active
-                    ? 'Current active plan'
-                    : 'Not saved yet'}
+              {autosaving
+                ? 'Saving…'
+                : form.formState.isDirty
+                  ? 'Unsaved changes'
+                  : saved
+                    ? 'All changes saved'
+                    : active
+                      ? 'Current active plan'
+                      : 'Not saved yet'}
             </span>
             {close && (
               <Button
@@ -308,14 +341,19 @@ export function AllocationEditor({
               <Button
                 type="button"
                 variant="ghost"
+                disabled={autosaving}
                 onClick={() => setConfirm('delete')}
               >
                 Discard draft
               </Button>
             )}
-            <Button type="submit" variant={active ? 'default' : 'outline'}>
+            <Button
+              type="submit"
+              variant={active ? 'default' : 'outline'}
+              disabled={autosaving}
+            >
               <Save size={16} />
-              {save.isPending
+              {save.isPending && !autosaving
                 ? 'Saving…'
                 : active
                   ? 'Update reservations'

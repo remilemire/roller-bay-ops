@@ -167,6 +167,23 @@ test('receipt drafts preserve partial imperial input and unsaved edits on confli
     'MY-UNSAVED-CHANGE',
   );
 });
+test('a saved receipt draft autosaves idle edits without taking focus', async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto(`/stock-receipts/${ids.receipt}`);
+  await expect(page.getByText(/REVISION 1/)).toBeVisible();
+  const width = page.getByLabel('Width (in)', { exact: true });
+  await width.fill('60');
+  await expect(page.getByText('Unsaved changes')).toBeVisible();
+  await expect(page.getByText(/REVISION 2/)).toBeVisible();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  await expect(width).toBeFocused();
+  await expect(width).toHaveValue('60');
+  await expect(
+    page.getByRole('button', { name: 'Submit receipt', exact: true }),
+  ).toBeEnabled();
+});
 test('receipt submission retries the same saved revision after an uncertain response', async ({
   page,
 }) => {
