@@ -29,7 +29,7 @@ export const completionFormSchema = z.object({
   ),
 });
 export type CompletionForm = z.infer<typeof completionFormSchema>;
-// Tube diameters stay in millimetres (the contract requires multiples of 5);
+// Tube diameters stay in millimetres (the contract requires whole millimetres);
 // every other measurement follows the given units in both directions.
 export function completionToForm(
   allocation: AllocationDetail,

@@ -30,7 +30,7 @@ Creation requires `fabricColorId`, `widthMm`, `initialLengthMm`, and `locationId
 
 The correction endpoint accepts `changes` containing a nonempty subset of `isUsed`, `widthMm`, `initialLengthMm`, `explicitLengthMm`, `radialDepthMm`, `tubeOuterDiameterMm`, `locationId`, and `consumedAt`. Color, roll/remnant type, and source linkage are fixed after creation. Unknown fields are rejected. Validation uses the resulting complete record, so partial updates cannot create inconsistent measurement inputs. Concurrent updates lock the affected row before reading and changing it.
 
-Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Width and initial length must be positive. Explicit length and radial depth may be zero. Tube diameter must be a positive integer multiple of five, within PostgreSQL's integer range.
+Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Width and initial length must be positive. Explicit length and radial depth may be zero. Tube diameter must be a positive integer within PostgreSQL's integer range.
 
 - Remnants require explicit length and cannot have roll depth or a tube diameter, regardless of `isUsed`. A new remnant starts unused independently of its source.
 - Unused rolls (`isUsed: false`) cannot have a tube diameter or depth. Used rolls (`isUsed: true`) require a tube diameter. Submit `isUsed` and the tube diameter together when first recording use. No first-use date is required or stored.

@@ -111,8 +111,8 @@ export const stockItems = pgTable(
       sql`${table.radialDepthMm} >= 0 AND ${table.radialDepthMm} <> 'NaN'::numeric`,
     ),
     check(
-      'fabric_stock_items_tube_outer_diameter_mm_step',
-      sql`${table.tubeOuterDiameterMm} > 0 AND ${table.tubeOuterDiameterMm} % 5 = 0`,
+      'fabric_stock_items_tube_outer_diameter_mm_positive',
+      sql`${table.tubeOuterDiameterMm} > 0`,
     ),
     check(
       'fabric_stock_items_tube_usage',

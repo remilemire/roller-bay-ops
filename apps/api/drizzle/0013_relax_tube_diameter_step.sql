@@ -1,0 +1,2 @@
+ALTER TABLE "fabric_stock_items" DROP CONSTRAINT "fabric_stock_items_tube_outer_diameter_mm_step";--> statement-breakpoint
+ALTER TABLE "fabric_stock_items" ADD CONSTRAINT "fabric_stock_items_tube_outer_diameter_mm_positive" CHECK ("fabric_stock_items"."tube_outer_diameter_mm" > 0);

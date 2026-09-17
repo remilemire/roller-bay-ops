@@ -19,8 +19,8 @@ export const lengthUnitSchema = z.enum(lengthUnits);
 export type LengthUnit = z.infer<typeof lengthUnitSchema>;
 
 // Each measurement a user may present in a unit of their choice. Tube outer
-// diameter is deliberately absent: stock contracts store it as a multiple of
-// 5 mm, so it stays in millimetres everywhere.
+// diameter is deliberately absent: stock contracts store it as whole
+// millimetres, so it stays in millimetres everywhere.
 export const measurementFields = [
   'rollWidth',
   'rollLength',

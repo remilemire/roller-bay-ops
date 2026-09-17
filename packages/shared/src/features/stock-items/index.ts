@@ -3,13 +3,7 @@ import { z } from 'zod';
 const dimension = z.number().nonnegative().max(999999999.999).multipleOf(0.001);
 const positiveDimension = dimension.positive();
 const nullableDimension = dimension.nullable();
-const tubeDiameter = z
-  .number()
-  .int()
-  .positive()
-  .max(2147483647)
-  .multipleOf(5)
-  .nullable();
+const tubeDiameter = z.number().int().positive().max(2147483647).nullable();
 const fields = {
   fabricColorId: z.uuid(),
   isRemnant: z.boolean(),

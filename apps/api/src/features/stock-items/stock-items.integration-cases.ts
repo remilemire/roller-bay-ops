@@ -273,7 +273,7 @@ export async function testStockItems(
         for (const invalid of [
           { explicitLengthMm: 1 },
           { radialDepthMm: 10 },
-          { tubeOuterDiameterMm: 53 },
+          { tubeOuterDiameterMm: 50.5 },
           { tubeOuterDiameterMm: 0 },
           { tubeOuterDiameterMm: 50 },
           { isUsed: true },

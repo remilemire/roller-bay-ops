@@ -149,7 +149,7 @@ export function CompletionEditor({
                             value={row.tube}
                             onChange={(tube) => change(index, { ...row, tube })}
                             disabled={stock.tubeOuterDiameterMm !== null}
-                            hint="Required after first use. A positive multiple of 5."
+                            hint="Required after first use. A positive whole number."
                           />
                         )}
                         {row.outcome === 'returned-roll' && (

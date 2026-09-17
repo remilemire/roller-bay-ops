@@ -132,7 +132,7 @@ export function StockEditor({ close }: { close: () => void }) {
                   onChange={(v) => form.setValue('tube', v)}
                   type="number"
                   required
-                  hint="A positive multiple of 5."
+                  hint="A positive whole number."
                 />
                 <TextField
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}

@@ -618,7 +618,7 @@ export async function testAllocations(
         }).expect(400);
         await post(`${path}/${allocation.id}/complete`, {
           expectedRevision: 1,
-          items: [{ ...consumed, tubeOuterDiameterMm: 51 }],
+          items: [{ ...consumed, tubeOuterDiameterMm: 50.5 }],
         }).expect(400);
         await post(`${path}/${allocation.id}/complete`, {
           expectedRevision: 1,
