@@ -22,6 +22,7 @@ export const environmentSchema = z
       .enum(['development', 'test', 'production'])
       .default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    HOST: z.union([z.ipv4(), z.ipv6()]).default('127.0.0.1'),
     DATABASE_URL: z
       .url()
       .refine(

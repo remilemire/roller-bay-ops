@@ -20,3 +20,6 @@ __pycache__/
 # Frontend browser test output
 apps/web/playwright-report/
 apps/web/test-results/
+
+# Local Vercel project configuration
+.vercel/

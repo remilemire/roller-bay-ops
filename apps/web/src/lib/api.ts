@@ -4,9 +4,10 @@ import {
   errorIssueSchema,
   type ErrorIssue,
 } from '@roller-bay/shared/errors';
-export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
-).replace(/\/$/, '');
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(
+  /\/$/,
+  '',
+);
 export const SESSION_EXPIRED_EVENT = 'roller-bay:session-expired';
 export class ApiError extends Error {
   readonly issues: ErrorIssue[];

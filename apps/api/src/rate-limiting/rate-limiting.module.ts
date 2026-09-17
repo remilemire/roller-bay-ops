@@ -27,7 +27,11 @@ export class RateLimitingModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(ApiRateLimitMiddleware)
-      .exclude({ path: 'health', method: RequestMethod.GET })
+      .exclude(
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'health/ready', method: RequestMethod.GET },
+        { path: 'health/solver', method: RequestMethod.GET },
+      )
       .forRoutes({ path: '{*path}', method: RequestMethod.ALL });
     consumer
       .apply(LoginRateLimitMiddleware)

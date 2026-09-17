@@ -6,7 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_API_URL"]
+      "env": ["NEXT_PUBLIC_API_URL", "API_ORIGIN", "VERCEL"]
     },
     "dev": {
       "dependsOn": ["^build"],
@@ -17,6 +17,7 @@
         "DATABASE_URL",
         "REDIS_URL",
         "PORT",
+        "HOST",
         "WEB_ORIGIN",
         "MICROSOFT_TENANT_ID",
         "MICROSOFT_CLIENT_ID",
@@ -35,7 +36,9 @@
         "SOLVER_API_KEY",
         "SOLVER_HOST",
         "SOLVER_PORT",
-        "SOLVER_PROVIDER"
+        "SOLVER_PROVIDER",
+        "API_ORIGIN",
+        "VERCEL"
       ]
     },
     "start": {
@@ -45,6 +48,7 @@
         "DATABASE_URL",
         "REDIS_URL",
         "PORT",
+        "HOST",
         "WEB_ORIGIN",
         "MICROSOFT_TENANT_ID",
         "MICROSOFT_CLIENT_ID",
@@ -63,7 +67,9 @@
         "SOLVER_API_KEY",
         "SOLVER_HOST",
         "SOLVER_PORT",
-        "SOLVER_PROVIDER"
+        "SOLVER_PROVIDER",
+        "API_ORIGIN",
+        "VERCEL"
       ]
     },
     "typecheck": {

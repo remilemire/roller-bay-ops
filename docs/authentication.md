@@ -53,6 +53,8 @@ This redirect behavior is scoped to browser login routes. Other API endpoints re
 
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. If TLS ends at a proxy, set the trusted proxy addresses so Express can recognize HTTPS. Never trust arbitrary forwarded headers.
 
+For the Vercel/Render deployment, the browser stays on one origin: Vercel forwards `/api/*` to Render, and the registered callback is `https://YOUR_DOMAIN/api/auth/callback`. See [deployment](deployment.md) for configuration and proxy verification.
+
 ## Rate limiting
 
 `RateLimitingModule` runs before session middleware and authentication. All API paths share a per-IP budget of 600 requests per 60-second window. Login and callback additionally share a separate, stricter budget of 30 requests per window (a normal sign-in uses two). Failed requests also count. GET health checks and OPTIONS preflights are exempt.

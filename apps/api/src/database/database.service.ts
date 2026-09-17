@@ -25,6 +25,11 @@ export class DatabaseService implements OnApplicationShutdown {
   async onApplicationShutdown() {
     await this.pool.end();
   }
+
+  async checkConnection() {
+    const probe = { text: 'SELECT 1', query_timeout: 1_500 };
+    await this.pool.query(probe);
+  }
 }
 
 export type DatabaseTransaction = Parameters<

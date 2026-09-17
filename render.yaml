@@ -1,0 +1,70 @@
+# Separate application services. Supply external PostgreSQL and Redis connections.
+services:
+  - type: pserv
+    name: roller-bay-solver
+    runtime: python
+    rootDir: apps/solver
+    buildCommand: pip install -r requirements.txt
+    startCommand: SOLVER_PORT="$PORT" python -m service.main
+    region: oregon
+    plan: standard
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: off
+    envVars:
+      - key: PORT
+        value: '10000'
+      - key: SOLVER_HOST
+        value: 0.0.0.0
+      - key: SOLVER_API_KEY
+        sync: false
+  - type: web
+    name: roller-bay-api
+    runtime: node
+    buildCommand: >-
+      npm ci --include=dev --workspace=@roller-bay/api --workspace=@roller-bay/shared --include-workspace-root
+      && npm run build --workspace=@roller-bay/shared
+      && npm run build --workspace=@roller-bay/api
+    startCommand: SOLVER_URL="http://$SOLVER_UPSTREAM" node apps/api/dist/main.js
+    preDeployCommand: npm run db:migrate --workspace=@roller-bay/api
+    healthCheckPath: /api/health/ready
+    region: oregon
+    plan: standard
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: '10000'
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: MICROSOFT_TENANT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CALLBACK_URL
+        sync: false
+      - key: AUTH_ALLOWED_DOMAIN
+        sync: false
+      - key: AUTH_SESSION_SECRET
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: SOLVER_API_KEY
+        fromService:
+          type: pserv
+          name: roller-bay-solver
+          envVarKey: SOLVER_API_KEY
+      - key: SOLVER_UPSTREAM
+        fromService:
+          type: pserv
+          name: roller-bay-solver
+          property: hostport
+      - key: TRUSTED_PROXY_IPS
+        sync: false

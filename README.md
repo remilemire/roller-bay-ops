@@ -4,6 +4,8 @@ Roller Bay Ops tracks individual fabric stock items for a window covering compan
 
 See the [product brief](docs/product-brief.md) for the workflows, proposed feature boundaries, open decisions, and recommended implementation sequence.
 
+See [deployment](docs/deployment.md) for the Vercel frontend, Render API and solver, same-origin `/api` routing, health checks, and pre-deploy migrations.
+
 The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
 
 The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, and shared Zod contracts. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning and cutting-result entry. The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership). API failures share one [error envelope](docs/errors.md).
@@ -31,7 +33,7 @@ Before `npm run dev`, fill in the Microsoft and session settings in `apps/api/.e
 - PostgreSQL: `localhost:5434` (the container uses port 5432 internally)
 - Redis: `localhost:6380` (the container uses port 6379 internally)
 
-Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; it does not check PostgreSQL or Redis availability. Use an authenticated `GET /api/auth/me` request to exercise the database connection.
+Local environment files are ignored by Git. The database credentials and unauthenticated Redis service in the examples are for local development only; both ports bind to localhost. The API validates its environment on startup. `/api/health` reports process liveness; `/api/health/ready` checks PostgreSQL and Redis. `/api/health/solver` monitors the optional solver separately.
 
 `npm run dev` builds shared contracts before starting the applications. Turborepo watches the dependency graph and rebuilds shared contracts and restarts dependent development tasks when they change. Stop the development processes with Ctrl+C; stop the backing services separately with `npm run services:down`. PostgreSQL and Redis data stay in separate Compose volumes.
 
@@ -67,7 +69,7 @@ apps/
         manufacturers/          # Manufacturer module and vertical slice
         materials/              # Material module and vertical slice
         colors/                 # Color module and vertical slice
-      health/                   # Liveness endpoint
+      health/                   # Liveness, storage readiness, solver monitor
       locations/                # Zones, sections, and storage levels
       stock-items/              # Physical rolls/remnants and admin CRUD
       stock-receipts/          # Receipts, quantity expansion, and idempotent submission
@@ -124,7 +126,7 @@ Import shared contracts through feature exports such as `@roller-bay/shared/user
 | `npm run db:migrate`                        | Apply pending migrations                                       |
 | `npm run db:studio`                         | Open Drizzle Studio for the configured database                |
 
-The migration history starts with a single initial migration for users and roles. Commit generated SQL and the `drizzle/meta` files together. Migrations run explicitly, not automatically at API startup. Database commands load `apps/api/.env`, because npm runs them from the API workspace. The web application reads `apps/web/.env.local`; `NEXT_PUBLIC_API_URL` is public and is embedded at build time.
+The migration history starts with a single initial migration for users and roles. Commit generated SQL and the `drizzle/meta` files together. Local migrations run explicitly. Render applies committed migrations in the API pre-deploy step, never at app startup. Database commands load `apps/api/.env`, because npm runs them from the API workspace. The web application reads `apps/web/.env.local`; `NEXT_PUBLIC_API_URL` is public and is embedded at build time.
 
 To verify the starter:
 
@@ -138,7 +140,7 @@ npm run format:check
 
 The default tests verify user persistence errors, email normalization, directory policy, configuration validation, and signed OIDC responses from a simulated provider. The optional `npm run test:integration` suite exercises auth against real Redis and PostgreSQL; see its [setup and scope](docs/authentication.md#tests).
 
-Microsoft sign-in and credentialed frontend requests use the existing backend sessions. Catalog, location, and stock corrections are available to admins and the owner. All active employees can work with receipts and allocations. The user directory requires a separately scoped backend listing endpoint; deployment remains future work. See [frontend verification](docs/frontend.md#verification) for unit and browser tests.
+Microsoft sign-in and credentialed frontend requests use the existing backend sessions. Catalog, location, and stock corrections are available to admins and the owner. All active employees can work with receipts and allocations. The user directory requires a separately scoped backend listing endpoint; Vercel/Render configuration is available, with live staging verification still required. See [frontend verification](docs/frontend.md#verification) for unit and browser tests.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

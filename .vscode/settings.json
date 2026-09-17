@@ -1,4 +1,7 @@
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/apps/solver/.venv/bin/python",
-  "python.analysis.extraPaths": ["${workspaceFolder}/apps/solver"]
+  "python.analysis.extraPaths": ["${workspaceFolder}/apps/solver"],
+  "json.schemaDownload.trustedDomains": {
+    "https://openapi.vercel.sh/vercel.json": true
+  }
 }

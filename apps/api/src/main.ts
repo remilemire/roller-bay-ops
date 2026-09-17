@@ -24,7 +24,10 @@ async function bootstrap() {
     exposedHeaders: ['RateLimit', 'RateLimit-Policy', 'Retry-After'],
   });
   app.enableShutdownHooks();
-  await app.listen(config.get('PORT', { infer: true }), '127.0.0.1');
+  await app.listen(
+    config.get('PORT', { infer: true }),
+    config.get('HOST', { infer: true }),
+  );
 }
 
 void bootstrap().catch((error: unknown) => {
