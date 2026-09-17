@@ -1,12 +1,14 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  defaultMeasurementUnits,
   lengthUnitSchema,
   lengthUnits,
   measurementFields,
-  type LengthUnit,
   type MeasurementField,
+  type UpdateMeasurementUnits,
 } from '@roller-bay/shared/users';
+import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/input';
@@ -30,16 +32,38 @@ const fieldLabels: Record<MeasurementField, string> = {
   tubeDiameter: 'Tube outer diameter',
 };
 
+const sections: { title: string; fields: MeasurementField[] }[] = [
+  { title: 'Stock dimensions', fields: ['rollWidth', 'rollLength'] },
+  { title: 'Blind dimensions', fields: ['blindWidth', 'finishedDrop'] },
+  {
+    title: 'Cutting & remnants',
+    fields: [
+      'dropAllowance',
+      'dropLength',
+      'edgeTrim',
+      'minimumRemnantWidth',
+      'minimumRemnantLength',
+    ],
+  },
+  {
+    title: 'Roll measurements',
+    fields: ['thickness', 'radialDepth', 'tubeDiameter'],
+  },
+];
+
 export function MeasurementUnitsPanel() {
   const units = useMeasurementUnits();
   const client = useQueryClient();
   const change = useMutation({
-    mutationFn: (input: { field: MeasurementField; unit: LengthUnit }) =>
-      updateMeasurementUnits({ [input.field]: input.unit }),
+    mutationFn: (patch: UpdateMeasurementUnits) =>
+      updateMeasurementUnits(patch),
     // The selects show the session's value, so the server response is what
     // updates them; a failed change visibly falls back to the saved unit.
     onSuccess: (user) => client.setQueryData(sessionKey, user),
   });
+  const isDefault = measurementFields.every(
+    (field) => units[field] === defaultMeasurementUnits[field],
+  );
   return (
     <section className="panel" aria-labelledby="measurements-heading">
       <div className="panel-heading">
@@ -47,31 +71,45 @@ export function MeasurementUnitsPanel() {
           <h2 id="measurements-heading">Measurements</h2>
           <p>Choose the unit for entering and reading each measurement.</p>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isDefault || change.isPending}
+          onClick={() => change.mutate(defaultMeasurementUnits)}
+        >
+          Reset to defaults
+        </Button>
       </div>
       <div className="panel-body">
         <fieldset
-          className="form-grid"
           disabled={change.isPending}
           style={{ border: 0, padding: 0, margin: 0 }}
         >
-          {measurementFields.map((field) => (
-            <Field label={fieldLabels[field]} key={field}>
-              <Select
-                value={units[field]}
-                onChange={(event) =>
-                  change.mutate({
-                    field,
-                    unit: lengthUnitSchema.parse(event.target.value),
-                  })
-                }
-              >
-                {lengthUnits.map((unit) => (
-                  <option value={unit} key={unit}>
-                    {unitNames[unit]}
-                  </option>
+          {sections.map((section) => (
+            <div className="form-section" key={section.title}>
+              <h3>{section.title}</h3>
+              <div className="form-grid">
+                {section.fields.map((field) => (
+                  <Field label={fieldLabels[field]} key={field}>
+                    <Select
+                      value={units[field]}
+                      onChange={(event) =>
+                        change.mutate({
+                          [field]: lengthUnitSchema.parse(event.target.value),
+                        })
+                      }
+                    >
+                      {lengthUnits.map((unit) => (
+                        <option value={unit} key={unit}>
+                          {unitNames[unit]}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
                 ))}
-              </Select>
-            </Field>
+              </div>
+            </div>
           ))}
         </fieldset>
         {change.error && <ErrorNotice error={change.error} />}

@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 import { user } from '../../../tests/fixtures';
 import { sessionKey } from '@/features/auth/auth.queries';
 import { MeasurementUnitsPanel } from './measurement-units-panel';
@@ -47,6 +48,34 @@ it('saves one field at a time and shows the units the server returns', async () 
   expect(client.getQueryData(sessionKey)).toEqual(updated);
   expect(screen.getByLabelText('Roll width')).toHaveValue('in');
   expect(screen.getByLabelText('Tube outer diameter')).toHaveValue('mm');
+});
+
+it('groups fields into sections and resets every unit to its default', async () => {
+  const changed = {
+    ...user,
+    measurementUnits: { ...user.measurementUnits, rollLength: 'm' },
+  };
+  const fetchMock = vi.fn().mockResolvedValue(json(user));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = renderPanel();
+  expect(
+    screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
+  ).toEqual([
+    'Stock dimensions',
+    'Blind dimensions',
+    'Cutting & remnants',
+    'Roll measurements',
+  ]);
+  const reset = screen.getByRole('button', { name: 'Reset to defaults' });
+  expect(reset).toBeDisabled();
+  client.setQueryData(sessionKey, changed);
+  await waitFor(() => expect(reset).toBeEnabled());
+  await userEvent.click(reset);
+  await waitFor(() =>
+    expect(screen.getByLabelText('Roll length')).toHaveValue('yd'),
+  );
+  const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  expect(JSON.parse(init.body as string)).toEqual(defaultMeasurementUnits);
 });
 
 it('keeps the saved unit and reports the error when saving fails', async () => {

@@ -52,7 +52,7 @@ Completion retries preserve the original submission key and payload to avoid dup
 
 ## Measurements and access
 
-The API and database use millimetres. The UI defaults to inches for widths and horizontal trimming, yards for lengths and drop allowances, and millimetres for thickness, radial depth, and tube outside diameter. Each user can choose units per measurement field in Settings. Blank measurements remain missing values, not zero.
+The API and database use millimetres. The UI defaults to inches for widths, drops, allowances, trimming, and minimum reusable sizes, yards for roll length, and millimetres for thickness, radial depth, and tube outside diameter. Each user can choose units per measurement field in Settings. Blank measurements remain missing values, not zero.
 
 Microsoft work-account sign-in and Redis sessions protect the workspace. All active employees can use receiving and allocation workflows. Admins and the owner maintain catalog, locations, and stock corrections. See [authentication](authentication.md) and the [frontend workspace](frontend.md).
 

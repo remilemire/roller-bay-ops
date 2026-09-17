@@ -14,7 +14,7 @@ it('preserves requirement identity, assignment ordering, and incomplete fields',
   const data = allocationFromForm(
     {
       orderNumber: '',
-      requirements: [{ ...r, width: '22', length: '1.5', quantity: '2' }],
+      requirements: [{ ...r, width: '22', length: '54', quantity: '2' }],
       drops: [
         {
           stockItemId: '',
@@ -87,7 +87,7 @@ it('lets blind drops use inches while other fields keep their own units', () => 
     length: '72',
   });
   expect(allocationToForm(data, units)).toMatchObject({
-    requirements: [{ length: '2' }],
-    drops: [{ length: '3' }],
+    requirements: [{ length: '72' }],
+    drops: [{ length: '108' }],
   });
 });
