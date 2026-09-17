@@ -22,6 +22,7 @@ export function buildCuttingContext(
       isRemnant: item.isRemnant,
       isUsed: item.isUsed,
       consumedAt: item.consumedAt,
+      voidedAt: item.voidedAt,
     })),
   };
 }

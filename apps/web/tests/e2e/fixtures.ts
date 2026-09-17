@@ -66,7 +66,8 @@ export async function mockApi(
         status,
         contentType: 'application/json',
         headers: {
-          'Access-Control-Allow-Origin': 'http://localhost:3100',
+          'Access-Control-Allow-Origin':
+            request.headers().origin ?? 'http://localhost:3100',
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Headers': 'Content-Type,Idempotency-Key',
           'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
@@ -92,6 +93,7 @@ export async function mockApi(
       return send(null, 204);
     }
     if (!state.authenticated) return send({ message: 'Session expired' }, 401);
+    if (path.endsWith('/history')) return send(paged([], url));
     if (path === '/users/me/measurement-units' && method === 'PATCH') {
       const body = request.postDataJSON() as Partial<MeasurementUnits>;
       state.unitRequests.push(body);

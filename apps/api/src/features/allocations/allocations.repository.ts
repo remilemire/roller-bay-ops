@@ -345,7 +345,11 @@ export class AllocationsRepository {
       .where(
         and(
           active(),
-          sql`(${stockItems.consumedAt} IS NOT NULL OR ${stockItems.remainingLengthMm} < ${total})`,
+          sql`(${stockItems.voidedAt} IS NOT NULL OR ${stockItems.consumedAt} IS NOT NULL OR ${stockItems.remainingLengthMm} < ${total}
+            OR EXISTS (SELECT 1 FROM allocation_cuts ac JOIN allocation_cut_items aci ON aci.allocation_cut_id = ac.id
+              JOIN allocation_requirements ar ON ar.id = aci.allocation_requirement_id
+              WHERE ac.allocation_item_id = ${allocationItems.id}
+              GROUP BY ac.id, ac.edge_trim_mm HAVING sum(ar.width_mm * aci.quantity) + 2 * coalesce(ac.edge_trim_mm, 0) > ${stockItems.widthMm}))`,
           stockIds ? inArray(stockItems.id, stockIds) : undefined,
           allocationIds ? inArray(allocations.id, allocationIds) : undefined,
         ),

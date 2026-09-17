@@ -1,3 +1,5 @@
+import { testCorrections } from '../audit/corrections.integration-cases.js';
+import { AuditModule } from '../audit/audit.module.js';
 import { AllocationsModule } from '../allocations/allocations.module.js';
 import { testAllocations } from '../allocations/allocations.integration-cases.js';
 import { testStockReceipts } from '../stock-receipts/stock-receipts.integration-cases.js';
@@ -47,7 +49,7 @@ const enabled = process.env.AUTH_INTEGRATION_TESTS === '1';
 
 test(
   'auth integration with real Redis and isolated PostgreSQL tables',
-  { skip: !enabled, timeout: 30000 },
+  { skip: !enabled, timeout: 90000 },
   async (t) => {
     assert.ok(
       process.env.TEST_DATABASE_URL,
@@ -95,6 +97,7 @@ test(
           load: [() => config],
         }),
         ErrorsModule,
+        AuditModule,
         RateLimitingModule,
         AuthModule,
         HealthModule,
@@ -287,6 +290,16 @@ test(
       );
 
       await testAllocations(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testCorrections(
         t,
         app,
         pool,
@@ -659,9 +672,9 @@ test(
         'logout deletes the session, clears the cookie, and invalidates replay; outages fail closed',
         async () => {
           profile = {
-            microsoftSubjectId: 'initial-subject',
-            name: 'Employee',
-            email: 'changed.name+ops@example.com',
+            microsoftSubjectId: 'logout-only-subject',
+            name: 'Session-only employee',
+            email: 'session.fixture@example.com',
           };
           const login = await signIn();
           await request(app.getHttpServer())
@@ -701,12 +714,12 @@ test(
             .set('Cookie', active.authenticated)
             .expect(200);
           await redis.client.connect();
-          await request(app.getHttpServer())
+          const activeUser = await request(app.getHttpServer())
             .get('/api/auth/me')
             .set('Cookie', active.authenticated)
             .expect(200);
           await pool.query(`DELETE FROM "${schema}".users WHERE id=$1`, [
-            userId,
+            activeUser.body.id,
           ]);
           await request(app.getHttpServer())
             .get('/api/auth/me')

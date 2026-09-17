@@ -1,3 +1,4 @@
+import { AuditModule } from '../audit/audit.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseModule } from '../../database/database.module.js';
@@ -14,6 +15,7 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 
 @Module({
   imports: [
+    AuditModule,
     ConfigModule,
     DatabaseModule,
     StockItemsModule,

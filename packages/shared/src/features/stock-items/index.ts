@@ -100,6 +100,7 @@ export const stockItemQuerySchema = z.strictObject({
   zoneId: z.uuid().optional(),
   isRemnant: queryBoolean.optional(),
   isConsumed: queryBoolean.default(false),
+  isVoided: queryBoolean.default(false),
   minWidthMm: queryDimension.optional(),
   minRemainingLengthMm: queryDimension.optional(),
 });
@@ -107,6 +108,8 @@ export const stockItemQuerySchema = z.strictObject({
 export const stockItemSchema = z.object({
   ...fields,
   id: z.uuid(),
+  revision: z.number().int().positive(),
+  voidedAt: z.iso.datetime().nullable(),
   stockReceiptItemId: z.uuid().nullable(),
   measurementThicknessMm: z
     .number()
@@ -148,7 +151,7 @@ const retainedScrapSchema = z.strictObject({
 });
 const cuttingOutcomeFields = {
   stockItemId: z.uuid().transform((value) => value.toLowerCase()),
-  expectedUpdatedAt: z.iso.datetime(),
+  expectedRevision: z.number().int().positive().max(2147483646),
   scraps: z.array(retainedScrapSchema).max(100).default([]),
 };
 export const stockCuttingOutcomeSchema = z.discriminatedUnion('outcome', [
@@ -172,4 +175,63 @@ export const stockCuttingOutcomeSchema = z.discriminatedUnion('outcome', [
     locationId: z.uuid().transform((value) => value.toLowerCase()),
   }),
 ]);
+// Read old completion reports and replay their original keys without fabricating revisions.
+const legacyOutcomeFields = {
+  stockItemId: cuttingOutcomeFields.stockItemId,
+  expectedUpdatedAt: z.iso.datetime(),
+  scraps: cuttingOutcomeFields.scraps,
+};
+export const legacyStockCuttingOutcomeSchema = z.discriminatedUnion('outcome', [
+  z.strictObject({
+    ...legacyOutcomeFields,
+    ...stockCuttingOutcomeSchema.options[0].omit({
+      stockItemId: true,
+      expectedRevision: true,
+      scraps: true,
+    }).shape,
+  }),
+  z.strictObject({
+    ...legacyOutcomeFields,
+    ...stockCuttingOutcomeSchema.options[1].omit({
+      stockItemId: true,
+      expectedRevision: true,
+      scraps: true,
+    }).shape,
+  }),
+  z.strictObject({
+    ...legacyOutcomeFields,
+    ...stockCuttingOutcomeSchema.options[2].omit({
+      stockItemId: true,
+      expectedRevision: true,
+      scraps: true,
+    }).shape,
+  }),
+]);
+export const recordedStockCuttingOutcomeSchema = z.union([
+  stockCuttingOutcomeSchema,
+  legacyStockCuttingOutcomeSchema,
+]);
 export type StockCuttingOutcome = z.infer<typeof stockCuttingOutcomeSchema>;
+
+// The immutable measurement snapshot omits joined, renameable catalog labels.
+export const stockSnapshotSchema = stockItemSchema.omit({
+  fabricColorCode: true,
+  materialId: true,
+  materialName: true,
+  manufacturerId: true,
+  manufacturerName: true,
+  locationLabel: true,
+  sectionId: true,
+  sectionLabel: true,
+  zoneId: true,
+  zoneName: true,
+});
+export type StockSnapshot = z.infer<typeof stockSnapshotSchema>;
+export const stockEffectSchema = z.object({
+  calculationThicknessMm: z.number().positive().nullable().default(null),
+  stockItemId: z.uuid(),
+  sourceStockItemId: z.uuid().nullable(),
+  before: stockSnapshotSchema.nullable(),
+  after: stockSnapshotSchema,
+});
+export type StockEffect = z.infer<typeof stockEffectSchema>;

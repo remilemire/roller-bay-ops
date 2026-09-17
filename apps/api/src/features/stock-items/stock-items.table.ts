@@ -49,7 +49,7 @@ export const stockItems = pgTable(
     })
       .generatedAlwaysAs(
         (): SQL => sql`CASE
-          WHEN ${stockItems.consumedAt} IS NOT NULL THEN 0::numeric
+          WHEN ${stockItems.voidedAt} IS NOT NULL OR ${stockItems.consumedAt} IS NOT NULL THEN 0::numeric
           WHEN ${stockItems.isRemnant} THEN ${stockItems.explicitLengthMm}
           WHEN ${stockItems.radialDepthMm} IS NOT NULL THEN
             round(
@@ -73,6 +73,8 @@ export const stockItems = pgTable(
       () => stockReceiptItems.id,
       { onDelete: 'restrict' },
     ),
+    revision: integer('revision').default(1).notNull(),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
@@ -83,6 +85,7 @@ export const stockItems = pgTable(
       .notNull(),
   },
   (table) => [
+    check('fabric_stock_items_revision_positive', sql`${table.revision} > 0`),
     index('fabric_stock_items_fabric_color_id_idx').on(table.fabricColorId),
     index('fabric_stock_items_location_id_idx').on(table.locationId),
     index('fabric_stock_items_source_stock_item_id_idx').on(

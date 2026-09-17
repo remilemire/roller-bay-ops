@@ -186,6 +186,7 @@ export async function generatePatterns(
     }
     if (
       stock.consumedAt !== null ||
+      stock.voidedAt != null ||
       (stock.isRemnant && stock.reservedLengthMm > 0)
     )
       continue;

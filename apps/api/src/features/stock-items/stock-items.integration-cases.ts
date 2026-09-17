@@ -1,3 +1,4 @@
+import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { TestContext } from 'node:test';
@@ -28,13 +29,17 @@ export async function testStockItems(
       .set('Origin', origin)
       .send(body);
   const patch = (url: string, body: object) =>
-    request(server)
-      .patch(url)
-      .set('Cookie', cookie)
-      .set('Origin', origin)
-      .send(body);
+    url.startsWith(path + '/')
+      ? stockCorrectionRequest(server, cookie, origin, url, body)
+      : request(server)
+          .patch(url)
+          .set('Cookie', cookie)
+          .set('Origin', origin)
+          .send(body);
   const remove = (url: string) =>
-    request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
+    url.startsWith(path + '/')
+      ? stockCorrectionRequest(server, cookie, origin, url)
+      : request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
   const role = (value: string) =>
     pool.query(`UPDATE "${schema}".users SET role=$1 WHERE id=$2`, [
       value,
@@ -54,12 +59,12 @@ export async function testStockItems(
           .send({})
           .expect(401);
         await request(server)
-          .patch(`${path}/${randomUUID()}`)
+          .post(`${path}/${randomUUID()}/corrections`)
           .set('Origin', origin)
           .send({})
           .expect(401);
         await request(server)
-          .delete(`${path}/${randomUUID()}`)
+          .post(`${path}/${randomUUID()}/void`)
           .set('Origin', origin)
           .expect(401);
         await role('user');
@@ -363,7 +368,7 @@ export async function testStockItems(
         await patch(`${path}/${measured.id}`, { locationId: null }).expect(400);
         await patch(`${path}/${measured.id}`, {
           locationId: location.id,
-        }).expect(200);
+        }).expect(400);
         assert.equal((await read(measured.id)).measurementThicknessMm, 0.5);
         assert.equal((await read(measured.id)).remainingLengthMm, 3769.911);
         const remeasured = stockItemSchema.parse(
@@ -393,14 +398,29 @@ export async function testStockItems(
         await patch(`${path}/${measured.id}`, {
           tubeOuterDiameterMm: null,
         }).expect(400);
-        const parallel = await Promise.all([
-          patch(`${path}/${remnant.id}`, { explicitLengthMm: 1200 }),
-          patch(`${path}/${remnant.id}`, { widthMm: 800 }),
-        ]);
-        assert.deepEqual(
-          parallel.map((response) => response.status),
-          [200, 200],
+        const revision = (await read(remnant.id)).revision;
+        const parallel = await Promise.all(
+          [{ explicitLengthMm: 1200 }, { widthMm: 800 }].map((changes) =>
+            request(server)
+              .post(`${path}/${remnant.id}/corrections`)
+              .set('Cookie', cookie)
+              .set('Origin', origin)
+              .set('Idempotency-Key', randomUUID())
+              .send({
+                expectedRevision: revision,
+                reason: 'Concurrent correction',
+                changes,
+              }),
+          ),
         );
+        assert.deepEqual(parallel.map((r) => r.status).sort(), [200, 409]);
+        const current = await read(remnant.id);
+        await patch(
+          `${path}/${remnant.id}`,
+          current.widthMm === 800
+            ? { explicitLengthMm: 1200 }
+            : { widthMm: 800 },
+        ).expect(200);
         assert.equal((await read(remnant.id)).widthMm, 800);
         assert.equal((await read(remnant.id)).remainingLengthMm, 1200);
 
@@ -470,23 +490,18 @@ export async function testStockItems(
         await role('owner');
         const owned = await create(input);
         await patch(`${path}/${owned.id}`, { widthMm: 1000 }).expect(200);
-        await remove(`${path}/${owned.id}`).expect(204);
+        await remove(`${path}/${owned.id}`).expect(200);
         await role('admin');
-        for (const item of [remnant, roll, measured, other]) {
-          await remove(`${path}/${item.id}`).expect(204);
-          await get(`${path}/${item.id}`).expect(404);
+        for (const item of [remnant, measured, other]) {
+          await remove(`${path}/${item.id}`).expect(200);
+          assert.ok((await read(item.id)).voidedAt);
         }
-        await remove(`/api/locations/${location.id}`).expect(204);
-        await remove(`/api/locations/sections/${section.id}`).expect(204);
-        await remove(`/api/locations/zones/${zone.id}`).expect(204);
-        for (const id of [color.id, otherColor.id])
-          await remove(`/api/fabric-catalog/colors/${id}`).expect(204);
-        await remove(`/api/fabric-catalog/materials/${material.id}`).expect(
-          204,
-        );
-        await remove(`/api/fabric-catalog/manufacturers/${maker.id}`).expect(
-          204,
-        );
+        // A voided descendant still preserves its source relationship.
+        await remove(`${path}/${roll.id}`).expect(409);
+        assert.equal((await read(roll.id)).voidedAt, null);
+        // Voiding retains stock and its references; catalog and storage records remain protected.
+        await remove(`/api/locations/${location.id}`).expect(409);
+        await remove(`/api/fabric-catalog/colors/${color.id}`).expect(409);
       },
     );
   } finally {

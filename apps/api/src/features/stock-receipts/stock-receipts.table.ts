@@ -1,8 +1,10 @@
+import type { StockEffect } from '@roller-bay/shared/stock-items';
 import { sql } from 'drizzle-orm';
 import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   boolean,
   timestamp,
@@ -30,6 +32,7 @@ export const stockReceipts = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+    stockEffects: jsonb('stock_effects').$type<StockEffect[]>(),
     revision: integer('revision').default(1).notNull(),
     submittedDraftRevision: integer('submitted_draft_revision'),
     purchaseOrderNumber: varchar('purchase_order_number', {

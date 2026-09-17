@@ -1,3 +1,4 @@
+import type { StockEffect } from '@roller-bay/shared/stock-items';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -36,6 +37,7 @@ export const allocations = pgTable(
       .notNull(),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     submittedDraftRevision: integer('submitted_draft_revision'),
+    stockEffects: jsonb('stock_effects').$type<StockEffect[]>(),
     revision: integer('revision').default(1).notNull(),
     settings: jsonb('settings').$type<AllocationDraftData['settings']>(),
     plannedSummary: jsonb('planned_summary').$type<CuttingPlanSummary>(),
@@ -44,6 +46,10 @@ export const allocations = pgTable(
     completionKey: uuid('completion_key'),
     completionRequestHash: varchar('completion_request_hash', { length: 64 }),
     completion: jsonb('completion').$type<AllocationCompletion>(),
+    effectiveCompletion: jsonb(
+      'effective_completion',
+    ).$type<AllocationCompletion>(),
+    correctedAt: timestamp('corrected_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   },

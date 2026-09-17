@@ -84,3 +84,7 @@ Vitest and React Testing Library cover API errors, error envelope parsing, issue
 Browser tests intercept API requests using fixtures shaped by the real shared contracts. They verify the browser's behavior and outgoing requests without changing a database. They do not replace the backend's PostgreSQL/Redis/solver integration suites or live Microsoft tenant testing. Trace files, screenshots, and browser reports are ignored by Git.
 
 Allocation forms collect finished blind sizes and quantities. Edge trimming, reusable-remnant thresholds, and extra drop allowance are server configuration, not editable form fields. Saved allocation details still display their recorded rules and allowances in the user’s preferred units.
+
+## Corrections and history
+
+Stock, submitted receipts and completed allocations expose admin correction actions and employee-readable history. Forms pin their opening revisions and units, require a reason and review, preserve input on conflicts, and retain the exact payload/key for uncertain retries. Receipt and completion contexts explain blocked records and link to related orders. Voided stock has a separate list filter; corrected printed allocation details identify their correction date. See [corrections and audit](corrections-and-audit.md) for operational rules and schema rollout.

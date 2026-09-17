@@ -14,6 +14,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/features/auth/auth-boundary', async () => {
   const { defaultMeasurementUnits } = await import('@roller-bay/shared/users');
   return {
+    useCanManage: () => false,
     useCurrentUser: () => ({
       id: 'user-1',
       measurementUnits: defaultMeasurementUnits,

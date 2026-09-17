@@ -51,6 +51,7 @@ export const stockReceiptItemSchema = z.object({
   ...lineFields,
   id: z.uuid(),
   stockReceiptId: z.uuid(),
+  voidedAt: z.iso.datetime().nullable(),
   stockItemIds: z.array(z.uuid()),
 });
 export const stockReceiptSchema = stockReceiptSummarySchema.extend({

@@ -35,6 +35,14 @@
     "./errors": {
       "types": "./dist/errors/index.d.ts",
       "default": "./dist/errors/index.js"
+    },
+    "./audit": {
+      "types": "./dist/features/audit/index.d.ts",
+      "default": "./dist/features/audit/index.js"
+    },
+    "./corrections": {
+      "types": "./dist/features/corrections/index.d.ts",
+      "default": "./dist/features/corrections/index.js"
     }
   },
   "files": [

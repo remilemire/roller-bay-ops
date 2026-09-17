@@ -117,6 +117,17 @@ export class StockReceiptsRepository {
     return row!;
   }
 
+  async updateItem(
+    id: string,
+    values: Partial<typeof stockReceiptItems.$inferInsert>,
+  ) {
+    const [row] = await this.db
+      .update(stockReceiptItems)
+      .set(values)
+      .where(eq(stockReceiptItems.id, id))
+      .returning();
+    return row!;
+  }
   deleteItems(id: string) {
     return this.db
       .delete(stockReceiptItems)

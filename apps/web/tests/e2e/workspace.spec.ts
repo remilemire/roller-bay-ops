@@ -217,7 +217,7 @@ test('cutting completion preserves the stock revision and sends tube measurement
         stockItemId: ids.stock,
         outcome: 'consumed',
         tubeOuterDiameterMm: 50,
-        expectedUpdatedAt: '2026-09-16T12:00:00.000Z',
+        expectedRevision: 1,
       },
     ],
   });

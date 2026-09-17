@@ -18,6 +18,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/features/auth/auth-boundary', async () => {
   const { defaultMeasurementUnits } = await import('@roller-bay/shared/users');
   return {
+    useCanManage: () => false,
     useCurrentUser: () => ({
       id: 'user-1',
       measurementUnits: defaultMeasurementUnits,
@@ -72,6 +73,12 @@ it('does not unmount a dirty draft if another employee submits it during a backg
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
+  client.setQueryData(['history', 'stock-receipts', receiptDraft.id, 1], {
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 25,
+  });
   client.setQueryData([...receiptKey, receiptDraft.id], receiptDraft);
   render(
     <QueryClientProvider client={client}>
@@ -92,6 +99,12 @@ it('preserves a dirty draft when a background request fails', async () => {
   const user = userEvent.setup();
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+  });
+  client.setQueryData(['history', 'stock-receipts', receiptDraft.id, 1], {
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 25,
   });
   client.setQueryData([...receiptKey, receiptDraft.id], receiptDraft);
   render(

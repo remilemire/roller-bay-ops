@@ -6,6 +6,7 @@ import {
   integer,
   numeric,
   pgTable,
+  timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
@@ -19,6 +20,7 @@ export const stockReceiptItems = pgTable(
     stockReceiptId: uuid('stock_receipt_id')
       .notNull()
       .references(() => stockReceipts.id, { onDelete: 'restrict' }),
+    voidedAt: timestamp('voided_at', { withTimezone: true }),
     position: integer('position').notNull(),
     fabricColorId: uuid('fabric_color_id').references(() => fabricColors.id, {
       onDelete: 'restrict',

@@ -14,6 +14,12 @@ export function validateStockUsage(
   const issues: CuttingPlanIssue[] = [];
   for (const drop of plan.drops) {
     const path = `plan.drops.${drop.index}`;
+    if (drop.stock.voidedAt)
+      issues.push({
+        code: 'voided_stock',
+        path,
+        message: 'Voided stock cannot be used.',
+      });
     if (drop.stock.consumedAt !== null)
       issues.push({
         code: 'consumed_stock',

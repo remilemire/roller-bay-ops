@@ -54,6 +54,8 @@ export const stock = stockItemSchema.parse({
   widthMm: 2997.2,
   initialLengthMm: 54864,
   remainingLengthMm: 54864,
+  revision: 1,
+  voidedAt: null,
   explicitLengthMm: null,
   radialDepthMm: null,
   tubeOuterDiameterMm: null,
@@ -105,6 +107,7 @@ export const receipt = stockReceiptDetailSchema.parse({
       id: ids.line,
       stockReceiptId: ids.receipt,
       ...receiptData.items[0],
+      voidedAt: null,
       stockItemIds: [ids.stock, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'],
       stockItems: [
         stock,
@@ -163,4 +166,5 @@ export const allocation = allocationDetailSchema.parse({
     },
   ],
   completion: null,
+  correctedAt: null,
 });

@@ -1,6 +1,9 @@
+import { allocations } from '../allocations/tables/allocations.table.js';
+import { allocationItems } from '../allocations/tables/allocation-items.table.js';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
+  sql,
   asc,
   count,
   eq,
@@ -12,7 +15,6 @@ import {
   isNotNull,
 } from 'drizzle-orm';
 import type { StockItemQuery } from '@roller-bay/shared/stock-items';
-import { StockItemInUseError } from './stock-items.errors.js';
 import {
   DatabaseService,
   type DatabaseTransaction,
@@ -33,7 +35,7 @@ type StockItemsDatabase = Pick<
 export type StockItemRecord = typeof stockItems.$inferSelect;
 export type StockItemWrite = Omit<
   typeof stockItems.$inferInsert,
-  'id' | 'createdAt' | 'updatedAt'
+  'id' | 'createdAt' | 'updatedAt' | 'revision'
 >;
 
 @Injectable()
@@ -44,20 +46,28 @@ export class StockItemsRepository {
   }
 
   withTransaction<T>(
-    operation: (repository: StockItemsRepository) => Promise<T>,
+    operation: (
+      repository: StockItemsRepository,
+      tx: DatabaseTransaction,
+    ) => Promise<T>,
   ): Promise<T> {
     return stockItemsQuery(() =>
       this.db.transaction((tx) =>
-        operation(new StockItemsRepository({ db: tx })),
+        operation(new StockItemsRepository({ db: tx }), tx),
       ),
     );
   }
 
   list(query: StockItemQuery) {
     const where = and(
-      query.isConsumed
-        ? isNotNull(stockItems.consumedAt)
-        : isNull(stockItems.consumedAt),
+      query.isVoided
+        ? isNotNull(stockItems.voidedAt)
+        : isNull(stockItems.voidedAt),
+      !query.isVoided
+        ? query.isConsumed
+          ? isNotNull(stockItems.consumedAt)
+          : isNull(stockItems.consumedAt)
+        : undefined,
       query.fabricColorId
         ? eq(stockItems.fabricColorId, query.fabricColorId)
         : undefined,
@@ -115,6 +125,55 @@ export class StockItemsRepository {
     );
   }
 
+  async creationAllocation(id: string) {
+    const [row] = await this.db
+      .select({ id: allocations.id })
+      .from(allocations)
+      .where(
+        sql`${allocations.stockEffects} @> ${JSON.stringify([{ stockItemId: id, before: null }])}::jsonb OR ${allocations.completion}->'createdStockItemIds' @> ${JSON.stringify([id])}::jsonb`,
+      )
+      .limit(1);
+    return row;
+  }
+  async allocationReferences(ids: string[]) {
+    if (!ids.length) return [];
+    return this.db
+      .select({
+        allocationId: allocations.id,
+        stockItemId: allocationItems.stockItemId,
+        completedAt: allocations.completedAt,
+        cancelledAt: allocations.cancelledAt,
+      })
+      .from(allocationItems)
+      .innerJoin(allocations, eq(allocationItems.allocationId, allocations.id))
+      .where(
+        and(
+          inArray(allocationItems.stockItemId, ids),
+          eq(allocations.isDraft, false),
+          isNull(allocations.cancelledAt),
+        ),
+      );
+  }
+  async lockRows(ids: string[]) {
+    if (!ids.length) return [];
+    return this.db
+      .select()
+      .from(stockItems)
+      .where(inArray(stockItems.id, ids))
+      .orderBy(asc(stockItems.id))
+      .for('update');
+  }
+  async descendants(ids: string[]) {
+    return ids.length
+      ? this.db
+          .select({
+            id: stockItems.id,
+            sourceStockItemId: stockItems.sourceStockItemId,
+          })
+          .from(stockItems)
+          .where(inArray(stockItems.sourceStockItemId, ids))
+      : [];
+  }
   async findById(id: string) {
     return stockItemsQuery(async () => {
       const [row] = await this.select().where(eq(stockItems.id, id));
@@ -149,7 +208,14 @@ export class StockItemsRepository {
   }
 
   async update(id: string, input: StockItemWrite) {
-    await this.db.update(stockItems).set(input).where(eq(stockItems.id, id));
+    await this.db
+      .update(stockItems)
+      .set({
+        ...input,
+        revision: sql`${stockItems.revision} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(stockItems.id, id));
   }
 
   async createReceivedRolls(
@@ -176,28 +242,6 @@ export class StockItemsRepository {
     );
   }
 
-  delete(id: string) {
-    return stockItemsQuery(async () => {
-      const [row] = await this.db
-        .delete(stockItems)
-        .where(
-          and(eq(stockItems.id, id), isNull(stockItems.stockReceiptItemId)),
-        )
-        .returning({ id: stockItems.id });
-      if (!row) {
-        const [existing] = await this.db
-          .select({ receipt: stockItems.stockReceiptItemId })
-          .from(stockItems)
-          .where(eq(stockItems.id, id));
-        if (existing?.receipt)
-          throw new StockItemInUseError(
-            'Stock received through a purchase order cannot be deleted.',
-          );
-      }
-      return row;
-    }, true);
-  }
-
   async findForAllocation(
     transaction: DatabaseTransaction,
     filter: { stockIds?: string[]; colorIds?: string[]; lock?: boolean },
@@ -210,6 +254,7 @@ export class StockItemsRepository {
         ? inArray(stockItems.fabricColorId, filter.colorIds)
         : undefined,
       filter.colorIds ? isNull(stockItems.consumedAt) : undefined,
+      filter.colorIds ? isNull(stockItems.voidedAt) : undefined,
     );
     // Lock stock alone before loading joined labels. A common ID order avoids
     // reversed lock acquisition when allocations share several stock items.

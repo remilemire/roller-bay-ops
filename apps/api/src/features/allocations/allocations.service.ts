@@ -1,3 +1,17 @@
+import { AuditService, canonicalJson } from '../audit/audit.service.js';
+import {
+  stockChanges,
+  snapshotWrite,
+} from '../stock-items/stock-items.audit.js';
+import {
+  cuttingWrite,
+  retainedPieceWrite,
+} from '../stock-items/stock-items.cutting.js';
+import type { StockEffect } from '@roller-bay/shared/stock-items';
+import {
+  completionCorrectionContextSchema,
+  type CompletionCorrection,
+} from '@roller-bay/shared/corrections';
 /**
  * Reservation-changing writes lock the allocation header, then stock in a
  * common order before checking availability.
@@ -18,7 +32,8 @@ import {
   type AllocationQuery,
   type CreateAllocation,
   type ReplaceAllocation,
-  type CompleteAllocation,
+  completeAllocationSchema,
+  type CompleteAllocationRequest,
 } from '@roller-bay/shared/allocations';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import type { DatabaseTransaction } from '../../database/database.service.js';
@@ -46,6 +61,7 @@ const hash = (value: unknown) =>
 @Injectable()
 export class AllocationsService {
   constructor(
+    private readonly audit: AuditService,
     private readonly repository: AllocationsRepository,
     private readonly stockItems: StockItemsService,
     private readonly cuttingRules: CuttingRulesService,
@@ -75,6 +91,7 @@ export class AllocationsService {
           header,
           { ...input, ...this.cuttingRules.apply(input.requirements) },
           false,
+          userId,
         );
       }),
     );
@@ -104,18 +121,33 @@ export class AllocationsService {
           return this.detail(repository, tx, previous);
         }
         await repository.replacePlan(header.id, configured);
-        return this.detail(repository, tx, header);
+        const result = await this.detail(repository, tx, header);
+        await this.audit.record(tx, userId, 'allocation.draft-created', [
+          {
+            recordType: 'allocations',
+            recordId: header.id,
+            before: null,
+            after: { type: 'allocations', value: result },
+          },
+        ]);
+        return result;
       }),
     );
   }
 
-  updateDraft(id: string, revision: number, data: AllocationDraftInput) {
+  updateDraft(
+    id: string,
+    revision: number,
+    data: AllocationDraftInput,
+    userId: string,
+  ) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const previous = requireDraftRevision(
           await repository.findById(id, true),
           revision,
         );
+        const before = await this.detail(repository, tx, previous);
         const configured = {
           ...data,
           ...this.cuttingRules.apply(data.requirements, {
@@ -128,21 +160,42 @@ export class AllocationsService {
           orderNumber: data.orderNumber,
           settings: configured.settings,
         });
-        return this.detail(repository, tx, header);
+        const result = await this.detail(repository, tx, header);
+        await this.audit.record(tx, userId, 'allocation.draft-updated', [
+          {
+            recordType: 'allocations',
+            recordId: id,
+            before: { type: 'allocations', value: before },
+            after: { type: 'allocations', value: result },
+          },
+        ]);
+        return result;
       }),
     );
   }
 
-  deleteDraft(id: string, revision: number) {
+  deleteDraft(id: string, revision: number, userId: string) {
     return allocationOperation(() =>
-      this.repository.withTransaction(async (repository) => {
-        requireDraftRevision(await repository.findById(id, true), revision);
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = requireDraftRevision(
+          await repository.findById(id, true),
+          revision,
+        );
+        const before = await this.detail(repository, tx, header);
+        await this.audit.record(tx, userId, 'allocation.draft-deleted', [
+          {
+            recordType: 'allocations',
+            recordId: id,
+            before: { type: 'allocations', value: before },
+            after: null,
+          },
+        ]);
         await repository.delete(id);
       }),
     );
   }
 
-  submitDraft(id: string, revision: number) {
+  submitDraft(id: string, revision: number, userId: string) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
@@ -180,6 +233,7 @@ export class AllocationsService {
             ...this.cuttingRules.apply(input.data.requirements, saved),
           },
           true,
+          userId,
         );
       }),
     );
@@ -191,7 +245,9 @@ export class AllocationsService {
     header: AllocationRecord,
     input: ConfiguredAllocationPlan,
     fromDraft: boolean,
+    userId: string,
   ) {
+    const before = fromDraft ? await this.detail(repository, tx, header) : null;
     const summary = await this.validateForWrite(
       repository,
       tx,
@@ -208,16 +264,26 @@ export class AllocationsService {
           plannedSummary: summary,
         })
       : await repository.initializePlan(header.id, input.settings, summary);
-    return this.detail(repository, tx, saved);
+    const result = await this.detail(repository, tx, saved);
+    await this.audit.record(tx, userId, 'allocation.confirmed', [
+      {
+        recordType: 'allocations',
+        recordId: header.id,
+        before: before ? { type: 'allocations', value: before } : null,
+        after: { type: 'allocations', value: result },
+      },
+    ]);
+    return result;
   }
 
-  replace(id: string, input: ReplaceAllocation) {
+  replace(id: string, input: ReplaceAllocation, userId: string) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = requireActiveRevision(
           await repository.findById(id, true),
           input.expectedRevision,
         );
+        const before = await this.detail(repository, tx, header);
         const configured = {
           ...input,
           ...this.cuttingRules.apply(input.requirements, {
@@ -239,12 +305,21 @@ export class AllocationsService {
           settings: configured.settings,
           plannedSummary: summary,
         });
-        return this.detail(repository, tx, saved);
+        const result = await this.detail(repository, tx, saved);
+        await this.audit.record(tx, userId, 'allocation.replaced', [
+          {
+            recordType: 'allocations',
+            recordId: id,
+            before: { type: 'allocations', value: before },
+            after: { type: 'allocations', value: result },
+          },
+        ]);
+        return result;
       }),
     );
   }
 
-  cancel(id: string, revision: number) {
+  cancel(id: string, revision: number, userId: string) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
@@ -256,19 +331,34 @@ export class AllocationsService {
           stockIds: items.map((item) => item.stockItemId!),
           lock: true,
         });
-        return this.detail(
+        const before = await this.detail(repository, tx, header);
+        const result = await this.detail(
           repository,
           tx,
           await repository.update(id, {
             cancelledAt: new Date(),
           }),
         );
+        await this.audit.record(tx, userId, 'allocation.cancelled', [
+          {
+            recordType: 'allocations',
+            recordId: id,
+            before: { type: 'allocations', value: before },
+            after: { type: 'allocations', value: result },
+          },
+        ]);
+        return result;
       }),
     );
   }
 
-  complete(id: string, input: CompleteAllocation, userId: string, key: string) {
-    const requestHash = hash(input);
+  complete(
+    id: string,
+    request: CompleteAllocationRequest,
+    userId: string,
+    key: string,
+  ) {
+    const requestHash = hash(request);
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id, true);
@@ -286,6 +376,12 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, header);
         }
+        const parsed = completeAllocationSchema.safeParse(request);
+        if (!parsed.success)
+          throw new ConflictException(
+            'Refresh stock revisions before submitting cutting results. Older requests may only replay a completed submission.',
+          );
+        const input = parsed.data;
         requireActiveRevision(header, input.expectedRevision);
         const allocated = await repository.items(id);
         const ids = allocated.map((item) => item.stockItemId!);
@@ -302,20 +398,24 @@ export class AllocationsService {
           stockIds: ids,
           lock: true,
         });
+        const before = await this.detail(repository, tx, header);
         const now = new Date();
-        const createdStockItemIds = await this.stockItems.recordCuttingResults(
+        const effects = await this.stockItems.recordCuttingResults(
           input.items,
           tx,
           now,
         );
         let saved = await repository.update(id, {
+          stockEffects: effects,
           completedAt: now,
           completionKey: key,
           completionRequestHash: requestHash,
           completion: {
             submittedByUserId: userId,
             items: input.items,
-            createdStockItemIds,
+            createdStockItemIds: effects
+              .filter((e) => !e.before)
+              .map((e) => e.stockItemId),
             affectedAllocationIds: [],
           },
         });
@@ -326,7 +426,271 @@ export class AllocationsService {
           ...saved.completion!,
           affectedAllocationIds,
         });
-        return this.detail(repository, tx, saved);
+        const result = await this.detail(repository, tx, saved);
+        await this.audit.record(tx, userId, 'allocation.completed', [
+          {
+            recordType: 'allocations',
+            recordId: id,
+            before: { type: 'allocations', value: before },
+            after: { type: 'allocations', value: result },
+          },
+          ...stockChanges(effects),
+        ]);
+        return result;
+      }),
+    );
+  }
+
+  correctionContext(id: string) {
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.findById(id);
+        if (!header) throw new NotFoundException('Allocation not found.');
+        if (!header.completedAt)
+          throw new ConflictException(
+            'Only completed cutting results can be corrected.',
+          );
+        const effects = header.stockEffects ?? [];
+        const ids = effects
+          .filter((e) => !e.after.voidedAt)
+          .map((e) => e.stockItemId);
+        return completionCorrectionContextSchema.parse({
+          record: await this.detail(repository, tx, header),
+          baselineAvailable: header.stockEffects !== null,
+          effects,
+          stockItems: await this.stockItems.findForAllocation(tx, {
+            stockIds: ids,
+          }),
+          eligibility: await this.stockItems.eligibility(tx, effects, ids, id),
+        });
+      }, true),
+    );
+  }
+
+  correctCompletion(
+    id: string,
+    input: CompletionCorrection,
+    userId: string,
+    key: string,
+  ) {
+    return allocationOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.findById(id, true);
+        if (!header) throw new NotFoundException('Allocation not found.');
+        const audit = this.audit;
+        const replay = await audit.replay(
+          tx,
+          userId,
+          'allocation.correct-completion',
+          id,
+          key,
+          input,
+        );
+        if (replay.result) return replay.result;
+        if (
+          !header.completedAt ||
+          !header.completion ||
+          header.revision !== input.expectedRevision
+        )
+          throw new ConflictException(
+            'Allocation changed or is not completed.',
+          );
+        if (!header.stockEffects)
+          throw new ConflictException(
+            'This older completion lacks a trustworthy stock baseline. Use current-stock adjustments.',
+          );
+        const selectedIds = input.items.map((i) => i.outcome.stockItemId);
+        if (new Set(selectedIds).size !== selectedIds.length)
+          throw new BadRequestException(
+            'Correct each cutting result only once.',
+          );
+        const baseline = new Map(
+          header.stockEffects.map((e) => [e.stockItemId, e]),
+        );
+        const families = input.items.map((item) => {
+          const source = baseline.get(item.outcome.stockItemId);
+          if (
+            !source?.before ||
+            !header.completion!.items.some(
+              (i) => i.stockItemId === source.stockItemId,
+            )
+          )
+            throw new BadRequestException(
+              'Select a source outcome from this allocation.',
+            );
+          const pieces = header.stockEffects!.filter(
+            (e) =>
+              !e.before &&
+              e.sourceStockItemId === source.stockItemId &&
+              !e.after.voidedAt,
+          );
+          return { item, source, pieces };
+        });
+        const familyIds = families.flatMap((f) => [
+          f.source.stockItemId,
+          ...f.pieces.map((p) => p.stockItemId),
+        ]);
+        const rows = await this.stockItems.lockForCorrection(tx, familyIds);
+        await this.stockItems.requireCorrectionEligible(
+          tx,
+          header.stockEffects,
+          input.stockVersions,
+          familyIds,
+          id,
+        );
+        const current = new Map(rows.map((r) => [r.id, r]));
+        const before = await this.detail(repository, tx, header);
+        const effects: StockEffect[] = [];
+        const effective = structuredClone(
+          header.effectiveCompletion ?? header.completion,
+        );
+        for (const { item, source, pieces } of families) {
+          const sourceBefore = source.before!;
+          const actual = current.get(source.stockItemId)!;
+          if (item.outcome.expectedRevision !== actual.revision)
+            throw new ConflictException(
+              'Stock changed; refresh before correcting.',
+            );
+          if (
+            item.outcome.outcome === 'returned-roll' &&
+            !source.calculationThicknessMm
+          )
+            throw new ConflictException(
+              'The original thickness snapshot is unavailable. Use a current-stock adjustment.',
+            );
+          const write = cuttingWrite(
+            sourceBefore,
+            item.outcome,
+            header.completedAt,
+            source.calculationThicknessMm?.toFixed(3) ?? null,
+          );
+          const selectedPieceIds = item.retainedPieces.flatMap((p) =>
+            p.id ? [p.id] : [],
+          );
+          if (
+            new Set(selectedPieceIds).size !== selectedPieceIds.length ||
+            selectedPieceIds.some(
+              (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
+            )
+          )
+            throw new BadRequestException(
+              'Select distinct retained pieces from this source outcome.',
+            );
+          const identifiedPieceIds = [
+            ...selectedPieceIds,
+            ...item.removeRetainedPieceIds,
+          ];
+          if (
+            new Set(identifiedPieceIds).size !== identifiedPieceIds.length ||
+            identifiedPieceIds.some(
+              (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
+            ) ||
+            pieces.some(
+              (piece) => !identifiedPieceIds.includes(piece.stockItemId),
+            )
+          )
+            throw new BadRequestException(
+              'Keep or explicitly select every existing retained piece for voiding.',
+            );
+          const pending: Parameters<StockItemsService['applySnapshots']>[1] =
+            [];
+          if (
+            canonicalJson({ ...snapshotWrite(actual), ...write }) !==
+            canonicalJson(snapshotWrite(actual))
+          )
+            pending.push({ before: actual, value: write });
+          for (const piece of pieces)
+            if (item.removeRetainedPieceIds.includes(piece.stockItemId)) {
+              const previous = current.get(piece.stockItemId)!;
+              pending.push({
+                before: previous,
+                value: { ...previous, voidedAt: new Date().toISOString() },
+              });
+            }
+          for (const piece of item.retainedPieces) {
+            const value = retainedPieceWrite(sourceBefore, piece);
+            const previous = piece.id ? current.get(piece.id)! : null;
+            if (
+              !previous ||
+              canonicalJson({ ...snapshotWrite(previous), ...value }) !==
+                canonicalJson(snapshotWrite(previous))
+            )
+              pending.push({ before: previous, value });
+          }
+          const applied = await this.stockItems.applySnapshots(tx, pending);
+          effects.push(...applied);
+          for (const e of applied) {
+            const original = baseline.get(e.stockItemId);
+            baseline.set(e.stockItemId, {
+              ...e,
+              before: original ? original.before : e.before,
+              calculationThicknessMm:
+                original?.calculationThicknessMm ??
+                source.calculationThicknessMm,
+            });
+          }
+          const index = effective.items.findIndex(
+            (i) => i.stockItemId === source.stockItemId,
+          );
+          effective.items[index] = {
+            ...item.outcome,
+            scraps: item.retainedPieces.map((p) => ({
+              widthMm: p.widthMm,
+              lengthMm: p.lengthMm,
+              locationId: p.locationId,
+              quantity: 1,
+            })),
+          };
+        }
+        if (!effects.length)
+          throw new BadRequestException('Provide an actual change.');
+        effective.createdStockItemIds = [...baseline.values()]
+          .filter((e) => !e.before && !e.after.voidedAt)
+          .map((e) => e.stockItemId);
+        if (effective.createdStockItemIds.length > 1000)
+          throw new BadRequestException(
+            'A completion supports at most 1,000 retained pieces.',
+          );
+        effective.affectedAllocationIds =
+          await repository.affectedAllocations(familyIds);
+        const saved = await repository.update(id, {
+          stockEffects: [...baseline.values()],
+          effectiveCompletion: effective,
+          correctedAt: new Date(),
+        });
+        const result = await this.detail(repository, tx, saved);
+        const eventId = await audit.record(
+          tx,
+          userId,
+          'allocation.completion-corrected',
+          [
+            {
+              recordType: 'allocations',
+              recordId: id,
+              before: { type: 'allocations', value: before },
+              after: { type: 'allocations', value: result },
+            },
+            ...stockChanges(effects),
+          ],
+          input.reason,
+        );
+        return audit.remember(
+          tx,
+          userId,
+          'allocation.correct-completion',
+          id,
+          key,
+          replay.requestHash,
+          {
+            eventId,
+            recordId: id,
+            revision: saved.revision,
+            affectedAllocationIds: effective.affectedAllocationIds,
+            createdStockItemIds: effects
+              .filter((e) => !e.before)
+              .map((e) => e.stockItemId),
+          },
+        );
       }),
     );
   }
@@ -393,9 +757,12 @@ export class AllocationsService {
     );
     if (!result.valid) {
       const conflict = result.issues.some((issue) =>
-        ['consumed_stock', 'reserved_remnant', 'length_capacity'].includes(
-          issue.code,
-        ),
+        [
+          'voided_stock',
+          'consumed_stock',
+          'reserved_remnant',
+          'length_capacity',
+        ].includes(issue.code),
       );
       const error = {
         message: conflict
@@ -471,7 +838,8 @@ export class AllocationsService {
       plan: await repository.plan(header.id),
       settings: header.settings,
       plannedSummary: header.plannedSummary,
-      completion: header.completion,
+      completion: header.effectiveCompletion ?? header.completion,
+      correctedAt: header.correctedAt?.toISOString() ?? null,
       items: items.map((item) => ({
         ...item,
         reservedLengthMm: Number(item.reservedLengthMm),

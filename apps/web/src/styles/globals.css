@@ -1248,6 +1248,9 @@ td strong {
   color: var(--muted);
 }
 @media print {
+  .no-print {
+    display: none !important;
+  }
   .sidebar,
   .topbar,
   .heading-actions,
@@ -1294,4 +1297,31 @@ td strong {
     background: #eee;
     color: black;
   }
+}
+
+.audit-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+.audit-values > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(0, 1.5fr);
+  gap: 12px;
+  align-items: start;
+}
+.audit-values dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.correction-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.correction-check input[type='checkbox'] {
+  width: auto;
+  flex: 0 0 auto;
 }

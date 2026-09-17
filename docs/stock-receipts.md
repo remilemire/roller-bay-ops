@@ -85,3 +85,7 @@ Shared clients can parse `stockReceiptRecordSchema` for GET detail, or the separ
 Header checks enforce the `is_draft` lifecycle. Deferred constraint triggers enforce the previously required line fields whenever a receipt is submitted, including direct SQL writes. Child changes write an unchanged parent revision to serialize with concurrent confirmation; this does not increment the public revision. Completeness is checked at transaction end so submission and full-replacement saves can update multiple tables atomically. These functions and triggers are hand-written migration SQL, outside Drizzle's generated table metadata.
 
 Unit tests cover draft contracts and conflict translation. Database/HTTP tests cover ordered partial rows, shared editing/submission, revisions, retries, reference validation, and rollback after stock insertion. Raw-SQL tests cover every conditionally required line field, incomplete confirmation, and concurrent child writes versus confirmation at READ COMMITTED and REPEATABLE READ. Tests copy the actual migrated tables, foreign keys, and triggers into isolated schemas; they do not invent test-only constraints.
+
+## Submitted corrections and history
+
+Admins can correct submitted receipt paperwork and selected eligible lines. Stock entered by mistake is voided, not deleted. All active employees can view history. See [corrections and audit](corrections-and-audit.md) for API bodies, preserved identities, eligibility checks, retries, and required schema rollout.

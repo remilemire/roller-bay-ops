@@ -3,10 +3,9 @@ import {
   stockItemListSchema,
   stockItemSchema,
   createStockItemSchema,
-  updateStockItemSchema,
 } from '@roller-bay/shared/stock-items';
 import type { LengthUnit } from '@roller-bay/shared/users';
-import { api, noContent, queryString } from '@/lib/api';
+import { api, queryString } from '@/lib/api';
 import { measurementLabel } from '@/lib/measurements';
 export const stockKey = ['stock-items'] as const;
 export const stockList = (filters: Record<string, unknown> = {}) =>
@@ -25,15 +24,11 @@ export const stockDetail = (id: string) =>
     queryFn: ({ signal }) =>
       api(`/stock-items/${id}`, stockItemSchema, { signal }),
   });
-export const saveStock = (body: unknown, id?: string) =>
-  api(`/stock-items${id ? `/${id}` : ''}`, stockItemSchema, {
-    method: id ? 'PATCH' : 'POST',
-    body: id
-      ? updateStockItemSchema.parse(body)
-      : createStockItemSchema.parse(body),
+export const saveStock = (body: unknown) =>
+  api('/stock-items', stockItemSchema, {
+    method: 'POST',
+    body: createStockItemSchema.parse(body),
   });
-export const deleteStock = (id: string) =>
-  api(`/stock-items/${id}`, noContent, { method: 'DELETE' });
 // Option labels show the roll width in the caller's unit; key the lookup
 // query by that unit so cached labels never show another unit.
 export const lookupStock =

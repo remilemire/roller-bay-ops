@@ -1,3 +1,10 @@
+import { AuditService } from '../audit/audit.service.js';
+import { stockChanges } from '../stock-items/stock-items.audit.js';
+import type { StockEffect } from '@roller-bay/shared/stock-items';
+import {
+  receiptCorrectionContextSchema,
+  type ReceiptCorrection,
+} from '@roller-bay/shared/corrections';
 import { createHash } from 'node:crypto';
 import {
   BadRequestException,
@@ -13,7 +20,6 @@ import {
   stockReceiptDraftSchema,
   stockReceiptDraftSummarySchema,
   stockReceiptSummarySchema,
-  stockReceiptSchema,
   stockReceiptDetailSchema,
   type CreateStockReceipt,
   type StockReceiptDraftData,
@@ -37,6 +43,7 @@ const hash = (input: unknown) =>
 @Injectable()
 export class StockReceiptsService {
   constructor(
+    private readonly audit: AuditService,
     private readonly repository: StockReceiptsRepository,
     private readonly stockItems: StockItemsService,
   ) {}
@@ -87,30 +94,71 @@ export class StockReceiptsService {
           return this.detail(repository, tx, existing);
         }
         await this.writeLines(repository, header.id, data);
-        if (draft) return this.detail(repository, tx, header);
+        if (draft) {
+          const result = await this.detail(repository, tx, header);
+          await this.audit.record(tx, userId, 'receipt.draft-created', [
+            {
+              recordType: 'stock-receipts',
+              recordId: header.id,
+              before: null,
+              after: { type: 'stock-receipts', value: result },
+            },
+          ]);
+          return result;
+        }
         return this.submitRecords(repository, tx, header, userId, false);
       }),
     );
   }
 
-  updateDraft(id: string, revision: number, data: StockReceiptDraftData) {
+  updateDraft(
+    id: string,
+    revision: number,
+    data: StockReceiptDraftData,
+    userId: string,
+  ) {
     return this.operation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        this.requireDraft(await repository.findById(id, true), revision);
+        const previous = this.requireDraft(
+          await repository.findById(id, true),
+          revision,
+        );
+        const before = await this.detail(repository, tx, previous);
         await repository.deleteItems(id);
         await this.writeLines(repository, id, data);
         const header = await repository.update(id, {
           purchaseOrderNumber: data.purchaseOrderNumber,
         });
-        return this.detail(repository, tx, header);
+        const result = await this.detail(repository, tx, header);
+        await this.audit.record(tx, userId, 'receipt.draft-updated', [
+          {
+            recordType: 'stock-receipts',
+            recordId: id,
+            before: { type: 'stock-receipts', value: before },
+            after: { type: 'stock-receipts', value: result },
+          },
+        ]);
+        return result;
       }),
     );
   }
 
-  deleteDraft(id: string, revision: number) {
+  deleteDraft(id: string, revision: number, userId: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository) => {
-        this.requireDraft(await repository.findById(id, true), revision);
+      this.repository.withTransaction(async (repository, tx) => {
+        const previous = this.requireDraft(
+          await repository.findById(id, true),
+          revision,
+        );
+        const before = await this.detail(repository, tx, previous);
+        await this.audit.record(tx, userId, 'receipt.draft-deleted', [
+          {
+            recordType: 'stock-receipts',
+            recordId: id,
+            before: { type: 'stock-receipts', value: before },
+            after: null,
+          },
+        ]);
         await repository.deleteItems(id);
         await repository.delete(id);
       }),
@@ -183,7 +231,8 @@ export class StockReceiptsService {
         message: 'Complete all receipt fields before submitting.',
         issues: parsed.error.issues,
       });
-    await this.stockItems.receiveRolls(
+    const before = fromDraft ? await this.detail(repository, tx, header) : null;
+    const effects = await this.stockItems.receiveRolls(
       parsed.data.items.map((line, index) => ({
         ...line,
         stockReceiptItemId: lines[index]!.id,
@@ -193,6 +242,7 @@ export class StockReceiptsService {
     const saved = await repository.update(
       header.id,
       {
+        stockEffects: effects,
         isDraft: false,
         submittedAt: new Date(),
         submittedByUserId: userId,
@@ -200,7 +250,264 @@ export class StockReceiptsService {
       },
       fromDraft,
     );
-    return this.receipt(repository, tx, saved);
+    const result = await this.receipt(repository, tx, saved);
+    await this.audit.record(tx, userId, 'receipt.submitted', [
+      {
+        recordType: 'stock-receipts',
+        recordId: header.id,
+        before: before ? { type: 'stock-receipts', value: before } : null,
+        after: { type: 'stock-receipts', value: result },
+      },
+      ...stockChanges(effects),
+    ]);
+    return result;
+  }
+
+  correctionContext(id: string) {
+    return this.operation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.findById(id);
+        if (!header) throw new NotFoundException('Stock receipt not found.');
+        if (header.isDraft)
+          throw new ConflictException(
+            'Submit the receipt before correcting it.',
+          );
+        const record = await this.receipt(repository, tx, header);
+        const ids = record.items.flatMap((i) => i.stockItemIds);
+        return receiptCorrectionContextSchema.parse({
+          record,
+          baselineAvailable: header.stockEffects !== null,
+          eligibility: await this.stockItems.eligibility(
+            tx,
+            header.stockEffects ?? [],
+            ids,
+          ),
+        });
+      }, true),
+    );
+  }
+
+  correct(id: string, input: ReceiptCorrection, userId: string, key: string) {
+    return this.operation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const header = await repository.findById(id, true);
+        if (!header) throw new NotFoundException('Stock receipt not found.');
+        const audit = this.audit;
+        const replay = await audit.replay(
+          tx,
+          userId,
+          'receipt.correct',
+          id,
+          key,
+          input,
+        );
+        if (replay.result) return replay.result;
+        if (header.isDraft || header.revision !== input.expectedRevision)
+          throw new ConflictException('Receipt changed or is still a draft.');
+        if (input.operations.length && header.stockEffects === null)
+          throw new ConflictException(
+            'This older receipt lacks a trustworthy stock baseline. Use a current-stock adjustment.',
+          );
+        const before = await this.receipt(repository, tx, header);
+        const lines = await repository.findItems(id);
+        const operated = input.operations.flatMap((op) =>
+          op.action === 'add' ? [] : [op.lineId],
+        );
+        if (new Set(operated).size !== operated.length)
+          throw new BadRequestException('Correct each receipt line only once.');
+        // Paperwork and quantity increases do not lock unrelated existing rolls.
+        const affectedStockIds = input.operations.flatMap((op) => {
+          if (op.action === 'add') return [];
+          const line = before.items.find((line) => line.id === op.lineId);
+          if (!line || line.voidedAt)
+            throw new BadRequestException(
+              'Select an active line from this receipt.',
+            );
+          const allRolls = line.stockItems
+            .filter((stock) => !stock.voidedAt)
+            .map((stock) => stock.id);
+          if (op.action === 'remove') return allRolls;
+          const dimensionsChanged =
+            op.data.fabricColorId !== line.fabricColorId ||
+            op.data.widthMm !== line.widthMm ||
+            op.data.initialLengthMm !== line.initialLengthMm ||
+            op.data.locationId !== line.locationId;
+          return dimensionsChanged ? allRolls : op.removeStockItemIds;
+        });
+        const locked = new Map(
+          (await this.stockItems.lockForCorrection(tx, affectedStockIds)).map(
+            (stock) => [stock.id, stock],
+          ),
+        );
+        const effects: StockEffect[] = [];
+        let position = Math.max(0, ...lines.map((l) => l.position));
+        let changed =
+          input.purchaseOrderNumber !== undefined &&
+          input.purchaseOrderNumber !== header.purchaseOrderNumber;
+        for (const op of input.operations) {
+          if (op.action === 'add') {
+            const [line] = await repository.createItems([
+              {
+                stockReceiptId: id,
+                position: ++position,
+                ...op.data,
+                widthMm: op.data.widthMm.toFixed(3),
+                initialLengthMm: op.data.initialLengthMm.toFixed(3),
+              },
+            ]);
+            effects.push(
+              ...(await this.stockItems.receiveRolls(
+                [{ ...op.data, stockReceiptItemId: line!.id }],
+                tx,
+              )),
+            );
+            changed = true;
+            continue;
+          }
+          const line = lines.find((l) => l.id === op.lineId);
+          if (!line || line.voidedAt)
+            throw new BadRequestException(
+              'Select an active line from this receipt.',
+            );
+          const stocks = (
+            await this.stockItems.findByStockReceiptItemIds([line.id], tx)
+          ).filter((r) => !r.voidedAt);
+          const data = op.action === 'update' ? op.data : null;
+          const dimensionsChanged =
+            !!data &&
+            (data.fabricColorId !== line.fabricColorId ||
+              data.widthMm !== Number(line.widthMm) ||
+              data.initialLengthMm !== Number(line.initialLengthMm) ||
+              data.locationId !== line.locationId);
+          const removeIds =
+            op.action === 'remove'
+              ? stocks.map((r) => r.id)
+              : op.removeStockItemIds;
+          if (
+            new Set(removeIds).size !== removeIds.length ||
+            removeIds.some((stockId) => !stocks.some((r) => r.id === stockId))
+          )
+            throw new BadRequestException(
+              'Select distinct rolls from this receipt line.',
+            );
+          if (
+            data &&
+            removeIds.length !== Math.max(0, stocks.length - data.quantity)
+          )
+            throw new BadRequestException(
+              'Select exactly the rolls removed by the corrected quantity.',
+            );
+          const affectedIds = dimensionsChanged
+            ? stocks.map((r) => r.id)
+            : removeIds;
+          await this.stockItems.requireCorrectionEligible(
+            tx,
+            header.stockEffects ?? [],
+            input.stockVersions,
+            affectedIds,
+          );
+          for (const stock of stocks) {
+            if (!affectedIds.includes(stock.id)) continue;
+            const current = locked.get(stock.id)!;
+            const value = removeIds.includes(stock.id)
+              ? { ...current, voidedAt: new Date().toISOString() }
+              : { ...current, ...data!, quantity: undefined };
+            effects.push(
+              ...(await this.stockItems.applySnapshots(tx, [
+                { before: current, value },
+              ])),
+            );
+          }
+          if (data) {
+            if (data.quantity > stocks.length)
+              effects.push(
+                ...(await this.stockItems.receiveRolls(
+                  [
+                    {
+                      ...data,
+                      quantity: data.quantity - stocks.length,
+                      stockReceiptItemId: line.id,
+                    },
+                  ],
+                  tx,
+                )),
+              );
+            await repository.updateItem(line.id, {
+              ...data,
+              widthMm: data.widthMm.toFixed(3),
+              initialLengthMm: data.initialLengthMm.toFixed(3),
+            });
+            changed ||= dimensionsChanged || data.quantity !== stocks.length;
+          } else {
+            await repository.updateItem(line.id, { voidedAt: new Date() });
+            changed = true;
+          }
+        }
+        if (!changed)
+          throw new BadRequestException('Provide an actual change.');
+        const currentLines = (await repository.findItems(id)).filter(
+          (l) => !l.voidedAt,
+        );
+        if (
+          currentLines.length > 100 ||
+          currentLines.reduce((n, l) => n + (l.quantity ?? 0), 0) > 1000
+        )
+          throw new BadRequestException(
+            'A receipt supports at most 100 active lines and 1,000 rolls.',
+          );
+        const baseline = new Map(
+          (header.stockEffects ?? []).map((e) => [e.stockItemId, e]),
+        );
+        for (const e of effects)
+          baseline.set(e.stockItemId, {
+            ...e,
+            before: baseline.has(e.stockItemId)
+              ? baseline.get(e.stockItemId)!.before
+              : e.before,
+          });
+        const saved = await repository.update(id, {
+          purchaseOrderNumber:
+            input.purchaseOrderNumber ?? header.purchaseOrderNumber,
+          stockEffects:
+            header.stockEffects === null && !effects.length
+              ? null
+              : [...baseline.values()],
+        });
+        const result = await this.receipt(repository, tx, saved);
+        const eventId = await audit.record(
+          tx,
+          userId,
+          'receipt.corrected',
+          [
+            {
+              recordType: 'stock-receipts',
+              recordId: id,
+              before: { type: 'stock-receipts', value: before },
+              after: { type: 'stock-receipts', value: result },
+            },
+            ...stockChanges(effects),
+          ],
+          input.reason,
+        );
+        return audit.remember(
+          tx,
+          userId,
+          'receipt.correct',
+          id,
+          key,
+          replay.requestHash,
+          {
+            eventId,
+            recordId: id,
+            revision: saved.revision,
+            affectedAllocationIds: [],
+            createdStockItemIds: effects
+              .filter((e) => !e.before)
+              .map((e) => e.stockItemId),
+          },
+        );
+      }),
+    );
   }
 
   list(query: StockReceiptQuery) {
@@ -220,7 +527,7 @@ export class StockReceiptsService {
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.findById(id);
         if (!header) throw new NotFoundException('Stock receipt not found.');
-        return this.detail(repository, tx, header, true);
+        return this.detail(repository, tx, header);
       }, true),
     );
   }
@@ -246,10 +553,8 @@ export class StockReceiptsService {
     repository: StockReceiptsRepository,
     tx: DatabaseTransaction,
     header: StockReceiptRecord,
-    includeStock = false,
   ) {
-    if (!header.isDraft)
-      return this.receipt(repository, tx, header, includeStock);
+    if (!header.isDraft) return this.receipt(repository, tx, header);
     return stockReceiptDraftSchema.parse({
       ...this.toPublic(header),
       data: this.formData(header, await repository.findItems(header.id)),
@@ -260,7 +565,6 @@ export class StockReceiptsService {
     repository: StockReceiptsRepository,
     tx: DatabaseTransaction,
     header: StockReceiptRecord,
-    detail = false,
   ) {
     const lines = await repository.findItems(header.id);
     const stock = await this.stockItems.findByStockReceiptItemIds(
@@ -275,16 +579,15 @@ export class StockReceiptsService {
         );
         return {
           ...line,
+          voidedAt: line.voidedAt?.toISOString() ?? null,
           widthMm: Number(line.widthMm),
           initialLengthMm: Number(line.initialLengthMm),
           stockItemIds: rolls.map((item) => item.id),
-          ...(detail ? { stockItems: rolls } : {}),
+          stockItems: rolls,
         };
       }),
     };
-    return detail
-      ? stockReceiptDetailSchema.parse(result)
-      : stockReceiptSchema.parse(result);
+    return stockReceiptDetailSchema.parse(result);
   }
 
   private toPublic(row: StockReceiptRecord) {

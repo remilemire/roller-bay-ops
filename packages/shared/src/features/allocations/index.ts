@@ -2,6 +2,8 @@ import { z } from 'zod';
 import {
   stockItemSchema,
   stockCuttingOutcomeSchema,
+  legacyStockCuttingOutcomeSchema,
+  recordedStockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
 
 export const allocationStateSchema = z.enum([
@@ -34,6 +36,7 @@ export const cuttingStockSchema = z.strictObject({
   isRemnant: z.boolean(),
   isUsed: z.boolean(),
   consumedAt: z.iso.datetime().nullable(),
+  voidedAt: z.iso.datetime().nullable().optional(),
 });
 
 export const cuttingContextSchema = z.strictObject({
@@ -160,6 +163,27 @@ export const completeAllocationSchema = z
       ) <= 1000,
     'A completion may create at most 1,000 retained scraps.',
   );
+// Legacy timestamp submissions may only replay an already committed completion.
+export const completeAllocationRequestSchema = z.union([
+  completeAllocationSchema,
+  z
+    .strictObject({
+      expectedRevision: revision,
+      items: z.array(legacyStockCuttingOutcomeSchema).min(1).max(10000),
+    })
+    .refine(
+      (value) =>
+        value.items.reduce(
+          (sum, item) =>
+            sum + item.scraps.reduce((n, piece) => n + piece.quantity, 0),
+          0,
+        ) <= 1000,
+      'A completion may create at most 1,000 retained scraps.',
+    ),
+]);
+export type CompleteAllocationRequest = z.infer<
+  typeof completeAllocationRequestSchema
+>;
 export const allocationQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -180,7 +204,7 @@ export const allocationSummarySchema = z.object({
 });
 export const allocationCompletionSchema = z.object({
   submittedByUserId: id,
-  items: z.array(stockCuttingOutcomeSchema),
+  items: z.array(recordedStockCuttingOutcomeSchema),
   createdStockItemIds: z.array(id),
   affectedAllocationIds: z.array(id),
 });
@@ -198,6 +222,7 @@ export const allocationDetailSchema = allocationSummarySchema.extend({
     }),
   ),
   completion: allocationCompletionSchema.nullable(),
+  correctedAt: z.iso.datetime().nullable(),
 });
 const draftField = <T extends z.ZodType>(schema: T) =>
   schema.nullish().transform((value) => value ?? null);

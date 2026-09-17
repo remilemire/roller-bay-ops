@@ -16,6 +16,9 @@ const tables = [
   'allocation_items',
   'allocation_cuts',
   'allocation_cut_items',
+  'audit_events',
+  'audit_changes',
+  'correction_requests',
 ];
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 

@@ -1,4 +1,10 @@
 import {
+  receiptCorrectionSchema,
+  correctionKeySchema,
+  type ReceiptCorrection,
+} from '@roller-bay/shared/corrections';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import {
   Body,
   Delete,
   Controller,
@@ -55,8 +61,14 @@ export class StockReceiptsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateStockReceiptDraftSchema))
     input: { expectedRevision: number; data: StockReceiptDraftData },
+    @Req() request: Request,
   ) {
-    return this.service.updateDraft(id, input.expectedRevision, input.data);
+    return this.service.updateDraft(
+      id,
+      input.expectedRevision,
+      input.data,
+      request.currentUser!.id,
+    );
   }
 
   @Delete(':id/draft')
@@ -65,8 +77,13 @@ export class StockReceiptsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(stockReceiptDraftRevisionSchema))
     input: { expectedRevision: number },
+    @Req() request: Request,
   ) {
-    return this.service.deleteDraft(id, input.expectedRevision);
+    return this.service.deleteDraft(
+      id,
+      input.expectedRevision,
+      request.currentUser!.id,
+    );
   }
 
   @Post(':id/submit')
@@ -97,6 +114,29 @@ export class StockReceiptsController {
       key,
     );
     return this.service.create(input, request.currentUser.id, validatedKey);
+  }
+
+  @Get(':id/correction-context')
+  @Roles('admin')
+  correctionContext(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.correctionContext(id);
+  }
+  @Post(':id/corrections')
+  @Roles('admin')
+  @HttpCode(200)
+  correction(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(receiptCorrectionSchema))
+    input: ReceiptCorrection,
+    @Headers('idempotency-key') key: string,
+    @Req() request: Request,
+  ) {
+    return this.service.correct(
+      id,
+      input,
+      request.currentUser!.id,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
+    );
   }
 
   @Get()

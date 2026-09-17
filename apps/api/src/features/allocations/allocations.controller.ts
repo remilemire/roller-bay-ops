@@ -1,4 +1,10 @@
 import {
+  completionCorrectionSchema,
+  correctionKeySchema,
+  type CompletionCorrection,
+} from '@roller-bay/shared/corrections';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import {
   Body,
   Delete,
   Controller,
@@ -19,7 +25,7 @@ import {
   allocationIdempotencyKeySchema,
   allocationQuerySchema,
   cancelAllocationSchema,
-  completeAllocationSchema,
+  completeAllocationRequestSchema,
   createAllocationSchema,
   createAllocationDraftSchema,
   updateAllocationDraftSchema,
@@ -29,7 +35,7 @@ import {
   replaceAllocationSchema,
   validateAllocationSchema,
   type AllocationQuery,
-  type CompleteAllocation,
+  type CompleteAllocationRequest,
   type CreateAllocation,
   type OptimizeAllocation,
   type ReplaceAllocation,
@@ -69,8 +75,14 @@ export class AllocationsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateAllocationDraftSchema))
     input: { expectedRevision: number; data: AllocationDraftData },
+    @Req() request: Request,
   ) {
-    return this.service.updateDraft(id, input.expectedRevision, input.data);
+    return this.service.updateDraft(
+      id,
+      input.expectedRevision,
+      input.data,
+      request.currentUser!.id,
+    );
   }
 
   @Delete(':id/draft')
@@ -79,8 +91,13 @@ export class AllocationsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(allocationDraftRevisionSchema))
     input: { expectedRevision: number },
+    @Req() request: Request,
   ) {
-    return this.service.deleteDraft(id, input.expectedRevision);
+    return this.service.deleteDraft(
+      id,
+      input.expectedRevision,
+      request.currentUser!.id,
+    );
   }
 
   @Post(':id/submit')
@@ -92,7 +109,34 @@ export class AllocationsController {
     @Req() request: Request,
   ) {
     if (!request.currentUser) throw new UnauthorizedException();
-    return this.service.submitDraft(id, input.expectedRevision);
+    return this.service.submitDraft(
+      id,
+      input.expectedRevision,
+      request.currentUser!.id,
+    );
+  }
+
+  @Get(':id/correction-context')
+  @Roles('admin')
+  correctionContext(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.correctionContext(id);
+  }
+  @Post(':id/completion-corrections')
+  @Roles('admin')
+  @HttpCode(200)
+  correction(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(completionCorrectionSchema))
+    input: CompletionCorrection,
+    @Headers('idempotency-key') key: string,
+    @Req() request: Request,
+  ) {
+    return this.service.correctCompletion(
+      id,
+      input,
+      request.currentUser!.id,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
+    );
   }
 
   @Get()
@@ -150,8 +194,9 @@ export class AllocationsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(replaceAllocationSchema))
     input: ReplaceAllocation,
+    @Req() request: Request,
   ) {
-    return this.service.replace(id, input);
+    return this.service.replace(id, input, request.currentUser!.id);
   }
   @Post(':id/cancel')
   @HttpCode(200)
@@ -159,15 +204,20 @@ export class AllocationsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(cancelAllocationSchema))
     input: { expectedRevision: number },
+    @Req() request: Request,
   ) {
-    return this.service.cancel(id, input.expectedRevision);
+    return this.service.cancel(
+      id,
+      input.expectedRevision,
+      request.currentUser!.id,
+    );
   }
   @Post(':id/complete')
   @HttpCode(200)
   complete(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(completeAllocationSchema))
-    input: CompleteAllocation,
+    @Body(new ZodValidationPipe(completeAllocationRequestSchema))
+    input: CompleteAllocationRequest,
     @Headers('idempotency-key') key: string | undefined,
     @Req() request: Request,
   ) {

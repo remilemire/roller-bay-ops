@@ -180,7 +180,7 @@ export async function testAllocations(
         assert.equal(result.items[0]!.stockItem.remainingLengthMm, 10000);
         assert.equal(result.items[0]!.reservedLengthMm, 1000);
         await request(server)
-          .patch(`/api/stock-items/${result.items[0]!.stockItemId}`)
+          .post(`/api/stock-items/${result.items[0]!.stockItemId}/corrections`)
           .set('Cookie', cookie)
           .set('Origin', origin)
           .send({ widthMm: 1000 })
@@ -476,7 +476,7 @@ export async function testAllocations(
           items: [
             {
               stockItemId: stockId,
-              expectedUpdatedAt: first.items[0]!.stockItem.updatedAt,
+              expectedRevision: first.items[0]!.stockItem.revision,
               outcome: 'returned-roll',
               radialDepthMm: 1,
               tubeOuterDiameterMm: 50,
@@ -564,7 +564,7 @@ export async function testAllocations(
           items: [
             {
               stockItemId: stockId,
-              expectedUpdatedAt: allocation.items[0]!.stockItem.updatedAt,
+              expectedRevision: allocation.items[0]!.stockItem.revision,
               outcome: 'returned-roll',
               radialDepthMm: 1,
               tubeOuterDiameterMm: 50,
@@ -602,7 +602,7 @@ export async function testAllocations(
         const consumed = {
           stockItemId: stockId,
           outcome: 'consumed',
-          expectedUpdatedAt: allocation.items[0]!.stockItem.updatedAt,
+          expectedRevision: allocation.items[0]!.stockItem.revision,
         };
         await post(`${path}/${allocation.id}/complete`, {
           expectedRevision: 1,
@@ -626,7 +626,7 @@ export async function testAllocations(
             {
               ...consumed,
               tubeOuterDiameterMm: 50,
-              expectedUpdatedAt: '2000-01-01T00:00:00Z',
+              expectedRevision: 999,
             },
           ],
         }).expect(409);
@@ -643,7 +643,7 @@ export async function testAllocations(
           items: [
             {
               stockItemId: remnantId,
-              expectedUpdatedAt: remnant.items[0]!.stockItem.updatedAt,
+              expectedRevision: remnant.items[0]!.stockItem.revision,
               outcome: 'returned-remnant',
               widthMm: 600,
               explicitLengthMm: 500,
@@ -670,7 +670,7 @@ export async function testAllocations(
           items: [
             {
               stockItemId: stockId,
-              expectedUpdatedAt: allocation.items[0]!.stockItem.updatedAt,
+              expectedRevision: allocation.items[0]!.stockItem.revision,
               outcome: 'consumed',
               tubeOuterDiameterMm: 50,
               scraps: [

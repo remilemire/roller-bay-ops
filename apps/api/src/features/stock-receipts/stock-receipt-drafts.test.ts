@@ -1,3 +1,4 @@
+import { AuditService } from '../audit/audit.service.js';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { StockReceiptsService } from './stock-receipts.service.js';
@@ -57,6 +58,7 @@ test('incomplete saved receipt submission never reaches stock creation or confir
     createdAt: now,
     updatedAt: now,
     isDraft: true,
+    stockEffects: null,
     revision: 1,
     submittedDraftRevision: null,
     submittedAt: null,
@@ -69,6 +71,7 @@ test('incomplete saved receipt submission never reaches stock creation or confir
       id: randomUUID(),
       stockReceiptId: header.id,
       position: 1,
+      voidedAt: null,
       fabricColorId: randomUUID(),
       locationId: randomUUID(),
       widthMm: '1200.000',
@@ -97,6 +100,7 @@ test('incomplete saved receipt submission never reaches stock creation or confir
     },
   };
   const service = new StockReceiptsService(
+    {} as AuditService,
     repository as unknown as StockReceiptsRepository,
     stock as unknown as StockItemsService,
   );

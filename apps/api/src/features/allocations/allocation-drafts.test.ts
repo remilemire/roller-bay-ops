@@ -1,3 +1,4 @@
+import { AuditService } from '../audit/audit.service.js';
 import { ConfigService } from '@nestjs/config';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import { AllocationsService } from './allocations.service.js';
@@ -43,6 +44,9 @@ const header = (): AllocationRecord => ({
   completionKey: null,
   completionRequestHash: null,
   completion: null,
+  effectiveCompletion: null,
+  correctedAt: null,
+  stockEffects: null,
   completedAt: null,
   cancelledAt: null,
 });
@@ -153,6 +157,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     },
   };
   const service = new AllocationsService(
+    {} as AuditService,
     repository as unknown as AllocationsRepository,
     stock as unknown as StockItemsService,
     new CuttingRulesService(
@@ -164,7 +169,10 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       }),
     ),
   );
-  await assert.rejects(service.submitDraft(draft.id, 1), BadRequestException);
+  await assert.rejects(
+    service.submitDraft(draft.id, 1, randomUUID()),
+    BadRequestException,
+  );
   assert.equal(writes, 0);
   assert.equal(draft.confirmedAt, null);
 });

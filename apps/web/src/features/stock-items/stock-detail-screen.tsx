@@ -1,13 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
 import {
   PageHeading,
   ErrorNotice,
@@ -16,23 +14,15 @@ import {
 } from '@/components/ui/feedback';
 import { dimension, dateLabel, shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
-import { stockDetail, deleteStock, stockKey } from './stock-items.api';
-import { StockEditor } from './stock-editor';
+import { stockDetail } from './stock-items.api';
+import { StockCorrectionEditor } from './stock-correction-editor';
+import { History } from '@/features/audit/history';
 export function StockDetailScreen({ id }: { id: string }) {
   const query = useQuery(stockDetail(id));
   const admin = useCanManage();
   const units = useMeasurementUnits();
-  const client = useQueryClient();
-  const router = useRouter();
   const [edit, setEdit] = useState(false);
   const [remove, setRemove] = useState(false);
-  const deletion = useMutation({
-    mutationFn: () => deleteStock(id),
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: stockKey });
-      router.push('/stock-items');
-    },
-  });
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
   const item = query.data;
@@ -73,15 +63,15 @@ export function StockDetailScreen({ id }: { id: string }) {
         title={item.fabricColorCode}
         description={item.id}
       >
-        {admin && (
+        {admin && !item.voidedAt && (
           <>
             <Button variant="outline" onClick={() => setRemove(true)}>
               <Trash2 size={16} />
-              Delete
+              Void record
             </Button>
             <Button onClick={() => setEdit(true)}>
               <Pencil size={16} />
-              Edit stock
+              Correct stock
             </Button>
           </>
         )}
@@ -91,13 +81,15 @@ export function StockDetailScreen({ id }: { id: string }) {
           <h2>Fabric details</h2>
           <Status
             value={
-              item.consumedAt
-                ? 'consumed'
-                : item.isRemnant
-                  ? 'remnant'
-                  : item.isUsed
-                    ? 'used-roll'
-                    : 'new-roll'
+              item.voidedAt
+                ? 'voided'
+                : item.consumedAt
+                  ? 'consumed'
+                  : item.isRemnant
+                    ? 'remnant'
+                    : item.isUsed
+                      ? 'used-roll'
+                      : 'new-roll'
             }
           />
         </div>
@@ -127,27 +119,17 @@ export function StockDetailScreen({ id }: { id: string }) {
           </p>
         </div>
       </section>
-      {edit && <StockEditor item={item} close={() => setEdit(false)} />}
-      <Dialog
-        open={remove}
-        onOpenChange={setRemove}
-        title="Delete this stock item?"
-        description="Linked stock cannot be deleted. Mark used-up fabric as consumed to keep its history."
-      >
-        {deletion.error && <ErrorNotice error={deletion.error} />}
-        <div className="form-actions">
-          <Button variant="outline" onClick={() => setRemove(false)}>
-            Keep stock
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={deletion.isPending}
-            onClick={() => deletion.mutate()}
-          >
-            Delete stock
-          </Button>
-        </div>
-      </Dialog>
+      <History type="stock-items" id={id} />
+      {edit && (
+        <StockCorrectionEditor item={item} close={() => setEdit(false)} />
+      )}
+      {remove && (
+        <StockCorrectionEditor
+          item={item}
+          voiding
+          close={() => setRemove(false)}
+        />
+      )}
     </>
   );
 }

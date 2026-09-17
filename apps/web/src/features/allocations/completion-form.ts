@@ -10,7 +10,7 @@ export const completionFormSchema = z.object({
   items: z.array(
     z.object({
       stockItemId: z.string(),
-      expectedUpdatedAt: z.string(),
+      expectedRevision: z.number().int().positive(),
       outcome: z.string(),
       tube: z.string(),
       depth: z.string(),
@@ -38,7 +38,7 @@ export function completionToForm(
   return {
     items: allocation.items.map(({ stockItem }) => ({
       stockItemId: stockItem.id,
-      expectedUpdatedAt: stockItem.updatedAt,
+      expectedRevision: stockItem.revision,
       outcome: '',
       tube: String(stockItem.tubeOuterDiameterMm ?? ''),
       depth: '',
@@ -58,7 +58,7 @@ export function completionFromForm(
     expectedRevision,
     items: form.items.map((item) => ({
       stockItemId: item.stockItemId,
-      expectedUpdatedAt: item.expectedUpdatedAt,
+      expectedRevision: item.expectedRevision,
       outcome: item.outcome,
       ...(item.outcome === 'consumed'
         ? item.tube.trim()
@@ -104,7 +104,7 @@ export function completionRecovery(
       return {
         ...base,
         stockItemId: item.stockItemId,
-        expectedUpdatedAt: item.expectedUpdatedAt,
+        expectedRevision: item.expectedRevision,
         outcome: item.outcome,
         tube:
           'tubeOuterDiameterMm' in item

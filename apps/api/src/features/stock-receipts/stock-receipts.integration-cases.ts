@@ -1,3 +1,4 @@
+import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
 import { testStockReceiptDrafts } from './stock-receipt-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -50,6 +51,7 @@ export async function testStockReceipts(
         `SELECT count(*)::int AS total FROM "${schema}"."${table}"`,
       )
     ).rows[0].total as number;
+  const initialStockCount = await count('fabric_stock_items');
   try {
     await pool.query(
       `INSERT INTO "${schema}".manufacturers (id, name) VALUES ($1, 'Receipt manufacturer')`,
@@ -183,7 +185,7 @@ export async function testStockReceipts(
           receipt.items.flatMap((item) => item.stockItemIds).length,
           5,
         );
-        assert.equal(await count('fabric_stock_items'), 5);
+        assert.equal(await count('fabric_stock_items'), initialStockCount + 5);
         assert.ok(
           !('requestHash' in receipt) && !('idempotencyKey' in receipt),
         );
@@ -210,36 +212,40 @@ export async function testStockReceipts(
           }
         }
         const stockId = receipt.items[0]!.stockItemIds[0]!;
-        await request(server)
-          .patch(`/api/stock-items/${stockId}`)
-          .set('Cookie', cookie)
-          .set('Origin', origin)
-          .send({ widthMm: 1500 })
-          .expect(403);
+        await stockCorrectionRequest(
+          server,
+          cookie,
+          origin,
+          `/api/stock-items/${stockId}`,
+          { widthMm: 1500 },
+        ).expect(403);
         await role('admin');
-        await request(server)
-          .delete(`/api/stock-items/${stockId}`)
-          .set('Cookie', cookie)
-          .set('Origin', origin)
-          .expect(409);
-        await request(server)
-          .patch(`/api/stock-items/${stockId}`)
-          .set('Cookie', cookie)
-          .set('Origin', origin)
-          .send({ isUsed: true, tubeOuterDiameterMm: 50, radialDepthMm: 10 })
-          .expect(200);
-        await request(server)
-          .patch(`/api/stock-items/${stockId}`)
-          .set('Cookie', cookie)
-          .set('Origin', origin)
-          .send({ stockReceiptItemId: null })
-          .expect(400);
+        await stockCorrectionRequest(
+          server,
+          cookie,
+          origin,
+          `/api/stock-items/${stockId}`,
+        ).expect(409);
+        await stockCorrectionRequest(
+          server,
+          cookie,
+          origin,
+          `/api/stock-items/${stockId}`,
+          { isUsed: true, tubeOuterDiameterMm: 50, radialDepthMm: 10 },
+        ).expect(200);
+        await stockCorrectionRequest(
+          server,
+          cookie,
+          origin,
+          `/api/stock-items/${stockId}`,
+          { stockReceiptItemId: null },
+        ).expect(400);
         await role('user');
         const replay = await submit(
           { items: input.items, purchaseOrderNumber: 'PO-12345' },
           key.toUpperCase(),
         ).expect(201);
-        assert.deepEqual(replay.body, receipt);
+        assert.deepEqual(stockReceiptSchema.parse(replay.body), receipt);
         const changed = stockReceiptDetailSchema.parse(
           (await get(`${path}/${receipt.id}`).expect(200)).body,
         );
@@ -254,7 +260,7 @@ export async function testStockReceipts(
           key,
         ).expect(409);
         assert.equal(await count('stock_receipts'), 1);
-        assert.equal(await count('fabric_stock_items'), 5);
+        assert.equal(await count('fabric_stock_items'), initialStockCount + 5);
         const page = stockReceiptListSchema.parse(
           (await get(`${path}?search=po-123&pageSize=1`).expect(200)).body,
         );

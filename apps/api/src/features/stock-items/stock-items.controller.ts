@@ -1,21 +1,26 @@
+import type { Request } from 'express';
+import {
+  stockCorrectionSchema,
+  stockVoidSchema,
+  correctionKeySchema,
+  type StockCorrection,
+} from '@roller-bay/shared/corrections';
 import {
   Body,
   Controller,
-  Delete,
+  Headers,
+  Req,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
-  Patch,
   Post,
   Query,
 } from '@nestjs/common';
 import {
   createStockItemSchema,
-  updateStockItemSchema,
   stockItemQuerySchema,
   type CreateStockItem,
-  type UpdateStockItem,
   type StockItemQuery,
 } from '@roller-bay/shared/stock-items';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -41,22 +46,41 @@ export class StockItemsController {
   create(
     @Body(new ZodValidationPipe(createStockItemSchema))
     input: CreateStockItem,
+    @Req() request: Request,
   ) {
-    return this.service.create(input);
+    return this.service.create(input, request.currentUser!.id);
   }
-  @Patch(':id')
+  @Post(':id/corrections')
   @Roles('admin')
-  update(
+  @HttpCode(200)
+  correct(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(updateStockItemSchema))
-    input: UpdateStockItem,
+    @Body(new ZodValidationPipe(stockCorrectionSchema)) input: StockCorrection,
+    @Headers('idempotency-key') key: string,
+    @Req() request: Request,
   ) {
-    return this.service.update(id, input);
+    return this.service.correct(
+      id,
+      input,
+      request.currentUser!.id,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
+    );
   }
-  @Delete(':id')
+  @Post(':id/void')
   @Roles('admin')
-  @HttpCode(204)
-  delete(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.delete(id);
+  @HttpCode(200)
+  void(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(stockVoidSchema))
+    input: { reason: string; expectedRevision: number },
+    @Headers('idempotency-key') key: string,
+    @Req() request: Request,
+  ) {
+    return this.service.void(
+      id,
+      input,
+      request.currentUser!.id,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
+    );
   }
 }

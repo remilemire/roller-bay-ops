@@ -87,7 +87,7 @@ test('allocation contracts normalize keys, require revisions, and reject client-
 test('completion contracts distinguish roll/remnant measurements and cap retained-scrap expansion', () => {
   const base = {
     stockItemId: randomUUID(),
-    expectedUpdatedAt: new Date().toISOString(),
+    expectedRevision: 1,
   };
   const roll = {
     ...base,
@@ -191,6 +191,9 @@ test('allocation revisions reject stale and terminal-state writes', () => {
     completionKey: null,
     completionRequestHash: null,
     completion: null,
+    effectiveCompletion: null,
+    correctedAt: null,
+    stockEffects: null,
     completedAt: null,
     cancelledAt: null,
   };

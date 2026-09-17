@@ -1,4 +1,8 @@
 'use client';
+import { History } from '@/features/audit/history';
+import { useCanManage } from '@/features/auth/auth-boundary';
+import { Button } from '@/components/ui/button';
+import { ReceiptCorrectionEditor } from './receipt-correction-editor';
 import Link from 'next/link';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -34,12 +38,19 @@ function ReceiptRecord({
   receipt: z.infer<typeof stockReceiptRecordSchema>;
 }) {
   const units = useMeasurementUnits();
+  const admin = useCanManage();
+  const [correcting, setCorrecting] = useState(false);
   // A background submission by another employee must not unmount unsaved input.
   const [draft, setDraft] = useState(
     receipt.state === 'draft' ? receipt : null,
   );
   if (draft)
-    return <ReceiptEditor initial={draft} onSubmitted={() => setDraft(null)} />;
+    return (
+      <>
+        <ReceiptEditor initial={draft} onSubmitted={() => setDraft(null)} />
+        <History type="stock-receipts" id={receipt.id} />
+      </>
+    );
   if (receipt.state === 'draft') return <Loading />;
   return (
     <>
@@ -49,12 +60,17 @@ function ReceiptRecord({
         description={`Submitted ${dateLabel(receipt.submittedAt)} · ${shortId(receipt.id)}`}
       >
         <Status value="submitted" />
+        {admin && (
+          <Button onClick={() => setCorrecting(true)}>Correct receipt</Button>
+        )}
       </PageHeading>
       <section className="panel">
         <div className="panel-heading">
           <h2>
-            {receipt.items.reduce((sum, i) => sum + i.quantity, 0)} rolls
-            received
+            {receipt.items
+              .filter((i) => !i.voidedAt)
+              .reduce((sum, i) => sum + i.quantity, 0)}{' '}
+            rolls received
           </h2>
         </div>
         <div className="data-table-wrap">
@@ -78,7 +94,7 @@ function ReceiptRecord({
                   <td>
                     {fieldLabel(units, 'rollLength', line.initialLengthMm)}
                   </td>
-                  <td>{line.quantity}</td>
+                  <td>{line.voidedAt ? 'Voided' : line.quantity}</td>
                   <td>
                     {line.stockItemIds.map((stock) => (
                       <Link
@@ -97,6 +113,13 @@ function ReceiptRecord({
           </table>
         </div>
       </section>
+      <History type="stock-receipts" id={receipt.id} />
+      {correcting && (
+        <ReceiptCorrectionEditor
+          id={receipt.id}
+          close={() => setCorrecting(false)}
+        />
+      )}
     </>
   );
 }

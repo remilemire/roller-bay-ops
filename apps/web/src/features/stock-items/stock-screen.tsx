@@ -23,6 +23,7 @@ import { StockEditor } from './stock-editor';
 export function StockScreen() {
   const params = useListParams();
   const units = useMeasurementUnits();
+  const voided = params.get('state') === 'voided';
   const consumed = params.get('state') === 'consumed';
   const remnant = params.get('kind') === 'remnant';
   const query = useQuery(
@@ -30,6 +31,7 @@ export function StockScreen() {
       search: params.search,
       page: params.page,
       isConsumed: consumed,
+      isVoided: voided,
       isRemnant: remnant || undefined,
     }),
   );
@@ -56,13 +58,16 @@ export function StockScreen() {
             { value: '', label: 'On hand' },
             { value: 'remnant', label: 'Remnants' },
             { value: 'consumed', label: 'Consumed' },
+            { value: 'voided', label: 'Voided' },
           ].map((tab) => (
             <button
-              className={`tab ${(consumed ? 'consumed' : remnant ? 'remnant' : '') === tab.value ? 'active' : ''}`}
+              className={`tab ${(voided ? 'voided' : consumed ? 'consumed' : remnant ? 'remnant' : '') === tab.value ? 'active' : ''}`}
               key={tab.value}
               onClick={() =>
                 params.set({
-                  state: tab.value === 'consumed' ? 'consumed' : null,
+                  state: ['consumed', 'voided'].includes(tab.value)
+                    ? tab.value
+                    : null,
                   kind: tab.value === 'remnant' ? 'remnant' : null,
                 })
               }
@@ -125,13 +130,15 @@ export function StockScreen() {
                     <td>
                       <Status
                         value={
-                          item.consumedAt
-                            ? 'consumed'
-                            : item.isRemnant
-                              ? 'remnant'
-                              : item.isUsed
-                                ? 'used-roll'
-                                : 'new-roll'
+                          item.voidedAt
+                            ? 'voided'
+                            : item.consumedAt
+                              ? 'consumed'
+                              : item.isRemnant
+                                ? 'remnant'
+                                : item.isUsed
+                                  ? 'used-roll'
+                                  : 'new-roll'
                         }
                       />
                     </td>

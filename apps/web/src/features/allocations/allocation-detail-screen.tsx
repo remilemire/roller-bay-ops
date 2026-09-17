@@ -1,4 +1,7 @@
 'use client';
+import { History } from '@/features/audit/history';
+import { useCanManage } from '@/features/auth/auth-boundary';
+import { CompletionCorrectionEditor } from './completion-correction-editor';
 import Link from 'next/link';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -45,6 +48,8 @@ function AllocationRecord({
   allocation: z.infer<typeof allocationRecordSchema>;
 }) {
   const id = allocation.id;
+  const admin = useCanManage();
+  const [correcting, setCorrecting] = useState(false);
   const units = useMeasurementUnits();
   // A background confirmation must not replace the employee's open draft form.
   const [draft, setDraft] = useState(
@@ -70,7 +75,10 @@ function AllocationRecord({
   });
   if (draft)
     return (
-      <AllocationEditor initial={draft} onSubmitted={() => setDraft(null)} />
+      <>
+        <AllocationEditor initial={draft} onSubmitted={() => setDraft(null)} />
+        <History type="allocations" id={id} />
+      </>
     );
   if (mode === 'edit' && editingRecord)
     return (
@@ -95,6 +103,11 @@ function AllocationRecord({
           <Printer size={16} />
           Print plan
         </Button>
+        {admin && allocation.state === 'completed' && (
+          <Button onClick={() => setCorrecting(true)}>
+            Correct cutting results
+          </Button>
+        )}
         {allocation.state === 'active' && (
           <>
             <Button
@@ -119,6 +132,19 @@ function AllocationRecord({
           </>
         )}
       </PageHeading>
+      {allocation.correctedAt && (
+        <p className="notice">
+          Cutting results corrected {dateLabel(allocation.correctedAt)}.
+          Original results remain in history.
+        </p>
+      )}
+      <History type="allocations" id={id} />
+      {correcting && (
+        <CompletionCorrectionEditor
+          id={id}
+          close={() => setCorrecting(false)}
+        />
+      )}
       {allocation.needsReplanning && (
         <div className="notice notice-warning" role="alert">
           Some reserved fabric is no longer available in the required amount.
@@ -287,6 +313,86 @@ function AllocationRecord({
                 {allocation.completion.createdStockItemIds.length} retained
                 remnants created.
               </p>
+              <div className="data-table-wrap">
+                <table aria-label="Effective cutting results">
+                  <thead>
+                    <tr>
+                      <th>Stock</th>
+                      <th>Outcome</th>
+                      <th>Recorded measurements</th>
+                      <th>Retained pieces</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allocation.completion.items.map((outcome) => (
+                      <tr key={outcome.stockItemId}>
+                        <td>
+                          <Link
+                            className="text-link"
+                            href={`/stock-items/${outcome.stockItemId}`}
+                          >
+                            {shortId(outcome.stockItemId)}
+                          </Link>
+                        </td>
+                        <td>
+                          {outcome.outcome === 'consumed'
+                            ? 'Consumed'
+                            : outcome.outcome === 'returned-roll'
+                              ? 'Returned roll'
+                              : 'Returned remnant'}
+                        </td>
+                        <td>
+                          {outcome.outcome === 'returned-roll' ? (
+                            <>
+                              Depth{' '}
+                              {fieldLabel(
+                                units,
+                                'radialDepth',
+                                outcome.radialDepthMm,
+                              )}
+                              {outcome.tubeOuterDiameterMm !== undefined && (
+                                <> · tube {outcome.tubeOuterDiameterMm} mm</>
+                              )}
+                            </>
+                          ) : outcome.outcome === 'returned-remnant' ? (
+                            <>
+                              {fieldLabel(units, 'rollWidth', outcome.widthMm)}{' '}
+                              ×{' '}
+                              {fieldLabel(
+                                units,
+                                'rollLength',
+                                outcome.explicitLengthMm,
+                              )}
+                            </>
+                          ) : (
+                            'Fully consumed'
+                          )}
+                        </td>
+                        <td>
+                          {outcome.scraps.length
+                            ? outcome.scraps.map((piece, index) => (
+                                <div key={index}>
+                                  {piece.quantity} ×{' '}
+                                  {fieldLabel(
+                                    units,
+                                    'rollWidth',
+                                    piece.widthMm,
+                                  )}{' '}
+                                  ×{' '}
+                                  {fieldLabel(
+                                    units,
+                                    'rollLength',
+                                    piece.lengthMm,
+                                  )}
+                                </div>
+                              ))
+                            : 'None'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {allocation.completion.createdStockItemIds.length > 0 && (
                 <div className="inline-actions" style={{ flexWrap: 'wrap' }}>
                   {allocation.completion.createdStockItemIds.map((stockId) => (

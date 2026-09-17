@@ -3,7 +3,7 @@ import {
   defaultMeasurementUnits,
   type MeasurementUnits,
 } from '@roller-bay/shared/users';
-import { allocation, ids, timestamp } from '../../../tests/fixtures';
+import { allocation, ids } from '../../../tests/fixtures';
 import {
   completionFromForm,
   completionToForm,
@@ -24,7 +24,7 @@ it('keeps roll measurements in mm and converts retained scraps from inches and y
   const result = completionFromForm(form, 1, units);
   expect(result.items[0]).toEqual({
     stockItemId: ids.stock,
-    expectedUpdatedAt: timestamp,
+    expectedRevision: 1,
     outcome: 'returned-roll',
     tubeOuterDiameterMm: 50,
     radialDepthMm: 12.5,
