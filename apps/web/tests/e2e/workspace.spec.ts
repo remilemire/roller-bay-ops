@@ -282,7 +282,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     .getByLabel('Color · blind 1', { exact: true })
     .selectOption(ids.color);
   await page.getByLabel('Width (in)', { exact: true }).fill('54');
-  await page.getByLabel('Finished drop (yd)').fill('2.5');
+  await page.getByLabel('Finished drop (in)').fill('90');
   await expect(
     page.getByLabel(
       /Extra drop allowance|Trim per outside edge|Minimum reusable/,
@@ -294,8 +294,8 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     page.getByText('Valid cutting plan', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByLabel('Drop length (yd)', { exact: true }),
-  ).toHaveValue('2.777778');
+    page.getByLabel('Drop length (in)', { exact: true }),
+  ).toHaveValue('100');
   expect(state.allocationRequests.map((r) => r.path)).toEqual([
     '/allocations/optimize',
   ]);

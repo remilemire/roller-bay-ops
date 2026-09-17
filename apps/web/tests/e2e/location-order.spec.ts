@@ -107,6 +107,14 @@ async function keyboardMove(
   await handle.focus();
   await page.keyboard.press('Space');
   await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  // The keyboard sensor ignores a move key that arrives before it has measured
+  // the picked-up row, which no person can do. Let a frame render first.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   await page.keyboard.press(key);
   // Let the sortable transition finish before committing/cancelling the gesture.
   await page.waitForTimeout(280);
