@@ -351,7 +351,15 @@ function AllocationRecord({
                                 outcome.radialDepthMm,
                               )}
                               {outcome.tubeOuterDiameterMm !== undefined && (
-                                <> · tube {outcome.tubeOuterDiameterMm} mm</>
+                                <>
+                                  {' '}
+                                  · tube{' '}
+                                  {fieldLabel(
+                                    units,
+                                    'tubeDiameter',
+                                    outcome.tubeOuterDiameterMm,
+                                  )}
+                                </>
                               )}
                             </>
                           ) : outcome.outcome === 'returned-remnant' ? (

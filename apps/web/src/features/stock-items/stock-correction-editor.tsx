@@ -40,7 +40,9 @@ export function StockCorrectionEditor({
   const [depth, setDepth] = useState(
     fieldInput(units, 'radialDepth', item.radialDepthMm),
   );
-  const [tube, setTube] = useState(String(item.tubeOuterDiameterMm ?? ''));
+  const [tube, setTube] = useState(
+    fieldInput(units, 'tubeDiameter', item.tubeOuterDiameterMm),
+  );
   const [used, setUsed] = useState(item.isUsed ? 'yes' : 'no');
   const [consumed, setConsumed] = useState(item.consumedAt ? 'yes' : 'no');
   const [locationId, setLocation] = useState(item.locationId);
@@ -78,9 +80,7 @@ export function StockCorrectionEditor({
                     : {}),
                   tubeOuterDiameterMm: item.isRemnant
                     ? null
-                    : tube.trim()
-                      ? Number(tube)
-                      : null,
+                    : fieldValue(units, 'tubeDiameter', tube),
                   isUsed: used === 'yes',
                   locationId,
                   consumedAt:
@@ -125,7 +125,7 @@ export function StockCorrectionEditor({
                   type="number"
                 />
                 <TextField
-                  label="Tube outer diameter (mm)"
+                  label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                   value={tube}
                   onChange={setTube}
                   type="number"

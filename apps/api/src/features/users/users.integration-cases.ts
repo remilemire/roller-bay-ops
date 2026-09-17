@@ -241,7 +241,7 @@ export async function testUserRoles(
       for (const body of [
         {},
         [],
-        { tubeDiameter: 'mm' },
+        { boreDiameter: 'mm' },
         { rollWidth: 'inches' },
         { rollWidth: null },
         { rollWidth: 1 },

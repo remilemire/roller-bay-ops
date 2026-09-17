@@ -80,6 +80,7 @@ export function cuttingWrite(
     initialLengthMm: v.initialLengthMm.toFixed(3),
     explicitLengthMm: v.explicitLengthMm?.toFixed(3) ?? null,
     radialDepthMm: v.radialDepthMm?.toFixed(3) ?? null,
+    tubeOuterDiameterMm: v.tubeOuterDiameterMm?.toFixed(3) ?? null,
     measurementThicknessMm:
       outcome.outcome === 'returned-roll'
         ? thickness

@@ -27,6 +27,7 @@ const fieldLabels: Record<MeasurementField, string> = {
   minimumRemnantLength: 'Minimum reusable length',
   thickness: 'Fabric thickness',
   radialDepth: 'Radial depth',
+  tubeDiameter: 'Tube outer diameter',
 };
 
 export function MeasurementUnitsPanel() {
@@ -72,10 +73,6 @@ export function MeasurementUnitsPanel() {
               </Select>
             </Field>
           ))}
-          <div>
-            <div className="detail-label">Tube outer diameter</div>
-            <div className="detail-value">Millimetres, multiples of 5</div>
-          </div>
         </fieldset>
         {change.error && <ErrorNotice error={change.error} />}
         <p className="muted">

@@ -520,7 +520,7 @@ export class StockItemsService {
       initialLengthMm: Number(row.initialLengthMm),
       explicitLengthMm: nullableNumber(row.explicitLengthMm),
       radialDepthMm: nullableNumber(row.radialDepthMm),
-      tubeOuterDiameterMm: row.tubeOuterDiameterMm,
+      tubeOuterDiameterMm: nullableNumber(row.tubeOuterDiameterMm),
       locationId: row.locationId,
       sourceStockItemId: row.sourceStockItemId,
       isUsed: row.isUsed,
@@ -535,6 +535,7 @@ export class StockItemsService {
       initialLengthMm: input.initialLengthMm.toFixed(3),
       explicitLengthMm: input.explicitLengthMm?.toFixed(3) ?? null,
       radialDepthMm: input.radialDepthMm?.toFixed(3) ?? null,
+      tubeOuterDiameterMm: input.tubeOuterDiameterMm?.toFixed(3) ?? null,
       measurementThicknessMm: null,
       consumedAt: input.consumedAt === null ? null : new Date(input.consumedAt),
     };

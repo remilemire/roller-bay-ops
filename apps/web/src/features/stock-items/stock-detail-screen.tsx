@@ -12,7 +12,7 @@ import {
   Loading,
   Status,
 } from '@/components/ui/feedback';
-import { dimension, dateLabel, shortId } from '@/lib/format';
+import { dateLabel, shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
 import { stockDetail } from './stock-items.api';
 import { StockCorrectionEditor } from './stock-correction-editor';
@@ -43,7 +43,7 @@ export function StockDetailScreen({ id }: { id: string }) {
       'Tube outer diameter',
       item.tubeOuterDiameterMm === null
         ? 'Not measured'
-        : dimension(item.tubeOuterDiameterMm),
+        : fieldLabel(units, 'tubeDiameter', item.tubeOuterDiameterMm),
     ],
     [
       'Radial depth',

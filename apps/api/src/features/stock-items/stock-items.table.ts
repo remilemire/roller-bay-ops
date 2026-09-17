@@ -35,7 +35,10 @@ export const stockItems = pgTable(
     }),
     // One-sided depth: (roll outer diameter - tube outer diameter) / 2.
     radialDepthMm: numeric('radial_depth_mm', { precision: 12, scale: 3 }),
-    tubeOuterDiameterMm: integer('tube_outer_diameter_mm'),
+    tubeOuterDiameterMm: numeric('tube_outer_diameter_mm', {
+      precision: 12,
+      scale: 3,
+    }),
     // Snapshot for this measurement; catalog edits must not change its result.
     measurementThicknessMm: numeric('measurement_thickness_mm', {
       precision: 10,
@@ -54,7 +57,7 @@ export const stockItems = pgTable(
           WHEN ${stockItems.radialDepthMm} IS NOT NULL THEN
             round(
               pi()::numeric * ${stockItems.radialDepthMm}
-              * (${stockItems.tubeOuterDiameterMm}::numeric + ${stockItems.radialDepthMm})
+              * (${stockItems.tubeOuterDiameterMm} + ${stockItems.radialDepthMm})
               / nullif(${stockItems.measurementThicknessMm}, 0),
               3
             )
@@ -112,7 +115,7 @@ export const stockItems = pgTable(
     ),
     check(
       'fabric_stock_items_tube_outer_diameter_mm_positive',
-      sql`${table.tubeOuterDiameterMm} > 0`,
+      sql`${table.tubeOuterDiameterMm} > 0 AND ${table.tubeOuterDiameterMm} <> 'NaN'::numeric`,
     ),
     check(
       'fabric_stock_items_tube_usage',

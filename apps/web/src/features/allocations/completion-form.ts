@@ -29,8 +29,7 @@ export const completionFormSchema = z.object({
   ),
 });
 export type CompletionForm = z.infer<typeof completionFormSchema>;
-// Tube diameters stay in millimetres (the contract requires whole millimetres);
-// every other measurement follows the given units in both directions.
+// Every measurement follows the given units in both directions.
 export function completionToForm(
   allocation: AllocationDetail,
   units: MeasurementUnits,
@@ -40,7 +39,7 @@ export function completionToForm(
       stockItemId: stockItem.id,
       expectedRevision: stockItem.revision,
       outcome: '',
-      tube: String(stockItem.tubeOuterDiameterMm ?? ''),
+      tube: fieldInput(units, 'tubeDiameter', stockItem.tubeOuterDiameterMm),
       depth: '',
       width: fieldInput(units, 'rollWidth', stockItem.widthMm),
       length: '',
@@ -62,14 +61,22 @@ export function completionFromForm(
       outcome: item.outcome,
       ...(item.outcome === 'consumed'
         ? item.tube.trim()
-          ? { tubeOuterDiameterMm: nullableNumber(item.tube) }
+          ? {
+              tubeOuterDiameterMm: fieldValue(units, 'tubeDiameter', item.tube),
+            }
           : {}
         : item.outcome === 'returned-roll'
           ? {
               radialDepthMm: fieldValue(units, 'radialDepth', item.depth),
               locationId: item.locationId,
               ...(item.tube.trim()
-                ? { tubeOuterDiameterMm: nullableNumber(item.tube) }
+                ? {
+                    tubeOuterDiameterMm: fieldValue(
+                      units,
+                      'tubeDiameter',
+                      item.tube,
+                    ),
+                  }
                 : {}),
             }
           : {
@@ -108,7 +115,11 @@ export function completionRecovery(
         outcome: item.outcome,
         tube:
           'tubeOuterDiameterMm' in item
-            ? String(item.tubeOuterDiameterMm ?? '')
+            ? fieldInput(
+                units,
+                'tubeDiameter',
+                item.tubeOuterDiameterMm ?? null,
+              )
             : base.tube,
         depth:
           'radialDepthMm' in item

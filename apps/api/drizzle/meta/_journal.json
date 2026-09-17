@@ -99,6 +99,13 @@
       "when": 1789631123125,
       "tag": "0013_relax_tube_diameter_step",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789631387114,
+      "tag": "0014_tube_diameter_decimal",
+      "breakpoints": true
     }
   ]
 }

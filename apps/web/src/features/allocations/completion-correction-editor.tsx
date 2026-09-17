@@ -74,7 +74,11 @@ function CompletionCorrectionForm({
         id: item.stockItemId,
         selected: false,
         outcome: item.outcome as string,
-        tube: String(stock?.tubeOuterDiameterMm ?? ''),
+        tube: fieldInput(
+          units,
+          'tubeDiameter',
+          stock?.tubeOuterDiameterMm ?? null,
+        ),
         depth: fieldInput(units, 'radialDepth', stock?.radialDepthMm ?? null),
         width: fieldInput(units, 'rollWidth', stock?.widthMm ?? null),
         length: fieldInput(
@@ -138,7 +142,13 @@ function CompletionCorrectionForm({
                   }
                 : {
                     ...(r.tube.trim()
-                      ? { tubeOuterDiameterMm: Number(r.tube) }
+                      ? {
+                          tubeOuterDiameterMm: fieldValue(
+                            units,
+                            'tubeDiameter',
+                            r.tube,
+                          ),
+                        }
                       : {}),
                     ...(r.outcome === 'returned-roll'
                       ? {
@@ -222,7 +232,7 @@ function CompletionCorrectionForm({
                     />
                     {!stock.isRemnant && (
                       <TextField
-                        label="Tube outer diameter (mm)"
+                        label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                         value={row.tube}
                         onChange={(tube) => update(index, { tube })}
                         type="number"

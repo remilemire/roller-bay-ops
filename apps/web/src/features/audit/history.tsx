@@ -17,6 +17,7 @@ const measurements: Record<string, MeasurementField> = {
   explicitLengthMm: 'rollLength',
   remainingLengthMm: 'rollLength',
   radialDepthMm: 'radialDepth',
+  tubeOuterDiameterMm: 'tubeDiameter',
   measurementThicknessMm: 'thickness',
   reservedLengthMm: 'rollLength',
   lengthAllowanceMm: 'dropAllowance',
@@ -67,13 +68,7 @@ export function RecordValues({
   if (value === null || value === undefined) return <span>—</span>;
   if (typeof value === 'number')
     return (
-      <span>
-        {measurement
-          ? fieldLabel(units, measurement, value)
-          : field === 'tubeOuterDiameterMm'
-            ? `${value} mm`
-            : value}
-      </span>
+      <span>{measurement ? fieldLabel(units, measurement, value) : value}</span>
     );
   if (typeof value === 'boolean') return <span>{value ? 'Yes' : 'No'}</span>;
   if (typeof value === 'string') {

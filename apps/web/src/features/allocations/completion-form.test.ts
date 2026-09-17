@@ -58,10 +58,11 @@ it('records returned remnants with explicit length and rejects an unfinished out
   expect(() => completionFromForm(form, 1, units)).toThrow();
 });
 
-it('follows the chosen units for depth, remnants, and scraps while tubes stay in millimetres', () => {
+it('follows the chosen units for tubes, depth, remnants, and scraps', () => {
   const metric: MeasurementUnits = {
     ...defaultMeasurementUnits,
     radialDepth: 'cm',
+    tubeDiameter: 'in',
     rollWidth: 'mm',
     rollLength: 'm',
   };
@@ -69,7 +70,7 @@ it('follows the chosen units for depth, remnants, and scraps while tubes stay in
   expect(form.items[0]!.width).toBe('2997.2');
   Object.assign(form.items[0]!, {
     outcome: 'returned-roll',
-    tube: '50',
+    tube: '2',
     depth: '1.25',
     scraps: [
       {
@@ -82,7 +83,7 @@ it('follows the chosen units for depth, remnants, and scraps while tubes stay in
   });
   const result = completionFromForm(form, 1, metric);
   expect(result.items[0]).toMatchObject({
-    tubeOuterDiameterMm: 50,
+    tubeOuterDiameterMm: 50.8,
     radialDepthMm: 12.5,
     scraps: [{ widthMm: 762, lengthMm: 1828.8, quantity: 1 }],
   });

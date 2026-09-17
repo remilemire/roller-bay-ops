@@ -16,7 +16,6 @@ import {
   locationsKey,
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { nullableNumber } from '@/lib/format';
 import { fieldSuffix, fieldValue } from '@/lib/measurements';
 import { saveStock, stockKey } from './stock-items.api';
 export function StockEditor({ close }: { close: () => void }) {
@@ -54,7 +53,8 @@ export function StockEditor({ close }: { close: () => void }) {
             : null,
         radialDepthMm:
           v.kind === 'used' ? fieldValue(units, 'radialDepth', v.depth) : null,
-        tubeOuterDiameterMm: v.kind === 'used' ? nullableNumber(v.tube) : null,
+        tubeOuterDiameterMm:
+          v.kind === 'used' ? fieldValue(units, 'tubeDiameter', v.tube) : null,
         consumedAt: null,
       };
       return saveStock({
@@ -127,12 +127,11 @@ export function StockEditor({ close }: { close: () => void }) {
             {values.kind === 'used' && (
               <>
                 <TextField
-                  label="Tube outer diameter (mm)"
+                  label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                   value={values.tube}
                   onChange={(v) => form.setValue('tube', v)}
                   type="number"
                   required
-                  hint="A positive whole number."
                 />
                 <TextField
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}

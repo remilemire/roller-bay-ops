@@ -144,12 +144,12 @@ export function CompletionEditor({
                       <div className="form-grid">
                         {!stock.isRemnant && (
                           <TextField
-                            label="Tube outer diameter (mm)"
+                            label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                             type="number"
                             value={row.tube}
                             onChange={(tube) => change(index, { ...row, tube })}
                             disabled={stock.tubeOuterDiameterMm !== null}
-                            hint="Required after first use. A positive whole number."
+                            hint="Required after first use."
                           />
                         )}
                         {row.outcome === 'returned-roll' && (

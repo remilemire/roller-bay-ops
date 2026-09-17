@@ -46,7 +46,7 @@ it('saves one field at a time and shows the units the server returns', async () 
   expect(JSON.parse(init.body as string)).toEqual({ blindWidth: 'mm' });
   expect(client.getQueryData(sessionKey)).toEqual(updated);
   expect(screen.getByLabelText('Roll width')).toHaveValue('in');
-  expect(screen.getByText('Millimetres, multiples of 5')).toBeInTheDocument();
+  expect(screen.getByLabelText('Tube outer diameter')).toHaveValue('mm');
 });
 
 it('keeps the saved unit and reports the error when saving fails', async () => {

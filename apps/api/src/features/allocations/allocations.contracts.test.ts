@@ -98,7 +98,7 @@ test('completion contracts distinguish roll/remnant measurements and cap retaine
   };
   assert.equal(stockCuttingOutcomeSchema.safeParse(roll).success, true);
   for (const wrong of [
-    { ...roll, tubeOuterDiameterMm: 50.5 },
+    { ...roll, tubeOuterDiameterMm: 50.0005 },
     { ...roll, radialDepthMm: 1.1251 },
     { ...roll, explicitLengthMm: 100 },
     { ...roll, remainingLengthMm: 100 },
