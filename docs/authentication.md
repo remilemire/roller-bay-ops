@@ -90,9 +90,12 @@ Roles form a hierarchy: `owner` inherits all `admin` permissions, and both inher
 
 | Endpoint                                | Allowed callers    | Behavior                                                      |
 | --------------------------------------- | ------------------ | ------------------------------------------------------------- |
+| `GET /api/users`                        | Admin or owner     | List users, paginated and searchable by name or email.        |
 | `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to user or admin.                      |
 | `POST /api/users/transfer-ownership`    | Current owner only | Transfer ownership to `newOwnerId` from the JSON body.        |
 | `PATCH /api/users/me/measurement-units` | Any active user    | Set the caller's own unit for one or more measurement fields. |
+
+The list accepts `page`, `pageSize` (1–100, default 25), and `search`, which matches the name or email as a case-insensitive literal substring. Unknown query parameters receive 400. It returns `{ items, total, page, pageSize }` with public user records ordered by name, including inactive users, read from one snapshot so the page and total agree.
 
 Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body must contain only `role`; assigning `owner` through this endpoint is rejected with 400. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
 

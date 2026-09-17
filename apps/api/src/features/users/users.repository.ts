@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { asc, count, eq, ilike, or, sql } from 'drizzle-orm';
 import type {
   UpdateMeasurementUnits,
+  UserQuery,
   UserRole,
 } from '@roller-bay/shared/users';
 import { DatabaseService } from '../../database/database.service.js';
@@ -43,6 +44,33 @@ export class UsersRepository {
   async findById(id: string) {
     const [user] = await this.db.select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  // Call on the standalone repository: the snapshot transaction keeps the page
+  // and its total consistent with each other.
+  list(query: UserQuery) {
+    const pattern =
+      query.search && `%${query.search.replace(/[\\%_]/g, '\\$&')}%`;
+    const where = pattern
+      ? or(ilike(users.name, pattern), ilike(users.email, pattern))
+      : undefined;
+    return this.db.transaction(
+      async (tx) => {
+        const items = await tx
+          .select()
+          .from(users)
+          .where(where)
+          .orderBy(asc(users.name), asc(users.id))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize);
+        const [result] = await tx
+          .select({ total: count() })
+          .from(users)
+          .where(where);
+        return { items, total: result!.total };
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
   }
 
   // Call on the standalone repository: the email-conflict retry requires

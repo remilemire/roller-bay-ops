@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -18,6 +20,8 @@ import {
   type UpdateUserRole,
   transferOwnershipSchema,
   type TransferOwnership,
+  userQuerySchema,
+  type UserQuery,
 } from '@roller-bay/shared/users';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
@@ -26,6 +30,12 @@ import { UsersService } from './users.service.js';
 @Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
+
+  @Get()
+  @Roles('admin')
+  list(@Query(new ZodValidationPipe(userQuerySchema)) query: UserQuery) {
+    return this.users.list(query);
+  }
 
   // Any active user may change their own units; the target is never a path id.
   @Patch('me/measurement-units')

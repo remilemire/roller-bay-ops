@@ -12,6 +12,7 @@ import {
   resolveMeasurementUnits,
   userSchema,
   type UpdateMeasurementUnits,
+  type UserQuery,
   type UserRole,
 } from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
@@ -66,6 +67,20 @@ export class UsersService {
     try {
       const user = await this.repository.findById(id);
       return user ? this.toPublic(user) : undefined;
+    } catch (error) {
+      this.rethrowStorageError(error);
+    }
+  }
+
+  async list(query: UserQuery) {
+    try {
+      const { items, total } = await this.repository.list(query);
+      return {
+        items: items.map((user) => this.toPublic(user)),
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+      };
     } catch (error) {
       this.rethrowStorageError(error);
     }

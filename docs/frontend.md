@@ -28,9 +28,10 @@ The `(auth)` and `(dashboard)` route groups select layouts without changing URLs
 | `/stock-items`, `/stock-items/:id`                              | Stock search, lifecycle filters, detail, source links, and admin opening-stock/correction forms.                                                                                                 |
 | `/stock-receipts`, `/stock-receipts/new`, `/stock-receipts/:id` | Shared draft entry, revision-aware saves/deletion, confirmation, and resulting stock links.                                                                                                      |
 | `/allocations`, `/allocations/new`, `/allocations/:id`          | Requirements, cutting rules, manual drops/assignments, optimization/validation previews, shared drafts, confirmation, active-plan replacement, cancellation, printing, and cutting-result entry. |
+| `/users`                                                        | Admin/owner user directory: search by name or email, role changes, deactivation and reactivation, and owner-only ownership transfer, each behind a confirmation dialog.                          |
 | `/settings`                                                     | Current account, per-field measurement units, and appearance preference.                                                                                                                         |
 
-Admins and the owner can modify catalog, locations, and stock records. All active employees can manage receipt and allocation workflows. The backend authorizes every request. There is no user directory or management screen; the users API does not expose a list endpoint. Dashboard figures use existing paginated totals.
+Admins and the owner can modify catalog, locations, and stock records. All active employees can manage receipt and allocation workflows. The backend authorizes every request. The Users link and directory are shown only to admins and the owner; other roles see a notice and the list is not requested. The directory offers no actions on the owner or on the signed-in user's own row, so ownership changes only through a transfer and nobody locks themselves out from this screen. A transfer refreshes the session so the previous owner's role updates immediately. Dashboard figures use existing paginated totals.
 
 ## Authentication and API requests
 

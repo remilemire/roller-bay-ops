@@ -101,6 +101,24 @@ export const userSchema = z.object({
 
 export type User = z.infer<typeof userSchema>;
 
+export const userQuerySchema = z.strictObject({
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  // Matches the name or the work email.
+  search: z.string().trim().max(120).optional(),
+});
+
+export type UserQuery = z.infer<typeof userQuerySchema>;
+
+export const userListSchema = z.object({
+  items: z.array(userSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+});
+
+export type UserList = z.infer<typeof userListSchema>;
+
 export const updateUserActivationSchema = z.strictObject({
   isActive: z.boolean(),
 });

@@ -13,9 +13,10 @@ import {
   PackagePlus,
   Scissors,
   Settings2,
+  Users,
 } from 'lucide-react';
 import { api, noContent } from '@/lib/api';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
 import { clearPrivateData, sessionKey } from '@/features/auth/auth.queries';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -28,10 +29,12 @@ const navigation = [
   { href: '/allocations', label: 'Allocations', Icon: Scissors },
   { href: '/fabric-catalog', label: 'Fabric catalog', Icon: Box },
   { href: '/locations', label: 'Locations', Icon: MapPin },
+  { href: '/users', label: 'Users', Icon: Users, manageOnly: true },
 ];
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const user = useCurrentUser();
+  const canManage = useCanManage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const client = useQueryClient();
@@ -56,23 +59,25 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </span>
       </Link>
       <nav aria-label="Main navigation">
-        {navigation.map(({ href, label, Icon }) => {
-          const active =
-            href === '/' ? pathname === href : pathname.startsWith(href);
-          return (
-            <Link
-              href={href}
-              key={href}
-              className={`nav-link ${active ? 'active' : ''}`}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => setMobileOpen(false)}
-            >
-              <Icon size={20} />
-              <span>{label}</span>
-              {active && <span className="nav-dot" />}
-            </Link>
-          );
-        })}
+        {navigation
+          .filter((item) => !item.manageOnly || canManage)
+          .map(({ href, label, Icon }) => {
+            const active =
+              href === '/' ? pathname === href : pathname.startsWith(href);
+            return (
+              <Link
+                href={href}
+                key={href}
+                className={`nav-link ${active ? 'active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => setMobileOpen(false)}
+              >
+                <Icon size={20} />
+                <span>{label}</span>
+                {active && <span className="nav-dot" />}
+              </Link>
+            );
+          })}
       </nav>
       <div className="sidebar-bottom">
         <Link

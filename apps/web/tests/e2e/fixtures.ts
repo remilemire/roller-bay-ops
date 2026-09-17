@@ -21,6 +21,12 @@ import {
   allocation,
 } from '../fixtures';
 export { ids } from '../fixtures';
+const teammate = {
+  ...user,
+  id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  name: 'Robin Park',
+  email: 'robin@example.com',
+};
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean } = {},
@@ -34,6 +40,8 @@ export async function mockApi(
     role: options.role ?? 'admin',
     measurementUnits: { ...defaultMeasurementUnits } as MeasurementUnits,
     unitRequests: [] as unknown[],
+    teammateRole: 'user',
+    userRequests: [] as unknown[],
     receiptDraft: structuredClone(receiptDraft),
     receiptSubmitted: false,
     receiptConflict: false,
@@ -103,6 +111,24 @@ export async function mockApi(
         role: state.role,
         measurementUnits: state.measurementUnits,
       });
+    }
+    if (path === '/users' && method === 'GET')
+      return state.role === 'user'
+        ? send({ message: 'Your role cannot perform this action.' }, 403)
+        : send(
+            paged(
+              [
+                { ...user, role: state.role },
+                { ...teammate, role: state.teammateRole },
+              ],
+              url,
+            ),
+          );
+    if (path === `/users/${teammate.id}/role` && method === 'PATCH') {
+      const body = request.postDataJSON() as { role: string };
+      state.userRequests.push(body);
+      state.teammateRole = body.role;
+      return send({ ...teammate, role: state.teammateRole });
     }
     if (path === '/fabric-catalog/colors')
       return send(paged([state.catalogColor], url));

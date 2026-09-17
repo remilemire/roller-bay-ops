@@ -7,6 +7,7 @@ import request from 'supertest';
 import {
   defaultMeasurementUnits,
   ownershipTransferResultSchema,
+  userListSchema,
   userSchema,
 } from '@roller-bay/shared/users';
 import { UsersRepository } from './users.repository.js';
@@ -220,6 +221,42 @@ export async function testUserRoles(
         .set('Cookie', ownerCookie)
         .set('Origin', origin)
         .expect(204);
+    },
+  );
+
+  await t.test(
+    'the user directory is admin-only, searchable by name or email, and paginated',
+    async () => {
+      const list = (query: string, cookie = adminCookie) =>
+        request(server).get(`/api/users${query}`).set('Cookie', cookie);
+      await request(server).get('/api/users').expect(401);
+      await list('', recipientCookie).expect(403);
+      await list('?pageSize=0').expect(400);
+      await list('?role=admin').expect(400);
+      const all = userListSchema.parse((await list('').expect(200)).body);
+      assert.equal(all.items.length, all.total);
+      assert.deepEqual(
+        all.items.map((user) => user.name),
+        all.items.map((user) => user.name).sort((a, b) => a.localeCompare(b)),
+      );
+      for (const id of [originalOwnerId, recipientId, alternateId])
+        assert.ok(all.items.some((user) => user.id === id));
+      for (const search of ['recip', 'RECIPIENT@example'])
+        assert.deepEqual(
+          userListSchema
+            .parse(
+              (await list(`?search=${search}`, ownerCookie).expect(200)).body,
+            )
+            .items.map((user) => user.id),
+          [recipientId],
+        );
+      // Wildcards in the search text match literally.
+      assert.equal((await list('?search=%25').expect(200)).body.total, 0);
+      const page = userListSchema.parse(
+        (await list('?page=2&pageSize=1').expect(200)).body,
+      );
+      assert.equal(page.total, all.total);
+      assert.deepEqual(page.items, [all.items[1]]);
     },
   );
 
