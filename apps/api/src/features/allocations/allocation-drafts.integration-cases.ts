@@ -74,7 +74,7 @@ export async function testAllocationDrafts(
             cuts: [
               {},
               complete.plan.cuts[0],
-              { stockItemId: stockId, lengthMm: 50, items: [] },
+              { stockItemId: stockId, items: [] },
               {},
             ],
           },
@@ -84,9 +84,10 @@ export async function testAllocationDrafts(
           draft.data.requirements.map((item) => item.id),
           partial.requirements.map((item) => item!.id),
         );
+        // Only the assigned cut has a derived length; the test allowance is zero.
         assert.deepEqual(
           draft.data.plan.cuts.map((cut) => cut.lengthMm),
-          [null, 1000, 50, null],
+          [null, 1000, null, null],
         );
         assert.deepEqual(
           (await get(draft.id).expect(200)).body.data,

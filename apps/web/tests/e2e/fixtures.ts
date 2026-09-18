@@ -27,6 +27,45 @@ const teammate = {
   name: 'Robin Park',
   email: 'robin@example.com',
 };
+// Mirrors the server: rules come from configuration and each cut is as long
+// as its longest assigned drop plus that blind's allowance.
+function draftData(input: AllocationDraftInput) {
+  const requirements = input.requirements.map((item) => ({
+    ...item,
+    lengthAllowanceMm: 254,
+  }));
+  const lengths = new Map(
+    requirements.map((item) => [
+      item.id,
+      item.lengthMm === null ? null : item.lengthMm + item.lengthAllowanceMm,
+    ]),
+  );
+  return {
+    ...input,
+    settings: {
+      edgeTrimMm: 25.4,
+      minimumRemnantWidthMm: 1524,
+      minimumRemnantLengthMm: 1524,
+      dropAllowanceMm: 254,
+    },
+    requirements,
+    plan: {
+      cuts: input.plan.cuts.map((cut) => ({
+        ...cut,
+        lengthMm: cut.items.reduce<number | null>(
+          (longest, item) => {
+            const length = lengths.get(item.requirementId) ?? null;
+            return length === null || longest === null
+              ? null
+              : Math.max(longest, length);
+          },
+          cut.items.length ? 0 : null,
+        ),
+      })),
+    },
+  };
+}
+
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean } = {},
@@ -339,20 +378,7 @@ export async function mockApi(
       );
     }
     if (path === `/allocations/${ids.allocation}/draft` && method === 'PUT') {
-      const input = request.postDataJSON().data as AllocationDraftInput;
-      const data = {
-        ...input,
-        settings: {
-          edgeTrimMm: 25.4,
-          minimumRemnantWidthMm: 1524,
-          minimumRemnantLengthMm: 1524,
-          dropAllowanceMm: 254,
-        },
-        requirements: input.requirements.map((item) => ({
-          ...item,
-          lengthAllowanceMm: 254,
-        })),
-      };
+      const data = draftData(request.postDataJSON().data);
       state.allocationDraft = allocationDraftSchema.parse({
         ...state.allocationDraft,
         orderNumber: data.orderNumber,
@@ -372,20 +398,7 @@ export async function mockApi(
       return send(state.allocation);
     }
     if (path === '/allocations/drafts') {
-      const input = request.postDataJSON().data as AllocationDraftInput;
-      const data = {
-        ...input,
-        settings: {
-          edgeTrimMm: 25.4,
-          minimumRemnantWidthMm: 1524,
-          minimumRemnantLengthMm: 1524,
-          dropAllowanceMm: 254,
-        },
-        requirements: input.requirements.map((item) => ({
-          ...item,
-          lengthAllowanceMm: 254,
-        })),
-      };
+      const data = draftData(request.postDataJSON().data);
       state.allocationDraft = allocationDraftSchema.parse({
         ...allocation,
         state: 'draft',

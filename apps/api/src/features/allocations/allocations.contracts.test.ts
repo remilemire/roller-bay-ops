@@ -36,7 +36,6 @@ function submission() {
       cuts: [
         {
           stockItemId: context.stockItems[0]!.id,
-          lengthMm: 3,
           items: [{ requirementId: context.requirements[0]!.id, quantity: 2 }],
         },
       ],

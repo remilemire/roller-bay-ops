@@ -23,7 +23,10 @@ import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
-import { CuttingRulesService } from './cutting-rules.service.js';
+import {
+  CuttingRulesService,
+  planCutLengths,
+} from './cutting-rules.service.js';
 import { SolverError } from '../../solver/solver.errors.js';
 
 @Injectable()
@@ -93,7 +96,10 @@ export class AllocationPlanningService {
       ...new Set(input.plan.cuts.map((cut) => cut.stockItemId)),
     ]);
     return allocationValidationSchema.parse({
-      ...validateCuttingPlan(snapshot.context, input.plan),
+      ...validateCuttingPlan(
+        snapshot.context,
+        planCutLengths(snapshot.context.requirements, input.plan),
+      ),
       stockItems: snapshot.stock,
     });
   }

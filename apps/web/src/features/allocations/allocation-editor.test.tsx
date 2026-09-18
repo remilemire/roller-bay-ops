@@ -141,6 +141,7 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(
     screen.queryByText('Generating a cutting plan…'),
   ).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Cut length (in)')).toHaveValue(108);
+  expect(screen.queryByLabelText(/Cut length/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Quantity in this cut')).toHaveValue(1);
   expect(save).toBeEnabled();
 });

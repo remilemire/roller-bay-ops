@@ -51,6 +51,7 @@ import { buildCuttingContext } from './allocation-cutting-context.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 import {
   CuttingRulesService,
+  planCutLengths,
   type ConfiguredAllocationPlan,
 } from './cutting-rules.service.js';
 import { toLengthUnits } from './cutting-plan/cutting-dimensions.js';
@@ -89,7 +90,7 @@ export class AllocationsService {
           repository,
           tx,
           header,
-          { ...input, ...this.cuttingRules.apply(input.requirements) },
+          this.configure(input),
           false,
           userId,
         );
@@ -99,10 +100,7 @@ export class AllocationsService {
 
   createDraft(data: AllocationDraftInput, userId: string, key: string) {
     const requestHash = hash({ mode: 'draft', data });
-    const configured = {
-      ...data,
-      ...this.cuttingRules.apply(data.requirements),
-    };
+    const configured = this.configure(data);
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.create({
@@ -148,13 +146,10 @@ export class AllocationsService {
           revision,
         );
         const before = await this.detail(repository, tx, previous);
-        const configured = {
-          ...data,
-          ...this.cuttingRules.apply(data.requirements, {
-            settings: previous.settings,
-            requirements: await repository.requirements(id),
-          }),
-        };
+        const configured = this.configure(data, {
+          settings: previous.settings,
+          requirements: await repository.requirements(id),
+        });
         await repository.replacePlan(id, configured);
         const header = await repository.update(id, {
           orderNumber: data.orderNumber,
@@ -217,7 +212,13 @@ export class AllocationsService {
               quantity,
             }),
           ),
-          plan: saved.plan,
+          // Stored cut lengths are re-derived from the submitted requirements.
+          plan: {
+            cuts: saved.plan.cuts.map(({ stockItemId, items }) => ({
+              stockItemId,
+              items,
+            })),
+          },
         });
         if (!input.success)
           throw new BadRequestException({
@@ -228,10 +229,7 @@ export class AllocationsService {
           repository,
           tx,
           header,
-          {
-            ...input.data,
-            ...this.cuttingRules.apply(input.data.requirements, saved),
-          },
+          this.configure(input.data, saved),
           true,
           userId,
         );
@@ -284,13 +282,10 @@ export class AllocationsService {
           input.expectedRevision,
         );
         const before = await this.detail(repository, tx, header);
-        const configured = {
-          ...input,
-          ...this.cuttingRules.apply(input.requirements, {
-            settings: header.settings,
-            requirements: await repository.requirements(id),
-          }),
-        };
+        const configured = this.configure(input, {
+          settings: header.settings,
+          requirements: await repository.requirements(id),
+        });
         const current = await repository.items(id);
         const summary = await this.validateForWrite(
           repository,
@@ -722,6 +717,25 @@ export class AllocationsService {
         return this.detail(repository, tx, header);
       }, true),
     );
+  }
+
+  // Cutting rules and cut lengths are server-derived on every write, so a
+  // draft, submission, or edit never carries client-authored lengths.
+  private configure<
+    R extends { id: string; lengthMm: number | null },
+    C extends { items: { requirementId: string }[] },
+    X extends object,
+  >(
+    input: X & { requirements: R[]; plan: { cuts: C[] } },
+    saved?: Parameters<CuttingRulesService['apply']>[1],
+  ) {
+    const { requirements, plan, ...rest } = input;
+    const rules = this.cuttingRules.apply(requirements, saved);
+    return {
+      ...rest,
+      ...rules,
+      plan: planCutLengths(rules.requirements, plan),
+    };
   }
 
   private async validateForWrite(

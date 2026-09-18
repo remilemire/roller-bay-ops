@@ -292,9 +292,10 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   await expect(
     page.getByText('Valid cutting plan', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel('Cut length (in)', { exact: true })).toHaveValue(
-    '100',
-  );
+  await expect(page.getByLabel(/Cut length/)).toHaveCount(0);
+  await expect(
+    page.getByLabel('Quantity in this cut', { exact: true }),
+  ).toHaveValue('1');
   expect(state.allocationRequests.map((r) => r.path)).toEqual([
     '/allocations/optimize',
   ]);

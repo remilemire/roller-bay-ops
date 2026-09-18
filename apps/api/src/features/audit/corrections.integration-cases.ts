@@ -136,11 +136,7 @@ export async function testCorrections(
         ],
         plan: {
           cuts: [
-            {
-              stockItemId: stockId,
-              lengthMm: 1000,
-              items: [{ requirementId, quantity: 1 }],
-            },
+            { stockItemId: stockId, items: [{ requirementId, quantity: 1 }] },
           ],
         },
       };

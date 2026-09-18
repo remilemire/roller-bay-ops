@@ -74,11 +74,7 @@ export async function testAllocations(
       ],
       plan: {
         cuts: [
-          {
-            stockItemId: stockId,
-            lengthMm: length,
-            items: [{ requirementId, quantity: 1 }],
-          },
+          { stockItemId: stockId, items: [{ requirementId, quantity: 1 }] },
         ],
       },
     };
@@ -264,12 +260,11 @@ export async function testAllocations(
           config.set('CUTTING_DROP_ALLOWANCE_MM', 254);
           const body = input(await seed());
           const { requirements } = body;
-          const invalid = await post(`${path}/validate`, {
+          // Cut length is derived from the drop and allowance, never supplied.
+          await post(`${path}/validate`, {
             requirements,
-            plan: body.plan,
-          }).expect(200);
-          assert.equal(invalid.body.valid, false);
-          body.plan.cuts[0]!.lengthMm += 254;
+            plan: { cuts: [{ ...body.plan.cuts[0], lengthMm: 1254 }] },
+          }).expect(400);
           const preview = await post(`${path}/validate`, {
             requirements,
             plan: body.plan,
@@ -288,6 +283,7 @@ export async function testAllocations(
           const key = randomUUID();
           const created = await create(body, key);
           assert.equal(created.requirements[0]!.lengthAllowanceMm, 254);
+          assert.equal(created.plan.cuts[0]!.lengthMm, 1254);
           assert.equal(created.items[0]!.reservedLengthMm, 1254);
           assert.deepEqual(created.plannedSummary, preview.body.summary);
           assert.deepEqual(created.settings, {
@@ -297,7 +293,6 @@ export async function testAllocations(
             dropAllowanceMm: 254,
           });
           const draftBody = input(body.plan.cuts[0]!.stockItemId);
-          draftBody.plan.cuts[0]!.lengthMm += 254;
           const draftKey = randomUUID();
           const draft = (
             await post(`${path}/drafts`, { data: draftBody }, draftKey).expect(

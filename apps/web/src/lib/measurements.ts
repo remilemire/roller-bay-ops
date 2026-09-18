@@ -71,7 +71,7 @@ export const measurementHelp = {
   dropAllowance:
     "Extra length added to each blind's finished drop, covering drop straightening, the bottom bar and tube attachment. Applied automatically; it can't be changed on the order.",
   cutLength:
-    "How far to unroll before one straight cut across the full fabric width. Must equal the longest finished drop in the cut plus its drop allowance. Blinds sit side by side, so adding blinds doesn't lengthen the cut.",
+    "How far to unroll before one straight cut across the full fabric width. Calculated as the longest finished drop in the cut plus its drop allowance. Blinds sit side by side, so adding blinds doesn't lengthen the cut.",
   edgeTrim:
     "Width removed from each outside edge of the fabric before blinds are placed. Applied once per edge, not per blind. Applied automatically; it can't be changed on the order.",
   tubeDiameter:

@@ -17,10 +17,10 @@ export const allocationFormSchema = z.object({
       quantity: z.string(),
     }),
   ),
+  // Cut length is derived by the API from the assigned blinds, not entered.
   cuts: z.array(
     z.object({
       stockItemId: z.string(),
-      length: z.string(),
       items: z.array(
         z.object({ requirementId: z.string(), quantity: z.string() }),
       ),
@@ -56,7 +56,6 @@ export function allocationToForm(
     cuts:
       data?.plan.cuts.map((d) => ({
         stockItemId: d.stockItemId ?? '',
-        length: fieldInput(units, 'cutLength', d.lengthMm),
         items: d.items.map((i) => ({
           requirementId: i.requirementId,
           quantity: String(i.quantity ?? ''),
@@ -80,7 +79,6 @@ export function allocationFromForm(
     plan: {
       cuts: form.cuts.map((d) => ({
         stockItemId: nullableText(d.stockItemId),
-        lengthMm: fieldValue(units, 'cutLength', d.length),
         items: d.items.map((i) => ({
           requirementId: i.requirementId,
           quantity: nullableNumber(i.quantity),

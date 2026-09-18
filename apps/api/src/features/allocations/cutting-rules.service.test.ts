@@ -14,7 +14,10 @@ import {
   environmentSchema,
   type Environment,
 } from '../../config/environment.js';
-import { CuttingRulesService } from './cutting-rules.service.js';
+import {
+  CuttingRulesService,
+  planCutLengths,
+} from './cutting-rules.service.js';
 import { fixture } from './optimizer/optimizer.fixtures.js';
 
 const defaults = {
@@ -115,7 +118,6 @@ test('write and preview contracts reject client cutting rules while response sna
     cuts: [
       {
         stockItemId: context.stockItems[0]!.id,
-        lengthMm: 3,
         items: [{ requirementId: requirements[0]!.id, quantity: 2 }],
       },
     ],
@@ -142,6 +144,14 @@ test('write and preview contracts reject client cutting rules while response sna
         .success,
       false,
     );
+    if ('plan' in input)
+      assert.equal(
+        schema.safeParse({
+          ...input,
+          plan: { cuts: [{ ...plan.cuts[0], lengthMm: 3 }] },
+        }).success,
+        false,
+      );
   }
   const snapshot = allocationDraftDataSchema.parse({
     requirements: context.requirements,
@@ -149,4 +159,35 @@ test('write and preview contracts reject client cutting rules while response sna
   });
   assert.equal(snapshot.settings.dropAllowanceMm, 254);
   assert.deepEqual(snapshot.requirements, context.requirements);
+});
+
+test('cut length is the longest assigned drop plus its own allowance, unknown while a draft blind lacks a drop', () => {
+  const [short, long, blank] = [randomUUID(), randomUUID(), randomUUID()];
+  const requirements = [
+    { id: short, lengthMm: 1000, lengthAllowanceMm: 457.2 },
+    { id: long, lengthMm: 1200.001, lengthAllowanceMm: 254 },
+    { id: blank, lengthMm: null, lengthAllowanceMm: 254 },
+  ];
+  const { cuts } = planCutLengths(requirements, {
+    cuts: [
+      { stockItemId: 'a', items: [{ requirementId: short, quantity: 2 }] },
+      {
+        stockItemId: 'a',
+        items: [{ requirementId: short }, { requirementId: long }],
+      },
+      { stockItemId: null, items: [] },
+      { items: [{ requirementId: long }, { requirementId: blank }] },
+      { items: [{ requirementId: randomUUID() }] },
+    ],
+  });
+  // The shorter drop with the larger allowance is the longer adjusted piece.
+  assert.deepEqual(
+    cuts.map((cut) => cut.lengthMm),
+    [1457.2, 1457.2, null, null, null],
+  );
+  assert.deepEqual(cuts[0], {
+    stockItemId: 'a',
+    items: [{ requirementId: short, quantity: 2 }],
+    lengthMm: 1457.2,
+  });
 });

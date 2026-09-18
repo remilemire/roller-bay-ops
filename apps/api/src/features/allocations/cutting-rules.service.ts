@@ -4,6 +4,7 @@ import type {
   AllocationDraftData,
   CreateAllocation,
   CuttingContext,
+  CuttingPlanInput,
 } from '@roller-bay/shared/allocations';
 import type { Environment } from '../../config/environment.js';
 
@@ -11,10 +12,51 @@ type SavedRules = {
   settings: AllocationDraftData['settings'] | null;
   requirements: { id: string; lengthAllowanceMm: number | string | null }[];
 };
-export type ConfiguredAllocationPlan = Omit<CreateAllocation, 'requirements'> &
+type AssignedCut = { items: readonly { requirementId: string }[] };
+type PlannedCuts<C> = { cuts: (C & { lengthMm: number | null })[] };
+export type ConfiguredAllocationPlan = Omit<
+  CreateAllocation,
+  'requirements' | 'plan'
+> &
   Pick<CuttingContext, 'requirements'> & {
     settings: CuttingContext['settings'] & { dropAllowanceMm: number };
+    plan: PlannedCuts<CuttingPlanInput['cuts'][number]>;
   };
+
+/**
+ * Cut length is never entered. Each full-width cut is as long as its longest
+ * assigned finished drop plus that blind's allowance, so it stays consistent
+ * with the requirements it serves. A cut with no assignments, or with a draft
+ * blind whose drop is still missing, has no length yet.
+ */
+export function planCutLengths<C extends AssignedCut>(
+  requirements: readonly {
+    id: string;
+    lengthMm: number | null;
+    lengthAllowanceMm: number;
+  }[],
+  plan: { cuts: readonly C[] },
+): PlannedCuts<C> {
+  const lengths = new Map(
+    requirements.map((item) => [
+      item.id,
+      item.lengthMm === null
+        ? null
+        : Math.round((item.lengthMm + item.lengthAllowanceMm) * 1000) / 1000,
+    ]),
+  );
+  return {
+    cuts: plan.cuts.map((cut) => {
+      let lengthMm: number | null = null;
+      for (const item of cut.items) {
+        const length = lengths.get(item.requirementId);
+        if (length == null) return { ...cut, lengthMm: null };
+        if (lengthMm === null || length > lengthMm) lengthMm = length;
+      }
+      return { ...cut, lengthMm };
+    }),
+  };
+}
 
 @Injectable()
 export class CuttingRulesService {

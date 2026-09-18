@@ -78,7 +78,13 @@ export function AllocationEditor({
             quantity,
           }),
         ),
-        plan: active.plan,
+        // Stored cut lengths are derived; edits resubmit only the assignments.
+        plan: {
+          cuts: active.plan.cuts.map(({ stockItemId, items }) => ({
+            stockItemId,
+            items,
+          })),
+        },
       })
     : undefined;
   const form = useForm<AllocationForm>({

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
-import { fieldSuffix, measurementHelp } from '@/lib/measurements';
+import { fieldSuffix } from '@/lib/measurements';
 import { type AllocationForm } from './allocation-form';
 import { stockKey, lookupStock } from '@/features/stock-items/stock-items.api';
 
@@ -33,7 +33,7 @@ export function CutPlanEditor({
     onChange();
   }
   function addCut() {
-    cuts.append({ stockItemId: '', length: '', items: [] });
+    cuts.append({ stockItemId: '', items: [] });
     onChange();
   }
   // A generated plan replaces every cut, so an existing plan needs a nod first.
@@ -51,7 +51,8 @@ export function CutPlanEditor({
           <h2>Cutting plan</h2>
           <p>
             Each cut comes from one stock item. Blinds are arranged left to
-            right within it.
+            right within it, and its length follows the longest blind plus the
+            drop allowance.
           </p>
         </div>
         {cuts.fields.length > 0 && (
@@ -87,10 +88,7 @@ export function CutPlanEditor({
             <div className="plan-option">
               <Plus size={18} />
               <strong>Build it by hand</strong>
-              <p>
-                Choose each stock item, set its cut length and assign blinds to
-                it.
-              </p>
+              <p>Choose each stock item and assign blinds to it.</p>
               <Button type="button" variant="outline" onClick={addCut}>
                 Add cut
               </Button>
@@ -141,13 +139,6 @@ export function CutPlanEditor({
                   onChange={(v) => change({ ...cut, stockItemId: v })}
                   queryKey={[...stockKey, units.rollWidth]}
                   load={lookupStock(units.rollWidth)}
-                />
-                <TextField
-                  label={`Cut length (${fieldSuffix(units, 'cutLength')})`}
-                  help={measurementHelp.cutLength}
-                  type="number"
-                  value={cut.length}
-                  onChange={(v) => change({ ...cut, length: v })}
                 />
               </div>
               <hr className="divider" />

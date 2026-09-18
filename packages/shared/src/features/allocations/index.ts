@@ -51,24 +51,28 @@ export const cuttingContextSchema = z.strictObject({
 
 // Each cut spans the full stock width. Items are ordered left to right;
 // quantities represent adjacent copies. Rotation and nesting are not supported.
-export const cuttingPlanSchema = z.strictObject({
-  cuts: z
-    .array(
-      z.strictObject({
-        stockItemId: id,
-        lengthMm: dimension.positive(),
-        items: z
-          .array(z.strictObject({ requirementId: id, quantity }))
-          .min(1)
-          .max(1000),
-      }),
-    )
-    .min(1)
-    .max(10000),
-});
+const cutAssignments = z
+  .array(z.strictObject({ requirementId: id, quantity }))
+  .min(1)
+  .max(1000);
+const planCuts = <T extends z.ZodType>(cut: T) =>
+  z.strictObject({ cuts: z.array(cut).min(1).max(10000) });
+export const cuttingPlanSchema = planCuts(
+  z.strictObject({
+    stockItemId: id,
+    lengthMm: dimension.positive(),
+    items: cutAssignments,
+  }),
+);
+// Submissions and previews omit the cut length: the server derives it from the
+// longest assigned finished drop plus that blind's allowance.
+export const cuttingPlanInputSchema = planCuts(
+  z.strictObject({ stockItemId: id, items: cutAssignments }),
+);
 
 export type CuttingContext = z.infer<typeof cuttingContextSchema>;
 export type CuttingPlan = z.infer<typeof cuttingPlanSchema>;
+export type CuttingPlanInput = z.infer<typeof cuttingPlanInputSchema>;
 
 export const cuttingSettingsSchema = cuttingContextSchema.shape.settings;
 export const allocationIdempotencyKeySchema = id;
@@ -127,7 +131,7 @@ export const optimizeAllocationSchema = z
     'Provide allocationId and expectedRevision together.',
   );
 export const validateAllocationSchema = z
-  .strictObject({ ...previewFields, plan: cuttingPlanSchema })
+  .strictObject({ ...previewFields, plan: cuttingPlanInputSchema })
   .refine(
     previewRevision,
     'Provide allocationId and expectedRevision together.',
@@ -135,7 +139,7 @@ export const validateAllocationSchema = z
 const allocationSubmission = z.strictObject({
   orderNumber: z.string().trim().min(1).max(50),
   ...planningFields,
-  plan: cuttingPlanSchema,
+  plan: cuttingPlanInputSchema,
 });
 export const createAllocationSchema = allocationSubmission.refine(
   (value) =>
@@ -226,6 +230,17 @@ export const allocationDetailSchema = allocationSummarySchema.extend({
 });
 const draftField = <T extends z.ZodType>(schema: T) =>
   schema.nullish().transform((value) => value ?? null);
+const draftCutFields = {
+  stockItemId: draftField(id),
+  items: z
+    .array(
+      z.strictObject({ requirementId: id, quantity: draftField(quantity) }),
+    )
+    .max(1000)
+    .default([]),
+};
+const draftPlan = <T extends z.ZodType>(cut: T) =>
+  z.strictObject({ cuts: z.array(cut).max(10000).default([]) }).prefault({});
 export const allocationDraftDataSchema = z
   .strictObject({
     orderNumber: draftField(z.string().trim().min(1).max(50)),
@@ -250,28 +265,13 @@ export const allocationDraftDataSchema = z
         dropAllowanceMm: dimension.optional(),
       })
       .prefault({}),
-    plan: z
-      .strictObject({
-        cuts: z
-          .array(
-            z.strictObject({
-              stockItemId: draftField(id),
-              lengthMm: draftField(dimension.positive()),
-              items: z
-                .array(
-                  z.strictObject({
-                    requirementId: id,
-                    quantity: draftField(quantity),
-                  }),
-                )
-                .max(1000)
-                .default([]),
-            }),
-          )
-          .max(10000)
-          .default([]),
-      })
-      .prefault({}),
+    // Stored drafts keep the derived cut length so readers see it as it was.
+    plan: draftPlan(
+      z.strictObject({
+        ...draftCutFields,
+        lengthMm: draftField(dimension.positive()),
+      }),
+    ),
   })
   .superRefine(validateDraftAssignments);
 
@@ -325,7 +325,7 @@ export const allocationDraftInputSchema = z
       )
       .max(1000)
       .default([]),
-    plan: allocationDraftDataSchema.shape.plan,
+    plan: draftPlan(z.strictObject(draftCutFields)),
   })
   .superRefine(validateDraftAssignments);
 export type AllocationDraftInput = z.infer<typeof allocationDraftInputSchema>;
