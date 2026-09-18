@@ -62,7 +62,12 @@ export function ReceiptEditor({
   const liveUnits = useMeasurementUnits();
   const [units] = useState(liveUnits);
   const scope = `receipt:${user.id}:new`;
-  const recovery = stockReceiptDraftDataSchema.safeParse(pendingPayload(scope));
+  // The pending create request belongs to the blank form that sent it;
+  // saved drafts must neither offer to restore it nor clear it.
+  const ownsPending = !initial;
+  const recovery = stockReceiptDraftDataSchema.safeParse(
+    ownsPending ? pendingPayload(scope) : undefined,
+  );
   const form = useForm<ReceiptForm>({
     resolver: zodResolver(receiptFormSchema),
     defaultValues: receiptToForm(
@@ -99,10 +104,10 @@ export function ReceiptEditor({
         error.status < 500 &&
         error.status !== 409
       )
-        finishRequest(scope);
+        if (ownsPending) finishRequest(scope);
     },
     onSuccess: async (draft) => {
-      finishRequest(scope);
+      if (ownsPending) finishRequest(scope);
       setSaved(draft);
       form.reset(receiptToForm(draft.data, units));
       client.setQueryData([...receiptKey, draft.id], draft);

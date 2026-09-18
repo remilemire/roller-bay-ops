@@ -68,7 +68,12 @@ export function AllocationEditor({
   const liveUnits = useMeasurementUnits();
   const [units] = useState(liveUnits);
   const scope = `allocation:${user.id}:new`;
-  const recovery = allocationDraftInputSchema.safeParse(pendingPayload(scope));
+  // The pending create request belongs to the blank form that sent it;
+  // saved drafts and active plans must neither offer to restore it nor clear it.
+  const ownsPending = !initial && !active;
+  const recovery = allocationDraftInputSchema.safeParse(
+    ownsPending ? pendingPayload(scope) : undefined,
+  );
   const activeData = active
     ? allocationDraftInputSchema.parse({
         orderNumber: active.orderNumber,
@@ -149,10 +154,10 @@ export function AllocationEditor({
         error.status < 500 &&
         error.status !== 409
       )
-        finishRequest(scope);
+        if (ownsPending) finishRequest(scope);
     },
     onSuccess: async (record) => {
-      finishRequest(scope);
+      if (ownsPending) finishRequest(scope);
       if (record.state === 'draft') {
         setSaved(record);
         form.reset(allocationToForm(record.data, units));

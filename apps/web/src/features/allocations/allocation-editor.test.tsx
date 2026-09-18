@@ -240,3 +240,30 @@ it('saves unsaved edits to the draft before confirming it', async () => {
     expect.objectContaining({ orderNumber: '104802' }),
   );
 });
+
+it('leaves a pending new-allocation request alone while editing an active plan', async () => {
+  const user = userEvent.setup();
+  const pending = JSON.stringify({
+    key: crypto.randomUUID(),
+    payload: JSON.stringify({ orderNumber: '209999' }),
+  });
+  sessionStorage.setItem('roller-bay:pending:allocation:user-1:new', pending);
+  replace.mockRejectedValue(new ApiError(400, 'Validation failed'));
+  render(
+    <QueryClientProvider client={client()}>
+      <AllocationEditor active={allocation} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText('Order number')).toHaveValue('104801');
+  await user.click(screen.getByRole('button', { name: 'Update reservations' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Validation failed',
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Restore earlier request' }),
+  ).not.toBeInTheDocument();
+  expect(
+    sessionStorage.getItem('roller-bay:pending:allocation:user-1:new'),
+  ).toBe(pending);
+  sessionStorage.clear();
+});
