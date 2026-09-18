@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LocationsScreen } from './locations-screen';
 import { listLocations, saveLocation } from './locations.api';
+import { ApiError } from '@/lib/api';
 
 const state = vi.hoisted(() => ({ canManage: true }));
 vi.mock('next/navigation', () => ({
@@ -113,6 +114,31 @@ it('creates a level using the section where Add level was clicked', async () => 
     }),
   );
 });
+it('shows a rejected level label beside its field', async () => {
+  vi.mocked(saveLocation).mockRejectedValue(
+    new ApiError(409, 'Validation failed', undefined, [
+      { path: 'label', message: 'This section already has that level.' },
+    ]),
+  );
+  showLocations();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'Add level to Warehouse / A' }),
+  );
+  const dialog = within(screen.getByRole('dialog'));
+  const level = dialog.getByLabelText('Level');
+  await user.type(level, 'Top');
+  await user.click(dialog.getByRole('button', { name: 'Save record' }));
+  const notice = await dialog.findByRole('alert');
+  expect(notice).toHaveTextContent('Validation failed');
+  expect(notice).not.toHaveTextContent(/level/i);
+  expect(level).toHaveAccessibleDescription(
+    'This section already has that level.',
+  );
+  await user.type(level, ' 2');
+  expect(level).not.toBeInvalid();
+});
+
 it('loads additional children without dropping the existing branch', async () => {
   vi.mocked(listLocations).mockImplementation(async (kind, _search, page) => ({
     items: [

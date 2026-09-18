@@ -24,6 +24,9 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -505,6 +508,16 @@ function LocationChildren({
     </>
   );
 }
+// Request-body keys, which differ by location kind, and the form fields that
+// edit them.
+const BODY_FIELDS = {
+  name: 'name',
+  label: 'name',
+  zoneId: 'parentId',
+  sectionId: 'parentId',
+} as const;
+const fieldName = (issue: ErrorIssue) =>
+  BODY_FIELDS[issuePath(issue) as keyof typeof BODY_FIELDS] ?? null;
 function LocationEditor({
   kind,
   row,
@@ -530,6 +543,7 @@ function LocationEditor({
   const mutation = useMutation({
     mutationFn: (data: z.infer<typeof formSchema>) =>
       saveLocation(kind, row?.id, data),
+    onError: (error) => showFieldIssues(form, error, fieldName),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: locationsKey }),
@@ -539,6 +553,11 @@ function LocationEditor({
     },
   });
   const parentKind = kind === 'levels' ? 'sections' : 'zones';
+  const { errors } = form.formState;
+  const set = (name: keyof z.infer<typeof formSchema>, value: string) => {
+    form.setValue(name, value);
+    form.clearErrors(name);
+  };
   return (
     <Dialog
       open
@@ -553,7 +572,8 @@ function LocationEditor({
           <TextField
             label={kind === 'levels' ? 'Level' : 'Name'}
             value={values.name}
-            onChange={(v) => form.setValue('name', v)}
+            onChange={(v) => set('name', v)}
+            error={errors.name?.message}
             required
             maxLength={kind === 'zones' ? 120 : 40}
           />
@@ -568,7 +588,8 @@ function LocationEditor({
             <Lookup
               label={kind === 'levels' ? 'Section' : 'Zone'}
               value={values.parentId}
-              onChange={(v) => form.setValue('parentId', v)}
+              onChange={(v) => set('parentId', v)}
+              error={errors.parentId?.message}
               queryKey={[...locationsKey, parentKind]}
               load={async (search, page, signal) => {
                 const data = await listLocations(
@@ -585,12 +606,12 @@ function LocationEditor({
             />
           )}
         </div>
-        {form.formState.errors.name && (
-          <p className="notice notice-error" role="alert">
-            {form.formState.errors.name.message}
-          </p>
+        {mutation.error && (
+          <ErrorNotice
+            error={mutation.error}
+            inline={(issue) => fieldName(issue) !== null}
+          />
         )}
-        {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
             type="button"
