@@ -120,6 +120,8 @@ function describePredicate(issue: ErrorIssue): string | null {
     return /received (null|undefined)$/.test(message)
       ? 'is required'
       : 'is invalid';
+  // A choice left unselected fails the payload's discriminator.
+  if (/^Invalid discriminator value/.test(message)) return 'is required';
   if (/^Too small/.test(message)) return 'is too small';
   if (/^Too big/.test(message)) return 'is too large';
   if (/^Invalid number: must be a multiple of/.test(message))

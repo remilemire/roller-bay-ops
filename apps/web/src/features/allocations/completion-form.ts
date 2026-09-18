@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FieldPath } from 'react-hook-form';
 import {
   completeAllocationSchema,
   type AllocationDetail,
@@ -29,6 +30,27 @@ export const completionFormSchema = z.object({
   ),
 });
 export type CompletionForm = z.infer<typeof completionFormSchema>;
+const PAYLOAD_FIELDS: Record<string, string> = {
+  tubeOuterDiameterMm: 'tube',
+  radialDepthMm: 'depth',
+  explicitLengthMm: 'length',
+  widthMm: 'width',
+  lengthMm: 'length',
+};
+/**
+ * The form field that shows an issue reported against the completion payload,
+ * or null when the issue belongs to no single field.
+ */
+export function completionFieldName(
+  path: string,
+): FieldPath<CompletionForm> | null {
+  const match = path.match(
+    /^(items\.\d+\.(?:scraps\.\d+\.)?)(outcome|locationId|quantity|\w+Mm)$/,
+  );
+  if (!match) return null;
+  const field = PAYLOAD_FIELDS[match[2]!] ?? match[2]!;
+  return `${match[1]}${field}` as FieldPath<CompletionForm>;
+}
 // Every measurement follows the given units in both directions.
 export function completionToForm(
   allocation: AllocationDetail,

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,6 +20,9 @@ import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import {
   requestKey,
   finishRequest,
@@ -29,6 +32,7 @@ import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { shortId } from '@/lib/format';
 import { completeAllocation, allocationKey } from './allocations.api';
 import {
+  completionFieldName,
   completionFormSchema,
   completionFromForm,
   completionToForm,
@@ -60,11 +64,20 @@ export function CompletionEditor({
   const [confirm, setConfirm] = useState(false);
   const [validationError, setValidationError] = useState<unknown>(null);
   useUnsavedChanges(form.formState.isDirty);
+  const fieldName = (issue: ErrorIssue) =>
+    completionFieldName(issuePath(issue));
+  // Issues with a field of their own show beside it; the rest stay in the
+  // notice above the actions.
+  const showIssues = (source: unknown) =>
+    showFieldIssues(form, source, fieldName);
+  const fieldError = (name: FieldPath<CompletionForm>) =>
+    form.getFieldState(name, form.formState).error?.message;
   const mutation = useMutation({
     mutationFn: (value: CompletionForm) => {
       const body = completionFromForm(value, allocation.revision, units);
       return completeAllocation(allocation.id, body, requestKey(scope, body));
     },
+    onError: (error) => showIssues(error),
     onSuccess: async () => {
       finishRequest(scope);
       form.reset(form.getValues());
@@ -76,12 +89,14 @@ export function CompletionEditor({
       close();
     },
   });
-  const change = (index: number, row: CompletionForm['items'][number]) =>
+  const change = (index: number, row: CompletionForm['items'][number]) => {
     form.setValue(
       'items',
       values.items.map((item, i) => (i === index ? row : item)),
       { shouldDirty: true },
     );
+    form.clearErrors(`items.${index}`);
+  };
   return (
     <>
       <PageHeading
@@ -97,6 +112,7 @@ export function CompletionEditor({
             setConfirm(true);
           } catch (error) {
             setValidationError(error);
+            showIssues(error);
           }
         })}
       >
@@ -128,6 +144,7 @@ export function CompletionEditor({
                       label="What happened to this stock item?"
                       value={row.outcome}
                       onChange={(outcome) => change(index, { ...row, outcome })}
+                      error={fieldError(`items.${index}.outcome`)}
                       options={[
                         { value: 'consumed', label: 'Fully consumed' },
                         {
@@ -149,6 +166,7 @@ export function CompletionEditor({
                             type="number"
                             value={row.tube}
                             onChange={(tube) => change(index, { ...row, tube })}
+                            error={fieldError(`items.${index}.tube`)}
                             disabled={stock.tubeOuterDiameterMm !== null}
                             hint="Required after first use."
                           />
@@ -162,6 +180,7 @@ export function CompletionEditor({
                             onChange={(depth) =>
                               change(index, { ...row, depth })
                             }
+                            error={fieldError(`items.${index}.depth`)}
                           />
                         )}
                         {row.outcome === 'returned-remnant' && (
@@ -173,6 +192,7 @@ export function CompletionEditor({
                               onChange={(width) =>
                                 change(index, { ...row, width })
                               }
+                              error={fieldError(`items.${index}.width`)}
                             />
                             <TextField
                               label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
@@ -181,6 +201,7 @@ export function CompletionEditor({
                               onChange={(length) =>
                                 change(index, { ...row, length })
                               }
+                              error={fieldError(`items.${index}.length`)}
                             />
                           </>
                         )}
@@ -192,6 +213,7 @@ export function CompletionEditor({
                               onChange={(locationId) =>
                                 change(index, { ...row, locationId })
                               }
+                              error={fieldError(`items.${index}.locationId`)}
                               queryKey={locationsKey}
                               load={lookupLocations}
                             />
@@ -265,6 +287,9 @@ export function CompletionEditor({
                               type="number"
                               value={scrap.width}
                               onChange={(width) => update({ ...scrap, width })}
+                              error={fieldError(
+                                `items.${index}.scraps.${si}.width`,
+                              )}
                             />
                             <TextField
                               label={`Length (${fieldSuffix(units, 'rollLength')})`}
@@ -273,6 +298,9 @@ export function CompletionEditor({
                               onChange={(length) =>
                                 update({ ...scrap, length })
                               }
+                              error={fieldError(
+                                `items.${index}.scraps.${si}.length`,
+                              )}
                             />
                             <TextField
                               label="Quantity"
@@ -281,6 +309,9 @@ export function CompletionEditor({
                               onChange={(quantity) =>
                                 update({ ...scrap, quantity })
                               }
+                              error={fieldError(
+                                `items.${index}.scraps.${si}.quantity`,
+                              )}
                             />
                             <div className="span-full">
                               <Lookup
@@ -289,6 +320,9 @@ export function CompletionEditor({
                                 onChange={(locationId) =>
                                   update({ ...scrap, locationId })
                                 }
+                                error={fieldError(
+                                  `items.${index}.scraps.${si}.locationId`,
+                                )}
                                 queryKey={locationsKey}
                                 load={lookupLocations}
                               />
@@ -302,7 +336,12 @@ export function CompletionEditor({
               );
             })}
           </div>
-          {Boolean(validationError) && <ErrorNotice error={validationError} />}
+          {Boolean(validationError) && (
+            <ErrorNotice
+              error={validationError}
+              inline={(issue) => fieldName(issue) !== null}
+            />
+          )}
           <div className="form-actions">
             <Button
               type="button"

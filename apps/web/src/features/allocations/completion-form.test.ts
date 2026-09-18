@@ -5,6 +5,7 @@ import {
 } from '@roller-bay/shared/users';
 import { allocation, ids } from '../../../tests/fixtures';
 import {
+  completionFieldName,
   completionFromForm,
   completionToForm,
   completionRecovery,
@@ -88,4 +89,24 @@ it('follows the chosen units for tubes, depth, remnants, and scraps', () => {
     scraps: [{ widthMm: 762, lengthMm: 1828.8, quantity: 1 }],
   });
   expect(completionRecovery(result, allocation, metric)).toEqual(form);
+});
+
+it('places completion issues on the field that fixes them', () => {
+  expect(completionFieldName('items.0.outcome')).toBe('items.0.outcome');
+  expect(completionFieldName('items.1.radialDepthMm')).toBe('items.1.depth');
+  expect(completionFieldName('items.0.tubeOuterDiameterMm')).toBe(
+    'items.0.tube',
+  );
+  expect(completionFieldName('items.0.explicitLengthMm')).toBe(
+    'items.0.length',
+  );
+  expect(completionFieldName('items.0.scraps.2.lengthMm')).toBe(
+    'items.0.scraps.2.length',
+  );
+  expect(completionFieldName('items.0.scraps.2.locationId')).toBe(
+    'items.0.scraps.2.locationId',
+  );
+  // Issues about the whole submission stay in the notice.
+  expect(completionFieldName('items')).toBeNull();
+  expect(completionFieldName('items.0')).toBeNull();
 });
