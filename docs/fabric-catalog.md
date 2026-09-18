@@ -28,7 +28,7 @@ All resources are namespaced under `/api/fabric-catalog`. Each resource supports
 
 PATCH accepts a nonempty subset of the create fields. IDs are UUIDs. Unknown body fields and query parameters are rejected.
 
-Names are trimmed and must contain 1–120 characters. Color codes are trimmed, uppercased, globally unique, and contain 1–16 ASCII letters, digits, hyphens, forward slashes, or periods. Slashes and periods appear in supplier codes such as `NB1-WHT/GR` and `CHR02.02`. Thickness is a JSON number in millimetres, greater than zero, at most 9,999,999.999, with at most three decimal places. Excess precision is rejected rather than rounded by the endpoint. PostgreSQL stores it as `thickness_mm numeric(10,3)`; JSON numbers need not display trailing zeroes.
+Names are trimmed and must contain 1–120 characters. Color codes are trimmed, uppercased, globally unique, and contain 1–10 ASCII letters, digits, hyphens, forward slashes, or periods. Slashes and periods appear in supplier codes such as `NB1-WHT/GR` and `CHR02.02`. Thickness is a JSON number in millimetres, greater than zero, at most 9,999,999.999, with at most three decimal places. Excess precision is rejected rather than rounded by the endpoint. PostgreSQL stores it as `thickness_mm numeric(10,3)`; JSON numbers need not display trailing zeroes.
 
 For example, creating a color uses:
 

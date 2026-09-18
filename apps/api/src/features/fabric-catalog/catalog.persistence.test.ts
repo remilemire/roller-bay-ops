@@ -90,7 +90,7 @@ test('catalog contracts preserve thousandths and reject extra precision or unint
     assert.equal(updateFabricColorSchema.safeParse(update).success, false);
 });
 
-test('color codes accept the punctuation in supplier codes up to sixteen characters', () => {
+test('color codes accept the punctuation in supplier codes up to ten characters', () => {
   const input = {
     materialId: '11111111-1111-4111-8111-111111111111',
     thicknessMm: 0.53,
@@ -100,9 +100,8 @@ test('color codes accept the punctuation in supplier codes up to sixteen charact
     'NB1-WHT/GR',
     'CHR02.02',
     '9703-02.31',
-    'BEVCHARCOAL',
     '1G3-OY/CHA',
-    'ABCDEFGH12345678',
+    'ABCDEFGH12',
   ])
     assert.equal(
       createFabricColorSchema.parse({ ...input, code }).code,
@@ -111,7 +110,7 @@ test('color codes accept the punctuation in supplier codes up to sixteen charact
   // The last entry is Cyrillic \u041d\u0421, a lookalike for HC that the old library pasted in.
   for (const code of [
     '',
-    'ABCDEFGH123456789',
+    'BEVCHARCOAL',
     'HC A33',
     'HC_A33',
     '\u041d\u0421-A33',

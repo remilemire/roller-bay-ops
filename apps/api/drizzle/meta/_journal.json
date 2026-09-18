@@ -120,6 +120,13 @@
       "when": 1789693166250,
       "tag": "0016_rename_plan_drops_to_cuts",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789700284283,
+      "tag": "0017_narrow_fabric_color_code",
+      "breakpoints": true
     }
   ]
 }
