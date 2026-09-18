@@ -1,16 +1,19 @@
 import { AlertCircle, ArrowRight, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
 import { describeError } from '@/lib/errors';
 import { Button } from './button';
 export function ErrorNotice({
   error,
   retry,
+  inline,
 }: {
   error: unknown;
   retry?: () => void;
+  inline?: (issue: ErrorIssue) => boolean;
 }) {
-  const { message, details } = describeError(error);
+  const { message, details } = describeError(error, inline);
   return (
     <div className="notice notice-error" role="alert">
       <AlertCircle size={19} />

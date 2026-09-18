@@ -754,6 +754,12 @@ td strong {
   font-size: 10px;
   color: var(--muted);
 }
+.field small.field-error {
+  color: var(--danger);
+}
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

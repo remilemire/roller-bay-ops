@@ -4,24 +4,34 @@ import type {
 } from '@roller-bay/shared/allocations';
 export function PlanPreview({
   result,
+  inline = () => false,
 }: {
   result: AllocationOptimization | AllocationValidation;
+  /** Issues the form already shows beside their fields. */
+  inline?: (issue: { path: string; message: string }) => boolean;
 }) {
-  if ('valid' in result && !result.valid)
+  if ('valid' in result && !result.valid) {
+    const unplaced = result.issues.filter((issue) => !inline(issue));
     return (
       <div className="notice notice-warning" role="alert">
         <div>
           <strong>Some cuts need attention</strong>
-          <ul>
-            {result.issues.map((issue, index) => (
-              <li key={index}>
-                {issue.message} <small>({issue.path})</small>
-              </li>
-            ))}
-          </ul>
+          {unplaced.length < result.issues.length && (
+            <p>Check the highlighted fields.</p>
+          )}
+          {unplaced.length > 0 && (
+            <ul>
+              {unplaced.map((issue, index) => (
+                <li key={index}>
+                  {issue.message} <small>({issue.path})</small>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     );
+  }
   if ('status' in result && result.status !== 'feasible')
     return (
       <div className="notice notice-warning" role="status">

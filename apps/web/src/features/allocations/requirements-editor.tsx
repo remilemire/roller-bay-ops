@@ -73,8 +73,12 @@ export function RequirementsEditor({
             form.setValue(`requirements.${index}.${key}`, value, {
               shouldDirty: true,
             });
+            form.clearErrors(`requirements.${index}.${key}`);
             onChange();
           };
+          const error = (key: keyof typeof r) =>
+            form.getFieldState(`requirements.${index}.${key}`, form.formState)
+              .error?.message;
           return (
             <div className="form-row" key={row.formKey}>
               <div className="form-row-header">
@@ -108,6 +112,7 @@ export function RequirementsEditor({
                 label={`Color · blind ${index + 1}`}
                 value={r.fabricColorId}
                 onChange={(v) => change('fabricColorId', v)}
+                error={error('fabricColorId')}
                 queryKey={[...catalogKey, 'colors']}
                 load={lookupColors}
               />
@@ -116,6 +121,7 @@ export function RequirementsEditor({
                 type="number"
                 value={r.width}
                 onChange={(v) => change('width', v)}
+                error={error('width')}
               />
               <TextField
                 label={`Finished drop (${fieldSuffix(units, 'finishedDrop')})`}
@@ -123,12 +129,14 @@ export function RequirementsEditor({
                 type="number"
                 value={r.length}
                 onChange={(v) => change('length', v)}
+                error={error('length')}
               />
               <TextField
                 label="Quantity"
                 type="number"
                 value={r.quantity}
                 onChange={(v) => change('quantity', v)}
+                error={error('quantity')}
               />
             </div>
           );

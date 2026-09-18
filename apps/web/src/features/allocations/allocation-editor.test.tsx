@@ -2,7 +2,10 @@ import { expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { AllocationOptimization } from '@roller-bay/shared/allocations';
+import {
+  allocationDraftSchema,
+  type AllocationOptimization,
+} from '@roller-bay/shared/allocations';
 import { allocation, stock, ids } from '../../../tests/fixtures';
 import { AllocationDetailScreen } from './allocation-detail-screen';
 import { AllocationEditor } from './allocation-editor';
@@ -34,6 +37,23 @@ vi.mock('./allocations.api', async (importOriginal) => ({
   replaceAllocation: replace,
   optimizeAllocation: optimize,
 }));
+const draft = allocationDraftSchema.parse({
+  id: allocation.id,
+  state: 'draft',
+  orderNumber: allocation.orderNumber,
+  createdByUserId: allocation.createdByUserId,
+  revision: 1,
+  createdAt: allocation.createdAt,
+  updatedAt: allocation.updatedAt,
+  completedAt: null,
+  cancelledAt: null,
+  needsReplanning: false,
+  data: {
+    orderNumber: allocation.orderNumber,
+    requirements: allocation.requirements,
+    plan: allocation.plan,
+  },
+});
 const client = () =>
   new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -144,4 +164,30 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(screen.queryByLabelText(/Cut length/)).not.toBeInTheDocument();
   expect(screen.getByLabelText('Quantity in this cut')).toHaveValue(1);
   expect(save).toBeEnabled();
+});
+
+it('shows submission problems beside their fields instead of listing them', async () => {
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={client()}>
+      <AllocationEditor
+        initial={{
+          ...draft,
+          data: {
+            ...draft.data,
+            requirements: [{ ...draft.data.requirements[0]!, widthMm: null }],
+          },
+        }}
+      />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  const width = screen.getByLabelText('Width (in)');
+  expect(width).toBeInvalid();
+  expect(width).toHaveAccessibleDescription('Required.');
+  const notice = screen.getByRole('alert');
+  expect(notice).toHaveTextContent('Some fields are missing or invalid.');
+  expect(notice).not.toHaveTextContent('width');
+  await user.type(width, '54');
+  expect(width).not.toBeInvalid();
 });

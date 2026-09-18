@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
 import {
   allocationDraftSchema,
   allocationDraftInputSchema,
@@ -31,8 +32,10 @@ import {
   finishRequest,
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { describeFieldIssue, errorIssues, issuePath } from '@/lib/errors';
 import {
   allocationFormSchema,
+  allocationFieldName,
   allocationToForm,
   allocationFromForm,
   type AllocationForm,
@@ -107,7 +110,20 @@ export function AllocationEditor({
   const client = useQueryClient();
   const router = useRouter();
   useEffect(() => () => abort.current?.abort(), []);
-  useUnsavedChanges(form.formState.isDirty);
+  const { errors, isDirty } = form.formState;
+  useUnsavedChanges(isDirty);
+  const fieldName = (issue: ErrorIssue) =>
+    allocationFieldName(issuePath(issue), form.getValues());
+  // Issues with a field of their own show beside it; the rest stay in the
+  // notice above the actions.
+  function showIssues(issues: ErrorIssue[]) {
+    form.clearErrors();
+    for (const issue of issues) {
+      const name = fieldName(issue);
+      if (name && !form.getFieldState(name).error)
+        form.setError(name, { message: describeFieldIssue(issue) });
+    }
+  }
   const refresh = () =>
     Promise.all([
       client.invalidateQueries({ queryKey: allocationKey }),
@@ -126,6 +142,7 @@ export function AllocationEditor({
         : createAllocationDraft(data, requestKey(scope, data));
     },
     onError: (error) => {
+      showIssues(errorIssues(error));
       if (
         error instanceof ApiError &&
         error.status >= 400 &&
@@ -148,6 +165,7 @@ export function AllocationEditor({
   });
   const submit = useMutation({
     mutationFn: () => submitAllocation(saved!.id, saved!.revision),
+    onError: (error) => showIssues(errorIssues(error)),
     onSuccess: async () => {
       form.reset(form.getValues());
       await refresh();
@@ -178,8 +196,10 @@ export function AllocationEditor({
       abort.current = new AbortController();
       return optimizeAllocation(context, abort.current.signal);
     },
+    onError: (error) => showIssues(errorIssues(error)),
     onSuccess: (result) => {
       setPreview(result);
+      showIssues('valid' in result && !result.valid ? result.issues : []);
       if ('status' in result && result.status === 'feasible') {
         const next = allocationToForm(
           { ...allocationFromForm(form.getValues(), units), plan: result.plan },
@@ -215,9 +235,11 @@ export function AllocationEditor({
     try {
       createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
       setValidationError(null);
+      form.clearErrors();
       setConfirm('submit');
     } catch (error) {
       setValidationError(error);
+      showIssues(errorIssues(error));
     }
   }
   return (
@@ -252,6 +274,7 @@ export function AllocationEditor({
                   }
                   maxLength={6}
                   inputMode="numeric"
+                  error={errors.orderNumber?.message}
                 />
               </div>
             </section>
@@ -291,11 +314,17 @@ export function AllocationEditor({
             )}
           </div>
         ) : (
-          preview && <PlanPreview result={preview} />
+          preview && (
+            <PlanPreview
+              result={preview}
+              inline={(issue) => fieldName(issue) !== null}
+            />
+          )
         )}
         {(save.error || validationError || planning.error) && (
           <ErrorNotice
             error={save.error ?? validationError ?? planning.error}
+            inline={(issue) => fieldName(issue) !== null}
           />
         )}
         {save.error && recovery.success && (
@@ -313,7 +342,7 @@ export function AllocationEditor({
         )}
         <div className="form-actions">
           <span className="draft-state">
-            {form.formState.isDirty
+            {isDirty
               ? 'Unsaved changes'
               : saved
                 ? 'All changes saved'
@@ -327,10 +356,7 @@ export function AllocationEditor({
               variant="ghost"
               disabled={busy}
               onClick={() => {
-                if (
-                  !form.formState.isDirty ||
-                  window.confirm('Discard your unsaved changes?')
-                )
+                if (!isDirty || window.confirm('Discard your unsaved changes?'))
                   close();
               }}
             >
@@ -362,7 +388,7 @@ export function AllocationEditor({
           {!active && (
             <Button
               type="button"
-              disabled={busy || !saved || form.formState.isDirty}
+              disabled={busy || !saved || isDirty}
               onClick={confirmSubmit}
             >
               <Check size={16} />

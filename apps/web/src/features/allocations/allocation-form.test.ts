@@ -4,6 +4,7 @@ import {
   type MeasurementUnits,
 } from '@roller-bay/shared/users';
 import {
+  allocationFieldName,
   allocationFromForm,
   allocationToForm,
   emptyRequirement,
@@ -90,4 +91,28 @@ it('lets blind drops use their own unit and drops the stored cut length from the
     requirements: [{ ...r, width: '22', length: '72', quantity: '1' }],
     cuts: [{ stockItemId: '', items: [] }],
   });
+});
+it('places API and plan-validator issues on the field that fixes them', () => {
+  const r = emptyRequirement();
+  const stockItemId = crypto.randomUUID();
+  const form = {
+    orderNumber: '',
+    requirements: [emptyRequirement(), r],
+    cuts: [
+      { stockItemId: '', items: [] },
+      { stockItemId, items: [{ requirementId: r.id, quantity: '1' }] },
+    ],
+  };
+  const name = (path: string) => allocationFieldName(path, form);
+  expect(name('orderNumber')).toBe('orderNumber');
+  expect(name('data.requirements.1.widthMm')).toBe('requirements.1.width');
+  expect(name(`context.requirements.${r.id}`)).toBe('requirements.1.quantity');
+  expect(name(`context.stockItems.${stockItemId}`)).toBe('cuts.1.stockItemId');
+  expect(name('plan.cuts.0')).toBe('cuts.0.stockItemId');
+  expect(name('plan.cuts.1.lengthMm')).toBe('cuts.1.stockItemId');
+  expect(name('plan.cuts.1.items.0')).toBe('cuts.1.items.0.requirementId');
+  expect(name('plan.cuts.1.items.0.quantity')).toBe('cuts.1.items.0.quantity');
+  // Issues about the whole list or unknown records stay in the notice.
+  expect(name('requirements')).toBeNull();
+  expect(name(`context.requirements.${crypto.randomUUID()}`)).toBeNull();
 });

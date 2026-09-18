@@ -12,24 +12,46 @@ export const GENERIC_ERROR_MESSAGE =
 export const INVALID_FIELDS_MESSAGE = 'Some fields are missing or invalid.';
 const MAX_DETAILS = 8;
 
-export function describeError(error: unknown): {
+/**
+ * `inline` names the issues a form already shows beside their fields, so the
+ * notice lists only what has no field of its own.
+ */
+export function describeError(
+  error: unknown,
+  inline: (issue: ErrorIssue) => boolean = () => false,
+): {
   message: string;
   details: string[];
 } {
+  const details = describeIssues(
+    errorIssues(error).filter((issue) => !inline(issue)),
+  );
   if (error instanceof z.ZodError)
-    return {
-      message: INVALID_FIELDS_MESSAGE,
-      details: describeIssues(
-        error.issues.map((issue) => ({
-          code: issue.code,
-          message: issue.message,
-          path: issue.path.map(String),
-        })),
-      ),
-    };
-  if (error instanceof ApiError)
-    return { message: error.message, details: describeIssues(error.issues) };
+    return { message: INVALID_FIELDS_MESSAGE, details };
+  if (error instanceof ApiError) return { message: error.message, details };
   return { message: GENERIC_ERROR_MESSAGE, details: [] };
+}
+
+export function errorIssues(error: unknown): ErrorIssue[] {
+  if (error instanceof z.ZodError)
+    return error.issues.map((issue) => ({
+      code: issue.code,
+      message: issue.message,
+      path: issue.path.map(String),
+    }));
+  return error instanceof ApiError ? error.issues : [];
+}
+
+/** The issue's path as `plan.cuts.0.stockItemId`, whichever shape it came in. */
+export const issuePath = (issue: ErrorIssue) =>
+  typeof issue.path === 'string' ? issue.path : (issue.path ?? []).join('.');
+
+/** Copy for an issue shown beside its field, where the label is redundant. */
+export function describeFieldIssue(issue: ErrorIssue): string {
+  const predicate = describePredicate(issue)?.replace(/^(is|has) /, '');
+  return predicate
+    ? `${predicate.charAt(0).toUpperCase()}${predicate.slice(1)}.`
+    : issue.message;
 }
 
 export function describeIssues(issues: readonly ErrorIssue[]): string[] {

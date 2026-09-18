@@ -18,6 +18,7 @@ export function Lookup({
   queryKey,
   load,
   selectedLabel,
+  error,
 }: {
   label: string;
   value: string;
@@ -29,6 +30,7 @@ export function Lookup({
     signal: AbortSignal,
   ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
   selectedLabel?: string;
+  error?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -104,6 +106,8 @@ export function Lookup({
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls={listId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
           aria-activedescendant={
             open && items[active] ? `${id}-option-${active}` : undefined
           }
@@ -221,6 +225,11 @@ export function Lookup({
           list.
         </small>
       ) : null}
+      {error && (
+        <small className="field-error" id={`${id}-error`}>
+          {error}
+        </small>
+      )}
     </div>
   );
 }

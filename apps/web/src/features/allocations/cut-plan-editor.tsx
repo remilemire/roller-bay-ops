@@ -1,5 +1,10 @@
 'use client';
-import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form';
+import {
+  useFieldArray,
+  useWatch,
+  type FieldPath,
+  type UseFormReturn,
+} from 'react-hook-form';
 import { Plus, Trash2, ArrowUp, Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
@@ -98,8 +103,12 @@ export function CutPlanEditor({
         {cuts.fields.map((row, index) => {
           // Field-array changes can render before the watched values catch up.
           const cut = form.getValues(`cuts.${index}`) ?? row;
-          const change = (next: typeof cut) =>
+          const change = (next: typeof cut) => {
             setCuts(values.cuts.map((d, i) => (i === index ? next : d)));
+            form.clearErrors(`cuts.${index}`);
+          };
+          const error = (name: FieldPath<AllocationForm>) =>
+            form.getFieldState(name, form.formState).error?.message;
           return (
             <div className="plan-cut" key={row.formKey}>
               <div className="form-row-header">
@@ -139,6 +148,7 @@ export function CutPlanEditor({
                   onChange={(v) => change({ ...cut, stockItemId: v })}
                   queryKey={[...stockKey, units.rollWidth]}
                   load={lookupStock(units.rollWidth)}
+                  error={error(`cuts.${index}.stockItemId`)}
                 />
               </div>
               <hr className="divider" />
@@ -159,6 +169,7 @@ export function CutPlanEditor({
                         ),
                       })
                     }
+                    error={error(`cuts.${index}.items.${ai}.requirementId`)}
                     options={values.requirements.map((r, i) => ({
                       value: r.id,
                       label: `Blind ${i + 1} · ${r.width || '?'} ${fieldSuffix(units, 'blindWidth')} × ${r.length || '?'} ${fieldSuffix(units, 'finishedDrop')}`,
@@ -172,6 +183,7 @@ export function CutPlanEditor({
                       label="Quantity in this cut"
                       type="number"
                       value={assignment.quantity}
+                      error={error(`cuts.${index}.items.${ai}.quantity`)}
                       onChange={(v) =>
                         change({
                           ...cut,

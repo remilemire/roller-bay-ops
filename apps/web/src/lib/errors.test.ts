@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { ApiError } from './api';
 import {
   describeError,
+  describeFieldIssue,
+  issuePath,
   describeIssue,
   describeIssuePath,
   describeIssues,
@@ -125,5 +127,31 @@ describe('describeError', () => {
     expect(lines).toHaveLength(9);
     expect(lines[0]).toBe('Item 1 › width is too small.');
     expect(lines.at(-1)).toBe('…and 4 more.');
+  });
+  it('leaves issues shown beside their fields out of the notice', () => {
+    const error = new ApiError(400, 'Validation failed', undefined, [
+      { path: 'orderNumber', message: 'Must be 6 digits.' },
+      {
+        path: 'requirements',
+        message: 'Too small: expected array to have >=1 items',
+      },
+    ]);
+    expect(
+      describeError(error, (issue) => issuePath(issue) === 'orderNumber'),
+    ).toEqual({
+      message: 'Validation failed',
+      details: ['Requirements is too small.'],
+    });
+  });
+  it('drops the label from field-level copy', () => {
+    expect(
+      describeFieldIssue({
+        path: ['requirements', 0, 'widthMm'],
+        message: 'Invalid input: expected number, received null',
+      }),
+    ).toBe('Required.');
+    expect(
+      describeFieldIssue({ path: 'orderNumber', message: 'Must be 6 digits.' }),
+    ).toBe('Must be 6 digits.');
   });
 });

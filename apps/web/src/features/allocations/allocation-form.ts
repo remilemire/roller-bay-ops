@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FieldPath } from 'react-hook-form';
 import {
   allocationDraftInputSchema,
   type AllocationDraftInput,
@@ -28,6 +29,57 @@ export const allocationFormSchema = z.object({
   ),
 });
 export type AllocationForm = z.infer<typeof allocationFormSchema>;
+const UUID = '[0-9a-f-]{36}';
+const FIELD_PATHS: [
+  RegExp,
+  (match: RegExpMatchArray, form: AllocationForm) => string | null,
+][] = [
+  [/^orderNumber$/, () => 'orderNumber'],
+  [
+    /^requirements\.(\d+)\.(fabricColorId|width|length|quantity)(Mm)?$/,
+    ([, row, key]) => `requirements.${row}.${key}`,
+  ],
+  // The plan validator reports quantity mismatches against the requirement ID.
+  [
+    new RegExp(`^requirements\\.(${UUID})$`),
+    ([, id], form) => {
+      const row = form.requirements.findIndex((r) => r.id === id);
+      return row < 0 ? null : `requirements.${row}.quantity`;
+    },
+  ],
+  [
+    new RegExp(`^stockItems\\.(${UUID})$`),
+    ([, id], form) => {
+      const cut = form.cuts.findIndex((c) => c.stockItemId === id);
+      return cut < 0 ? null : `cuts.${cut}.stockItemId`;
+    },
+  ],
+  // Whole-cut problems (width, derived length) are fixed by changing its stock.
+  [
+    /^plan\.cuts\.(\d+)(\.stockItemId|\.lengthMm)?$/,
+    ([, cut]) => `cuts.${cut}.stockItemId`,
+  ],
+  [
+    /^plan\.cuts\.(\d+)\.items\.(\d+)(?:\.(requirementId|quantity))?$/,
+    ([, cut, item, key]) =>
+      `cuts.${cut}.items.${item}.${key ?? 'requirementId'}`,
+  ],
+];
+/**
+ * The form field that shows an issue reported against the API payload or the
+ * plan validator's context, or null when the issue belongs to no single field.
+ */
+export function allocationFieldName(
+  path: string,
+  form: AllocationForm,
+): FieldPath<AllocationForm> | null {
+  const local = path.replace(/^(data|context)\./, '');
+  for (const [pattern, name] of FIELD_PATHS) {
+    const match = local.match(pattern);
+    if (match) return name(match, form) as FieldPath<AllocationForm> | null;
+  }
+  return null;
+}
 // This ID survives draft saves and is referenced by cut assignments; it is
 // separate from React Hook Form's transient field-array key.
 export const emptyRequirement = () => ({

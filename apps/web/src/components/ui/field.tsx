@@ -8,6 +8,8 @@ export function Field({
   help,
   htmlFor,
   helpId,
+  error,
+  errorId,
 }: {
   label: string;
   children: ReactNode;
@@ -15,18 +17,30 @@ export function Field({
   help?: string;
   htmlFor?: string;
   helpId?: string;
+  error?: string;
+  errorId?: string;
 }) {
-  // A wrapping label would also label the tooltip button, so fields with help
-  // point their label at the control explicitly instead.
-  if (help)
+  // A wrapping label would also name the control after its tooltip button and
+  // error text, so fields that know their control's id label it explicitly.
+  // The structure must not depend on whether an error is showing: switching
+  // it would remount the input and drop focus mid-correction.
+  if (htmlFor)
     return (
       <div className="field">
         <span className="field-label">
           <label htmlFor={htmlFor}>{label}</label>
-          <InfoTip text={help} id={helpId} />
+          {help && <InfoTip text={help} id={helpId} />}
         </span>
         {children}
-        {hint && <small>{hint}</small>}
+        {/* The error takes the hint's line, so a check that runs on blur does
+            not shift the page under the pointer's next click. */}
+        {error ? (
+          <small className="field-error" id={errorId}>
+            {error}
+          </small>
+        ) : (
+          hint && <small>{hint}</small>
+        )}
       </div>
     );
   return (
@@ -48,6 +62,8 @@ export function TextField({
   disabled = false,
   maxLength,
   inputMode,
+  error,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -59,14 +75,27 @@ export function TextField({
   disabled?: boolean;
   maxLength?: number;
   inputMode?: ComponentProps<'input'>['inputMode'];
+  error?: string;
+  onBlur?: () => void;
 }) {
   const id = useId();
   const helpId = useId();
+  const errorId = useId();
   return (
-    <Field label={label} hint={hint} help={help} htmlFor={id} helpId={helpId}>
+    <Field
+      label={label}
+      hint={hint}
+      help={help}
+      htmlFor={id}
+      helpId={helpId}
+      error={error}
+      errorId={errorId}
+    >
       <Input
         id={id}
-        aria-describedby={help ? helpId : undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy(help && helpId, error && errorId)}
+        onBlur={onBlur}
         type={type}
         step={type === 'number' ? 'any' : undefined}
         value={value}
@@ -86,6 +115,7 @@ export function ChoiceField({
   options,
   placeholder = 'Select…',
   disabled = false,
+  error,
 }: {
   label: string;
   value: string;
@@ -93,10 +123,16 @@ export function ChoiceField({
   options: { value: string; label: string }[];
   placeholder?: string;
   disabled?: boolean;
+  error?: string;
 }) {
+  const id = useId();
+  const errorId = useId();
   return (
-    <Field label={label}>
+    <Field label={label} htmlFor={id} error={error} errorId={errorId}>
       <Select
+        id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -111,3 +147,5 @@ export function ChoiceField({
     </Field>
   );
 }
+const describedBy = (...ids: (string | false | undefined)[]) =>
+  ids.filter(Boolean).join(' ') || undefined;
