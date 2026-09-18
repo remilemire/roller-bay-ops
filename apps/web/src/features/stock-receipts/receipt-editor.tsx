@@ -33,7 +33,6 @@ import {
   requestKey,
   finishRequest,
 } from '@/lib/pending-request';
-import { useAutosave } from '@/lib/use-autosave';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import {
   receiptFormSchema,
@@ -87,7 +86,7 @@ export function ReceiptEditor({
       client.invalidateQueries({ queryKey: ['stock-items'] }),
     ]);
   const save = useMutation({
-    mutationFn: async ({ value }: { value: ReceiptForm; auto?: boolean }) => {
+    mutationFn: async (value: ReceiptForm) => {
       const data = receiptFromForm(value, units);
       return saved
         ? saveReceiptDraft(saved.id, saved.revision, data)
@@ -102,14 +101,10 @@ export function ReceiptEditor({
       )
         finishRequest(scope);
     },
-    onSuccess: async (draft, { value, auto }) => {
+    onSuccess: async (draft) => {
       finishRequest(scope);
       setSaved(draft);
-      // An autosave leaves the inputs alone: the employee may still be typing,
-      // and anything entered since the request was sent must stay dirty.
-      form.reset(auto ? value : receiptToForm(draft.data, units), {
-        keepValues: auto,
-      });
+      form.reset(receiptToForm(draft.data, units));
       client.setQueryData([...receiptKey, draft.id], draft);
       await refresh();
       if (!initial) router.replace(`/stock-receipts/${draft.id}`);
@@ -148,23 +143,7 @@ export function ReceiptEditor({
   const conflict = [save.error, submit.error].some(
     (error) => error instanceof ApiError && error.status === 409,
   );
-  // An autosave must not disable the inputs being typed into; it only holds
-  // back the actions that would race it with the same revision.
-  const autosaving = save.isPending && save.variables.auto === true;
-  const busy =
-    (save.isPending && !autosaving) || submit.isPending || remove.isPending;
-  // Creating a draft stays explicit: its request key is bound to one payload.
-  useAutosave(
-    values,
-    Boolean(saved) &&
-      form.formState.isDirty &&
-      !save.isPending &&
-      !submit.isPending &&
-      !remove.isPending &&
-      !conflict &&
-      confirmation === null,
-    (value) => save.mutateAsync({ value, auto: true }),
-  );
+  const busy = save.isPending || submit.isPending || remove.isPending;
   const field = (
     index: number,
     name: keyof ReceiptForm['items'][number],
@@ -188,9 +167,9 @@ export function ReceiptEditor({
             : 'INCOMING FABRIC'
         }
         title={saved ? 'Receipt draft' : 'New stock receipt'}
-        description="Saved drafts update automatically. Stock is created only when you submit the receipt."
+        description="Save as you go. Stock is created only when you submit the receipt."
       />
-      <form onSubmit={form.handleSubmit((value) => save.mutate({ value }))}>
+      <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <section className="panel">
             <div className="panel-body">
@@ -303,27 +282,24 @@ export function ReceiptEditor({
           )}
           <div className="form-actions">
             <span className="draft-state">
-              {autosaving
-                ? 'Saving…'
-                : form.formState.isDirty
-                  ? 'Unsaved changes'
-                  : saved
-                    ? 'All changes saved'
-                    : 'Not saved yet'}
+              {form.formState.isDirty
+                ? 'Unsaved changes'
+                : saved
+                  ? 'All changes saved'
+                  : 'Not saved yet'}
             </span>
             {saved && (
               <Button
                 type="button"
                 variant="ghost"
-                disabled={autosaving}
                 onClick={() => setConfirmation('delete')}
               >
                 Discard draft
               </Button>
             )}
-            <Button type="submit" variant="outline" disabled={autosaving}>
+            <Button type="submit" variant="outline">
               <Save size={16} />
-              {save.isPending && !autosaving ? 'Saving…' : 'Save draft'}
+              {save.isPending ? 'Saving…' : 'Save draft'}
             </Button>
             <Button
               type="button"
@@ -339,7 +315,7 @@ export function ReceiptEditor({
               className="muted"
               style={{ textAlign: 'right', marginTop: 10, fontSize: 11 }}
             >
-              Changes save when you pause. Submit once they are saved.
+              Save your changes before submitting.
             </p>
           )}
         </fieldset>

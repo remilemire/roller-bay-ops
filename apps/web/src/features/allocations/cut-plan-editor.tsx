@@ -13,15 +13,12 @@ export function CutPlanEditor({
   form,
   units,
   onChange,
-  planningDisabled,
   onOptimize,
   onValidate,
 }: {
   form: UseFormReturn<AllocationForm>;
   units: MeasurementUnits;
   onChange: () => void;
-  // Previews check the draft revision, which an in-flight autosave advances.
-  planningDisabled: boolean;
   onOptimize: () => void;
   onValidate: () => void;
 }) {
@@ -57,11 +54,7 @@ export function CutPlanEditor({
             <Plus size={16} />
             Add drop
           </Button>
-          <Button
-            type="button"
-            disabled={planningDisabled}
-            onClick={() => onOptimize()}
-          >
+          <Button type="button" onClick={() => onOptimize()}>
             <Sparkles size={16} />
             Optimize
           </Button>
@@ -208,12 +201,7 @@ export function CutPlanEditor({
             </div>
           );
         })}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={planningDisabled}
-          onClick={() => onValidate()}
-        >
+        <Button type="button" variant="outline" onClick={() => onValidate()}>
           <Check size={16} />
           Validate plan
         </Button>
