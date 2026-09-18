@@ -164,7 +164,10 @@ export function CutPlanEditor({
                       label: `Blind ${i + 1} · ${r.width || '?'} ${fieldSuffix(units, 'blindWidth')} × ${r.length || '?'} ${fieldSuffix(units, 'finishedDrop')}`,
                     }))}
                   />
-                  <div className="inline-actions">
+                  <div
+                    className="inline-actions"
+                    style={{ alignItems: 'flex-end' }}
+                  >
                     <TextField
                       label="Quantity in this cut"
                       type="number"
