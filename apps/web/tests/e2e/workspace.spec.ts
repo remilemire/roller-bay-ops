@@ -283,9 +283,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   await page.getByLabel('Width (in)', { exact: true }).fill('54');
   await page.getByLabel('Finished drop (in)').fill('90');
   await expect(
-    page.getByLabel(
-      /Extra drop allowance|Trim per outside edge|Minimum reusable/,
-    ),
+    page.getByLabel(/Drop allowance|Edge trim|Minimum reusable/),
   ).toHaveCount(0);
   await page.getByLabel('Quantity', { exact: true }).fill('1');
   await page

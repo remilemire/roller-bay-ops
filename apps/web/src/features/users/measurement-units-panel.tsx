@@ -13,7 +13,7 @@ import { Field } from '@/components/ui/field';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/input';
 import { sessionKey } from '@/features/auth/auth.queries';
-import { unitNames } from '@/lib/measurements';
+import { helpFor, unitNames } from '@/lib/measurements';
 import { useMeasurementUnits } from './use-measurement-units';
 import { updateMeasurementUnits } from './users.api';
 
@@ -91,8 +91,20 @@ export function MeasurementUnitsPanel() {
               <h3>{section.title}</h3>
               <div className="form-grid">
                 {section.fields.map((field) => (
-                  <Field label={fieldLabels[field]} key={field}>
+                  <Field
+                    label={fieldLabels[field]}
+                    help={helpFor(field)}
+                    htmlFor={`measurement-unit-${field}`}
+                    helpId={`measurement-unit-${field}-help`}
+                    key={field}
+                  >
                     <Select
+                      id={`measurement-unit-${field}`}
+                      aria-describedby={
+                        helpFor(field)
+                          ? `measurement-unit-${field}-help`
+                          : undefined
+                      }
                       value={units[field]}
                       onChange={(event) =>
                         change.mutate({

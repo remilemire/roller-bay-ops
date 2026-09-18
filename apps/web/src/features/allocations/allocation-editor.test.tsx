@@ -51,9 +51,7 @@ it('keeps the active plan revision and edited values when a background refresh b
   );
   await user.click(screen.getByRole('button', { name: 'Edit plan' }));
   expect(
-    screen.queryByLabelText(
-      /Extra drop allowance|Trim per outside edge|Minimum reusable/,
-    ),
+    screen.queryByLabelText(/Drop allowance|Edge trim|Minimum reusable/),
   ).not.toBeInTheDocument();
   await user.clear(screen.getByLabelText('Order number'));
   await user.type(screen.getByLabelText('Order number'), 'LOCAL-PLAN');

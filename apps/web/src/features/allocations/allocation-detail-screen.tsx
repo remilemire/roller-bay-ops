@@ -20,7 +20,8 @@ import {
   Status,
 } from '@/components/ui/feedback';
 import { dateLabel, shortId } from '@/lib/format';
-import { fieldLabel } from '@/lib/measurements';
+import { InfoTip } from '@/components/ui/info-tip';
+import { fieldLabel, measurementHelp } from '@/lib/measurements';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import {
   allocationDetail,
@@ -167,6 +168,7 @@ function AllocationRecord({
                     <h3>
                       Cut {index + 1} · {stock?.fabricColorCode} ·{' '}
                       {fieldLabel(units, 'cutLength', cut.lengthMm)}
+                      <InfoTip text={measurementHelp.cutLength} />
                     </h3>
                     <Link
                       className="text-link"
@@ -229,8 +231,14 @@ function AllocationRecord({
                 <tr>
                   <th>Blind</th>
                   <th>Width</th>
-                  <th>Finished drop</th>
-                  <th>Extra allowance</th>
+                  <th>
+                    Finished drop
+                    <InfoTip text={measurementHelp.finishedDrop} />
+                  </th>
+                  <th>
+                    Drop allowance
+                    <InfoTip text={measurementHelp.dropAllowance} />
+                  </th>
                   <th>Quantity</th>
                 </tr>
               </thead>
@@ -257,7 +265,10 @@ function AllocationRecord({
             </div>
             <div className="panel-body details-grid">
               <div>
-                <div className="detail-label">Trim per outside edge</div>
+                <div className="detail-label">
+                  Edge trim
+                  <InfoTip text={measurementHelp.edgeTrim} />
+                </div>
                 <strong>
                   {fieldLabel(
                     units,

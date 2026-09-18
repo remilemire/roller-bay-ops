@@ -10,7 +10,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { fieldSuffix } from '@/lib/measurements';
+import { fieldSuffix, measurementHelp } from '@/lib/measurements';
 import {
   locationsKey,
   lookupLocations,
@@ -145,6 +145,7 @@ export function CompletionEditor({
                         {!stock.isRemnant && (
                           <TextField
                             label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                            help={measurementHelp.tubeDiameter}
                             type="number"
                             value={row.tube}
                             onChange={(tube) => change(index, { ...row, tube })}
@@ -155,12 +156,12 @@ export function CompletionEditor({
                         {row.outcome === 'returned-roll' && (
                           <TextField
                             label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                            help={measurementHelp.radialDepth}
                             type="number"
                             value={row.depth}
                             onChange={(depth) =>
                               change(index, { ...row, depth })
                             }
-                            hint="Measure from the tube surface to the outside of the fabric."
                           />
                         )}
                         {row.outcome === 'returned-remnant' && (

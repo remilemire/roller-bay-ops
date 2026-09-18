@@ -13,7 +13,12 @@ import {
   locationsKey,
   lookupLocations,
 } from '@/features/locations/locations.api';
-import { fieldInput, fieldValue, fieldSuffix } from '@/lib/measurements';
+import {
+  fieldInput,
+  fieldValue,
+  fieldSuffix,
+  measurementHelp,
+} from '@/lib/measurements';
 import { CorrectionSubmit } from '@/features/corrections/correction-submit';
 export function StockCorrectionEditor({
   item: initialItem,
@@ -120,12 +125,14 @@ export function StockCorrectionEditor({
               <>
                 <TextField
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                  help={measurementHelp.radialDepth}
                   value={depth}
                   onChange={setDepth}
                   type="number"
                 />
                 <TextField
                   label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                  help={measurementHelp.tubeDiameter}
                   value={tube}
                   onChange={setTube}
                   type="number"

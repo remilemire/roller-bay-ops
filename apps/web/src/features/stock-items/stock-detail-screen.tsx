@@ -13,7 +13,8 @@ import {
   Status,
 } from '@/components/ui/feedback';
 import { dateLabel, shortId } from '@/lib/format';
-import { fieldLabel } from '@/lib/measurements';
+import { InfoTip } from '@/components/ui/info-tip';
+import { fieldLabel, measurementHelp } from '@/lib/measurements';
 import { stockDetail } from './stock-items.api';
 import { StockCorrectionEditor } from './stock-correction-editor';
 import { History } from '@/features/audit/history';
@@ -26,7 +27,7 @@ export function StockDetailScreen({ id }: { id: string }) {
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
   const item = query.data;
-  const details = [
+  const details: [label: string, value: string, help?: string][] = [
     ['Width', fieldLabel(units, 'rollWidth', item.widthMm)],
     [
       'Remaining length',
@@ -44,12 +45,14 @@ export function StockDetailScreen({ id }: { id: string }) {
       item.tubeOuterDiameterMm === null
         ? 'Not measured'
         : fieldLabel(units, 'tubeDiameter', item.tubeOuterDiameterMm),
+      measurementHelp.tubeDiameter,
     ],
     [
       'Radial depth',
       item.radialDepthMm === null
         ? 'Not measured'
         : fieldLabel(units, 'radialDepth', item.radialDepthMm),
+      measurementHelp.radialDepth,
     ],
     ['Created', dateLabel(item.createdAt)],
   ];
@@ -95,9 +98,12 @@ export function StockDetailScreen({ id }: { id: string }) {
         </div>
         <div className="panel-body">
           <div className="details-grid">
-            {details.map(([label, value]) => (
+            {details.map(([label, value, help]) => (
               <div key={label}>
-                <div className="detail-label">{label}</div>
+                <div className="detail-label">
+                  {label}
+                  {help && <InfoTip text={help} />}
+                </div>
                 <div className="detail-value">{value}</div>
               </div>
             ))}

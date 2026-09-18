@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
-import { fieldSuffix } from '@/lib/measurements';
+import { fieldSuffix, measurementHelp } from '@/lib/measurements';
 import { type AllocationForm } from './allocation-form';
 import { stockKey, lookupStock } from '@/features/stock-items/stock-items.api';
 
@@ -144,6 +144,7 @@ export function CutPlanEditor({
                 />
                 <TextField
                   label={`Cut length (${fieldSuffix(units, 'cutLength')})`}
+                  help={measurementHelp.cutLength}
                   type="number"
                   value={cut.length}
                   onChange={(v) => change({ ...cut, length: v })}

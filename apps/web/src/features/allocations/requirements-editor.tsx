@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
-import { fieldSuffix } from '@/lib/measurements';
+import { fieldSuffix, measurementHelp } from '@/lib/measurements';
 import { type AllocationForm, emptyRequirement } from './allocation-form';
 import {
   catalogKey,
@@ -119,6 +119,7 @@ export function RequirementsEditor({
               />
               <TextField
                 label={`Finished drop (${fieldSuffix(units, 'finishedDrop')})`}
+                help={measurementHelp.finishedDrop}
                 type="number"
                 value={r.length}
                 onChange={(v) => change('length', v)}

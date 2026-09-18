@@ -16,7 +16,7 @@ import {
   locationsKey,
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { fieldSuffix, fieldValue } from '@/lib/measurements';
+import { fieldSuffix, fieldValue, measurementHelp } from '@/lib/measurements';
 import { saveStock, stockKey } from './stock-items.api';
 export function StockEditor({ close }: { close: () => void }) {
   // Pin the units this form opened with: a session refetch must not relabel
@@ -128,6 +128,7 @@ export function StockEditor({ close }: { close: () => void }) {
               <>
                 <TextField
                   label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                  help={measurementHelp.tubeDiameter}
                   value={values.tube}
                   onChange={(v) => form.setValue('tube', v)}
                   type="number"
@@ -135,10 +136,10 @@ export function StockEditor({ close }: { close: () => void }) {
                 />
                 <TextField
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                  help={measurementHelp.radialDepth}
                   value={values.depth}
                   onChange={(v) => form.setValue('depth', v)}
                   type="number"
-                  hint="From the tube surface to the outside of the fabric."
                 />
               </>
             )}

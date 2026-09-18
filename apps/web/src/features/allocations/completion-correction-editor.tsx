@@ -17,7 +17,12 @@ import {
   locationsKey,
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { fieldInput, fieldValue, fieldSuffix } from '@/lib/measurements';
+import {
+  fieldInput,
+  fieldValue,
+  fieldSuffix,
+  measurementHelp,
+} from '@/lib/measurements';
 import { shortId } from '@/lib/format';
 import { CorrectionSubmit } from '@/features/corrections/correction-submit';
 import { Blockers } from '@/features/corrections/blockers';
@@ -233,6 +238,7 @@ function CompletionCorrectionForm({
                     {!stock.isRemnant && (
                       <TextField
                         label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                        help={measurementHelp.tubeDiameter}
                         value={row.tube}
                         onChange={(tube) => update(index, { tube })}
                         type="number"
@@ -241,6 +247,7 @@ function CompletionCorrectionForm({
                     {row.outcome === 'returned-roll' && (
                       <TextField
                         label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                        help={measurementHelp.radialDepth}
                         value={row.depth}
                         onChange={(depth) => update(index, { depth })}
                         type="number"
