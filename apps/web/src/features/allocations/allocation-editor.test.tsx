@@ -170,6 +170,24 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(save).toBeEnabled();
 });
 
+it('keeps the order number to digits and flags a partial one beside the field', async () => {
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={client()}>
+      <AllocationEditor />
+    </QueryClientProvider>,
+  );
+  const input = screen.getByLabelText('Order number');
+  await user.type(input, '10a4-8');
+  expect(input).toHaveValue('1048');
+  expect(input).not.toBeInvalid();
+  await user.tab();
+  expect(input).toBeInvalid();
+  expect(input).toHaveAccessibleDescription('Must be 6 digits.');
+  await user.type(input, '02');
+  expect(input).not.toBeInvalid();
+});
+
 it('shows submission problems beside their fields instead of listing them', async () => {
   const user = userEvent.setup();
   render(

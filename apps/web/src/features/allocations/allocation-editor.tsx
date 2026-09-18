@@ -286,11 +286,18 @@ export function AllocationEditor({
                 <TextField
                   label="Order number"
                   value={values.orderNumber}
+                  // Check once the operator leaves the field, then keep
+                  // checking while they correct it.
                   onChange={(v) =>
-                    form.setValue('orderNumber', v, { shouldDirty: true })
+                    form.setValue('orderNumber', v.replace(/\D/g, ''), {
+                      shouldDirty: true,
+                      shouldValidate: Boolean(errors.orderNumber),
+                    })
                   }
+                  onBlur={() => void form.trigger('orderNumber')}
                   maxLength={6}
                   inputMode="numeric"
+                  hint="6 digits"
                   error={errors.orderNumber?.message}
                 />
               </div>
