@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils';
 const SEARCH_DELAY_MS = 250;
 /**
  * A single text input that searches as you type and lists the matches to pick
- * from. The list renders in the document flow rather than floating, so it is
- * never clipped by a panel or dialog and needs no positioning.
+ * from. While the list is open the box holds only the search text and shows
+ * the current selection as its placeholder; closed, it shows the selection.
+ * The list renders in the document flow rather than floating, so it is never
+ * clipped by a panel or dialog and needs no positioning.
  */
 export function Lookup({
   label,
@@ -38,7 +40,6 @@ export function Lookup({
   const [picked, setPicked] = useState<Record<string, string>>({});
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const focusedByPointer = useRef(false);
   // The query key keeps the page slot so review screens can still read
   // cached option labels.
   const result = useQuery({
@@ -54,8 +55,7 @@ export function Lookup({
       selectedLabel ??
       `Selected · ${value.slice(0, 8).toUpperCase()}`)
     : '';
-  // Opening shows the current selection; typing over it searches instead.
-  const query = term === selected ? '' : term.trim();
+  const query = term.trim();
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
@@ -69,10 +69,23 @@ export function Lookup({
   useEffect(() => {
     list.current?.children[active]?.scrollIntoView?.({ block: 'nearest' });
   }, [active]);
+  function close() {
+    setOpen(false);
+    setTerm('');
+  }
   function pick(item: { id: string; label: string }) {
     setPicked((known) => ({ ...known, [item.id]: item.label }));
     onChange(item.id);
-    setOpen(false);
+    close();
+  }
+  function clear() {
+    onChange('');
+    setTerm('');
+    setOpen(true);
+  }
+  function move(step: number) {
+    if (!items.length) return;
+    setActive(Math.min(Math.max(active + step, 0), items.length - 1));
   }
   const listId = `${id}-list`;
   const labelId = `${id}-label`;
@@ -94,44 +107,56 @@ export function Lookup({
           aria-activedescendant={
             open && items[active] ? `${id}-option-${active}` : undefined
           }
-          placeholder="Type to search…"
+          placeholder={selected || 'Type to search…'}
           value={open ? term : selected}
-          onMouseDown={() => {
-            focusedByPointer.current = document.activeElement !== input.current;
-          }}
-          onFocus={(event) => {
-            setTerm(selected);
-            setOpen(true);
-            event.target.select();
-          }}
-          onMouseUp={(event) => {
-            // Keep the select-all from focusing; a click's mouseup would undo it.
-            if (focusedByPointer.current) event.preventDefault();
-            focusedByPointer.current = false;
-          }}
+          onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}
           onChange={(event) => {
-            setTerm(event.target.value);
+            const next = event.target.value;
+            // Typing into the closed box edits the selection's label; keep
+            // only what was added and start a search with it.
+            setTerm(
+              open
+                ? next
+                : next.startsWith(selected)
+                  ? next.slice(selected.length)
+                  : next,
+            );
             setOpen(true);
-            // An emptied box means no selection.
-            if (event.target.value === '' && value) onChange('');
           }}
-          onBlur={() => setOpen(false)}
+          onBlur={close}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
               event.preventDefault();
-              if (open) setActive(Math.min(active + 1, items.length - 1));
+              if (open) move(1);
               else setOpen(true);
             } else if (event.key === 'ArrowUp') {
               event.preventDefault();
-              setActive(Math.max(active - 1, 0));
+              move(-1);
+            } else if (event.key === 'Tab' && open && items.length) {
+              // Tab walks the options; past either end it leaves the field.
+              const next = active + (event.shiftKey ? -1 : 1);
+              if (next < 0 || next >= items.length) close();
+              else {
+                event.preventDefault();
+                setActive(next);
+              }
             } else if (event.key === 'Enter' && open) {
               event.preventDefault();
               const item = items[active];
               if (item) pick(item);
             } else if (event.key === 'Escape' && open) {
               event.preventDefault();
-              setOpen(false);
+              close();
+            } else if (
+              (event.key === 'Backspace' || event.key === 'Delete') &&
+              value &&
+              (!open || term === '')
+            ) {
+              // Deleting from an empty search, or from the shown selection,
+              // removes the selection rather than editing its label.
+              event.preventDefault();
+              clear();
             }
           }}
         />
@@ -142,9 +167,7 @@ export function Lookup({
             aria-label={`Clear ${label}`}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
-              onChange('');
-              setTerm('');
-              setOpen(true);
+              clear();
               input.current?.focus();
             }}
           >

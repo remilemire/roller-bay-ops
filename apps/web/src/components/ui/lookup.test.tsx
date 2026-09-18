@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Dialog } from './dialog';
 import { Lookup } from './lookup';
 
 const colors = [
@@ -14,10 +15,12 @@ function Harness({
   initial = '',
   load,
   onChange = () => {},
+  after,
 }: {
   initial?: string;
   load: (search: string) => Promise<{ items: typeof colors; total: number }>;
   onChange?: (value: string) => void;
+  after?: React.ReactNode;
 }) {
   const [value, setValue] = useState(initial);
   const [client] = useState(
@@ -35,6 +38,7 @@ function Harness({
         queryKey={['colors']}
         load={load}
       />
+      {after}
     </QueryClientProvider>
   );
 }
@@ -61,13 +65,26 @@ it('searches as you type, picks with the keyboard and shows the pick by its labe
   expect(onChange).toHaveBeenCalledWith('b2');
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   expect(box).toHaveValue('C2-000 · Linen voile');
-  // Emptying the box clears the selection; the clear button does the same.
-  await user.clear(box);
-  expect(onChange).toHaveBeenLastCalledWith('');
+  // Typing into the closed box searches with the new text only, and the
+  // selection shows faded as the placeholder meanwhile.
+  await user.type(box, 'sheer');
+  expect(box).toHaveValue('sheer');
+  expect(box).toHaveAttribute('placeholder', 'C2-000 · Linen voile');
+  await waitFor(() =>
+    expect(filtering).toHaveBeenCalledWith('sheer', 1, expect.anything()),
+  );
   await user.click(
     await screen.findByRole('option', { name: 'S3-000 · Sheer' }),
   );
   expect(onChange).toHaveBeenLastCalledWith('c3');
+  expect(box).toHaveValue('S3-000 · Sheer');
+  // Backspace on the shown selection removes it instead of editing its label.
+  await user.keyboard('{Backspace}');
+  expect(onChange).toHaveBeenLastCalledWith('');
+  expect(box).toHaveValue('');
+  await user.click(
+    await screen.findByRole('option', { name: 'S3-000 · Sheer' }),
+  );
   await user.click(screen.getByRole('button', { name: 'Clear Fabric color' }));
   expect(onChange).toHaveBeenLastCalledWith('');
   expect(box).toHaveFocus();
@@ -89,6 +106,7 @@ it('labels a saved value from the loaded page, falls back to its id, and says wh
   ).toHaveAttribute('aria-selected', 'true');
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(box).toHaveValue('C2-000 · Linen voile');
   unmount();
   render(
     <Harness
@@ -101,4 +119,47 @@ it('labels a saved value from the loaded page, falls back to its id, and says wh
       'Selected · FFFFFFFF',
     ),
   );
+});
+
+it('walks the options with Tab and leaves the field past the last one', async () => {
+  const user = userEvent.setup();
+  render(
+    <Harness
+      load={async () => ({ items: colors, total: 3 })}
+      after={<button type="button">Next field</button>}
+    />,
+  );
+  const box = screen.getByRole('combobox', { name: 'Fabric color' });
+  await user.click(box);
+  const options = await screen.findAllByRole('option');
+  expect(box).toHaveAttribute('aria-activedescendant', options[0]!.id);
+  await user.tab();
+  expect(box).toHaveFocus();
+  expect(box).toHaveAttribute('aria-activedescendant', options[1]!.id);
+  await user.tab({ shift: true });
+  expect(box).toHaveAttribute('aria-activedescendant', options[0]!.id);
+  await user.tab();
+  await user.tab();
+  expect(box).toHaveAttribute('aria-activedescendant', options[2]!.id);
+  await user.tab();
+  expect(screen.getByRole('button', { name: 'Next field' })).toHaveFocus();
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+});
+
+it('lets Escape close an open list inside a dialog before it closes the dialog', async () => {
+  const user = userEvent.setup();
+  const onOpenChange = vi.fn();
+  render(
+    <Dialog open onOpenChange={onOpenChange} title="Edit">
+      <Harness load={async () => ({ items: colors, total: 3 })} />
+    </Dialog>,
+  );
+  const box = screen.getByRole('combobox', { name: 'Fabric color' });
+  await user.click(box);
+  await screen.findByRole('listbox');
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(onOpenChange).not.toHaveBeenCalled();
+  await user.keyboard('{Escape}');
+  expect(onOpenChange).toHaveBeenCalledWith(false);
 });
