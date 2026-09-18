@@ -31,8 +31,11 @@ export const toMm = (value: number, unit: LengthUnit) =>
 export const fromMm = (mm: number, unit: LengthUnit) =>
   mm / (micrometresPerUnit[unit] / 1000);
 
+export const measurementAmount = (mm: number, unit: LengthUnit) =>
+  Number(fromMm(mm, unit).toFixed(3));
+
 export const measurementLabel = (mm: number, unit: LengthUnit) =>
-  `${Number(fromMm(mm, unit).toFixed(3))} ${unit}`;
+  `${measurementAmount(mm, unit)} ${unit}`;
 
 // Editable values keep more precision than labels so an unchanged field
 // round-trips to the same stored millimetre value in every offered unit.
@@ -50,6 +53,13 @@ export const fieldLabel = (
   field: MeasurementField,
   mm: number,
 ) => measurementLabel(mm, units[field]);
+
+// A bare number for cells whose column heading already names the unit.
+export const fieldAmount = (
+  units: MeasurementUnits,
+  field: MeasurementField,
+  mm: number,
+) => measurementAmount(mm, units[field]);
 
 export const fieldInput = (
   units: MeasurementUnits,

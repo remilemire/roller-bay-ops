@@ -32,7 +32,7 @@ The destination is recorded explicitly; warehouse storage and shelves near cutte
 
 An employee enters the order number, finished blind dimensions, colors, and quantities. They select individual stock items and prepare a cutting plan manually or request an optimization preview. The backend applies configured drop allowances, edge trimming, and reusable-remnant thresholds.
 
-Saving a draft does not reserve fabric. Confirmation validates the complete plan against current stock and creates reservations atomically. Reservations reduce available length without changing the physical balance. The allocation detail can be printed for the cutters and identifies the selected stock and cuts. Optimization is a bounded search and does not establish global optimality.
+Saving a draft does not reserve fabric. Confirmation validates the complete plan against current stock and creates reservations atomically. Reservations reduce available length without changing the physical balance. A printable cutting sheet identifies the selected stock and cuts and leaves blanks for the measurements, return locations, and kept remnants recorded after cutting. Optimization is a bounded search and does not establish global optimality.
 
 See [allocations](allocations.md) for planning constraints, reservations, and lifecycle rules.
 

@@ -1322,7 +1322,111 @@ td strong {
 .arrival-row > svg {
   color: var(--muted);
 }
+.sheet h3 {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.sheet-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px 56px;
+}
+.sheet-fields > .grow {
+  flex: 1;
+  min-width: 240px;
+  max-width: 480px;
+}
+.sheet-blinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+}
+.sheet-col-check {
+  width: 72px;
+}
+.sheet-col-sm {
+  width: 120px;
+}
+.sheet-col-md {
+  width: 160px;
+}
+.sheet-col-lg {
+  width: 200px;
+}
+.sheet-blank {
+  display: inline-block;
+  min-width: 180px;
+  height: 42px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.sheet-blank.wide {
+  width: 100%;
+}
+.sheet-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sheet-box {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+.sheet-choices {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.sheet-fill td {
+  height: 42px;
+}
+.sheet-fill:last-child td {
+  border-bottom: 1px solid var(--border);
+}
+.sheet-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.detail-value + .sheet-note {
+  margin-top: 4px;
+}
+.sheet-expected {
+  margin-bottom: 8px;
+}
+@page {
+  margin: 12mm;
+}
 @media print {
+  /* Paper palette: printing must not depend on the viewer's theme. The
+     important flag outranks the dark and palette selectors on the same root. */
+  :root {
+    color-scheme: light !important;
+    --background: #fff !important;
+    --foreground: #000 !important;
+    --muted: #444 !important;
+    --surface: #fff !important;
+    --surface-soft: #fff !important;
+    --glass: #fff !important;
+    --border: #bbb !important;
+    --primary: #000 !important;
+    --primary-foreground: #fff !important;
+    --primary-soft: #eee !important;
+    --muted-surface: #eee !important;
+    --danger: #000 !important;
+    --danger-soft: #eee !important;
+    --warning: #000 !important;
+    --warning-soft: #eee !important;
+    --shadow: none !important;
+    --glass-shadow: none !important;
+    --orb-one: transparent !important;
+    --orb-two: transparent !important;
+  }
   .no-print {
     display: none !important;
   }
@@ -1371,6 +1475,34 @@ td strong {
   .notice {
     background: #eee;
     color: black;
+  }
+  .sheet .panel {
+    border-radius: 0;
+  }
+  .sheet .panel-heading,
+  .sheet .panel-body {
+    padding: 12px 14px;
+  }
+  .sheet th,
+  .sheet td {
+    padding: 6px 10px;
+  }
+  .sheet th {
+    background: none;
+    color: #000;
+    border-bottom: 1px solid #000;
+  }
+  .sheet td {
+    border-color: #999;
+  }
+  .sheet tr {
+    break-inside: avoid;
+  }
+  .sheet-blank,
+  .sheet-box,
+  .sheet-note {
+    color: #000;
+    border-color: #000;
   }
 }
 

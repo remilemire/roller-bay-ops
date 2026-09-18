@@ -23,6 +23,7 @@ import { dateLabel, shortId } from '@/lib/format';
 import { InfoTip } from '@/components/ui/info-tip';
 import { fieldLabel, measurementHelp } from '@/lib/measurements';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { stockLocationLabel } from '@/features/stock-items/stock-location';
 import {
   allocationDetail,
   cancelAllocation,
@@ -100,10 +101,14 @@ function AllocationRecord({
         title={allocation.orderNumber}
         description={`Created ${dateLabel(allocation.createdAt)} · Revision ${allocation.revision}`}
       >
-        <Button variant="outline" onClick={() => window.print()}>
-          <Printer size={16} />
-          Print plan
-        </Button>
+        {allocation.state === 'active' && (
+          <Button asChild variant="outline">
+            <Link href={`/allocations/${id}/cutting-sheet`}>
+              <Printer size={16} />
+              Cutting sheet
+            </Link>
+          </Button>
+        )}
         {admin && allocation.state === 'completed' && (
           <Button onClick={() => setCorrecting(true)}>
             Correct cutting results
@@ -182,7 +187,7 @@ function AllocationRecord({
                     style={{ margin: '6px 0 12px', fontSize: 12 }}
                   >
                     {stock &&
-                      `${fieldLabel(units, 'rollWidth', stock.widthMm)} ${stock.isRemnant ? 'remnant' : 'roll'} · ${stock.zoneName} / ${stock.sectionLabel} / ${stock.locationLabel}`}
+                      `${fieldLabel(units, 'rollWidth', stock.widthMm)} ${stock.isRemnant ? 'remnant' : 'roll'} · ${stockLocationLabel(stock)}`}
                   </p>
                   <div
                     className="plan-strip"

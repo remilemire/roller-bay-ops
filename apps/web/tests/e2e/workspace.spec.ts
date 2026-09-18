@@ -218,6 +218,22 @@ test('cutting completion preserves the stock revision and sends tube measurement
   });
 });
 
+test('the cutting sheet opens from the allocation and hides its toolbar when printed', async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto(`/allocations/${ids.allocation}`);
+  await page.getByRole('link', { name: 'Cutting sheet' }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/allocations/${ids.allocation}/cutting-sheet$`),
+  );
+  await expect(page.getByText('Warehouse / A / 2')).toBeVisible();
+  await expect(page.getByText('Tube outer diameter (mm)')).toBeVisible();
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByRole('button', { name: 'Print' })).toBeHidden();
+  await expect(page.getByText('Tube outer diameter (mm)')).toBeVisible();
+});
+
 test('expired sessions unmount private workflows and return to sign-in', async ({
   page,
 }, testInfo) => {
