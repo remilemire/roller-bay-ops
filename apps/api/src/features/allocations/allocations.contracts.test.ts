@@ -33,7 +33,7 @@ function submission() {
       }),
     ),
     plan: {
-      drops: [
+      cuts: [
         {
           stockItemId: context.stockItems[0]!.id,
           lengthMm: 3,

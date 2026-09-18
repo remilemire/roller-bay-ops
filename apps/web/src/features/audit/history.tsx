@@ -62,8 +62,8 @@ export function RecordValues({
       ? 'blindWidth'
       : section === 'requirements' && field === 'lengthMm'
         ? 'finishedDrop'
-        : section === 'drops' && field === 'lengthMm'
-          ? 'dropLength'
+        : section === 'cuts' && field === 'lengthMm'
+          ? 'cutLength'
           : measurements[field];
   if (value === null || value === undefined) return <span>—</span>;
   if (typeof value === 'number')
@@ -132,7 +132,7 @@ export function RecordValues({
                 referenceLabels={referenceLabels}
                 value={v}
                 field={k}
-                section={['requirements', 'drops'].includes(k) ? k : section}
+                section={['requirements', 'cuts'].includes(k) ? k : section}
               />
             </dd>
           </div>

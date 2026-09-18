@@ -22,14 +22,14 @@ export function CutPlanEditor({
   onOptimize: () => void;
   onValidate: () => void;
 }) {
-  const drops = useFieldArray({
+  const cuts = useFieldArray({
     control: form.control,
-    name: 'drops',
+    name: 'cuts',
     keyName: 'formKey',
   });
   const values = useWatch({ control: form.control }) as AllocationForm;
-  function setDrops(value: AllocationForm['drops']) {
-    form.setValue('drops', value, { shouldDirty: true });
+  function setCuts(value: AllocationForm['cuts']) {
+    form.setValue('cuts', value, { shouldDirty: true });
     onChange();
   }
   return (
@@ -38,7 +38,7 @@ export function CutPlanEditor({
         <div>
           <h2>Cutting plan</h2>
           <p>
-            Each drop belongs to one stock item. Blinds are arranged left to
+            Each cut belongs to one stock item. Blinds are arranged left to
             right.
           </p>
         </div>
@@ -47,12 +47,12 @@ export function CutPlanEditor({
             type="button"
             variant="outline"
             onClick={() => {
-              drops.append({ stockItemId: '', length: '', items: [] });
+              cuts.append({ stockItemId: '', length: '', items: [] });
               onChange();
             }}
           >
             <Plus size={16} />
-            Add drop
+            Add cut
           </Button>
           <Button type="button" onClick={() => onOptimize()}>
             <Sparkles size={16} />
@@ -61,30 +61,30 @@ export function CutPlanEditor({
         </div>
       </div>
       <div className="panel-body">
-        {!drops.fields.length && (
+        {!cuts.fields.length && (
           <p className="muted">
-            Add drops manually, or optimize after entering the requirements and
+            Add cuts manually, or optimize after entering the requirements and
             cutting rules.
           </p>
         )}
-        {drops.fields.map((row, index) => {
+        {cuts.fields.map((row, index) => {
           // Field-array changes can render before the watched values catch up.
-          const drop = form.getValues(`drops.${index}`) ?? row;
-          const change = (next: typeof drop) =>
-            setDrops(values.drops.map((d, i) => (i === index ? next : d)));
+          const cut = form.getValues(`cuts.${index}`) ?? row;
+          const change = (next: typeof cut) =>
+            setCuts(values.cuts.map((d, i) => (i === index ? next : d)));
           return (
-            <div className="plan-drop" key={row.formKey}>
+            <div className="plan-cut" key={row.formKey}>
               <div className="form-row-header">
-                <strong>Drop {index + 1}</strong>
+                <strong>Cut {index + 1}</strong>
                 <div className="inline-actions">
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
                     disabled={index === 0}
-                    aria-label={`Move drop ${index + 1} up`}
+                    aria-label={`Move cut ${index + 1} up`}
                     onClick={() => {
-                      drops.move(index, index - 1);
+                      cuts.move(index, index - 1);
                       onChange();
                     }}
                   >
@@ -94,9 +94,9 @@ export function CutPlanEditor({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    aria-label={`Remove drop ${index + 1}`}
+                    aria-label={`Remove cut ${index + 1}`}
                     onClick={() => {
-                      drops.remove(index);
+                      cuts.remove(index);
                       onChange();
                     }}
                   >
@@ -106,33 +106,33 @@ export function CutPlanEditor({
               </div>
               <div className="form-grid">
                 <Lookup
-                  label={`Stock item · drop ${index + 1}`}
-                  value={drop.stockItemId}
-                  onChange={(v) => change({ ...drop, stockItemId: v })}
+                  label={`Stock item · cut ${index + 1}`}
+                  value={cut.stockItemId}
+                  onChange={(v) => change({ ...cut, stockItemId: v })}
                   queryKey={[...stockKey, units.rollWidth]}
                   load={lookupStock(units.rollWidth)}
                 />
                 <TextField
-                  label={`Drop length (${fieldSuffix(units, 'dropLength')})`}
+                  label={`Cut length (${fieldSuffix(units, 'cutLength')})`}
                   type="number"
-                  value={drop.length}
-                  onChange={(v) => change({ ...drop, length: v })}
+                  value={cut.length}
+                  onChange={(v) => change({ ...cut, length: v })}
                 />
               </div>
               <hr className="divider" />
-              {drop.items.map((assignment, ai) => (
+              {cut.items.map((assignment, ai) => (
                 <div
                   className="form-grid"
                   key={ai}
                   style={{ marginBottom: 12 }}
                 >
                   <ChoiceField
-                    label={`Blind · drop ${index + 1}, position ${ai + 1}`}
+                    label={`Blind · cut ${index + 1}, position ${ai + 1}`}
                     value={assignment.requirementId}
                     onChange={(v) =>
                       change({
-                        ...drop,
-                        items: drop.items.map((item, i) =>
+                        ...cut,
+                        items: cut.items.map((item, i) =>
                           i === ai ? { ...item, requirementId: v } : item,
                         ),
                       })
@@ -144,13 +144,13 @@ export function CutPlanEditor({
                   />
                   <div className="inline-actions">
                     <TextField
-                      label="Quantity in this drop"
+                      label="Quantity in this cut"
                       type="number"
                       value={assignment.quantity}
                       onChange={(v) =>
                         change({
-                          ...drop,
-                          items: drop.items.map((item, i) =>
+                          ...cut,
+                          items: cut.items.map((item, i) =>
                             i === ai ? { ...item, quantity: v } : item,
                           ),
                         })
@@ -160,11 +160,11 @@ export function CutPlanEditor({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={`Remove assignment ${ai + 1} from drop ${index + 1}`}
+                      aria-label={`Remove assignment ${ai + 1} from cut ${index + 1}`}
                       onClick={() =>
                         change({
-                          ...drop,
-                          items: drop.items.filter((_, i) => i !== ai),
+                          ...cut,
+                          items: cut.items.filter((_, i) => i !== ai),
                         })
                       }
                     >
@@ -179,18 +179,18 @@ export function CutPlanEditor({
                 size="sm"
                 disabled={
                   !values.requirements.some(
-                    (r) => !drop.items.some((i) => i.requirementId === r.id),
+                    (r) => !cut.items.some((i) => i.requirementId === r.id),
                   )
                 }
                 onClick={() => {
                   const next = values.requirements.find(
-                    (r) => !drop.items.some((i) => i.requirementId === r.id),
+                    (r) => !cut.items.some((i) => i.requirementId === r.id),
                   );
                   if (next)
                     change({
-                      ...drop,
+                      ...cut,
                       items: [
-                        ...drop.items,
+                        ...cut.items,
                         { requirementId: next.id, quantity: '' },
                       ],
                     });

@@ -112,7 +112,7 @@ test('write and preview contracts reject client cutting rules while response sna
     }),
   );
   const plan = {
-    drops: [
+    cuts: [
       {
         stockItemId: context.stockItems[0]!.id,
         lengthMm: 3,

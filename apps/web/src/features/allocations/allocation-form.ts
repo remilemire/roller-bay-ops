@@ -17,7 +17,7 @@ export const allocationFormSchema = z.object({
       quantity: z.string(),
     }),
   ),
-  drops: z.array(
+  cuts: z.array(
     z.object({
       stockItemId: z.string(),
       length: z.string(),
@@ -53,10 +53,10 @@ export function allocationToForm(
         length: fieldInput(units, 'finishedDrop', i.lengthMm),
         quantity: String(i.quantity ?? ''),
       })) ?? [],
-    drops:
-      data?.plan.drops.map((d) => ({
+    cuts:
+      data?.plan.cuts.map((d) => ({
         stockItemId: d.stockItemId ?? '',
-        length: fieldInput(units, 'dropLength', d.lengthMm),
+        length: fieldInput(units, 'cutLength', d.lengthMm),
         items: d.items.map((i) => ({
           requirementId: i.requirementId,
           quantity: String(i.quantity ?? ''),
@@ -78,9 +78,9 @@ export function allocationFromForm(
       quantity: nullableNumber(r.quantity),
     })),
     plan: {
-      drops: form.drops.map((d) => ({
+      cuts: form.cuts.map((d) => ({
         stockItemId: nullableText(d.stockItemId),
-        lengthMm: fieldValue(units, 'dropLength', d.length),
+        lengthMm: fieldValue(units, 'cutLength', d.length),
         items: d.items.map((i) => ({
           requirementId: i.requirementId,
           quantity: nullableNumber(i.quantity),

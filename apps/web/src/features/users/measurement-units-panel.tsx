@@ -23,7 +23,7 @@ const fieldLabels: Record<MeasurementField, string> = {
   blindWidth: 'Blind width',
   finishedDrop: 'Finished drop',
   dropAllowance: 'Drop allowance',
-  dropLength: 'Cut drop length',
+  cutLength: 'Cut length',
   edgeTrim: 'Edge trim',
   minimumRemnantWidth: 'Minimum reusable width',
   minimumRemnantLength: 'Minimum reusable length',
@@ -39,7 +39,7 @@ const sections: { title: string; fields: MeasurementField[] }[] = [
     title: 'Cutting & remnants',
     fields: [
       'dropAllowance',
-      'dropLength',
+      'cutLength',
       'edgeTrim',
       'minimumRemnantWidth',
       'minimumRemnantLength',

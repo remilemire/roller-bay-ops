@@ -157,22 +157,22 @@ function AllocationRecord({
             <Status value={allocation.state} />
           </div>
           <div className="panel-body">
-            {allocation.plan.drops.map((drop, index) => {
+            {allocation.plan.cuts.map((cut, index) => {
               const stock = allocation.items.find(
-                (item) => item.stockItemId === drop.stockItemId,
+                (item) => item.stockItemId === cut.stockItemId,
               )?.stockItem;
               return (
-                <div className="plan-drop" key={index}>
+                <div className="plan-cut" key={index}>
                   <div className="form-row-header">
                     <h3>
-                      Drop {index + 1} · {stock?.fabricColorCode} ·{' '}
-                      {fieldLabel(units, 'dropLength', drop.lengthMm)}
+                      Cut {index + 1} · {stock?.fabricColorCode} ·{' '}
+                      {fieldLabel(units, 'cutLength', cut.lengthMm)}
                     </h3>
                     <Link
                       className="text-link"
-                      href={`/stock-items/${drop.stockItemId}`}
+                      href={`/stock-items/${cut.stockItemId}`}
                     >
-                      {shortId(drop.stockItemId)}
+                      {shortId(cut.stockItemId)}
                     </Link>
                   </div>
                   <p
@@ -184,9 +184,9 @@ function AllocationRecord({
                   </p>
                   <div
                     className="plan-strip"
-                    aria-label={`Blind order within drop ${index + 1}`}
+                    aria-label={`Blind order within cut ${index + 1}`}
                   >
-                    {drop.items.map((assignment) => {
+                    {cut.items.map((assignment) => {
                       const ri = allocation.requirements.findIndex(
                         (r) => r.id === assignment.requirementId,
                       );
@@ -292,7 +292,7 @@ function AllocationRecord({
         {allocation.plannedSummary && (
           <div className="notice notice-info">
             <span>
-              {allocation.plannedSummary.dropCount} drops ·{' '}
+              {allocation.plannedSummary.cutCount} cuts ·{' '}
               {allocation.plannedSummary.stockItemCount} stock items ·{' '}
               {(
                 Number(allocation.plannedSummary.wasteAreaMm2) / 1_000_000

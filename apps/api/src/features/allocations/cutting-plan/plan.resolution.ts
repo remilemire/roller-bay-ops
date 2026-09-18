@@ -13,7 +13,7 @@ import type {
   CuttingPlanIssue,
   CuttingPlanResolution,
   PlannedStockUsage,
-  ResolvedDrop,
+  ResolvedCut,
   ResolvedAssignment,
 } from './cutting-plan.types.js';
 import { toLengthUnits } from './cutting-dimensions.js';
@@ -43,12 +43,12 @@ function parseInputs(contextInput: unknown, planInput: unknown): ParsedInputs {
   return { valid: true, context: context.data, plan: plan.data };
 }
 
-function groupStockUsage(drops: readonly ResolvedDrop[]): PlannedStockUsage[] {
+function groupStockUsage(cuts: readonly ResolvedCut[]): PlannedStockUsage[] {
   const usage = new Map<string, PlannedStockUsage>();
-  for (const drop of drops) {
+  for (const cut of cuts) {
     const plannedLength =
-      (usage.get(drop.stock.id)?.plannedLength ?? 0n) + drop.length;
-    usage.set(drop.stock.id, { stock: drop.stock, plannedLength });
+      (usage.get(cut.stock.id)?.plannedLength ?? 0n) + cut.length;
+    usage.set(cut.stock.id, { stock: cut.stock, plannedLength });
   }
   return [...usage.values()];
 }
@@ -79,10 +79,10 @@ export function resolveCuttingPlan(
     });
   if (issues.length) return { valid: false, issues };
 
-  const drops: ResolvedDrop[] = [];
-  for (const [index, drop] of plan.drops.entries()) {
-    const path = `plan.drops.${index}`;
-    const stock = stocks.get(drop.stockItemId);
+  const cuts: ResolvedCut[] = [];
+  for (const [index, cut] of plan.cuts.entries()) {
+    const path = `plan.cuts.${index}`;
+    const stock = stocks.get(cut.stockItemId);
     if (!stock)
       issues.push({
         code: 'unknown_stock',
@@ -90,7 +90,7 @@ export function resolveCuttingPlan(
         message: 'Stock item is absent from the availability snapshot.',
       });
     const assignments: ResolvedAssignment[] = [];
-    for (const [itemIndex, item] of drop.items.entries()) {
+    for (const [itemIndex, item] of cut.items.entries()) {
       const requirement = requirements.get(item.requirementId);
       if (!requirement) {
         issues.push({
@@ -110,10 +110,10 @@ export function resolveCuttingPlan(
       });
     }
     if (stock)
-      drops.push({
+      cuts.push({
         index,
         stock,
-        length: toLengthUnits(drop.lengthMm),
+        length: toLengthUnits(cut.lengthMm),
         assignments,
       });
   }
@@ -123,8 +123,8 @@ export function resolveCuttingPlan(
     plan: {
       requirements: context.requirements,
       settings: context.settings,
-      drops,
-      stockUsage: groupStockUsage(drops),
+      cuts,
+      stockUsage: groupStockUsage(cuts),
     },
   };
 }

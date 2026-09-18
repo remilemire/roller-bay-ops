@@ -13,8 +13,8 @@ import {
 describe('issue labels', () => {
   it('turns Zod and cutting-plan paths into readable labels', () => {
     expect(describeIssuePath(['items', 0, 'widthMm'])).toBe('Item 1 › width');
-    expect(describeIssuePath('plan.drops.0.items.1.requirementId')).toBe(
-      'Plan › drop 1 › item 2 › requirement',
+    expect(describeIssuePath('plan.cuts.0.items.1.requirementId')).toBe(
+      'Plan › cut 1 › item 2 › requirement',
     );
     expect(describeIssuePath('context.stockItems.2.remainingLengthMm')).toBe(
       'Stock item 3 › remaining length',
@@ -91,15 +91,15 @@ describe('describeError', () => {
           [
             {
               code: 'length_capacity',
-              path: 'plan.drops.0',
-              message: 'Drop exceeds remaining length.',
+              path: 'plan.cuts.0',
+              message: 'Cut exceeds remaining length.',
             },
           ],
         ),
       ),
     ).toEqual({
       message: 'Stock availability changed or is insufficient.',
-      details: ['Plan › drop 1: Drop exceeds remaining length.'],
+      details: ['Plan › cut 1: Cut exceeds remaining length.'],
     });
     expect(describeError(new ApiError(503, 'Temporarily unavailable'))).toEqual(
       { message: 'Temporarily unavailable', details: [] },

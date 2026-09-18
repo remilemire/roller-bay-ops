@@ -57,7 +57,7 @@ export class AllocationPlanningService {
         stockItems:
           result.status === 'feasible'
             ? snapshot.stock.filter((item) =>
-                result.plan.drops.some((drop) => drop.stockItemId === item.id),
+                result.plan.cuts.some((cut) => cut.stockItemId === item.id),
               )
             : [],
       });
@@ -90,7 +90,7 @@ export class AllocationPlanningService {
 
   async validate(input: ValidateAllocation) {
     const snapshot = await this.snapshot(input, [
-      ...new Set(input.plan.drops.map((drop) => drop.stockItemId)),
+      ...new Set(input.plan.cuts.map((cut) => cut.stockItemId)),
     ]);
     return allocationValidationSchema.parse({
       ...validateCuttingPlan(snapshot.context, input.plan),

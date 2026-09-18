@@ -11,7 +11,7 @@ export interface CuttingOffcut {
   quantity: number;
 }
 
-export function dropOffcuts(
+export function cutOffcuts(
   stockWidth: bigint,
   length: bigint,
   assignments: readonly ResolvedAssignment[],

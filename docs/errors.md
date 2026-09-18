@@ -9,8 +9,8 @@ Every non-2xx JSON response from the API has one shape, defined in `packages/sha
   "issues": [
     {
       "code": "length_capacity",
-      "path": "plan.drops.0",
-      "message": "Drop exceeds remaining length."
+      "path": "plan.cuts.0",
+      "message": "Cut exceeds remaining length."
     }
   ]
 }
@@ -43,7 +43,7 @@ Unknown routes under `/api` return a 404 envelope; the global prefix keeps its l
 
 ## Frontend
 
-`apps/web/src/lib/api.ts` parses error bodies with the shared schema; `ApiError` carries `status`, `message`, optional `retryAfterMs`, and `issues`. `apps/web/src/lib/errors.ts` turns any error into a message plus readable detail lines (`plan.drops.0.items.1.widthMm` becomes `Plan › drop 1 › item 2 › width`), and `ErrorNotice` renders them. Text from any other exception is replaced by generic copy.
+`apps/web/src/lib/api.ts` parses error bodies with the shared schema; `ApiError` carries `status`, `message`, optional `retryAfterMs`, and `issues`. `apps/web/src/lib/errors.ts` turns any error into a message plus readable detail lines (`plan.cuts.0.items.1.widthMm` becomes `Plan › cut 1 › item 2 › width`), and `ErrorNotice` renders them. Text from any other exception is replaced by generic copy.
 
 ## Tests
 

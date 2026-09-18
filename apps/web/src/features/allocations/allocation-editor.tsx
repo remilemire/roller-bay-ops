@@ -180,7 +180,7 @@ export function AllocationEditor({
           units,
         );
         // Optimization proposes form changes; it neither saves nor reserves stock.
-        form.setValue('drops', next.drops, { shouldDirty: true });
+        form.setValue('cuts', next.cuts, { shouldDirty: true });
       }
     },
   });

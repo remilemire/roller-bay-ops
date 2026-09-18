@@ -38,7 +38,7 @@ export function PlanPreview({
       <div>
         <strong>Valid cutting plan</strong>
         <p>
-          {summary.dropCount} drops · {summary.stockItemCount} stock items ·{' '}
+          {summary.cutCount} cuts · {summary.stockItemCount} stock items ·{' '}
           {summary.newRollCount} new rolls ·{' '}
           {(Number(summary.wasteAreaMm2) / 1_000_000).toFixed(4)} m² waste
         </p>

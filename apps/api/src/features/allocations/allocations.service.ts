@@ -736,7 +736,7 @@ export class AllocationsService {
       tx,
     );
     const selected = [
-      ...new Set(input.plan.drops.map((drop) => drop.stockItemId)),
+      ...new Set(input.plan.cuts.map((cut) => cut.stockItemId)),
     ];
     // Replanning releases old stock as well as claiming new stock. Lock their
     // union before excluding this order's existing reservation from availability.

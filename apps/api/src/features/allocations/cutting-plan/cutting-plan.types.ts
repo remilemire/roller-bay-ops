@@ -13,7 +13,7 @@ export interface CuttingPlanIssue {
 
 export interface CuttingLeftover {
   stockItemId: string;
-  dropIndex: number | null;
+  cutIndex: number | null;
   kind: 'left-edge' | 'right-edge' | 'shortening' | 'remnant-tail';
   widthMm: number;
   lengthMm: number;
@@ -29,7 +29,7 @@ export interface CuttingPlanSummary {
   requiredAreaMm2: string;
   reusableAreaMm2: string;
   wasteAreaMm2: string;
-  dropCount: number;
+  cutCount: number;
   stockItemCount: number;
   newRollCount: number;
 }
@@ -49,7 +49,7 @@ export interface ResolvedAssignment {
   readonly length: bigint;
 }
 
-export interface ResolvedDrop {
+export interface ResolvedCut {
   readonly index: number;
   readonly stock: Stock;
   readonly length: bigint;
@@ -64,7 +64,7 @@ export interface PlannedStockUsage {
 export interface ResolvedCuttingPlan {
   readonly requirements: readonly Requirement[];
   readonly settings: CuttingSettings;
-  readonly drops: readonly ResolvedDrop[];
+  readonly cuts: readonly ResolvedCut[];
   readonly stockUsage: readonly PlannedStockUsage[];
 }
 

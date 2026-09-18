@@ -1,5 +1,5 @@
 /**
- * Enumerates legal single-drop patterns under per-color budgets. Width groups
+ * Enumerates legal single-cut patterns under per-color budgets. Width groups
  * take turns, so one width cannot consume an entire color's candidate budget.
  * Completeness records whether every legal pattern and stock assignment was kept.
  */
@@ -11,13 +11,13 @@ import type {
 } from '../cutting-plan/cutting-plan.types.js';
 import { toLengthUnits } from '../cutting-plan/cutting-dimensions.js';
 import {
-  dropOffcuts,
+  cutOffcuts,
   isReusableOffcut,
 } from '../cutting-plan/cutting-offcuts.js';
 import { checkCancellation } from './optimization.errors.js';
 import { OPTIMIZATION_LIMITS } from './optimization.input.js';
 
-export interface DropPattern {
+export interface CutPattern {
   colorId: string;
   width: bigint;
   length: bigint;
@@ -26,7 +26,7 @@ export interface DropPattern {
 }
 
 export interface PatternAssignment {
-  pattern: DropPattern;
+  pattern: CutPattern;
   stock: Stock;
   maximum: number;
 }
@@ -109,12 +109,12 @@ function scorePattern(
   group: WidthGroup,
   items: ResolvedAssignment[],
   context: CuttingContext,
-): DropPattern {
+): CutPattern {
   const length = items.reduce(
     (max, item) => (item.length > max ? item.length : max),
     0n,
   );
-  const waste = dropOffcuts(
+  const waste = cutOffcuts(
     group.width,
     length,
     items,
@@ -138,7 +138,7 @@ function scorePattern(
 }
 
 function* placements(
-  pattern: DropPattern,
+  pattern: CutPattern,
   stocks: Stock[],
 ): Generator<PatternAssignment> {
   for (const stock of stocks) {
@@ -212,7 +212,7 @@ export async function generatePatterns(
     groups.set(key, group);
   }
   // This check precedes candidate truncation: a blind that fits no available
-  // piece by itself cannot fit inside any combined drop either.
+  // piece by itself cannot fit inside any combined cut either.
   if (covered.size !== context.requirements.length)
     return { assignments: [], complete: true, impossible: true };
   const colors = [...requirements.keys()].sort();
@@ -254,7 +254,7 @@ export async function generatePatterns(
       iterator: combinations(group, trim),
     }));
     const seen = new Set<string>();
-    const patterns: { pattern: DropPattern; stocks: Stock[] }[] = [];
+    const patterns: { pattern: CutPattern; stocks: Stock[] }[] = [];
     let nodes = 0;
     generation: while (generators.length) {
       const next: typeof generators = [];

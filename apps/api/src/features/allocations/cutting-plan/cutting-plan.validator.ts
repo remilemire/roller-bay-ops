@@ -5,7 +5,7 @@
 import type { CuttingPlanValidation } from './cutting-plan.types.js';
 import { resolveCuttingPlan } from './plan.resolution.js';
 import { validateRequirements } from './requirement.validation.js';
-import { validateDrops } from './drop.validation.js';
+import { validateCuts } from './cut.validation.js';
 import { validateStockUsage } from './stock-usage.validation.js';
 import { buildSummary } from './cutting-plan.accounting.js';
 export type {
@@ -23,7 +23,7 @@ export function validateCuttingPlan(
   if (!resolved.valid) return resolved;
   const issues = [
     ...validateRequirements(resolved.plan),
-    ...validateDrops(resolved.plan),
+    ...validateCuts(resolved.plan),
     ...validateStockUsage(resolved.plan),
   ];
   if (issues.length) return { valid: false, issues };

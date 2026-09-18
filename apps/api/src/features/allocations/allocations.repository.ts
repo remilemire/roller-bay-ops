@@ -192,7 +192,7 @@ export class AllocationsRepository {
       byCut.set(item.allocationCutId, group);
     }
     return {
-      drops: rows.map(({ cut, stockItemId }) => ({
+      cuts: rows.map(({ cut, stockItemId }) => ({
         stockItemId,
         lengthMm:
           cut.plannedLengthMm === null ? null : Number(cut.plannedLengthMm),
@@ -250,9 +250,9 @@ export class AllocationsRepository {
     for (const batch of batches(requirements))
       await this.db.insert(allocationRequirements).values(batch);
 
-    // Unassigned drops each get a placeholder; selected stock is shared across its drops.
-    const itemKeys = input.plan.drops.map(
-      (drop, index) => drop.stockItemId ?? `unassigned:${index}`,
+    // Unassigned cuts each get a placeholder; selected stock is shared across its cuts.
+    const itemKeys = input.plan.cuts.map(
+      (cut, index) => cut.stockItemId ?? `unassigned:${index}`,
     );
     const uniqueKeys = [...new Set(itemKeys)];
     const reservations = new Map(
@@ -272,20 +272,20 @@ export class AllocationsRepository {
       await this.db.insert(allocationItems).values(values);
       batch.forEach((key, index) => byKey.set(key, values[index]!.id));
     }
-    // Preserve both the whole form's drop order and each stock item's cutting order.
+    // Preserve both the whole form's cut order and each stock item's cutting order.
     const positions = new Map<string, number>();
-    const inputs = input.plan.drops.map((drop, index) => {
+    const inputs = input.plan.cuts.map((cut, index) => {
       const key = itemKeys[index]!;
       const position = (positions.get(key) ?? 0) + 1;
       positions.set(key, position);
       return {
-        drop,
+        cut,
         values: {
           id: crypto.randomUUID(),
           allocationItemId: byKey.get(key)!,
           position,
           planPosition: index + 1,
-          plannedLengthMm: drop.lengthMm?.toFixed(3) ?? null,
+          plannedLengthMm: cut.lengthMm?.toFixed(3) ?? null,
           edgeTrimMm: input.settings.edgeTrimMm?.toFixed(3) ?? null,
         },
       };
@@ -294,8 +294,8 @@ export class AllocationsRepository {
       await this.db
         .insert(allocationCuts)
         .values(batch.map((entry) => entry.values));
-    const assignments = inputs.flatMap(({ drop, values }) =>
-      drop.items.map((item, index) => ({
+    const assignments = inputs.flatMap(({ cut, values }) =>
+      cut.items.map((item, index) => ({
         allocationCutId: values.id,
         allocationRequirementId: item.requirementId,
         position: index + 1,

@@ -1015,7 +1015,7 @@ td strong {
   font-size: 10px;
   color: var(--muted);
 }
-.plan-drop {
+.plan-cut {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1269,7 +1269,7 @@ td strong {
     color: black;
   }
   .panel,
-  .plan-drop {
+  .plan-cut {
     box-shadow: none;
     background: white;
     border-color: #ccc;

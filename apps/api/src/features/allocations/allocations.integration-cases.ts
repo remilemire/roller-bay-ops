@@ -73,7 +73,7 @@ export async function testAllocations(
         },
       ],
       plan: {
-        drops: [
+        cuts: [
           {
             stockItemId: stockId,
             lengthMm: length,
@@ -112,7 +112,7 @@ export async function testAllocations(
       )!;
       if (!stock) return { status: 'infeasible' as const };
       const plan = {
-        drops: [
+        cuts: [
           {
             stockItemId: stock.id,
             lengthMm: requirement.lengthMm + requirement.lengthAllowanceMm,
@@ -269,7 +269,7 @@ export async function testAllocations(
             plan: body.plan,
           }).expect(200);
           assert.equal(invalid.body.valid, false);
-          body.plan.drops[0]!.lengthMm += 254;
+          body.plan.cuts[0]!.lengthMm += 254;
           const preview = await post(`${path}/validate`, {
             requirements,
             plan: body.plan,
@@ -296,8 +296,8 @@ export async function testAllocations(
             minimumRemnantLengthMm: 1524,
             dropAllowanceMm: 254,
           });
-          const draftBody = input(body.plan.drops[0]!.stockItemId);
-          draftBody.plan.drops[0]!.lengthMm += 254;
+          const draftBody = input(body.plan.cuts[0]!.stockItemId);
+          draftBody.plan.cuts[0]!.lengthMm += 254;
           const draftKey = randomUUID();
           const draft = (
             await post(`${path}/drafts`, { data: draftBody }, draftKey).expect(
@@ -458,7 +458,7 @@ export async function testAllocations(
         assert.equal(unchanged.revision, 1);
         assert.equal(
           unchanged.items[0]!.stockItemId,
-          original.plan.drops[0]!.stockItemId,
+          original.plan.cuts[0]!.stockItemId,
         );
       },
     );
@@ -541,9 +541,7 @@ export async function testAllocations(
         const replacement = {
           ...secondInput,
           plan: {
-            drops: [
-              { ...secondInput.plan.drops[0]!, stockItemId: await seed() },
-            ],
+            cuts: [{ ...secondInput.plan.cuts[0]!, stockItemId: await seed() }],
           },
           expectedRevision: 1,
         };

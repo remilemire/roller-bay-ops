@@ -51,7 +51,7 @@ export function describeIssue(issue: ErrorIssue): string {
 
 const INDEX = /^\d+$/;
 
-/** `plan.drops.0.items.1.widthMm` becomes `Plan › drop 1 › item 2 › width`. */
+/** `plan.cuts.0.items.1.widthMm` becomes `Plan › cut 1 › item 2 › width`. */
 export function describeIssuePath(path: ErrorIssue['path']): string {
   const segments = (typeof path === 'string' ? path.split('.') : (path ?? []))
     .map(String)

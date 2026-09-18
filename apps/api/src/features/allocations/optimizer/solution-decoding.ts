@@ -1,4 +1,4 @@
-/** Reconstructs domain drops and checks modeled objectives against independent plan accounting. */
+/** Reconstructs domain cuts and checks modeled objectives against independent plan accounting. */
 import type {
   CuttingContext,
   CuttingPlan,
@@ -23,7 +23,7 @@ export function decodeSolution(
       'Solver solution does not match a valid cutting plan and its accounting.',
     );
   };
-  const plan: CuttingPlan = { drops: [] };
+  const plan: CuttingPlan = { cuts: [] };
   for (const assignment of model.assignments) {
     const count = solution.values[assignment.variable];
     if (
@@ -34,8 +34,8 @@ export function decodeSolution(
     )
       fail();
     for (let i = 0; i < count!; i++) {
-      if (plan.drops.length >= 100) fail();
-      plan.drops.push({
+      if (plan.cuts.length >= 100) fail();
+      plan.cuts.push({
         stockItemId: assignment.stock.id,
         lengthMm: toMillimetres(assignment.pattern.length),
         items: assignment.pattern.items.map((item) => ({
@@ -51,7 +51,7 @@ export function decodeSolution(
   const expected = [
     BigInt(summary.wasteAreaMm2.replace('.', '')),
     BigInt(summary.newRollCount),
-    BigInt(summary.dropCount),
+    BigInt(summary.cutCount),
     BigInt(summary.stockItemCount),
   ];
   for (const [index, terms] of model.objectives.entries()) {

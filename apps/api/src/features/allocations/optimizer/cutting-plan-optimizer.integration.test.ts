@@ -17,7 +17,7 @@ import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
 const score = (summary: CuttingPlanSummary) => [
   BigInt(summary.wasteAreaMm2.replace('.', '')),
   BigInt(summary.newRollCount),
-  BigInt(summary.dropCount),
+  BigInt(summary.cutCount),
   BigInt(summary.stockItemCount),
 ];
 const better = (a: bigint[], b: bigint[]) => {
@@ -25,7 +25,7 @@ const better = (a: bigint[], b: bigint[]) => {
   return false;
 };
 
-// Independently partitions individual blinds into drops, tries all stock choices,
+// Independently partitions individual blinds into cuts, tries all stock choices,
 // and scores only complete plans through the domain validator (no pattern/model reuse).
 function exhaustiveReference(context: CuttingContext): bigint[] | null {
   const blinds = context.requirements.flatMap((item) =>
@@ -33,12 +33,12 @@ function exhaustiveReference(context: CuttingContext): bigint[] | null {
   );
   assert.ok(blinds.length <= 5);
   let best: bigint[] | null = null;
-  const drops: CuttingPlan['drops'] = [];
+  const cuts: CuttingPlan['cuts'] = [];
   const consumed = new Map<string, bigint>();
   const trim = toLengthUnits(context.settings.edgeTrimMm);
   function visit(mask: number): void {
     if (mask === 0) {
-      const result = validateCuttingPlan(context, { drops });
+      const result = validateCuttingPlan(context, { cuts });
       if (result.valid) {
         const value = score(result.summary);
         if (!best || better(value, best)) best = value;
@@ -79,7 +79,7 @@ function exhaustiveReference(context: CuttingContext): bigint[] | null {
         )
           continue;
         consumed.set(stock.id, used + length);
-        drops.push({
+        cuts.push({
           stockItemId: stock.id,
           lengthMm: toMillimetres(length),
           items: [...quantities].map(([requirementId, quantity]) => ({
@@ -88,7 +88,7 @@ function exhaustiveReference(context: CuttingContext): bigint[] | null {
           })),
         });
         visit(mask ^ subset);
-        drops.pop();
+        cuts.pop();
         consumed.set(stock.id, used);
       }
     }
@@ -153,7 +153,7 @@ test(
       },
     );
     await t.test(
-      'equal waste prefers no new rolls before fewer drops',
+      'equal waste prefers no new rolls before fewer cuts',
       async () => {
         const context = fixture();
         context.settings.minimumRemnantWidthMm = 100;
@@ -166,14 +166,14 @@ test(
         });
         const result = await compare(context);
         assert.equal(result?.summary.newRollCount, 0);
-        assert.equal(result?.summary.dropCount, 2);
+        assert.equal(result?.summary.cutCount, 2);
       },
     );
     await t.test(
-      'fewer drops and then fewer stock items break remaining ties',
+      'fewer cuts and then fewer stock items break remaining ties',
       async () => {
         const result = await compare(fixture());
-        assert.equal(result?.summary.dropCount, 1);
+        assert.equal(result?.summary.cutCount, 1);
         const context = fixture();
         context.stockItems[0]!.widthMm = 6;
         context.stockItems.push(
@@ -185,7 +185,7 @@ test(
       },
     );
     await t.test(
-      'remnant tail is counted once across multiple drops and thresholds are inclusive',
+      'remnant tail is counted once across multiple cuts and thresholds are inclusive',
       async () => {
         for (const length of [6, 7, 8, 9]) {
           const context = fixture();
@@ -196,7 +196,7 @@ test(
             remainingLengthMm: length,
           });
           const result = await compare(context);
-          assert.equal(result?.summary.dropCount, 2);
+          assert.equal(result?.summary.cutCount, 2);
           assert.equal(
             result?.summary.reservations[0]?.reservedLengthMm,
             length,
@@ -272,11 +272,11 @@ test(
         assert.equal(hundred.status, 'feasible');
         if (hundred.status !== 'feasible')
           throw new Error(JSON.stringify(hundred));
-        assert.equal(hundred.summary.dropCount, 50);
+        assert.equal(hundred.summary.cutCount, 50);
         assert.equal(
-          hundred.plan.drops.reduce(
-            (total, drop) =>
-              total + drop.items.reduce((sum, item) => sum + item.quantity, 0),
+          hundred.plan.cuts.reduce(
+            (total, cut) =>
+              total + cut.items.reduce((sum, item) => sum + item.quantity, 0),
             0,
           ),
           100,
@@ -306,8 +306,8 @@ test(
           throw new Error(JSON.stringify(result));
         assert.equal(validateCuttingPlan(context, result.plan).valid, true);
         const quantities = new Map<string, number>();
-        for (const drop of result.plan.drops)
-          for (const item of drop.items)
+        for (const cut of result.plan.cuts)
+          for (const item of cut.items)
             quantities.set(
               item.requirementId,
               (quantities.get(item.requirementId) ?? 0) + item.quantity,

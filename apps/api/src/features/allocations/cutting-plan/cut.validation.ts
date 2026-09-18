@@ -1,11 +1,11 @@
 /**
- * Checks only drop geometry: fixed orientation, outside trims, and drop length.
+ * Checks only cut geometry: fixed orientation, outside trims, and cut length.
  * Returns issues only; it never constructs leftovers or calculates waste.
  */
 import type {
   CuttingPlanIssue,
   ResolvedAssignment,
-  ResolvedDrop,
+  ResolvedCut,
   ResolvedCuttingPlan,
 } from './cutting-plan.types.js';
 import { toLengthUnits } from './cutting-dimensions.js';
@@ -18,22 +18,22 @@ function longestLength(assignments: readonly ResolvedAssignment[]): bigint {
   );
 }
 
-function validateDrop(drop: ResolvedDrop, trim: bigint): CuttingPlanIssue[] {
+function validateCut(cut: ResolvedCut, trim: bigint): CuttingPlanIssue[] {
   const issues: CuttingPlanIssue[] = [];
-  const path = `plan.drops.${drop.index}`;
-  if (drop.length !== longestLength(drop.assignments))
+  const path = `plan.cuts.${cut.index}`;
+  if (cut.length !== longestLength(cut.assignments))
     issues.push({
-      code: 'drop_length',
+      code: 'cut_length',
       path: `${path}.lengthMm`,
       message:
-        'Drop length must equal the longest assigned length including allowance.',
+        'Cut length must equal the longest assigned length including allowance.',
     });
-  const width = drop.assignments.reduce(
+  const width = cut.assignments.reduce(
     (total, assignment) =>
       total + assignment.width * BigInt(assignment.quantity),
     0n,
   );
-  if (width + 2n * trim > toLengthUnits(drop.stock.widthMm))
+  if (width + 2n * trim > toLengthUnits(cut.stock.widthMm))
     issues.push({
       code: 'width_capacity',
       path,
@@ -42,7 +42,7 @@ function validateDrop(drop: ResolvedDrop, trim: bigint): CuttingPlanIssue[] {
   return issues;
 }
 
-export function validateDrops(plan: ResolvedCuttingPlan): CuttingPlanIssue[] {
+export function validateCuts(plan: ResolvedCuttingPlan): CuttingPlanIssue[] {
   const trim = toLengthUnits(plan.settings.edgeTrimMm);
-  return plan.drops.flatMap((drop) => validateDrop(drop, trim));
+  return plan.cuts.flatMap((cut) => validateCut(cut, trim));
 }

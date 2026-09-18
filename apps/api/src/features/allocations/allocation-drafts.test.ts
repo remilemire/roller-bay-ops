@@ -55,14 +55,14 @@ test('allocation drafts preserve missing values and reject invalid supplied fiel
   const id = randomUUID();
   const data = allocationDraftDataSchema.parse({
     requirements: [{ id }],
-    plan: { drops: [{ items: [{ requirementId: id }] }, {}] },
+    plan: { cuts: [{ items: [{ requirementId: id }] }, {}] },
   });
   assert.equal(data.orderNumber, null);
   assert.equal(data.requirements[0]!.quantity, null);
   assert.equal(data.requirements[0]!.lengthAllowanceMm, null);
   assert.equal(data.settings.edgeTrimMm, null);
-  assert.equal(data.plan.drops[0]!.stockItemId, null);
-  assert.equal(data.plan.drops[0]!.items[0]!.quantity, null);
+  assert.equal(data.plan.cuts[0]!.stockItemId, null);
+  assert.equal(data.plan.cuts[0]!.items[0]!.quantity, null);
   assert.deepEqual(allocationDraftDataSchema.parse(data), data);
   assert.equal(createAllocationSchema.safeParse(data).success, false);
   for (const invalid of [
@@ -72,16 +72,16 @@ test('allocation drafts preserve missing values and reject invalid supplied fiel
     { requirements: [{ id }, { id }] },
     {
       requirements: [{ id }],
-      plan: { drops: [{ items: [{ requirementId: randomUUID() }] }] },
+      plan: { cuts: [{ items: [{ requirementId: randomUUID() }] }] },
     },
     {
       requirements: [{ id }],
       plan: {
-        drops: [{ items: [{ requirementId: id }, { requirementId: id }] }],
+        cuts: [{ items: [{ requirementId: id }, { requirementId: id }] }],
       },
     },
     { settings: { edgeTrimMm: -1 } },
-    { plan: { drops: [{}] }, stockItems: [] },
+    { plan: { cuts: [{}] }, stockItems: [] },
   ])
     assert.equal(allocationDraftDataSchema.safeParse(invalid).success, false);
 });
@@ -142,7 +142,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     ) => operation(repository, {}),
     findById: async () => draft,
     requirements: async () => [],
-    plan: async () => ({ drops: [] }),
+    plan: async () => ({ cuts: [] }),
     replacePlan: async () => {
       writes++;
     },

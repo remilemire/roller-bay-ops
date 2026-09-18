@@ -7,7 +7,7 @@ import type {
   CuttingPlanSummary,
   ResolvedCuttingPlan,
 } from './cutting-plan.types.js';
-import { dropOffcuts, isReusableOffcut } from './cutting-offcuts.js';
+import { cutOffcuts, isReusableOffcut } from './cutting-offcuts.js';
 import {
   toLengthUnits,
   toMillimetres,
@@ -16,7 +16,7 @@ import {
 
 interface Offcut {
   stockItemId: string;
-  dropIndex: number | null;
+  cutIndex: number | null;
   kind: CuttingLeftover['kind'];
   width: bigint;
   length: bigint;
@@ -35,25 +35,25 @@ interface AreaTotals {
 }
 
 function calculateOffcuts(plan: ResolvedCuttingPlan): Offcut[] {
-  const offcuts: Offcut[] = plan.drops.flatMap((drop) =>
-    dropOffcuts(
-      toLengthUnits(drop.stock.widthMm),
-      drop.length,
-      drop.assignments,
+  const offcuts: Offcut[] = plan.cuts.flatMap((cut) =>
+    cutOffcuts(
+      toLengthUnits(cut.stock.widthMm),
+      cut.length,
+      cut.assignments,
       toLengthUnits(plan.settings.edgeTrimMm),
     ).map((offcut) => ({
       ...offcut,
-      stockItemId: drop.stock.id,
-      dropIndex: drop.index,
+      stockItemId: cut.stock.id,
+      cutIndex: cut.index,
     })),
   );
   for (const { stock, plannedLength } of plan.stockUsage) {
-    // Evaluate a remnant's tail after all its drops, not after each cut; the
-    // entire piece leaves the shelf even when only part of its length is cut.
+    // Evaluate a remnant's tail once, after all of its cuts; the entire piece
+    // leaves the shelf even when only part of its length is cut.
     if (stock.isRemnant)
       offcuts.push({
         stockItemId: stock.id,
-        dropIndex: null,
+        cutIndex: null,
         kind: 'remnant-tail',
         width: toLengthUnits(stock.widthMm),
         length: toLengthUnits(stock.remainingLengthMm) - plannedLength,
@@ -93,8 +93,8 @@ function calculateAreas(
       : plannedLength;
     areas.input += toLengthUnits(stock.widthMm) * length;
   }
-  for (const drop of plan.drops)
-    for (const assignment of drop.assignments) {
+  for (const cut of plan.cuts)
+    for (const assignment of cut.assignments) {
       areas.required +=
         assignment.width * assignment.length * BigInt(assignment.quantity);
     }
@@ -130,7 +130,7 @@ export function buildSummary(plan: ResolvedCuttingPlan): CuttingPlanSummary {
     requiredAreaMm2: toSquareMillimetres(areas.required),
     reusableAreaMm2: toSquareMillimetres(areas.reusable),
     wasteAreaMm2: toSquareMillimetres(areas.waste),
-    dropCount: plan.drops.length,
+    cutCount: plan.cuts.length,
     stockItemCount: plan.stockUsage.length,
     newRollCount: plan.stockUsage.filter(
       ({ stock }) => !stock.isRemnant && !stock.isUsed,

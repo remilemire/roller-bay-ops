@@ -61,7 +61,7 @@ export async function testAllocationDrafts(
       [colleague, `${colleague}@example.com`, colleague],
     );
     await t.test(
-      'allocation drafts preserve ordered partial rows and unassigned drops without reserving stock',
+      'allocation drafts preserve ordered partial rows and unassigned cuts without reserving stock',
       async () => {
         const stockId = await seed(1000);
         const complete = input(stockId);
@@ -71,9 +71,9 @@ export async function testAllocationDrafts(
             complete.requirements[0],
           ],
           plan: {
-            drops: [
+            cuts: [
               {},
-              complete.plan.drops[0],
+              complete.plan.cuts[0],
               { stockItemId: stockId, lengthMm: 50, items: [] },
               {},
             ],
@@ -85,7 +85,7 @@ export async function testAllocationDrafts(
           partial.requirements.map((item) => item!.id),
         );
         assert.deepEqual(
-          draft.data.plan.drops.map((drop) => drop.lengthMm),
+          draft.data.plan.cuts.map((cut) => cut.lengthMm),
           [null, 1000, 50, null],
         );
         assert.deepEqual(
@@ -167,10 +167,10 @@ export async function testAllocationDrafts(
           requirements: [{ id: randomUUID(), fabricColorId: randomUUID() }],
         }).expect(404);
         await put(draft.id, 1, {
-          plan: { drops: [{ stockItemId: randomUUID() }] },
+          plan: { cuts: [{ stockItemId: randomUUID() }] },
         }).expect(404);
         await put(draft.id, 1, {
-          plan: { drops: [{ items: [{ requirementId: randomUUID() }] }] },
+          plan: { cuts: [{ items: [{ requirementId: randomUUID() }] }] },
         }).expect(400);
         const updates = await Promise.all([
           put(draft.id, 1, { orderNumber: 'A' }),

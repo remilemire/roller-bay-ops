@@ -49,10 +49,10 @@ export const cuttingContextSchema = z.strictObject({
   }),
 });
 
-// Each drop is cut across the stock first. Items are ordered left to right;
+// Each cut spans the full stock width. Items are ordered left to right;
 // quantities represent adjacent copies. Rotation and nesting are not supported.
 export const cuttingPlanSchema = z.strictObject({
-  drops: z
+  cuts: z
     .array(
       z.strictObject({
         stockItemId: id,
@@ -76,7 +76,7 @@ export const cuttingPlanSummarySchema = z.object({
   leftovers: z.array(
     z.object({
       stockItemId: id,
-      dropIndex: z.number().int().nonnegative().nullable(),
+      cutIndex: z.number().int().nonnegative().nullable(),
       kind: z.enum(['left-edge', 'right-edge', 'shortening', 'remnant-tail']),
       widthMm: dimension,
       lengthMm: dimension,
@@ -91,7 +91,7 @@ export const cuttingPlanSummarySchema = z.object({
   requiredAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
   reusableAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
   wasteAreaMm2: z.string().regex(/^\d+\.\d{6}$/),
-  dropCount: z.number().int().nonnegative(),
+  cutCount: z.number().int().nonnegative(),
   stockItemCount: z.number().int().nonnegative(),
   newRollCount: z.number().int().nonnegative(),
 });
@@ -139,7 +139,7 @@ const allocationSubmission = z.strictObject({
 });
 export const createAllocationSchema = allocationSubmission.refine(
   (value) =>
-    value.plan.drops.reduce((total, drop) => total + drop.items.length, 0) <=
+    value.plan.cuts.reduce((total, cut) => total + cut.items.length, 0) <=
     10000,
   'An allocation may contain at most 10,000 cut assignments.',
 );
@@ -252,7 +252,7 @@ export const allocationDraftDataSchema = z
       .prefault({}),
     plan: z
       .strictObject({
-        drops: z
+        cuts: z
           .array(
             z.strictObject({
               stockItemId: draftField(id),
@@ -278,7 +278,7 @@ export const allocationDraftDataSchema = z
 function validateDraftAssignments(
   value: {
     requirements: { id: string }[];
-    plan: { drops: { items: { requirementId: string }[] }[] };
+    plan: { cuts: { items: { requirementId: string }[] }[] };
   },
   ctx: z.RefinementCtx,
 ) {
@@ -292,13 +292,13 @@ function validateDraftAssignments(
       message: 'Requirement IDs must be unique.',
     });
   let assignments = 0;
-  value.plan.drops.forEach((drop, i) => {
+  value.plan.cuts.forEach((cut, i) => {
     const assigned = new Set<string>();
-    drop.items.forEach((item, j) => {
+    cut.items.forEach((item, j) => {
       if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
         ctx.addIssue({
           code: 'custom',
-          path: ['plan', 'drops', i, 'items', j, 'requirementId'],
+          path: ['plan', 'cuts', i, 'items', j, 'requirementId'],
           message:
             'Assignments must reference a unique requirement in this draft.',
         });

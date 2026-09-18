@@ -57,8 +57,8 @@ class ProbeController {
         },
         {
           code: 'length_capacity',
-          path: 'plan.drops.0',
-          message: 'Drop exceeds remaining length.',
+          path: 'plan.cuts.0',
+          message: 'Cut exceeds remaining length.',
         },
       ],
     });
@@ -132,8 +132,8 @@ test('every failure leaves the API as the shared envelope without internal detai
         { code: 'too_small', path: ['widthMm'], message: 'Too small' },
         {
           code: 'length_capacity',
-          path: 'plan.drops.0',
-          message: 'Drop exceeds remaining length.',
+          path: 'plan.cuts.0',
+          message: 'Cut exceeds remaining length.',
         },
       ],
     });

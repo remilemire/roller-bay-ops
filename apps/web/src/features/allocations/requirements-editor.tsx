@@ -31,8 +31,8 @@ export function RequirementsEditor({
     const id = values.requirements[index]!.id;
     requirements.remove(index);
     form.setValue(
-      'drops',
-      values.drops.map((d) => ({
+      'cuts',
+      values.cuts.map((d) => ({
         ...d,
         items: d.items.filter((i) => i.requirementId !== id),
       })),

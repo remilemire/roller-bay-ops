@@ -135,7 +135,7 @@ export async function testCorrections(
           },
         ],
         plan: {
-          drops: [
+          cuts: [
             {
               stockItemId: stockId,
               lengthMm: 1000,
@@ -776,8 +776,8 @@ export async function testCorrections(
           [first, second] = r.items[0]!.stockItems;
         const draft = plan(first!.id);
         draft.requirements[0]!.quantity = 2;
-        draft.plan.drops.push({
-          ...draft.plan.drops[0]!,
+        draft.plan.cuts.push({
+          ...draft.plan.cuts[0]!,
           stockItemId: second!.id,
         });
         const a = allocationDetailSchema.parse(

@@ -1,5 +1,5 @@
 /**
- * Builds bounded cutting candidates, then minimizes waste, new rolls, drops, and
+ * Builds bounded cutting candidates, then minimizes waste, new rolls, cuts, and
  * stock handling in successive solver passes. Only proven objective values are
  * locked. Every incumbent is decoded and independently validated before return.
  */

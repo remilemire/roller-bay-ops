@@ -148,7 +148,7 @@ export const allocation = allocationDetailSchema.parse({
     minimumRemnantLengthMm: 457.2,
   },
   plan: {
-    drops: [
+    cuts: [
       {
         stockItemId: ids.stock,
         lengthMm: 2743.2,

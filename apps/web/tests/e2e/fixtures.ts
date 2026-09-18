@@ -297,9 +297,9 @@ export async function mockApi(
           status: 'feasible',
           stockItems: [stock],
           plan: {
-            drops: [
+            cuts: [
               {
-                ...allocation.plan.drops[0],
+                ...allocation.plan.cuts[0],
                 lengthMm: 2540,
                 items: [{ requirementId: requirement.id, quantity: 1 }],
               },
@@ -309,7 +309,7 @@ export async function mockApi(
             leftovers: [
               {
                 stockItemId: ids.stock,
-                dropIndex: 0,
+                cutIndex: 0,
                 kind: 'left-edge',
                 widthMm: 25.4,
                 lengthMm: 2540,
@@ -318,7 +318,7 @@ export async function mockApi(
               },
               {
                 stockItemId: ids.stock,
-                dropIndex: 0,
+                cutIndex: 0,
                 kind: 'right-edge',
                 widthMm: 1600.2,
                 lengthMm: 2540,
@@ -331,7 +331,7 @@ export async function mockApi(
             requiredAreaMm2: (1371.6 * 2540).toFixed(6),
             reusableAreaMm2: (1600.2 * 2540).toFixed(6),
             wasteAreaMm2: (25.4 * 2540).toFixed(6),
-            dropCount: 1,
+            cutCount: 1,
             stockItemCount: 1,
             newRollCount: 1,
           },
@@ -400,7 +400,7 @@ export async function mockApi(
         issues: [
           {
             code: 'WIDTH',
-            path: 'plan.drops.0',
+            path: 'plan.cuts.0',
             message: 'The required widths do not fit this stock item.',
           },
         ],

@@ -15,7 +15,7 @@ it('preserves requirement identity, assignment ordering, and incomplete fields',
     {
       orderNumber: '',
       requirements: [{ ...r, width: '22', length: '54', quantity: '2' }],
-      drops: [
+      cuts: [
         {
           stockItemId: '',
           length: '',
@@ -31,7 +31,7 @@ it('preserves requirement identity, assignment ordering, and incomplete fields',
     lengthMm: 1371.6,
     quantity: 2,
   });
-  expect(data.plan.drops[0]).toMatchObject({
+  expect(data.plan.cuts[0]).toMatchObject({
     stockItemId: null,
     lengthMm: null,
     items: [{ requirementId: r.id, quantity: null }],
@@ -47,7 +47,7 @@ it('rejects assignments whose requirement was removed', () => {
     allocationFromForm(
       {
         ...allocationToForm(undefined, units),
-        drops: [
+        cuts: [
           {
             stockItemId: '',
             length: '',
@@ -66,13 +66,13 @@ it('lets blind drops use inches while other fields keep their own units', () => 
     finishedDrop: 'in',
     dropAllowance: 'in',
     edgeTrim: 'mm',
-    dropLength: 'm',
+    cutLength: 'm',
   };
   const data = allocationFromForm(
     {
       orderNumber: 'RB-1',
       requirements: [{ ...r, width: '22', length: '72', quantity: '1' }],
-      drops: [{ stockItemId: '', length: '2.7432', items: [] }],
+      cuts: [{ stockItemId: '', length: '2.7432', items: [] }],
     },
     inchDrops,
   );
@@ -82,12 +82,12 @@ it('lets blind drops use inches while other fields keep their own units', () => 
   });
   expect(data).not.toHaveProperty('settings');
   expect(data.requirements[0]).not.toHaveProperty('lengthAllowanceMm');
-  expect(data.plan.drops[0]!.lengthMm).toBe(2743.2);
+  expect(data.plan.cuts[0]!.lengthMm).toBe(2743.2);
   expect(allocationToForm(data, inchDrops).requirements[0]).toMatchObject({
     length: '72',
   });
   expect(allocationToForm(data, units)).toMatchObject({
     requirements: [{ length: '72' }],
-    drops: [{ length: '108' }],
+    cuts: [{ length: '108' }],
   });
 });

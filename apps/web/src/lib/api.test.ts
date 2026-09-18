@@ -88,8 +88,8 @@ describe('API boundary', () => {
                 },
                 {
                   code: 'length_capacity',
-                  path: 'plan.drops.0',
-                  message: 'Drop exceeds remaining length.',
+                  path: 'plan.cuts.0',
+                  message: 'Cut exceeds remaining length.',
                 },
               ],
             }),
@@ -122,8 +122,8 @@ describe('API boundary', () => {
         },
         {
           code: 'length_capacity',
-          path: 'plan.drops.0',
-          message: 'Drop exceeds remaining length.',
+          path: 'plan.cuts.0',
+          message: 'Cut exceeds remaining length.',
         },
       ],
     });

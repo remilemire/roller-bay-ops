@@ -50,7 +50,7 @@ test('validates the allocator example in millimetres, including three separate r
     },
   };
   const plan: CuttingPlan = {
-    drops: [
+    cuts: [
       {
         stockItemId: id(20),
         lengthMm: yards(3),
@@ -77,7 +77,7 @@ test('validates the allocator example in millimetres, including three separate r
     ],
   };
   const summary = valid(context, plan);
-  assert.equal(summary.dropCount, 6);
+  assert.equal(summary.cutCount, 6);
   assert.equal(summary.stockItemCount, 5);
   assert.equal(
     summary.reservations.find((item) => item.stockItemId === id(20))!
@@ -136,7 +136,7 @@ function fixture(): { context: CuttingContext; plan: CuttingPlan } {
       },
     },
     plan: {
-      drops: [
+      cuts: [
         {
           stockItemId: id(20),
           lengthMm: 30,
@@ -167,8 +167,8 @@ function invalid(context: unknown, plan: unknown, code: string) {
 
 test('unresolved references return issues without a partial summary or cascading rule errors', () => {
   const { context, plan } = fixture();
-  plan.drops[0]!.stockItemId = id(98);
-  plan.drops[0]!.items[0]!.requirementId = id(99);
+  plan.cuts[0]!.stockItemId = id(98);
+  plan.cuts[0]!.items[0]!.requirementId = id(99);
   const result = validateCuttingPlan(context, plan);
   assert.equal(result.valid, false);
   if (result.valid) throw new Error('Expected invalid plan');
@@ -193,7 +193,7 @@ test('requirement, geometry, and availability failures are reported together wit
   assert.equal('summary' in result, false);
 });
 
-test('groups unequal drops, includes allowance once, and independently balances areas', () => {
+test('groups unequal cuts, includes allowance once, and independently balances areas', () => {
   const { context, plan } = fixture();
   const summary = valid(context, plan);
   assert.equal(summary.inputAreaMm2, '3540.000000');
@@ -225,24 +225,24 @@ test('orientation cannot be swapped to make a blind fit', () => {
     },
   ];
   context.stockItems[0]!.widthMm = 52;
-  plan.drops[0]!.items = [{ requirementId: id(1), quantity: 1 }];
-  plan.drops[0]!.lengthMm = 40;
+  plan.cuts[0]!.items = [{ requirementId: id(1), quantity: 1 }];
+  plan.cuts[0]!.lengthMm = 40;
   invalid(context, plan, 'width_capacity');
 });
 
-test('both short and excessive drops are rejected', () => {
+test('both short and excessive cuts are rejected', () => {
   for (const length of [29.999, 30.001]) {
     const { context, plan } = fixture();
-    plan.drops[0]!.lengthMm = length;
-    invalid(context, plan, 'drop_length');
+    plan.cuts[0]!.lengthMm = length;
+    invalid(context, plan, 'cut_length');
   }
 });
 
-test('aggregates multiple drops and subtracts active reservations', () => {
+test('aggregates multiple cuts and subtracts active reservations', () => {
   const { context, plan } = fixture();
   context.requirements[0]!.quantity = 2;
   context.requirements[1]!.quantity = 4;
-  plan.drops.push(structuredClone(plan.drops[0]!));
+  plan.cuts.push(structuredClone(plan.cuts[0]!));
   context.stockItems[0]!.reservedLengthMm = 40;
   assert.equal(valid(context, plan).reservations[0]!.reservedLengthMm, 60);
   context.stockItems[0]!.reservedLengthMm = 40.001;
@@ -283,11 +283,11 @@ test('remnant reuse checks both dimensions without rotation or combining pieces'
 test('missing, excessive, and repeated assignments are rejected', () => {
   for (const quantity of [1, 3]) {
     const { context, plan } = fixture();
-    plan.drops[0]!.items[1]!.quantity = quantity;
+    plan.cuts[0]!.items[1]!.quantity = quantity;
     invalid(context, plan, 'quantity_mismatch');
   }
   const { context, plan } = fixture();
-  plan.drops[0]!.items.push({ requirementId: id(2), quantity: 1 });
+  plan.cuts[0]!.items.push({ requirementId: id(2), quantity: 1 });
   invalid(context, plan, 'duplicate_requirement');
 });
 
@@ -299,13 +299,13 @@ test('unknown references, consumed stock, and color mismatch are rejected', () =
     [
       'unknown_stock',
       (_, p) => {
-        p.drops[0]!.stockItemId = id(99);
+        p.cuts[0]!.stockItemId = id(99);
       },
     ],
     [
       'unknown_requirement',
       (_, p) => {
-        p.drops[0]!.items[0]!.requirementId = id(99);
+        p.cuts[0]!.items[0]!.requirementId = id(99);
       },
     ],
     [
@@ -349,7 +349,7 @@ test('malformed dimensions, unsupported layout fields, and noninteger quantities
     invalid(changed, plan, 'invalid_input');
   }
   invalid(context, { ...plan, rotated: true }, 'invalid_input');
-  plan.drops[0]!.items[0]!.quantity = 1.5;
+  plan.cuts[0]!.items[0]!.quantity = 1.5;
   invalid(context, plan, 'invalid_input');
 });
 
@@ -366,8 +366,8 @@ test('large three-decimal dimensions retain exact area beyond safe integer multi
   context.stockItems[0]!.widthMm = 999999999.999;
   context.stockItems[0]!.remainingLengthMm = 999999999.999;
   context.settings.edgeTrimMm = 0.001;
-  plan.drops[0]!.lengthMm = 999999999.999;
-  plan.drops[0]!.items = [{ requirementId: id(1), quantity: 1 }];
+  plan.cuts[0]!.lengthMm = 999999999.999;
+  plan.cuts[0]!.items = [{ requirementId: id(1), quantity: 1 }];
   const summary = valid(context, plan);
   assert.equal(summary.inputAreaMm2, '999999999998000000.000001');
   assert.equal(summary.wasteAreaMm2, '1999999.999998');

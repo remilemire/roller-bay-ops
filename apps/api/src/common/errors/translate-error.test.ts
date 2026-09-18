@@ -52,8 +52,8 @@ test('field issues survive in both shapes the API emits; extra keys and malforme
         },
         {
           code: 'length_capacity',
-          path: 'plan.drops.0',
-          message: 'Drop exceeds remaining length.',
+          path: 'plan.cuts.0',
+          message: 'Cut exceeds remaining length.',
         },
       ],
     }),
@@ -69,8 +69,8 @@ test('field issues survive in both shapes the API emits; extra keys and malforme
       },
       {
         code: 'length_capacity',
-        path: 'plan.drops.0',
-        message: 'Drop exceeds remaining length.',
+        path: 'plan.cuts.0',
+        message: 'Cut exceeds remaining length.',
       },
     ],
   });
