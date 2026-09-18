@@ -62,6 +62,14 @@ export function CompletionCorrectionEditor({
     </Dialog>
   );
 }
+// Request-body measurement keys and the form fields that edit them.
+const BODY_FIELDS: Record<string, string> = {
+  tubeOuterDiameterMm: 'tube',
+  radialDepthMm: 'depth',
+  explicitLengthMm: 'length',
+  widthMm: 'width',
+  lengthMm: 'length',
+};
 function CompletionCorrectionForm({
   context,
   close,
@@ -123,6 +131,20 @@ function CompletionCorrectionForm({
       endpoint={`/allocations/${context.record.id}/completion-corrections`}
       schema={completionCorrectionSchema}
       close={close}
+      // The body lists only the selected items, so their indexes are mapped
+      // back to the stock item each one came from.
+      fieldName={(path) => {
+        const [, item, part, piece, key] =
+          path.match(
+            /^items\.(\d+)\.(outcome|retainedPieces\.(\d+))\.(\w+)$/,
+          ) ?? [];
+        const row = rows.filter((r) => r.selected)[Number(item)];
+        const field = key && (BODY_FIELDS[key] ?? key);
+        if (!row || !field) return null;
+        return part === 'outcome'
+          ? `${row.id}.${field}`
+          : `${row.id}.pieces.${piece}.${field}`;
+      }}
       makeBody={() => ({
         expectedRevision: original.record.revision,
         stockVersions: original.eligibility.map((e) => ({
@@ -185,181 +207,196 @@ function CompletionCorrectionForm({
           })),
       })}
     >
-      <div className="stack">
-        {rows.map((row, index) => {
-          const stock = original.stockItems.find((s) => s.id === row.id)!;
-          const familyIds = [
-            row.id,
-            ...original.effects
-              .filter(
-                (e) =>
-                  !e.before &&
-                  e.sourceStockItemId === row.id &&
-                  !e.after.voidedAt,
-              )
-              .map((e) => e.stockItemId),
-          ];
-          const eligibility = original.eligibility.filter((e) =>
-            familyIds.includes(e.stockItemId),
-          );
-          return (
-            <section className="panel" key={row.id}>
-              <div className="panel-body">
-                <label className="correction-check">
-                  <input
-                    type="checkbox"
-                    checked={row.selected}
-                    disabled={eligibility.some((e) => e.blockers.length > 0)}
-                    onChange={(e) =>
-                      update(index, { selected: e.target.checked })
-                    }
-                  />
-                  Correct {stock?.fabricColorCode} · {shortId(row.id)}
-                </label>
-                <Blockers items={eligibility} />
-                {row.selected && (
-                  <div className="stack">
-                    <ChoiceField
-                      label="Corrected outcome"
-                      value={row.outcome}
-                      onChange={(outcome) => update(index, { outcome })}
-                      options={[
-                        { value: 'consumed', label: 'Consumed' },
-                        {
-                          value: stock.isRemnant
-                            ? 'returned-remnant'
-                            : 'returned-roll',
-                          label: stock.isRemnant
-                            ? 'Returned remnant'
-                            : 'Returned roll',
-                        },
-                      ]}
-                    />
-                    {!stock.isRemnant && (
-                      <TextField
-                        label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
-                        help={measurementHelp.tubeDiameter}
-                        value={row.tube}
-                        onChange={(tube) => update(index, { tube })}
-                        type="number"
-                      />
-                    )}
-                    {row.outcome === 'returned-roll' && (
-                      <TextField
-                        label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
-                        help={measurementHelp.radialDepth}
-                        value={row.depth}
-                        onChange={(depth) => update(index, { depth })}
-                        type="number"
-                        required
-                      />
-                    )}
-                    {row.outcome === 'returned-remnant' && (
-                      <>
-                        <TextField
-                          label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                          value={row.width}
-                          onChange={(width) => update(index, { width })}
-                          type="number"
-                          required
-                        />
-                        <TextField
-                          label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
-                          value={row.length}
-                          onChange={(length) => update(index, { length })}
-                          type="number"
-                          required
-                        />
-                      </>
-                    )}
-                    {row.outcome !== 'consumed' && (
-                      <Lookup
-                        label="Returned location"
-                        value={row.locationId}
-                        onChange={(locationId) => update(index, { locationId })}
-                        queryKey={locationsKey}
-                        load={lookupLocations}
-                      />
-                    )}
-                    <h3>Retained pieces</h3>
-                    <p className="muted">
-                      Removing an existing piece voids its record. Keep pieces
-                      that were physically retained.
-                    </p>
-                    {row.pieces.map((piece, pi) => {
-                      const change = (patch: Partial<typeof piece>) =>
-                        update(index, {
-                          pieces: row.pieces.map((p, i) =>
-                            i === pi ? { ...p, ...patch } : p,
-                          ),
-                        });
-                      return (
-                        <div className="stack" key={piece.key}>
-                          <strong>
-                            {piece.id ? shortId(piece.id) : 'New piece'}
-                          </strong>
-                          <TextField
-                            label={`Piece width (${fieldSuffix(units, 'rollWidth')})`}
-                            value={piece.width}
-                            onChange={(width) => change({ width })}
-                            type="number"
-                            required
-                          />
-                          <TextField
-                            label={`Piece length (${fieldSuffix(units, 'rollLength')})`}
-                            value={piece.length}
-                            onChange={(length) => change({ length })}
-                            type="number"
-                            required
-                          />
-                          <Lookup
-                            label="Piece location"
-                            value={piece.locationId}
-                            onChange={(locationId) => change({ locationId })}
-                            queryKey={locationsKey}
-                            load={lookupLocations}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                              update(index, {
-                                pieces: row.pieces.filter((_, i) => i !== pi),
-                              })
-                            }
-                          >
-                            {piece.id ? 'Void piece' : 'Remove new piece'}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        update(index, {
-                          pieces: [
-                            ...row.pieces,
-                            {
-                              key: crypto.randomUUID(),
-                              id: '',
-                              width: '',
-                              length: '',
-                              locationId: row.locationId,
-                            },
-                          ],
-                        })
+      {(errors) => (
+        <div className="stack">
+          {rows.map((row, index) => {
+            const stock = original.stockItems.find((s) => s.id === row.id)!;
+            const familyIds = [
+              row.id,
+              ...original.effects
+                .filter(
+                  (e) =>
+                    !e.before &&
+                    e.sourceStockItemId === row.id &&
+                    !e.after.voidedAt,
+                )
+                .map((e) => e.stockItemId),
+            ];
+            const eligibility = original.eligibility.filter((e) =>
+              familyIds.includes(e.stockItemId),
+            );
+            return (
+              <section className="panel" key={row.id}>
+                <div className="panel-body">
+                  <label className="correction-check">
+                    <input
+                      type="checkbox"
+                      checked={row.selected}
+                      disabled={eligibility.some((e) => e.blockers.length > 0)}
+                      onChange={(e) =>
+                        update(index, { selected: e.target.checked })
                       }
-                    >
-                      Add missing piece
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+                    />
+                    Correct {stock?.fabricColorCode} · {shortId(row.id)}
+                  </label>
+                  <Blockers items={eligibility} />
+                  {row.selected && (
+                    <div className="stack">
+                      <ChoiceField
+                        label="Corrected outcome"
+                        value={row.outcome}
+                        onChange={(outcome) => update(index, { outcome })}
+                        error={errors[`${row.id}.outcome`]}
+                        options={[
+                          { value: 'consumed', label: 'Consumed' },
+                          {
+                            value: stock.isRemnant
+                              ? 'returned-remnant'
+                              : 'returned-roll',
+                            label: stock.isRemnant
+                              ? 'Returned remnant'
+                              : 'Returned roll',
+                          },
+                        ]}
+                      />
+                      {!stock.isRemnant && (
+                        <TextField
+                          label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                          help={measurementHelp.tubeDiameter}
+                          value={row.tube}
+                          onChange={(tube) => update(index, { tube })}
+                          error={errors[`${row.id}.tube`]}
+                          type="number"
+                        />
+                      )}
+                      {row.outcome === 'returned-roll' && (
+                        <TextField
+                          label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                          help={measurementHelp.radialDepth}
+                          value={row.depth}
+                          onChange={(depth) => update(index, { depth })}
+                          error={errors[`${row.id}.depth`]}
+                          type="number"
+                          required
+                        />
+                      )}
+                      {row.outcome === 'returned-remnant' && (
+                        <>
+                          <TextField
+                            label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                            value={row.width}
+                            onChange={(width) => update(index, { width })}
+                            error={errors[`${row.id}.width`]}
+                            type="number"
+                            required
+                          />
+                          <TextField
+                            label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
+                            value={row.length}
+                            onChange={(length) => update(index, { length })}
+                            error={errors[`${row.id}.length`]}
+                            type="number"
+                            required
+                          />
+                        </>
+                      )}
+                      {row.outcome !== 'consumed' && (
+                        <Lookup
+                          label="Returned location"
+                          value={row.locationId}
+                          onChange={(locationId) =>
+                            update(index, { locationId })
+                          }
+                          error={errors[`${row.id}.locationId`]}
+                          queryKey={locationsKey}
+                          load={lookupLocations}
+                        />
+                      )}
+                      <h3>Retained pieces</h3>
+                      <p className="muted">
+                        Removing an existing piece voids its record. Keep pieces
+                        that were physically retained.
+                      </p>
+                      {row.pieces.map((piece, pi) => {
+                        const change = (patch: Partial<typeof piece>) =>
+                          update(index, {
+                            pieces: row.pieces.map((p, i) =>
+                              i === pi ? { ...p, ...patch } : p,
+                            ),
+                          });
+                        return (
+                          <div className="stack" key={piece.key}>
+                            <strong>
+                              {piece.id ? shortId(piece.id) : 'New piece'}
+                            </strong>
+                            <TextField
+                              label={`Piece width (${fieldSuffix(units, 'rollWidth')})`}
+                              value={piece.width}
+                              onChange={(width) => change({ width })}
+                              error={errors[`${row.id}.pieces.${pi}.width`]}
+                              type="number"
+                              required
+                            />
+                            <TextField
+                              label={`Piece length (${fieldSuffix(units, 'rollLength')})`}
+                              value={piece.length}
+                              onChange={(length) => change({ length })}
+                              error={errors[`${row.id}.pieces.${pi}.length`]}
+                              type="number"
+                              required
+                            />
+                            <Lookup
+                              label="Piece location"
+                              value={piece.locationId}
+                              onChange={(locationId) => change({ locationId })}
+                              error={
+                                errors[`${row.id}.pieces.${pi}.locationId`]
+                              }
+                              queryKey={locationsKey}
+                              load={lookupLocations}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                update(index, {
+                                  pieces: row.pieces.filter((_, i) => i !== pi),
+                                })
+                              }
+                            >
+                              {piece.id ? 'Void piece' : 'Remove new piece'}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          update(index, {
+                            pieces: [
+                              ...row.pieces,
+                              {
+                                key: crypto.randomUUID(),
+                                id: '',
+                                width: '',
+                                length: '',
+                                locationId: row.locationId,
+                              },
+                            ],
+                          })
+                        }
+                      >
+                        Add missing piece
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </CorrectionSubmit>
   );
 }

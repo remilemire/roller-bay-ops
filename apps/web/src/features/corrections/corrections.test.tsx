@@ -191,3 +191,20 @@ it('shows audit actor, reason and before/after measurements without private prof
   expect(screen.getByRole('heading', { name: 'Before' })).toBeVisible();
   expect(screen.getByRole('heading', { name: 'After' })).toBeVisible();
 });
+
+it('shows a rejected correction value beside its field instead of listing it', async () => {
+  const actor = userEvent.setup();
+  render(<StockCorrectionEditor item={stock} close={vi.fn()} />, {
+    wrapper: wrapper(),
+  });
+  const width = screen.getByLabelText('Width (in)');
+  await actor.clear(width);
+  await actor.type(width, '0');
+  await actor.type(screen.getByLabelText('Reason for correction'), 'Typo');
+  await actor.click(screen.getByRole('button', { name: 'Review changes' }));
+  expect(width).toBeInvalid();
+  expect(width).toHaveAccessibleDescription('Too small.');
+  const notice = screen.getByRole('alert');
+  expect(notice).toHaveTextContent('Check the correction fields.');
+  expect(notice).not.toHaveTextContent(/width/i);
+});

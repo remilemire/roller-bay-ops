@@ -15,17 +15,30 @@ import { CorrectionReview } from './correction-review';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { TextField } from '@/components/ui/field';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { fieldIssues } from '@/lib/field-issues';
+
+/** Messages for the fields a correction form can place, by its own names. */
+export type CorrectionFieldErrors = Partial<Record<string, string>>;
 export function CorrectionSubmit({
   endpoint,
   schema,
   makeBody,
+  fieldName,
   children,
   close,
 }: {
   endpoint: string;
   schema: z.ZodType;
   makeBody: () => object;
-  children: ReactNode;
+  /**
+   * Maps a request-body issue path to the form's own field name. The matching
+   * messages reach `children` as a function, which shows them beside those
+   * fields; they describe the last review or save, not edits made since.
+   */
+  fieldName?: (path: string) => string | null;
+  children: ReactNode | ((errors: CorrectionFieldErrors) => ReactNode);
   close: () => void;
 }) {
   const user = useCurrentUser();
@@ -38,6 +51,10 @@ export function CorrectionSubmit({
   );
   const client = useQueryClient();
   useUnsavedChanges(true);
+  const placed = (issue: ErrorIssue) => {
+    const path = issuePath(issue);
+    return path === 'reason' ? path : (fieldName?.(path) ?? null);
+  };
   const mutation = useMutation({
     mutationFn: async (body: unknown) => {
       const key = requestKey(scope, body);
@@ -70,6 +87,8 @@ export function CorrectionSubmit({
       close();
     },
   });
+  const shown = error ?? mutation.error;
+  const errors: CorrectionFieldErrors = fieldIssues(shown, placed);
   return (
     <form
       onSubmit={(e) => {
@@ -104,18 +123,19 @@ export function CorrectionSubmit({
         {/* Keep the reason at the same spacing as the fields above it; a
             class on the fieldset would override its hidden attribute. */}
         <div className="stack">
-          {children}
+          {typeof children === 'function' ? children(errors) : children}
           <TextField
             label="Reason for correction"
             value={reason}
             onChange={setReason}
             required
             maxLength={1000}
+            error={errors.reason}
           />
         </div>
       </fieldset>
-      {(error || mutation.error) && (
-        <ErrorNotice error={error ?? mutation.error} />
+      {Boolean(shown) && (
+        <ErrorNotice error={shown} inline={(issue) => placed(issue) !== null} />
       )}
       {recovery.success && review === null && (
         <div className="notice">

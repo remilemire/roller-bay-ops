@@ -20,6 +20,17 @@ import {
   measurementHelp,
 } from '@/lib/measurements';
 import { CorrectionSubmit } from '@/features/corrections/correction-submit';
+// Request-body change keys and the form fields that edit them.
+const CHANGE_FIELDS: Record<string, string> = {
+  widthMm: 'width',
+  initialLengthMm: 'length',
+  explicitLengthMm: 'remaining',
+  radialDepthMm: 'depth',
+  tubeOuterDiameterMm: 'tube',
+  isUsed: 'used',
+  consumedAt: 'consumed',
+  locationId: 'locationId',
+};
 export function StockCorrectionEditor({
   item: initialItem,
   close,
@@ -68,6 +79,9 @@ export function StockCorrectionEditor({
         endpoint={`/stock-items/${item.id}/${voiding ? 'void' : 'corrections'}`}
         schema={voiding ? stockVoidSchema : stockCorrectionSchema}
         close={close}
+        fieldName={(path) =>
+          CHANGE_FIELDS[path.replace(/^changes\./, '')] ?? null
+        }
         makeBody={() => ({
           expectedRevision: original.revision,
           ...(!voiding
@@ -97,75 +111,85 @@ export function StockCorrectionEditor({
             : {}),
         })}
       >
-        {!voiding && (
-          <div className="stack">
-            <TextField
-              label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-              value={width}
-              onChange={setWidth}
-              type="number"
-              required
-            />
-            <TextField
-              label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
-              value={length}
-              onChange={setLength}
-              type="number"
-              required
-            />
-            {item.isRemnant ? (
+        {(errors) =>
+          !voiding && (
+            <div className="stack">
               <TextField
-                label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
-                value={remaining}
-                onChange={setRemaining}
+                label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                value={width}
+                onChange={setWidth}
+                error={errors.width}
                 type="number"
                 required
               />
-            ) : (
-              <>
+              <TextField
+                label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
+                value={length}
+                onChange={setLength}
+                error={errors.length}
+                type="number"
+                required
+              />
+              {item.isRemnant ? (
                 <TextField
-                  label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
-                  help={measurementHelp.radialDepth}
-                  value={depth}
-                  onChange={setDepth}
+                  label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
+                  value={remaining}
+                  onChange={setRemaining}
+                  error={errors.remaining}
                   type="number"
+                  required
                 />
-                <TextField
-                  label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
-                  help={measurementHelp.tubeDiameter}
-                  value={tube}
-                  onChange={setTube}
-                  type="number"
-                />
-              </>
-            )}
-            <ChoiceField
-              label="Previously used"
-              value={used}
-              onChange={setUsed}
-              options={[
-                { value: 'no', label: 'No' },
-                { value: 'yes', label: 'Yes' },
-              ]}
-            />
-            <ChoiceField
-              label="Consumed"
-              value={consumed}
-              onChange={setConsumed}
-              options={[
-                { value: 'no', label: 'No' },
-                { value: 'yes', label: 'Yes' },
-              ]}
-            />
-            <Lookup
-              label="Location"
-              value={locationId}
-              onChange={setLocation}
-              queryKey={locationsKey}
-              load={lookupLocations}
-            />
-          </div>
-        )}
+              ) : (
+                <>
+                  <TextField
+                    label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                    help={measurementHelp.radialDepth}
+                    value={depth}
+                    onChange={setDepth}
+                    error={errors.depth}
+                    type="number"
+                  />
+                  <TextField
+                    label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                    help={measurementHelp.tubeDiameter}
+                    value={tube}
+                    onChange={setTube}
+                    error={errors.tube}
+                    type="number"
+                  />
+                </>
+              )}
+              <ChoiceField
+                label="Previously used"
+                value={used}
+                onChange={setUsed}
+                error={errors.used}
+                options={[
+                  { value: 'no', label: 'No' },
+                  { value: 'yes', label: 'Yes' },
+                ]}
+              />
+              <ChoiceField
+                label="Consumed"
+                value={consumed}
+                onChange={setConsumed}
+                error={errors.consumed}
+                options={[
+                  { value: 'no', label: 'No' },
+                  { value: 'yes', label: 'Yes' },
+                ]}
+              />
+              <Lookup
+                label="Location"
+                value={locationId}
+                onChange={setLocation}
+                error={errors.locationId}
+                queryKey={locationsKey}
+                load={lookupLocations}
+              />
+            </div>
+          )
+        }
       </CorrectionSubmit>
     </Dialog>
   );

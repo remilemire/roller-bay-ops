@@ -61,6 +61,14 @@ export function ReceiptCorrectionEditor({
     </Dialog>
   );
 }
+// Request-body line keys and the form fields that edit them.
+const LINE_FIELDS: Record<string, string> = {
+  fabricColorId: 'fabricColorId',
+  widthMm: 'width',
+  initialLengthMm: 'length',
+  quantity: 'quantity',
+  locationId: 'locationId',
+};
 function ReceiptCorrectionForm({
   context,
   close,
@@ -94,6 +102,18 @@ function ReceiptCorrectionForm({
       endpoint={`/stock-receipts/${context.record.id}/corrections`}
       schema={receiptCorrectionSchema}
       close={close}
+      // Operations list only the changed lines, so their indexes are mapped
+      // back to the line each one came from.
+      fieldName={(path) => {
+        if (path === 'purchaseOrderNumber') return path;
+        const [, operation, key] =
+          path.match(/^operations\.(\d+)\.data\.(\w+)$/) ?? [];
+        const line = lines.filter((l) => l.action !== 'keep')[
+          Number(operation)
+        ];
+        const field = key && LINE_FIELDS[key];
+        return line && field ? `${line.key}.${field}` : null;
+      }}
       makeBody={() => ({
         expectedRevision: original.record.revision,
         // Omit an unchanged number so older receipts that predate the
@@ -125,161 +145,178 @@ function ReceiptCorrectionForm({
           ),
       })}
     >
-      <TextField
-        label="Purchase order number"
-        value={number}
-        onChange={setNumber}
-        required
-        maxLength={5}
-        inputMode="numeric"
-      />
-      {!original.baselineAvailable && (
-        <p className="notice">
-          This older receipt can have its purchase-order reference corrected.
-          Adjust current stock separately for other mistakes.
-        </p>
-      )}
-      {original.baselineAvailable && (
-        <div className="stack">
-          {lines.map((line, index) => {
-            const record = original.record.items.find(
-              (i) => i.id === line.lineId,
-            );
-            const eligibility = original.eligibility.filter((e) =>
-              record?.stockItemIds.includes(e.stockItemId),
-            );
-            return (
-              <section className="panel" key={line.key}>
-                <div className="panel-body">
-                  <h3>
-                    {record?.stockItems[0]?.fabricColorCode ??
-                      'New receipt line'}
-                  </h3>
-                  {line.lineId && (
-                    <ChoiceField
-                      label="Action"
-                      value={line.action}
-                      onChange={(action) => update(index, { action })}
-                      options={[
-                        { value: 'keep', label: 'Keep unchanged' },
-                        { value: 'update', label: 'Correct line' },
-                        { value: 'remove', label: 'Void line' },
-                      ]}
-                    />
-                  )}
-                  {line.action !== 'keep' && <Blockers items={eligibility} />}
-                  {['update', 'add'].includes(line.action) && (
-                    <div className="stack">
-                      <Lookup
-                        label="Fabric"
-                        value={line.fabricColorId}
-                        onChange={(fabricColorId) =>
-                          update(index, { fabricColorId })
-                        }
-                        queryKey={catalogKey}
-                        load={lookupColors}
-                      />
-                      <TextField
-                        label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                        value={line.width}
-                        onChange={(width) => update(index, { width })}
-                        type="number"
-                        required
-                      />
-                      <TextField
-                        label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
-                        value={line.length}
-                        onChange={(length) => update(index, { length })}
-                        type="number"
-                        required
-                      />
-                      <TextField
-                        label="Quantity"
-                        value={line.quantity}
-                        onChange={(quantity) => update(index, { quantity })}
-                        type="number"
-                        required
-                      />
-                      <Lookup
-                        label="Original destination"
-                        value={line.locationId}
-                        onChange={(locationId) => update(index, { locationId })}
-                        queryKey={locationsKey}
-                        load={lookupLocations}
-                      />
-                      {record && Number(line.quantity) < record.quantity && (
-                        <fieldset>
-                          <legend>Select rolls entered by mistake</legend>
-                          {record.stockItems
-                            .filter((s) => !s.voidedAt)
-                            .map((stock) => (
-                              <label
-                                className="correction-check"
-                                key={stock.id}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={line.removeIds.includes(stock.id)}
-                                  disabled={
-                                    !!eligibility.find(
-                                      (e) => e.stockItemId === stock.id,
-                                    )?.blockers.length
-                                  }
-                                  onChange={(e) =>
-                                    update(index, {
-                                      removeIds: e.target.checked
-                                        ? [...line.removeIds, stock.id]
-                                        : line.removeIds.filter(
-                                            (id) => id !== stock.id,
-                                          ),
-                                    })
-                                  }
-                                />
-                                {shortId(stock.id)}
-                              </label>
-                            ))}
-                        </fieldset>
+      {(errors) => (
+        <>
+          <TextField
+            label="Purchase order number"
+            value={number}
+            onChange={setNumber}
+            required
+            maxLength={5}
+            inputMode="numeric"
+            error={errors.purchaseOrderNumber}
+          />
+          {!original.baselineAvailable && (
+            <p className="notice">
+              This older receipt can have its purchase-order reference
+              corrected. Adjust current stock separately for other mistakes.
+            </p>
+          )}
+          {original.baselineAvailable && (
+            <div className="stack">
+              {lines.map((line, index) => {
+                const record = original.record.items.find(
+                  (i) => i.id === line.lineId,
+                );
+                const eligibility = original.eligibility.filter((e) =>
+                  record?.stockItemIds.includes(e.stockItemId),
+                );
+                return (
+                  <section className="panel" key={line.key}>
+                    <div className="panel-body">
+                      <h3>
+                        {record?.stockItems[0]?.fabricColorCode ??
+                          'New receipt line'}
+                      </h3>
+                      {line.lineId && (
+                        <ChoiceField
+                          label="Action"
+                          value={line.action}
+                          onChange={(action) => update(index, { action })}
+                          options={[
+                            { value: 'keep', label: 'Keep unchanged' },
+                            { value: 'update', label: 'Correct line' },
+                            { value: 'remove', label: 'Void line' },
+                          ]}
+                        />
+                      )}
+                      {line.action !== 'keep' && (
+                        <Blockers items={eligibility} />
+                      )}
+                      {['update', 'add'].includes(line.action) && (
+                        <div className="stack">
+                          <Lookup
+                            label="Fabric"
+                            value={line.fabricColorId}
+                            onChange={(fabricColorId) =>
+                              update(index, { fabricColorId })
+                            }
+                            error={errors[`${line.key}.fabricColorId`]}
+                            queryKey={catalogKey}
+                            load={lookupColors}
+                          />
+                          <TextField
+                            label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                            value={line.width}
+                            onChange={(width) => update(index, { width })}
+                            error={errors[`${line.key}.width`]}
+                            type="number"
+                            required
+                          />
+                          <TextField
+                            label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
+                            value={line.length}
+                            onChange={(length) => update(index, { length })}
+                            error={errors[`${line.key}.length`]}
+                            type="number"
+                            required
+                          />
+                          <TextField
+                            label="Quantity"
+                            value={line.quantity}
+                            onChange={(quantity) => update(index, { quantity })}
+                            error={errors[`${line.key}.quantity`]}
+                            type="number"
+                            required
+                          />
+                          <Lookup
+                            label="Original destination"
+                            value={line.locationId}
+                            onChange={(locationId) =>
+                              update(index, { locationId })
+                            }
+                            error={errors[`${line.key}.locationId`]}
+                            queryKey={locationsKey}
+                            load={lookupLocations}
+                          />
+                          {record &&
+                            Number(line.quantity) < record.quantity && (
+                              <fieldset>
+                                <legend>Select rolls entered by mistake</legend>
+                                {record.stockItems
+                                  .filter((s) => !s.voidedAt)
+                                  .map((stock) => (
+                                    <label
+                                      className="correction-check"
+                                      key={stock.id}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={line.removeIds.includes(
+                                          stock.id,
+                                        )}
+                                        disabled={
+                                          !!eligibility.find(
+                                            (e) => e.stockItemId === stock.id,
+                                          )?.blockers.length
+                                        }
+                                        onChange={(e) =>
+                                          update(index, {
+                                            removeIds: e.target.checked
+                                              ? [...line.removeIds, stock.id]
+                                              : line.removeIds.filter(
+                                                  (id) => id !== stock.id,
+                                                ),
+                                          })
+                                        }
+                                      />
+                                      {shortId(stock.id)}
+                                    </label>
+                                  ))}
+                              </fieldset>
+                            )}
+                        </div>
+                      )}
+                      {!line.lineId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            setLines(lines.filter((_, i) => i !== index))
+                          }
+                        >
+                          Remove new line
+                        </Button>
                       )}
                     </div>
-                  )}
-                  {!line.lineId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        setLines(lines.filter((_, i) => i !== index))
-                      }
-                    >
-                      Remove new line
-                    </Button>
-                  )}
-                </div>
-              </section>
-            );
-          })}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setLines([
-                ...lines,
-                {
-                  key: crypto.randomUUID(),
-                  lineId: '',
-                  action: 'add',
-                  fabricColorId: '',
-                  width: '',
-                  length: '',
-                  quantity: '1',
-                  locationId: '',
-                  removeIds: [],
-                },
-              ])
-            }
-          >
-            Add missing line
-          </Button>
-        </div>
+                  </section>
+                );
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setLines([
+                    ...lines,
+                    {
+                      key: crypto.randomUUID(),
+                      lineId: '',
+                      action: 'add',
+                      fabricColorId: '',
+                      width: '',
+                      length: '',
+                      quantity: '1',
+                      locationId: '',
+                      removeIds: [],
+                    },
+                  ])
+                }
+              >
+                Add missing line
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </CorrectionSubmit>
   );
