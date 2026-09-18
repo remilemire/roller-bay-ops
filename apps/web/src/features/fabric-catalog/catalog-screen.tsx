@@ -34,6 +34,9 @@ import styles from '@/components/ui/tree.module.css';
 import { useListParams } from '@/lib/use-list-params';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import {
   fieldInput,
   fieldLabel,
@@ -347,6 +350,17 @@ function CatalogChildren({
     </>
   );
 }
+// Request-body keys, which differ by record kind, and the form fields that
+// edit them.
+const BODY_FIELDS = {
+  name: 'name',
+  code: 'name',
+  materialId: 'parentId',
+  manufacturerId: 'parentId',
+  thicknessMm: 'thickness',
+} as const;
+const fieldName = (issue: ErrorIssue) =>
+  BODY_FIELDS[issuePath(issue) as keyof typeof BODY_FIELDS] ?? null;
 function CatalogEditor({
   kind,
   row,
@@ -381,6 +395,7 @@ function CatalogEditor({
         parentId: data.parentId,
         thicknessMm: fieldValue(units, 'thickness', data.thickness),
       }),
+    onError: (error) => showFieldIssues(form, error, fieldName),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: catalogKey }),
@@ -390,6 +405,11 @@ function CatalogEditor({
     },
   });
   const parentKind = kind === 'colors' ? 'materials' : 'manufacturers';
+  const { errors } = form.formState;
+  const set = (name: keyof z.infer<typeof formSchema>, value: string) => {
+    form.setValue(name, value);
+    form.clearErrors(name);
+  };
   return (
     <Dialog
       open
@@ -403,7 +423,8 @@ function CatalogEditor({
           <TextField
             label={kind === 'colors' ? 'Color code' : 'Name'}
             value={values.name}
-            onChange={(v) => form.setValue('name', v)}
+            onChange={(v) => set('name', v)}
+            error={errors.name?.message}
             required
             maxLength={kind === 'colors' ? 10 : 120}
           />
@@ -420,7 +441,8 @@ function CatalogEditor({
             <Lookup
               label={kind === 'colors' ? 'Material' : 'Manufacturer'}
               value={values.parentId}
-              onChange={(v) => form.setValue('parentId', v)}
+              onChange={(v) => set('parentId', v)}
+              error={errors.parentId?.message}
               selectedLabel={row.parent}
               queryKey={[...catalogKey, parentKind]}
               load={async (search, page, signal) => {
@@ -442,18 +464,19 @@ function CatalogEditor({
               label={`Thickness (${fieldSuffix(units, 'thickness')})`}
               type="number"
               value={values.thickness}
-              onChange={(v) => form.setValue('thickness', v)}
+              onChange={(v) => set('thickness', v)}
+              error={errors.thickness?.message}
               required
               hint="Stored to the nearest 0.001 mm."
             />
           )}
         </div>
-        {form.formState.errors.name && (
-          <p className="notice notice-error" role="alert">
-            {form.formState.errors.name.message}
-          </p>
+        {mutation.error && (
+          <ErrorNotice
+            error={mutation.error}
+            inline={(issue) => fieldName(issue) !== null}
+          />
         )}
-        {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
             type="button"

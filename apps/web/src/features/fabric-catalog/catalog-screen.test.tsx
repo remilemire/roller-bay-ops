@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CatalogScreen } from './catalog-screen';
 import { listCatalog, saveCatalog } from './catalog.api';
+import { ApiError } from '@/lib/api';
 
 const state = vi.hoisted(() => ({ canManage: true }));
 vi.mock('next/navigation', () => ({
@@ -133,6 +134,36 @@ it('creates a color using the material where Add color was clicked', async () =>
     }),
   );
 });
+it('shows rejected values beside the color code and thickness fields', async () => {
+  vi.mocked(saveCatalog).mockRejectedValue(
+    new ApiError(400, 'Validation failed', undefined, [
+      { path: ['code'], message: 'Use letters, digits, and hyphens.' },
+      { path: 'thicknessMm', message: 'Too small: expected number to be >0' },
+    ]),
+  );
+  showCatalog();
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Add color to Acme / Blackout',
+    }),
+  );
+  const dialog = within(screen.getByRole('dialog'));
+  await user.type(dialog.getByLabelText('Color code'), 'CD 34');
+  await user.type(dialog.getByLabelText(/^Thickness \(mm\)/), '0');
+  await user.click(dialog.getByRole('button', { name: 'Save record' }));
+  const notice = await dialog.findByRole('alert');
+  expect(notice).toHaveTextContent('Validation failed');
+  expect(notice).not.toHaveTextContent(/code|thickness/i);
+  expect(dialog.getByLabelText('Color code')).toHaveAccessibleDescription(
+    'Use letters, digits, and hyphens.',
+  );
+  const thickness = dialog.getByLabelText(/^Thickness \(mm\)/);
+  expect(thickness).toHaveAccessibleDescription('Too small.');
+  await user.type(thickness, '.5');
+  expect(thickness).not.toBeInvalid();
+});
+
 it('allows employees to browse the hierarchy without management controls', async () => {
   state.canManage = false;
   showCatalog();
