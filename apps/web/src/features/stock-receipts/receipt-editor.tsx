@@ -179,7 +179,8 @@ export function ReceiptEditor({
                 onChange={(v) =>
                   form.setValue('purchaseOrderNumber', v, { shouldDirty: true })
                 }
-                maxLength={50}
+                maxLength={5}
+                inputMode="numeric"
               />
             </div>
           </section>

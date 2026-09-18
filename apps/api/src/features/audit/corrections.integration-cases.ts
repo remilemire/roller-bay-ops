@@ -98,7 +98,7 @@ export async function testCorrections(
       stockReceiptDetailSchema.parse(
         (
           await post('/stock-receipts', {
-            purchaseOrderNumber: 'COR-' + suffix,
+            purchaseOrderNumber: '30001',
             items: [{ ...line, quantity }],
           }).expect(201)
         ).body,
@@ -124,7 +124,7 @@ export async function testCorrections(
     const plan = (stockId: string) => {
       const requirementId = randomUUID();
       return {
-        orderNumber: 'CUT-' + randomUUID().slice(0, 8),
+        orderNumber: '300001',
         requirements: [
           {
             id: requirementId,
@@ -327,7 +327,7 @@ export async function testCorrections(
         const r = stockReceiptDetailSchema.parse(
           (
             await post('/stock-receipts', {
-              purchaseOrderNumber: 'MIXED',
+              purchaseOrderNumber: '30002',
               items: [line, line],
             }).expect(201)
           ).body,
@@ -394,7 +394,7 @@ export async function testCorrections(
         await post(`/stock-receipts/${r.id}/corrections`, {
           reason: 'Paperwork typo',
           expectedRevision: r.revision,
-          purchaseOrderNumber: 'FIXED',
+          purchaseOrderNumber: '30003',
         }).expect(200);
         await post(`/stock-receipts/${r.id}/corrections`, {
           reason: 'Old stock correction',
@@ -716,7 +716,7 @@ export async function testCorrections(
         const r = stockReceiptDetailSchema.parse(
           (
             await post('/stock-receipts', {
-              purchaseOrderNumber: 'ATOMIC',
+              purchaseOrderNumber: '30004',
               items: [line, line],
             }).expect(201)
           ).body,

@@ -142,13 +142,14 @@ test('receipt drafts preserve partial imperial input and unsaved edits on confli
 }) => {
   const state = await mockApi(page);
   await page.goto('/stock-receipts/new');
-  await page.getByLabel('Purchase-order number').fill('PO-PARTIAL');
+  await page.getByLabel('Purchase-order number').fill('260');
   await page.getByLabel('Width (in)', { exact: true }).fill('54');
   await page.getByRole('button', { name: 'Add line', exact: true }).click();
   await expect(page.getByLabel('Color', { exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/stock-receipts/${ids.receipt}$`));
   await expect(page.getByText(/REVISION 1/)).toBeVisible();
+  expect(state.draftRequests[0]!.body.data.purchaseOrderNumber).toBe('260');
   expect(state.draftRequests[0]!.body.data.items[0]).toMatchObject({
     widthMm: 1371.6,
     initialLengthMm: null,
@@ -156,14 +157,12 @@ test('receipt drafts preserve partial imperial input and unsaved edits on confli
   });
   expect(state.draftRequests[0]!.key).toMatch(/^[\da-f-]{36}$/);
   state.receiptConflict = true;
-  await page.getByLabel('Purchase-order number').fill('MY-UNSAVED-CHANGE');
+  await page.getByLabel('Purchase-order number').fill('26049');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Receipt changed' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Purchase-order number')).toHaveValue(
-    'MY-UNSAVED-CHANGE',
-  );
+  await expect(page.getByLabel('Purchase-order number')).toHaveValue('26049');
 });
 test('receipt submission retries the same saved revision after an uncertain response', async ({
   page,
@@ -184,9 +183,7 @@ test('receipt submission retries the same saved revision after an uncertain resp
   await dialog
     .getByRole('button', { name: 'Submit receipt', exact: true })
     .click();
-  await expect(
-    page.getByRole('heading', { name: 'PO-2026-048' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '26048' })).toBeVisible();
   expect(state.submitAttempts).toBe(2);
   expect(state.stockCreations).toBe(1);
 });
@@ -274,7 +271,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
 }, testInfo) => {
   const state = await mockApi(page);
   await page.goto('/allocations/new');
-  await page.getByLabel('Order number', { exact: true }).fill('RB-PLANNED');
+  await page.getByLabel('Order number', { exact: true }).fill('104877');
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page
@@ -326,7 +323,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     .getByRole('button', { name: 'Confirm allocation', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'RB-PLANNED', exact: true }),
+    page.getByRole('heading', { name: '104877', exact: true }),
   ).toBeVisible();
   expect(state.allocationRequests.at(-1)).toEqual({
     path: `/allocations/${ids.allocation}/submit`,

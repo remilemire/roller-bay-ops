@@ -54,10 +54,10 @@ it('keeps the active plan revision and edited values when a background refresh b
     screen.queryByLabelText(/Drop allowance|Edge trim|Minimum reusable/),
   ).not.toBeInTheDocument();
   await user.clear(screen.getByLabelText('Order number'));
-  await user.type(screen.getByLabelText('Order number'), 'LOCAL-PLAN');
+  await user.type(screen.getByLabelText('Order number'), '104802');
   queries.setQueryData([...allocationKey, allocation.id], {
     ...allocation,
-    orderNumber: 'REMOTE-PLAN',
+    orderNumber: '104803',
     revision: 2,
   });
   await user.click(screen.getByRole('button', { name: 'Update reservations' }));
@@ -66,14 +66,14 @@ it('keeps the active plan revision and edited values when a background refresh b
       allocation.id,
       expect.objectContaining({
         expectedRevision: 1,
-        orderNumber: 'LOCAL-PLAN',
+        orderNumber: '104802',
       }),
     ),
   );
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Allocation changed',
   );
-  expect(screen.getByLabelText('Order number')).toHaveValue('LOCAL-PLAN');
+  expect(screen.getByLabelText('Order number')).toHaveValue('104802');
 });
 
 it('offers generating or hand-building a plan and reports planning in one place above the actions', async () => {

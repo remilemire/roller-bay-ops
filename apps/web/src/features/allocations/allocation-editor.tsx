@@ -250,7 +250,8 @@ export function AllocationEditor({
                   onChange={(v) =>
                     form.setValue('orderNumber', v, { shouldDirty: true })
                   }
-                  maxLength={50}
+                  maxLength={6}
+                  inputMode="numeric"
                 />
               </div>
             </section>

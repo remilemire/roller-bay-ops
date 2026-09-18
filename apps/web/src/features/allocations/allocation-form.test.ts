@@ -64,7 +64,7 @@ it('lets blind drops use their own unit and drops the stored cut length from the
   };
   const data = allocationFromForm(
     {
-      orderNumber: 'RB-1',
+      orderNumber: '104801',
       requirements: [{ ...r, width: '22', length: '72', quantity: '1' }],
       cuts: [{ stockItemId: '', items: [] }],
     },
@@ -86,7 +86,7 @@ it('lets blind drops use their own unit and drops the stored cut length from the
     plan: { cuts: [{ stockItemId: null, lengthMm: 2743.2, items: [] }] },
   };
   expect(allocationToForm(stored, units)).toEqual({
-    orderNumber: 'RB-1',
+    orderNumber: '104801',
     requirements: [{ ...r, width: '22', length: '72', quantity: '1' }],
     cuts: [{ stockItemId: '', items: [] }],
   });

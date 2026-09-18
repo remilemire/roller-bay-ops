@@ -18,7 +18,7 @@ All endpoints require an active signed-in user; user, admin, and owner roles can
 
 ```json
 {
-  "purchaseOrderNumber": "PO-12345",
+  "purchaseOrderNumber": "12345",
   "items": [
     {
       "fabricColorId": "11111111-1111-4111-8111-111111111111",
@@ -31,7 +31,7 @@ All endpoints require an active signed-in user; user, admin, and owner roles can
 }
 ```
 
-Purchase-order numbers are trimmed and must contain 1–50 characters. Each line requires a valid fabric color and destination location, positive width, and positive initial length **per roll**. Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Quantity is a positive integer defaulting to 1. A request must contain 1–100 lines and no more than 1,000 rolls in total. Unknown fields, including submitting-user overrides and stock-state fields, are rejected.
+Purchase-order numbers are trimmed and must be exactly five digits (0–9, leading zeros kept). Receipts submitted before this rule may hold other references of up to 50 characters; the database still accepts them. Each line requires a valid fabric color and destination location, positive width, and positive initial length **per roll**. Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Quantity is a positive integer defaulting to 1. A request must contain 1–100 lines and no more than 1,000 rolls in total. Unknown fields, including submitting-user overrides and stock-state fields, are rejected.
 
 The example creates one receipt, one line, and five individually identified stock items. Received rolls start unused, are not remnants, and have null tube diameter, depth, measurement thickness, source reference, and consumed timestamp. Their initial remaining length is the supplied length. Rolls with different dimensions or destinations belong on separate lines.
 
@@ -70,7 +70,7 @@ Any active employee can view, edit, submit, or discard a receipt draft. The crea
 | DELETE | `/api/stock-receipts/:id/draft`   | Discard header and lines with `{ expectedRevision }`; returns 204. |
 | POST   | `/api/stock-receipts/:id/submit`  | Submit saved form with `{ expectedRevision }`; returns 200.        |
 
-`data` has the same purchase-order-number and item fields as a complete receipt. Fields may be omitted or null and `items` may be empty; blank form controls should be sent as null. Supplied values retain normal validation, including foreign keys, dimension precision, and quantity limits. Missing quantities remain null rather than defaulting to one. Omitted arrays become empty on a full replacement. No JSON draft payload is stored.
+`data` has the same purchase-order-number and item fields as a complete receipt. Fields may be omitted or null and `items` may be empty; blank form controls should be sent as null. Supplied values retain normal validation, including foreign keys, dimension precision, and quantity limits. A draft purchase-order number may be any 1–50 characters so partial input can be saved; submission requires five digits. Missing quantities remain null rather than defaulting to one. Omitted arrays become empty on a full replacement. No JSON draft payload is stored.
 
 Draft revisions begin at one. Editing locks the header and increments its revision; stale writes return 409. Submission requires complete lines, creates rolls, sets `is_draft = false` and submission metadata, and increments the revision in one transaction. Header and saved line IDs remain unchanged. Failure rolls back every write and leaves the draft editable. Shared draft submission records the current authenticated employee as submitter.
 

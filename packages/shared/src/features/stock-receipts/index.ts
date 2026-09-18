@@ -16,9 +16,15 @@ export const stockReceiptItemInputSchema = z.strictObject({
   ...lineFields,
   quantity: lineFields.quantity.max(1000).default(1),
 });
+// Submitted receipts require the supplier's five-digit purchase-order number.
+// Drafts may hold partial input, and older records may predate this format.
+export const purchaseOrderNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{5}$/, 'Must be 5 digits.');
 export const createStockReceiptSchema = z
   .strictObject({
-    purchaseOrderNumber: z.string().trim().min(1).max(50),
+    purchaseOrderNumber: purchaseOrderNumberSchema,
     items: z.array(stockReceiptItemInputSchema).min(1).max(100),
   })
   .refine(

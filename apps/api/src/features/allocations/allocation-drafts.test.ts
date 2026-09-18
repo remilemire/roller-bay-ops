@@ -131,7 +131,7 @@ test('all reservation and shortage SQL excludes unconfirmed allocations', async 
 });
 
 test('incomplete allocation draft cannot reach reservation or confirmation writes', async () => {
-  const draft = { ...header(), orderNumber: 'INCOMPLETE' };
+  const draft = { ...header(), orderNumber: '104801' };
   let writes = 0;
   const repository = {
     withTransaction: async (

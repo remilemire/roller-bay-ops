@@ -44,29 +44,29 @@ it('keeps dirty values and the original expected revision after a shared draft c
     </QueryClientProvider>,
   );
   await user.clear(screen.getByLabelText('Purchase-order number'));
-  await user.type(screen.getByLabelText('Purchase-order number'), 'LOCAL');
+  await user.type(screen.getByLabelText('Purchase-order number'), '11111');
   view.rerender(
     <QueryClientProvider client={client}>
       <ReceiptEditor
         initial={{
           ...receiptDraft,
           revision: 2,
-          data: { ...receiptDraft.data, purchaseOrderNumber: 'REMOTE' },
+          data: { ...receiptDraft.data, purchaseOrderNumber: '22222' },
         }}
       />
     </QueryClientProvider>,
   );
-  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('LOCAL');
+  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('11111');
   await user.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(
       receiptDraft.id,
       1,
-      expect.objectContaining({ purchaseOrderNumber: 'LOCAL' }),
+      expect.objectContaining({ purchaseOrderNumber: '11111' }),
     ),
   );
   expect(await screen.findByRole('alert')).toHaveTextContent('Receipt changed');
-  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('LOCAL');
+  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('11111');
 });
 it('does not unmount a dirty draft if another employee submits it during a background refresh', async () => {
   const user = userEvent.setup();
@@ -86,12 +86,10 @@ it('does not unmount a dirty draft if another employee submits it during a backg
     </QueryClientProvider>,
   );
   await user.clear(screen.getByLabelText('Purchase-order number'));
-  await user.type(screen.getByLabelText('Purchase-order number'), 'KEEP THIS');
+  await user.type(screen.getByLabelText('Purchase-order number'), '33333');
   client.setQueryData([...receiptKey, receiptDraft.id], receipt);
   await waitFor(() =>
-    expect(screen.getByLabelText('Purchase-order number')).toHaveValue(
-      'KEEP THIS',
-    ),
+    expect(screen.getByLabelText('Purchase-order number')).toHaveValue('33333'),
   );
 });
 
@@ -113,7 +111,7 @@ it('preserves a dirty draft when a background request fails', async () => {
     </QueryClientProvider>,
   );
   await user.clear(screen.getByLabelText('Purchase-order number'));
-  await user.type(screen.getByLabelText('Purchase-order number'), 'UNSAVED');
+  await user.type(screen.getByLabelText('Purchase-order number'), '44444');
   await expect(
     client.fetchQuery({
       queryKey: [...receiptKey, receiptDraft.id],
@@ -126,5 +124,37 @@ it('preserves a dirty draft when a background request fails', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Connection interrupted',
   );
-  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('UNSAVED');
+  expect(screen.getByLabelText('Purchase-order number')).toHaveValue('44444');
+});
+
+it('limits the purchase-order number to five characters and requires digits before submitting', async () => {
+  const user = userEvent.setup();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  // A saved draft may hold partial or older input.
+  const partial = {
+    ...receiptDraft,
+    data: { ...receiptDraft.data, purchaseOrderNumber: 'PO-1' },
+  };
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ReceiptEditor initial={partial} />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Submit receipt' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Purchase order number: Must be 5 digits.',
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  view.unmount();
+  render(
+    <QueryClientProvider client={client}>
+      <ReceiptEditor initial={receiptDraft} />
+    </QueryClientProvider>,
+  );
+  const field = screen.getByLabelText('Purchase-order number');
+  await user.clear(field);
+  await user.type(field, '1234567');
+  expect(field).toHaveValue('12345');
 });

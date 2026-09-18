@@ -73,7 +73,7 @@ export const stock = stockItemSchema.parse({
   updatedAt: timestamp,
 });
 export const receiptData: StockReceiptDraftData = {
-  purchaseOrderNumber: 'PO-2026-048',
+  purchaseOrderNumber: '26048',
   items: [
     {
       fabricColorId: ids.color,
@@ -123,7 +123,7 @@ export const receipt = stockReceiptDetailSchema.parse({
 });
 export const allocation = allocationDetailSchema.parse({
   id: ids.allocation,
-  orderNumber: 'RB-1048',
+  orderNumber: '104801',
   state: 'active',
   revision: 1,
   createdByUserId: ids.user,

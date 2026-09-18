@@ -59,10 +59,12 @@ export async function testAllocations(
     );
     return id;
   };
+  // Sequential numbers keep order-number searches unambiguous.
+  let orderNumber = 100000;
   const input = (stockId: string, length = 1000): CreateAllocation => {
     const requirementId = randomUUID();
     return {
-      orderNumber: `ORDER-${randomUUID().slice(0, 8)}`,
+      orderNumber: String(++orderNumber),
       requirements: [
         {
           id: requirementId,
@@ -375,9 +377,7 @@ export async function testAllocations(
           [201, 201],
         );
         assert.equal(replies[0]!.body.id, replies[1]!.body.id);
-        await post(path, { ...body, orderNumber: 'DIFFERENT' }, key).expect(
-          409,
-        );
+        await post(path, { ...body, orderNumber: '999999' }, key).expect(409);
         const stock = await seed(1500);
         const competing = await Promise.all([
           post(path, input(stock)),
@@ -402,7 +402,7 @@ export async function testAllocations(
         const stockId = await seed(1000);
         const body = input(stockId);
         const allocation = await create(body);
-        const edited = { ...body, orderNumber: 'EDITED', expectedRevision: 1 };
+        const edited = { ...body, orderNumber: '999998', expectedRevision: 1 };
         const replies = await Promise.all([
           put(allocation.id, edited),
           put(allocation.id, edited),
@@ -427,7 +427,7 @@ export async function testAllocations(
         const list = allocationListSchema.parse(
           (
             await get(
-              `${path}?search=EDITED&state=cancelled&pageSize=1`,
+              `${path}?search=999998&state=cancelled&pageSize=1`,
             ).expect(200)
           ).body,
         );

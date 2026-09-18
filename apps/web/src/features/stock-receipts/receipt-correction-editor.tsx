@@ -96,7 +96,10 @@ function ReceiptCorrectionForm({
       close={close}
       makeBody={() => ({
         expectedRevision: original.record.revision,
-        purchaseOrderNumber: number,
+        // Omit an unchanged number so older receipts that predate the
+        // five-digit format can still have their lines corrected.
+        purchaseOrderNumber:
+          number === original.record.purchaseOrderNumber ? undefined : number,
         stockVersions: original.eligibility.map((e) => ({
           stockItemId: e.stockItemId,
           expectedRevision: e.revision,
@@ -127,6 +130,8 @@ function ReceiptCorrectionForm({
         value={number}
         onChange={setNumber}
         required
+        maxLength={5}
+        inputMode="numeric"
       />
       {!original.baselineAvailable && (
         <p className="notice">

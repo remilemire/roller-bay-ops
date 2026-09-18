@@ -136,8 +136,13 @@ export const validateAllocationSchema = z
     previewRevision,
     'Provide allocationId and expectedRevision together.',
   );
+// Confirmed allocations require the six-digit production order number. Drafts
+// may hold partial input, and older records may predate this format.
 const allocationSubmission = z.strictObject({
-  orderNumber: z.string().trim().min(1).max(50),
+  orderNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Must be 6 digits.'),
   ...planningFields,
   plan: cuttingPlanInputSchema,
 });

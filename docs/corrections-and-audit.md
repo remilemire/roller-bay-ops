@@ -40,7 +40,7 @@ Historical corrections require the selected stock to match its last workflow-pro
 
 ## Receiving
 
-Receipt correction bodies contain `expectedRevision`, `reason`, optional `purchaseOrderNumber`, `stockVersions`, and `operations`. Each operation is `add` with complete line `data`, `update` with `lineId`, complete `data` and explicit `removeStockItemIds`, or `remove` with `lineId`. Correct each existing line at most once per request.
+Receipt correction bodies contain `expectedRevision`, `reason`, optional `purchaseOrderNumber` (five digits), `stockVersions`, and `operations`. Omit the purchase-order number to keep the current one; the web client omits it when unchanged so lines on older receipts with other references can still be corrected. Each operation is `add` with complete line `data`, `update` with `lineId`, complete `data` and explicit `removeStockItemIds`, or `remove` with `lineId`. Correct each existing line at most once per request.
 
 Changing fabric, width, initial length or original location affects every nonvoided roll on the line and requires all of them to be eligible. Quantity reductions void exactly the selected eligible rolls, even if other rolls have since changed. Quantity increases create new stock using the effective line attributes. Removed lines retain their original values and links with `voidedAt` set; exclude those lines from totals. Retained stock IDs and receipt submission metadata do not change. The entire request is atomic; active receipt totals remain limited to 100 lines and 1,000 rolls.
 

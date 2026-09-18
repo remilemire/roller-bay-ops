@@ -194,12 +194,16 @@ export async function testAllocationDrafts(
           await app
             .get(AllocationsService)
             .createDraft(
-              allocationDraftDataSchema.parse(body),
+              allocationDraftDataSchema.parse({ ...body, orderNumber: 'RB-1' }),
               colleague,
               randomUUID(),
             ),
         );
         ids.push(draft.id);
+        // Drafts keep partial order numbers; submission requires six digits.
+        await post(`${path}/${draft.id}/submit`, {
+          expectedRevision: 1,
+        }).expect(400);
         await put(draft.id, 1, body).expect(200);
         const responses = await Promise.all([
           post(`${path}/${draft.id}/submit`, { expectedRevision: 2 }),

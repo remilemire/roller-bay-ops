@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, type ComponentProps, type ReactNode } from 'react';
 import { InfoTip } from './info-tip';
 import { Input, Select } from './input';
 export function Field({
@@ -47,6 +47,7 @@ export function TextField({
   help,
   disabled = false,
   maxLength,
+  inputMode,
 }: {
   label: string;
   value: string;
@@ -57,6 +58,7 @@ export function TextField({
   help?: string;
   disabled?: boolean;
   maxLength?: number;
+  inputMode?: ComponentProps<'input'>['inputMode'];
 }) {
   const id = useId();
   const helpId = useId();
@@ -72,6 +74,7 @@ export function TextField({
         required={required}
         disabled={disabled}
         maxLength={maxLength}
+        inputMode={inputMode}
       />
     </Field>
   );

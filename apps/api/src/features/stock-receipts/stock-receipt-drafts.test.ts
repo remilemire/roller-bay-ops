@@ -38,6 +38,33 @@ test('receipt drafts save incomplete lines without inventing dimensions or quant
     assert.equal(stockReceiptDraftDataSchema.safeParse(invalid).success, false);
 });
 
+test('submitted receipts require a five-digit purchase-order number while drafts keep partial input', () => {
+  const items = [
+    {
+      fabricColorId: randomUUID(),
+      widthMm: 1200,
+      initialLengthMm: 5000,
+      locationId: randomUUID(),
+    },
+  ];
+  assert.equal(
+    createStockReceiptSchema.parse({ purchaseOrderNumber: ' 04821 ', items })
+      .purchaseOrderNumber,
+    '04821',
+  );
+  for (const purchaseOrderNumber of ['4821', '048210', 'PO-04821', '048 21'])
+    assert.equal(
+      createStockReceiptSchema.safeParse({ purchaseOrderNumber, items })
+        .success,
+      false,
+    );
+  assert.equal(
+    stockReceiptDraftDataSchema.parse({ purchaseOrderNumber: 'PO-48' })
+      .purchaseOrderNumber,
+    'PO-48',
+  );
+});
+
 test('receipt concurrent writes report conflicts rather than storage outages', async () => {
   for (const code of ['23505', '40001', '40P01', '55P03']) {
     await assert.rejects(
@@ -53,7 +80,7 @@ test('incomplete saved receipt submission never reaches stock creation or confir
   const now = new Date();
   const header: StockReceiptRecord = {
     id: randomUUID(),
-    purchaseOrderNumber: 'INCOMPLETE',
+    purchaseOrderNumber: '10482',
     createdByUserId: randomUUID(),
     createdAt: now,
     updatedAt: now,

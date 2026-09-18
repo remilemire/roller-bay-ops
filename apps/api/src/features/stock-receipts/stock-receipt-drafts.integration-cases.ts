@@ -161,16 +161,24 @@ export async function testStockReceiptDrafts(
       'another employee can edit and submit a receipt draft once with the same record and line IDs',
       async () => {
         const data = stockReceiptDraftDataSchema.parse({
-          purchaseOrderNumber: 'SHARED',
+          purchaseOrderNumber: '40001',
           items: [line],
         });
         const shared = stockReceiptDraftSchema.parse(
           await app
             .get(StockReceiptsService)
-            .createDraft(data, colleague, randomUUID()),
+            .createDraft(
+              { ...data, purchaseOrderNumber: 'PO-1' },
+              colleague,
+              randomUUID(),
+            ),
         );
         ids.push(shared.id);
         await get(shared.id).expect(200);
+        // Drafts keep partial purchase-order numbers; submission requires five digits.
+        await post(`${path}/${shared.id}/submit`, {
+          expectedRevision: 1,
+        }).expect(400);
         await put(shared.id, 1, data).expect(200);
         const lines = (
           await pool.query(
@@ -212,7 +220,7 @@ export async function testStockReceiptDrafts(
       'failed receipt draft submission rolls back stock writes and remains retryable',
       async (subtest) => {
         const draft = await create({
-          purchaseOrderNumber: 'ROLLBACK',
+          purchaseOrderNumber: '40002',
           items: [line],
         });
         const before = await stockCount();
@@ -247,7 +255,7 @@ export async function testStockReceiptDrafts(
       'database constraints reject incomplete submitted lines and incomplete draft transitions',
       async () => {
         const draft = await create({
-          purchaseOrderNumber: 'DB-CHECK',
+          purchaseOrderNumber: '40003',
           items: [line],
         });
         await post(`${path}/${draft.id}/submit`, {

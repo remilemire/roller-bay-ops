@@ -85,7 +85,7 @@ export async function testStockReceipts(
       locationId,
     };
     const input = {
-      purchaseOrderNumber: ' PO-12345 ',
+      purchaseOrderNumber: ' 12345 ',
       items: [line, { ...line, widthMm: 1000, quantity: 2 }],
     };
 
@@ -132,7 +132,9 @@ export async function testStockReceipts(
         );
         for (const invalid of [
           { ...input, purchaseOrderNumber: '' },
-          { ...input, purchaseOrderNumber: 'a'.repeat(51) },
+          { ...input, purchaseOrderNumber: '1234' },
+          { ...input, purchaseOrderNumber: '123456' },
+          { ...input, purchaseOrderNumber: 'PO-12345' },
           { ...input, items: [] },
           {
             ...input,
@@ -178,7 +180,7 @@ export async function testStockReceipts(
         const receipt = stockReceiptSchema.parse(
           (await submit(input, key).expect(201)).body,
         );
-        assert.equal(receipt.purchaseOrderNumber, 'PO-12345');
+        assert.equal(receipt.purchaseOrderNumber, '12345');
         assert.equal(receipt.submittedByUserId, userId);
         assert.equal(receipt.items.length, 2);
         assert.equal(
@@ -242,7 +244,7 @@ export async function testStockReceipts(
         ).expect(400);
         await role('user');
         const replay = await submit(
-          { items: input.items, purchaseOrderNumber: 'PO-12345' },
+          { items: input.items, purchaseOrderNumber: '12345' },
           key.toUpperCase(),
         ).expect(201);
         assert.deepEqual(stockReceiptSchema.parse(replay.body), receipt);
@@ -255,14 +257,13 @@ export async function testStockReceipts(
             .find((stock) => stock.id === stockId)!.remainingLengthMm,
           3769.911,
         );
-        await submit(
-          { ...input, purchaseOrderNumber: 'DIFFERENT' },
-          key,
-        ).expect(409);
+        await submit({ ...input, purchaseOrderNumber: '54321' }, key).expect(
+          409,
+        );
         assert.equal(await count('stock_receipts'), 1);
         assert.equal(await count('fabric_stock_items'), initialStockCount + 5);
         const page = stockReceiptListSchema.parse(
-          (await get(`${path}?search=po-123&pageSize=1`).expect(200)).body,
+          (await get(`${path}?search=234&pageSize=1`).expect(200)).body,
         );
         assert.equal(page.total, 1);
         assert.equal(page.items[0]!.id, receipt.id);
@@ -294,7 +295,7 @@ export async function testStockReceipts(
       async () => {
         const key = randomUUID();
         const body = {
-          purchaseOrderNumber: 'CONCURRENT',
+          purchaseOrderNumber: '20001',
           items: [{ ...line, quantity: 2 }],
         };
         const before = await count('fabric_stock_items');
@@ -311,7 +312,7 @@ export async function testStockReceipts(
         const conflictingKey = randomUUID();
         const conflicts = await Promise.all([
           submit(body, conflictingKey),
-          submit({ ...body, purchaseOrderNumber: 'OTHER' }, conflictingKey),
+          submit({ ...body, purchaseOrderNumber: '20002' }, conflictingKey),
         ]);
         assert.deepEqual(
           conflicts.map((result) => result.status).sort(),
@@ -325,21 +326,24 @@ export async function testStockReceipts(
           locationId: line.locationId,
         };
         const original = await submit(
-          { purchaseOrderNumber: 'DEFAULT', items: [withoutQuantity] },
+          { purchaseOrderNumber: '20003', items: [withoutQuantity] },
           defaultKey,
         ).expect(201);
         const repeated = await submit(
           {
-            purchaseOrderNumber: 'DEFAULT',
+            purchaseOrderNumber: '20003',
             items: [{ ...withoutQuantity, quantity: 1 }],
           },
           defaultKey,
         ).expect(201);
         assert.deepEqual(repeated.body, original.body);
-        for (const value of ['admin', 'owner']) {
+        for (const [value, purchaseOrderNumber] of [
+          ['admin', '20004'],
+          ['owner', '20005'],
+        ] as const) {
           await role(value);
           await submit({
-            purchaseOrderNumber: value,
+            purchaseOrderNumber,
             items: [withoutQuantity],
           }).expect(201);
           await get(path).expect(200);
@@ -363,13 +367,13 @@ export async function testStockReceipts(
         const key = randomUUID();
         await submit(
           {
-            purchaseOrderNumber: 'BAD-REFERENCE',
+            purchaseOrderNumber: '20006',
             items: [line, { ...line, fabricColorId: randomUUID() }],
           },
           key,
         ).expect(404);
         await submit({
-          purchaseOrderNumber: 'BAD-LOCATION',
+          purchaseOrderNumber: '20007',
           items: [{ ...line, locationId: randomUUID() }],
         }).expect(404);
         const repository = app.get(StockItemsRepository);
@@ -380,7 +384,7 @@ export async function testStockReceipts(
         };
         try {
           const failed = await submit(
-            { purchaseOrderNumber: 'RETRY', items: [line] },
+            { purchaseOrderNumber: '20008', items: [line] },
             key,
           ).expect(503);
           assert.ok(!JSON.stringify(failed.body).includes('Injected failure'));
@@ -396,7 +400,7 @@ export async function testStockReceipts(
           before,
         );
         await submit(
-          { purchaseOrderNumber: 'RETRY', items: [line] },
+          { purchaseOrderNumber: '20008', items: [line] },
           key,
         ).expect(201);
       },

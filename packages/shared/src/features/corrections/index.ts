@@ -6,6 +6,7 @@ import {
   stockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
 import {
+  purchaseOrderNumberSchema,
   stockReceiptItemInputSchema,
   stockReceiptDetailSchema,
 } from '../stock-receipts/index.js';
@@ -25,7 +26,7 @@ const stockVersionSchema = z.strictObject({
   expectedRevision: z.number().int().positive(),
 });
 export const receiptCorrectionSchema = correctionBaseSchema.extend({
-  purchaseOrderNumber: z.string().trim().min(1).max(50).optional(),
+  purchaseOrderNumber: purchaseOrderNumberSchema.optional(),
   operations: z
     .array(
       z.discriminatedUnion('action', [

@@ -130,7 +130,7 @@ test('write and preview contracts reject client cutting rules while response sna
   ]) {
     const input =
       schema === createAllocationSchema || schema === allocationDraftInputSchema
-        ? { orderNumber: 'ORDER', requirements, plan }
+        ? { orderNumber: '104801', requirements, plan }
         : schema === validateAllocationSchema
           ? { requirements, plan }
           : { requirements };

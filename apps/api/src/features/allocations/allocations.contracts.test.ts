@@ -22,7 +22,7 @@ import { fixture } from './optimizer/optimizer.fixtures.js';
 function submission() {
   const context = fixture();
   return {
-    orderNumber: ' ORDER-1 ',
+    orderNumber: ' 104801 ',
     requirements: context.requirements.map(
       ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
         id,
@@ -45,7 +45,12 @@ function submission() {
 
 test('allocation contracts normalize keys, require revisions, and reject client-authoritative stock balances', () => {
   const input = submission();
-  assert.equal(createAllocationSchema.parse(input).orderNumber, 'ORDER-1');
+  assert.equal(createAllocationSchema.parse(input).orderNumber, '104801');
+  for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
+    assert.equal(
+      createAllocationSchema.safeParse({ ...input, orderNumber }).success,
+      false,
+    );
   assert.equal(replaceAllocationSchema.safeParse(input).success, false);
   assert.equal(
     replaceAllocationSchema.safeParse({ ...input, expectedRevision: 1 })

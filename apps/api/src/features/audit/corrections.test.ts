@@ -106,6 +106,18 @@ test('receipt corrections distinguish quantity removal from deleting stock ident
     }).success,
     false,
   );
+  assert.equal(
+    receiptCorrectionSchema.parse({ ...parsed, purchaseOrderNumber: ' 04821 ' })
+      .purchaseOrderNumber,
+    '04821',
+  );
+  assert.equal(
+    receiptCorrectionSchema.safeParse({
+      ...parsed,
+      purchaseOrderNumber: 'PO-1',
+    }).success,
+    false,
+  );
 });
 test('completion corrections use individually identified pieces and bound the total', () => {
   const item = {
