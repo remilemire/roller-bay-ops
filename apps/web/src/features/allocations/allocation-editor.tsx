@@ -32,7 +32,8 @@ import {
   finishRequest,
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
-import { describeFieldIssue, errorIssues, issuePath } from '@/lib/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import {
   allocationFormSchema,
   allocationFieldName,
@@ -121,14 +122,8 @@ export function AllocationEditor({
     allocationFieldName(issuePath(issue), form.getValues());
   // Issues with a field of their own show beside it; the rest stay in the
   // notice above the actions.
-  function showIssues(issues: ErrorIssue[]) {
-    form.clearErrors();
-    for (const issue of issues) {
-      const name = fieldName(issue);
-      if (name && !form.getFieldState(name).error)
-        form.setError(name, { message: describeFieldIssue(issue) });
-    }
-  }
+  const showIssues = (source: unknown) =>
+    showFieldIssues(form, source, fieldName);
   const refresh = () =>
     Promise.all([
       client.invalidateQueries({ queryKey: allocationKey }),
@@ -147,7 +142,7 @@ export function AllocationEditor({
         : createAllocationDraft(data, requestKey(scope, data));
     },
     onError: (error) => {
-      showIssues(errorIssues(error));
+      showIssues(error);
       if (
         error instanceof ApiError &&
         error.status >= 400 &&
@@ -181,7 +176,7 @@ export function AllocationEditor({
           : await save.mutateAsync(form.getValues());
       return submitAllocation(draft.id, draft.revision);
     },
-    onError: (error) => showIssues(errorIssues(error)),
+    onError: (error) => showIssues(error),
     onSuccess: async (record) => {
       form.reset(form.getValues());
       await refresh();
@@ -212,7 +207,7 @@ export function AllocationEditor({
       abort.current = new AbortController();
       return optimizeAllocation(context, abort.current.signal);
     },
-    onError: (error) => showIssues(errorIssues(error)),
+    onError: (error) => showIssues(error),
     onSuccess: (result) => {
       setPreview(result);
       showIssues('valid' in result && !result.valid ? result.issues : []);
@@ -255,7 +250,7 @@ export function AllocationEditor({
       setConfirm('submit');
     } catch (error) {
       setValidationError(error);
-      showIssues(errorIssues(error));
+      showIssues(error);
     }
   }
   function closeConfirm() {
