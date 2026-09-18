@@ -136,9 +136,6 @@ export function CorrectionSubmit({
         <section>
           <h3>Review correction</h3>
           <CorrectionReview value={review} />
-          <p>
-            These changes and your reason will remain in the record’s history.
-          </p>
         </section>
       )}
       <div className="form-actions">
