@@ -145,9 +145,7 @@ test('receipt drafts preserve partial imperial input and unsaved edits on confli
   await page.getByLabel('Purchase-order number').fill('PO-PARTIAL');
   await page.getByLabel('Width (in)', { exact: true }).fill('54');
   await page.getByRole('button', { name: 'Add line', exact: true }).click();
-  await expect(
-    page.getByLabel('Color · line 2', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByLabel('Color', { exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/stock-receipts/${ids.receipt}$`));
   await expect(page.getByText(/REVISION 1/)).toBeVisible();

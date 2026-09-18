@@ -225,7 +225,7 @@ export function ReceiptEditor({
                       </Button>
                     </div>
                     <Lookup
-                      label={`Color · line ${index + 1}`}
+                      label="Color"
                       value={value.fabricColorId}
                       onChange={(v) => field(index, 'fabricColorId', v)}
                       queryKey={[...catalogKey, 'colors']}
@@ -251,7 +251,7 @@ export function ReceiptEditor({
                     />
                     <div className="span-full">
                       <Lookup
-                        label={`Destination · line ${index + 1}`}
+                        label="Destination"
                         value={value.locationId}
                         onChange={(v) => field(index, 'locationId', v)}
                         queryKey={locationsKey}
