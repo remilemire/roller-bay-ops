@@ -42,7 +42,7 @@ For example, creating a color uses:
 
 ## Reading and pagination
 
-All lists accept `search`, `page` (default 1), and `pageSize` (default 25, maximum 100). Page numbers are limited to 1,000,000. Search is a case-insensitive literal substring of the manufacturer/material name or color code; `%` and `_` are not wildcards. Filters combine with AND.
+All lists accept `search`, `page` (default 1), and `pageSize` (default 25, maximum 100). Page numbers are limited to 1,000,000. Search is a case-insensitive literal substring of the manufacturer/material name; for colors it matches the code, material name, or manufacturer name; `%` and `_` are not wildcards. Filters combine with AND.
 
 List responses contain `items`, `total`, `page`, and `pageSize`. `total` counts all matching records before pagination. Lists sort by name or color code, then ID, and read the page and total from the same database snapshot.
 

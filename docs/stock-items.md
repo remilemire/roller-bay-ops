@@ -47,7 +47,7 @@ Voiding preserves the record, its history, and relationships while excluding it 
 
 ## Queries and responses
 
-Lists accept `fabricColorId`, `locationId`, `sectionId`, `zoneId`, `isRemnant`, `isConsumed`, `isVoided`, `minWidthMm`, `minRemainingLengthMm`, `search`, `page`, and `pageSize`. Filters combine with AND. Boolean query values must be the strings `true` or `false`. `isConsumed` defaults to false; use true to list consumed records. Search matches a literal, case-insensitive substring of the fabric color code.
+Lists accept `fabricColorId`, `locationId`, `sectionId`, `zoneId`, `isRemnant`, `isConsumed`, `isVoided`, `minWidthMm`, `minRemainingLengthMm`, `search`, `page`, and `pageSize`. Filters combine with AND. Boolean query values must be the strings `true` or `false`. `isConsumed` defaults to false; use true to list consumed records. Search matches a literal, case-insensitive substring of the fabric color code or of the stock item ID.
 
 Pagination defaults to page 1 and 25 items, with at most 100 items per page. Results sort by creation time, then UUID. Page items and totals use the same database snapshot. The response is `{ items, total, page, pageSize }`.
 

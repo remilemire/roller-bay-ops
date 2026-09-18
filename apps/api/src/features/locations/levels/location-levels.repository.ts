@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, ilike, or } from 'drizzle-orm';
 import type {
   CreateLocation,
   UpdateLocation,
@@ -16,8 +16,13 @@ export class LocationLevelsRepository {
   constructor(private readonly database: DatabaseService) {}
   list(query: LocationQuery) {
     const where = and(
+      // A level is shown as zone / section / label; match any of the three.
       query.search
-        ? ilike(locations.label, containsPattern(query.search))
+        ? or(
+            ilike(locations.label, containsPattern(query.search)),
+            ilike(locationSections.label, containsPattern(query.search)),
+            ilike(locationZones.name, containsPattern(query.search)),
+          )
         : undefined,
       query.sectionId ? eq(locations.sectionId, query.sectionId) : undefined,
       query.zoneId ? eq(locationSections.zoneId, query.zoneId) : undefined,

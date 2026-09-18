@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, ilike, or } from 'drizzle-orm';
 import type {
   CreateFabricColor,
   UpdateFabricColor,
@@ -16,8 +16,13 @@ export class FabricColorsRepository {
   constructor(private readonly database: DatabaseService) {}
   list(query: FabricColorQuery) {
     const where = and(
+      // Match every part of the label a lookup shows for a color.
       query.search
-        ? ilike(fabricColors.code, containsPattern(query.search))
+        ? or(
+            ilike(fabricColors.code, containsPattern(query.search)),
+            ilike(fabricMaterials.name, containsPattern(query.search)),
+            ilike(manufacturers.name, containsPattern(query.search)),
+          )
         : undefined,
       query.materialId
         ? eq(fabricColors.materialId, query.materialId)

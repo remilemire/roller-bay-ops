@@ -51,7 +51,7 @@ export function StockScreen() {
         key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
-        placeholder="Search color code…"
+        placeholder="Search color code or ID…"
       >
         <div className="tabs">
           {[

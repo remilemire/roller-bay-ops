@@ -36,7 +36,7 @@ Zones and child lists support loading more siblings before dragging across page 
 
 Creation returns 201; reads and updates return 200. All records include `id`, `sortOrder`, `createdAt`, and `updatedAt`. Sections additionally include `zoneId` and `zoneName`. Locations include `sectionId`, `sectionLabel`, `zoneId`, and `zoneName`, so clients can display the complete address. Names reflect the current parent records.
 
-Lists return `{ items, total, page, pageSize }`. All support `search`, `page` (default 1), and `pageSize` (default 25, maximum 100). Search is a case-insensitive literal substring of the resource's own name or label. Filters combine with AND. Sort order is `sortOrder`, then name/label, then ID; page data and totals use the same database snapshot.
+Lists return `{ items, total, page, pageSize }`. All support `search`, `page` (default 1), and `pageSize` (default 25, maximum 100). Search is a case-insensitive literal substring of the resource's own name or label; a level also matches its section label and zone name, the path a lookup shows. Filters combine with AND. Sort order is `sortOrder`, then name/label, then ID; page data and totals use the same database snapshot.
 
 Deletion returns 204. Zones containing sections, sections containing locations, and locations referenced by stock items return 409. Duplicate names/labels return 409; missing records or parents return 404; invalid input returns 400. Storage failures return a generic 503.
 

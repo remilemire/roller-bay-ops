@@ -10,6 +10,7 @@ import {
   getTableColumns,
   gte,
   ilike,
+  or,
   inArray,
   isNull,
   isNotNull,
@@ -59,6 +60,8 @@ export class StockItemsRepository {
   }
 
   list(query: StockItemQuery) {
+    const containsPattern = (search: string) =>
+      `%${search.replace(/[\\%_]/g, '\\$&')}%`;
     const where = and(
       query.isVoided
         ? isNotNull(stockItems.voidedAt)
@@ -88,10 +91,11 @@ export class StockItemsRepository {
             query.minRemainingLengthMm.toFixed(3),
           )
         : undefined,
+      // Rolls are referred to by color code or by the ID shown on screen.
       query.search
-        ? ilike(
-            fabricColors.code,
-            `%${query.search.replace(/[\\%_]/g, '\\$&')}%`,
+        ? or(
+            ilike(fabricColors.code, containsPattern(query.search)),
+            ilike(sql`${stockItems.id}::text`, containsPattern(query.search)),
           )
         : undefined,
     );
