@@ -17,7 +17,22 @@ import {
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { fieldSuffix, fieldValue, measurementHelp } from '@/lib/measurements';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import { saveStock, stockKey } from './stock-items.api';
+// Request-body keys and the form fields that edit them.
+const BODY_FIELDS = {
+  fabricColorId: 'fabricColorId',
+  locationId: 'locationId',
+  widthMm: 'width',
+  initialLengthMm: 'initialLength',
+  explicitLengthMm: 'explicitLength',
+  radialDepthMm: 'depth',
+  tubeOuterDiameterMm: 'tube',
+} as const;
+const fieldName = (issue: ErrorIssue) =>
+  BODY_FIELDS[issuePath(issue) as keyof typeof BODY_FIELDS] ?? null;
 export function StockEditor({ close }: { close: () => void }) {
   // Pin the units this form opened with: a session refetch must not relabel
   // or reinterpret dirty input.
@@ -40,6 +55,11 @@ export function StockEditor({ close }: { close: () => void }) {
     ...useWatch({ control: form.control }),
   };
   const client = useQueryClient();
+  const { errors } = form.formState;
+  const set = (name: keyof typeof errors & keyof typeof values, v: string) => {
+    form.setValue(name, v);
+    form.clearErrors(name);
+  };
   const mutation = useMutation({
     mutationFn: (v: typeof values) => {
       const measurements = {
@@ -63,6 +83,7 @@ export function StockEditor({ close }: { close: () => void }) {
         isRemnant: v.kind === 'remnant',
       });
     },
+    onError: (error) => showFieldIssues(form, error, fieldName),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: stockKey }),
@@ -86,7 +107,8 @@ export function StockEditor({ close }: { close: () => void }) {
           <Lookup
             label="Fabric color"
             value={values.fabricColorId}
-            onChange={(v) => form.setValue('fabricColorId', v)}
+            onChange={(v) => set('fabricColorId', v)}
+            error={errors.fabricColorId?.message}
             queryKey={[...catalogKey, 'colors']}
             load={lookupColors}
           />
@@ -104,14 +126,16 @@ export function StockEditor({ close }: { close: () => void }) {
             <TextField
               label={`Width (${fieldSuffix(units, 'rollWidth')})`}
               value={values.width}
-              onChange={(v) => form.setValue('width', v)}
+              onChange={(v) => set('width', v)}
+              error={errors.width?.message}
               type="number"
               required
             />
             <TextField
               label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
               value={values.initialLength}
-              onChange={(v) => form.setValue('initialLength', v)}
+              onChange={(v) => set('initialLength', v)}
+              error={errors.initialLength?.message}
               type="number"
               required
             />
@@ -119,7 +143,8 @@ export function StockEditor({ close }: { close: () => void }) {
               <TextField
                 label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
                 value={values.explicitLength}
-                onChange={(v) => form.setValue('explicitLength', v)}
+                onChange={(v) => set('explicitLength', v)}
+                error={errors.explicitLength?.message}
                 type="number"
                 required
               />
@@ -130,7 +155,8 @@ export function StockEditor({ close }: { close: () => void }) {
                   label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                   help={measurementHelp.tubeDiameter}
                   value={values.tube}
-                  onChange={(v) => form.setValue('tube', v)}
+                  onChange={(v) => set('tube', v)}
+                  error={errors.tube?.message}
                   type="number"
                   required
                 />
@@ -138,7 +164,8 @@ export function StockEditor({ close }: { close: () => void }) {
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
                   help={measurementHelp.radialDepth}
                   value={values.depth}
-                  onChange={(v) => form.setValue('depth', v)}
+                  onChange={(v) => set('depth', v)}
+                  error={errors.depth?.message}
                   type="number"
                 />
               </>
@@ -147,12 +174,18 @@ export function StockEditor({ close }: { close: () => void }) {
           <Lookup
             label="Location"
             value={values.locationId}
-            onChange={(v) => form.setValue('locationId', v)}
+            onChange={(v) => set('locationId', v)}
+            error={errors.locationId?.message}
             queryKey={locationsKey}
             load={lookupLocations}
           />
         </div>
-        {mutation.error && <ErrorNotice error={mutation.error} />}
+        {mutation.error && (
+          <ErrorNotice
+            error={mutation.error}
+            inline={(issue) => fieldName(issue) !== null}
+          />
+        )}
         <div className="form-actions">
           <Button
             type="button"
