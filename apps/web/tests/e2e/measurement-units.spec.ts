@@ -37,9 +37,10 @@ test('units chosen per field in Settings relabel forms and lists while requests 
 
   await page.goto('/allocations/new');
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
+  await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page
-    .getByLabel('Color · blind 1', { exact: true })
-    .selectOption(ids.color);
+    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
+    .click();
   await page.getByLabel('Width (mm)', { exact: true }).fill('1371.6');
   await page.getByLabel('Finished drop (in)', { exact: true }).fill('90');
   await page.getByLabel('Quantity', { exact: true }).fill('1');

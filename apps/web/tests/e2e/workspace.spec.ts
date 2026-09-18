@@ -278,9 +278,10 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   await page.goto('/allocations/new');
   await page.getByLabel('Order number', { exact: true }).fill('RB-PLANNED');
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
+  await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page
-    .getByLabel('Color · blind 1', { exact: true })
-    .selectOption(ids.color);
+    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
+    .click();
   await page.getByLabel('Width (in)', { exact: true }).fill('54');
   await page.getByLabel('Finished drop (in)').fill('90');
   await expect(

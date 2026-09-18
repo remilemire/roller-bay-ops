@@ -744,7 +744,8 @@ td strong {
   gap: 7px;
   min-width: 0;
 }
-.field > span {
+.field > span,
+.field > label {
   font-size: 11px;
   font-weight: 550;
   color: var(--foreground);
@@ -1000,20 +1001,56 @@ td strong {
   align-items: center;
   gap: 8px;
 }
-.lookup {
-  display: grid;
-  gap: 6px;
+.combobox {
+  position: relative;
 }
-.lookup-controls {
-  display: flex;
-  gap: 6px;
+.combobox .input {
+  padding-right: 38px;
 }
-.lookup select {
-  width: 100%;
-}
-.lookup small {
-  font-size: 10px;
+.combobox-clear {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   color: var(--muted);
+}
+.combobox-clear:hover {
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+.combobox-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.combobox-list li {
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.combobox-list li.is-active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.combobox-list li[aria-selected='true'] {
+  font-weight: 600;
+}
+.combobox-list .combobox-empty {
+  color: var(--muted);
+  cursor: default;
 }
 .plan-cut {
   padding: 18px;
