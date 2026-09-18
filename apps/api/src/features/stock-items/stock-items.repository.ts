@@ -91,10 +91,11 @@ export class StockItemsRepository {
             query.minRemainingLengthMm.toFixed(3),
           )
         : undefined,
-      // Rolls are referred to by color code or by the ID shown on screen.
+      // Rolls are referred to by color code, material or the ID shown on screen.
       query.search
         ? or(
             ilike(fabricColors.code, containsPattern(query.search)),
+            ilike(fabricMaterials.name, containsPattern(query.search)),
             ilike(sql`${stockItems.id}::text`, containsPattern(query.search)),
           )
         : undefined,
@@ -115,6 +116,10 @@ export class StockItemsRepository {
             .innerJoin(
               fabricColors,
               eq(stockItems.fabricColorId, fabricColors.id),
+            )
+            .innerJoin(
+              fabricMaterials,
+              eq(fabricColors.materialId, fabricMaterials.id),
             )
             .innerJoin(locations, eq(stockItems.locationId, locations.id))
             .innerJoin(

@@ -456,6 +456,7 @@ export async function testStockItems(
           3,
         );
         assert.equal(await total('search=stock-1'), 3);
+        assert.equal(await total('search=STOCK%20MATERIAL'), 4);
         for (const search of ['%25', '_', '%5C'])
           assert.equal(await total(`search=${search}`), 0);
         for (const query of [
