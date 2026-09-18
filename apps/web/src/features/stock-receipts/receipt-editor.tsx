@@ -86,6 +86,13 @@ export function ReceiptEditor({
     null,
   );
   const [validationError, setValidationError] = useState<unknown>(null);
+  // A draft may keep a partly entered number, so this only warns once the
+  // operator has left the field; submission is what requires all five digits.
+  const [numberLeft, setNumberLeft] = useState(false);
+  const numberWarning =
+    numberLeft && !/^(\d{5})?$/.test(values.purchaseOrderNumber)
+      ? 'Must be 5 digits.'
+      : undefined;
   const client = useQueryClient();
   const router = useRouter();
   const { errors, isDirty } = form.formState;
@@ -215,12 +222,17 @@ export function ReceiptEditor({
               <TextField
                 label="Purchase-order number"
                 value={values.purchaseOrderNumber}
-                onChange={(v) =>
-                  form.setValue('purchaseOrderNumber', v, { shouldDirty: true })
-                }
+                onChange={(v) => {
+                  form.setValue('purchaseOrderNumber', v.replace(/\D/g, ''), {
+                    shouldDirty: true,
+                  });
+                  form.clearErrors('purchaseOrderNumber');
+                }}
+                onBlur={() => setNumberLeft(true)}
                 maxLength={5}
                 inputMode="numeric"
-                error={errors.purchaseOrderNumber?.message}
+                hint="5 digits"
+                error={errors.purchaseOrderNumber?.message ?? numberWarning}
               />
             </div>
           </section>

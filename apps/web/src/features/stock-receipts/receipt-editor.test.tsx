@@ -129,7 +129,7 @@ it('preserves a dirty draft when a background request fails', async () => {
   expect(screen.getByLabelText('Purchase-order number')).toHaveValue('44444');
 });
 
-it('limits the purchase-order number to five characters and requires digits before submitting', async () => {
+it('keeps the purchase-order number to five digits and requires them before submitting', async () => {
   const user = userEvent.setup();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -169,8 +169,14 @@ it('limits the purchase-order number to five characters and requires digits befo
   );
   const field = screen.getByLabelText('Purchase-order number');
   await user.clear(field);
-  await user.type(field, '1234567');
+  await user.type(field, '12a3');
+  expect(field).toHaveValue('123');
+  await user.tab();
+  expect(field).toBeInvalid();
+  expect(field).toHaveAccessibleDescription('Must be 5 digits.');
+  await user.type(field, '4567');
   expect(field).toHaveValue('12345');
+  expect(field).not.toBeInvalid();
 });
 
 it('saves unsaved edits to the draft before submitting it', async () => {
