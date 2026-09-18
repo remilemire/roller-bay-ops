@@ -5,7 +5,7 @@ export const colorCodeSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z0-9-]{1,10}$/);
+  .regex(/^[A-Z0-9./-]{1,16}$/);
 export const thicknessMmSchema = z
   .number()
   .positive()

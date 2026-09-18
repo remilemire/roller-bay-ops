@@ -17,7 +17,7 @@ export const fabricColors = pgTable(
     materialId: uuid('material_id')
       .notNull()
       .references(() => fabricMaterials.id, { onDelete: 'restrict' }),
-    code: varchar('code', { length: 10 }).notNull().unique(),
+    code: varchar('code', { length: 16 }).notNull().unique(),
     thicknessMm: numeric('thickness_mm', { precision: 10, scale: 3 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
@@ -25,9 +25,11 @@ export const fabricColors = pgTable(
   },
   (table) => [
     index('fabric_colors_material_id_idx').on(table.materialId),
+    // Supplier codes are copied verbatim from manufacturer price lists, which use
+    // '/' for split shades (NB1-WHT/GR) and '.' in numeric series (CHR02.02).
     check(
       'fabric_colors_code_format',
-      sql`${table.code} ~ '^[A-Z0-9-]{1,10}$'`,
+      sql`${table.code} ~ '^[A-Z0-9./-]{1,16}$'`,
     ),
     check(
       'fabric_colors_thickness_mm_positive',

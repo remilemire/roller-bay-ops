@@ -405,7 +405,7 @@ function CatalogEditor({
             value={values.name}
             onChange={(v) => form.setValue('name', v)}
             required
-            maxLength={kind === 'colors' ? 10 : 120}
+            maxLength={kind === 'colors' ? 16 : 120}
           />
           {parent && (
             <p>

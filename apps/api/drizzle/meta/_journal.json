@@ -106,6 +106,13 @@
       "when": 1789631387114,
       "tag": "0014_tube_diameter_decimal",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789690351938,
+      "tag": "0015_widen_fabric_color_code",
+      "breakpoints": true
     }
   ]
 }
