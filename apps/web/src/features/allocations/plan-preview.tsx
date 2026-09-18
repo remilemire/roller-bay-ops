@@ -28,7 +28,7 @@ export function PlanPreview({
         {result.status === 'infeasible'
           ? 'No valid plan fits the current requirements and available stock.'
           : result.reason === 'model_limit'
-            ? 'This order exceeds the current optimization limits. Try a smaller order or plan it manually.'
+            ? 'This order is too large to generate a plan for. Try a smaller order or build the plan by hand.'
             : 'The search ended without a complete plan. Try again or adjust the requirements.'}
       </div>
     );

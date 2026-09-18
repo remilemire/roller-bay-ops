@@ -289,7 +289,9 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     ),
   ).toHaveCount(0);
   await page.getByLabel('Quantity', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Optimize', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Generate plan', exact: true })
+    .click();
   await expect(
     page.getByText('Valid cutting plan', { exact: true }),
   ).toBeVisible();

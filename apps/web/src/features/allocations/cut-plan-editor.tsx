@@ -13,13 +13,13 @@ export function CutPlanEditor({
   form,
   units,
   onChange,
-  onOptimize,
+  onGenerate,
   onValidate,
 }: {
   form: UseFormReturn<AllocationForm>;
   units: MeasurementUnits;
   onChange: () => void;
-  onOptimize: () => void;
+  onGenerate: () => void;
   onValidate: () => void;
 }) {
   const cuts = useFieldArray({
@@ -32,40 +32,70 @@ export function CutPlanEditor({
     form.setValue('cuts', value, { shouldDirty: true });
     onChange();
   }
+  function addCut() {
+    cuts.append({ stockItemId: '', length: '', items: [] });
+    onChange();
+  }
+  // A generated plan replaces every cut, so an existing plan needs a nod first.
+  function generate() {
+    if (
+      !cuts.fields.length ||
+      window.confirm('Replace the current cuts with a generated plan?')
+    )
+      onGenerate();
+  }
   return (
     <section className="panel">
       <div className="panel-heading">
         <div>
           <h2>Cutting plan</h2>
           <p>
-            Each cut belongs to one stock item. Blinds are arranged left to
-            right.
+            Each cut comes from one stock item. Blinds are arranged left to
+            right within it.
           </p>
         </div>
-        <div className="inline-actions">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              cuts.append({ stockItemId: '', length: '', items: [] });
-              onChange();
-            }}
-          >
-            <Plus size={16} />
-            Add cut
-          </Button>
-          <Button type="button" onClick={() => onOptimize()}>
-            <Sparkles size={16} />
-            Optimize
-          </Button>
-        </div>
+        {cuts.fields.length > 0 && (
+          <div className="inline-actions">
+            <Button type="button" variant="outline" onClick={addCut}>
+              <Plus size={16} />
+              Add cut
+            </Button>
+            <Button type="button" variant="outline" onClick={generate}>
+              <Sparkles size={16} />
+              Generate plan
+            </Button>
+          </div>
+        )}
       </div>
       <div className="panel-body">
         {!cuts.fields.length && (
-          <p className="muted">
-            Add cuts manually, or optimize after entering the requirements and
-            cutting rules.
-          </p>
+          <div className="plan-start">
+            <div className="plan-option">
+              <Sparkles size={18} />
+              <strong>Generate a plan</strong>
+              <p>
+                Proposes cuts from the required blinds and the stock on hand.
+                You can adjust the result before saving.
+              </p>
+              <Button type="button" onClick={generate}>
+                Generate plan
+              </Button>
+            </div>
+            <span className="plan-or" aria-hidden="true">
+              or
+            </span>
+            <div className="plan-option">
+              <Plus size={18} />
+              <strong>Build it by hand</strong>
+              <p>
+                Choose each stock item, set its cut length and assign blinds to
+                it.
+              </p>
+              <Button type="button" variant="outline" onClick={addCut}>
+                Add cut
+              </Button>
+            </div>
+          </div>
         )}
         {cuts.fields.map((row, index) => {
           // Field-array changes can render before the watched values catch up.
@@ -201,10 +231,12 @@ export function CutPlanEditor({
             </div>
           );
         })}
-        <Button type="button" variant="outline" onClick={() => onValidate()}>
-          <Check size={16} />
-          Validate plan
-        </Button>
+        {cuts.fields.length > 0 && (
+          <Button type="button" variant="outline" onClick={() => onValidate()}>
+            <Check size={16} />
+            Validate plan
+          </Button>
+        )}
       </div>
     </section>
   );

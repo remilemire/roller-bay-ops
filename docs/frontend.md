@@ -58,7 +58,7 @@ New draft creation and cutting completion keep their request key and exact paylo
 
 Unsaved long forms warn before document unload and ordinary in-app link navigation. Browser history navigation is not intercepted; save a draft before leaving. Background refetches do not replace dirty values. Completion forms are not drafts, and active allocations cannot be reopened as drafts.
 
-Optimization calls the existing backend optimizer. It is a preview until confirmation and makes no global-optimality claim. Returned plans can be edited and validated before saving. The browser supports cancelling an optimization request. Completion records consumed stock, measured returned rolls, returned remnants, and retained scraps, then shows any affected allocations flagged for replanning.
+A cutting plan starts in one of two ways: **Generate plan** asks the backend optimizer for cuts, and **Add cut** builds the plan by hand. Generating over an existing plan asks before replacing its cuts. A generated plan is a preview until confirmation and makes no global-optimality claim; it can be edited and validated before saving, and a running generation can be cancelled. Feedback from generating or validating appears in one place between the plan and the form actions, both while the request runs and once it returns. Completion records consumed stock, measured returned rolls, returned remnants, and retained scraps, then shows any affected allocations flagged for replanning.
 
 ## Theme and responsiveness
 
@@ -80,7 +80,7 @@ npx playwright install chromium
 npm run test:e2e --workspace=@roller-bay/web
 ```
 
-Vitest and React Testing Library cover API errors, error envelope parsing, issue labelling, the error notice, cache clearing, query retries, unit conversions and per-field unit preferences, nullable drafts, assignment validation, submission-key reuse, retained completion results, and preservation of dirty forms/revisions during background updates. Playwright covers desktop and tablet navigation, theme persistence/transitions/reduced motion, session expiry/logout/deactivation, permissions, catalog editing, receipt conflicts and submission retries, allocation optimization/draft confirmation, and completion measurements.
+Vitest and React Testing Library cover API errors, error envelope parsing, issue labelling, the error notice, cache clearing, query retries, unit conversions and per-field unit preferences, nullable drafts, assignment validation, submission-key reuse, retained completion results, and preservation of dirty forms/revisions during background updates. Playwright covers desktop and tablet navigation, theme persistence/transitions/reduced motion, session expiry/logout/deactivation, permissions, catalog editing, receipt conflicts and submission retries, allocation plan generation/draft confirmation, and completion measurements.
 
 Browser tests intercept API requests using fixtures shaped by the real shared contracts. They verify the browser's behavior and outgoing requests without changing a database. They do not replace the backend's PostgreSQL/Redis/solver integration suites or live Microsoft tenant testing. Trace files, screenshots, and browser reports are ignored by Git.
 

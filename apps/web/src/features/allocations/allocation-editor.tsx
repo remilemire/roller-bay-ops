@@ -179,7 +179,7 @@ export function AllocationEditor({
           { ...allocationFromForm(form.getValues(), units), plan: result.plan },
           units,
         );
-        // Optimization proposes form changes; it neither saves nor reserves stock.
+        // A generated plan only changes the form; it neither saves nor reserves stock.
         form.setValue('cuts', next.cuts, { shouldDirty: true });
       }
     },
@@ -231,7 +231,7 @@ export function AllocationEditor({
               ? 'Allocation draft'
               : 'New allocation'
         }
-        description="Enter the required blinds, then build or optimize a cutting plan."
+        description="Enter the required blinds, then generate a cutting plan or build one by hand."
       />
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -257,91 +257,113 @@ export function AllocationEditor({
               form={form}
               units={units}
               onChange={() => setPreview(null)}
-              onOptimize={() => planning.mutate('optimize')}
+              onGenerate={() => planning.mutate('optimize')}
               onValidate={() => planning.mutate('validate')}
             />
           </div>
-          {preview && <PlanPreview result={preview} />}
-          {(save.error || validationError || planning.error) && (
-            <ErrorNotice
-              error={save.error ?? validationError ?? planning.error}
-            />
-          )}
-          {save.error && recovery.success && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                form.reset(allocationToForm(recovery.data, units));
-                save.reset();
-              }}
-            >
-              Restore earlier request
-            </Button>
-          )}
-          <div className="form-actions">
-            <span className="draft-state">
-              {form.formState.isDirty
-                ? 'Unsaved changes'
-                : saved
-                  ? 'All changes saved'
-                  : active
-                    ? 'Current active plan'
-                    : 'Not saved yet'}
+        </fieldset>
+        {/* One slot for planning feedback keeps the actions below from moving
+            between the request and its result. It sits outside the fieldset
+            so a running generation can still be cancelled. */}
+        {planning.isPending ? (
+          <div className="notice notice-info" role="status">
+            <span>
+              {planning.variables === 'optimize'
+                ? 'Generating a cutting plan…'
+                : 'Validating the plan…'}
             </span>
-            {close && (
+            {planning.variables === 'optimize' && (
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  if (
-                    !form.formState.isDirty ||
-                    window.confirm('Discard your unsaved changes?')
-                  )
-                    close();
-                }}
+                size="sm"
+                onClick={() => abort.current?.abort()}
               >
-                Cancel editing
-              </Button>
-            )}
-            {saved && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setConfirm('delete')}
-              >
-                Discard draft
-              </Button>
-            )}
-            <Button type="submit" variant={active ? 'default' : 'outline'}>
-              <Save size={16} />
-              {save.isPending
-                ? 'Saving…'
-                : active
-                  ? 'Update reservations'
-                  : 'Save draft'}
-            </Button>
-            {!active && (
-              <Button
-                type="button"
-                disabled={!saved || form.formState.isDirty}
-                onClick={confirmSubmit}
-              >
-                <Check size={16} />
-                Confirm allocation
+                Cancel
               </Button>
             )}
           </div>
-        </fieldset>
-      </form>
-      {planning.isPending && (
-        <div className="notice notice-info" role="status">
-          Finding a cutting plan…
-          <Button variant="ghost" onClick={() => abort.current?.abort()}>
-            Cancel optimization
+        ) : (
+          preview && <PlanPreview result={preview} />
+        )}
+        {(save.error || validationError || planning.error) && (
+          <ErrorNotice
+            error={save.error ?? validationError ?? planning.error}
+          />
+        )}
+        {save.error && recovery.success && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              form.reset(allocationToForm(recovery.data, units));
+              save.reset();
+            }}
+          >
+            Restore earlier request
           </Button>
+        )}
+        <div className="form-actions">
+          <span className="draft-state">
+            {form.formState.isDirty
+              ? 'Unsaved changes'
+              : saved
+                ? 'All changes saved'
+                : active
+                  ? 'Current active plan'
+                  : 'Not saved yet'}
+          </span>
+          {close && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  !form.formState.isDirty ||
+                  window.confirm('Discard your unsaved changes?')
+                )
+                  close();
+              }}
+            >
+              Cancel editing
+            </Button>
+          )}
+          {saved && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setConfirm('delete')}
+            >
+              Discard draft
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant={active ? 'default' : 'outline'}
+            disabled={busy}
+          >
+            <Save size={16} />
+            {save.isPending
+              ? 'Saving…'
+              : active
+                ? 'Update reservations'
+                : 'Save draft'}
+          </Button>
+          {!active && (
+            <Button
+              type="button"
+              disabled={busy || !saved || form.formState.isDirty}
+              onClick={confirmSubmit}
+            >
+              <Check size={16} />
+              Confirm allocation
+            </Button>
+          )}
         </div>
-      )}
+      </form>
       {saved && conflict && (
         <div className="notice notice-warning">
           <div>
