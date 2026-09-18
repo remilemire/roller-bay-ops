@@ -138,7 +138,6 @@ function AllocationRecord({
           Original results remain in history.
         </p>
       )}
-      <History type="allocations" id={id} />
       {correcting && (
         <CompletionCorrectionEditor
           id={id}
@@ -444,6 +443,7 @@ function AllocationRecord({
           </div>
         )}
       </div>
+      <History type="allocations" id={id} />
       <Dialog
         open={cancel}
         onOpenChange={setCancel}

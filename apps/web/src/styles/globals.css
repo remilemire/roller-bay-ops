@@ -1299,6 +1299,9 @@ td strong {
   }
 }
 
+.history {
+  margin-top: 22px;
+}
 .audit-values {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

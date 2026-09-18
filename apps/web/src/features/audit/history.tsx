@@ -161,7 +161,7 @@ export function History({ type, id }: { type: AuditRecordType; id: string }) {
       api(`/${type}/${id}/history?page=${page}`, historySchema, { signal }),
   });
   return (
-    <section className="panel no-print">
+    <section className="panel history no-print">
       <div className="panel-heading">
         <h2>History</h2>
       </div>
