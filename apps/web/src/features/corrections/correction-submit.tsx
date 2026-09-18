@@ -101,14 +101,18 @@ export function CorrectionSubmit({
         disabled={mutation.isPending || review !== null}
         style={{ border: 0, padding: 0 }}
       >
-        {children}
-        <TextField
-          label="Reason for correction"
-          value={reason}
-          onChange={setReason}
-          required
-          maxLength={1000}
-        />
+        {/* Keep the reason at the same spacing as the fields above it; a
+            class on the fieldset would override its hidden attribute. */}
+        <div className="stack">
+          {children}
+          <TextField
+            label="Reason for correction"
+            value={reason}
+            onChange={setReason}
+            required
+            maxLength={1000}
+          />
+        </div>
       </fieldset>
       {(error || mutation.error) && (
         <ErrorNotice error={error ?? mutation.error} />
