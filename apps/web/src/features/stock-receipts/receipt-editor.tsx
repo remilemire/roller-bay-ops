@@ -34,8 +34,12 @@ import {
   finishRequest,
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { showFieldIssues } from '@/lib/field-issues';
 import {
   receiptFormSchema,
+  receiptFieldName,
   receiptToForm,
   receiptFromForm,
   emptyReceiptLine,
@@ -84,7 +88,13 @@ export function ReceiptEditor({
   const [validationError, setValidationError] = useState<unknown>(null);
   const client = useQueryClient();
   const router = useRouter();
-  useUnsavedChanges(form.formState.isDirty);
+  const { errors, isDirty } = form.formState;
+  useUnsavedChanges(isDirty);
+  const fieldName = (issue: ErrorIssue) => receiptFieldName(issuePath(issue));
+  // Issues with a field of their own show beside it; the rest stay in the
+  // notice above the actions.
+  const showIssues = (source: unknown) =>
+    showFieldIssues(form, source, fieldName);
   const refresh = () =>
     Promise.all([
       client.invalidateQueries({ queryKey: receiptKey }),
@@ -98,6 +108,7 @@ export function ReceiptEditor({
         : createReceiptDraft(data, requestKey(scope, data));
     },
     onError: (error) => {
+      showIssues(error);
       if (
         error instanceof ApiError &&
         error.status >= 400 &&
@@ -117,6 +128,7 @@ export function ReceiptEditor({
   });
   const submit = useMutation({
     mutationFn: () => submitReceipt(saved!.id, saved!.revision),
+    onError: (error) => showIssues(error),
     onSuccess: async () => {
       form.reset(form.getValues());
       await refresh();
@@ -153,14 +165,19 @@ export function ReceiptEditor({
     index: number,
     name: keyof ReceiptForm['items'][number],
     value: string,
-  ) => form.setValue(`items.${index}.${name}`, value, { shouldDirty: true });
+  ) => {
+    form.setValue(`items.${index}.${name}`, value, { shouldDirty: true });
+    form.clearErrors(`items.${index}.${name}`);
+  };
   function confirmSubmit() {
     try {
       createStockReceiptSchema.parse(receiptFromForm(form.getValues(), units));
       setValidationError(null);
+      form.clearErrors();
       setConfirmation('submit');
     } catch (error) {
       setValidationError(error);
+      showIssues(error);
     }
   }
   return (
@@ -186,6 +203,7 @@ export function ReceiptEditor({
                 }
                 maxLength={5}
                 inputMode="numeric"
+                error={errors.purchaseOrderNumber?.message}
               />
             </div>
           </section>
@@ -234,6 +252,7 @@ export function ReceiptEditor({
                       label="Color"
                       value={value.fabricColorId}
                       onChange={(v) => field(index, 'fabricColorId', v)}
+                      error={errors.items?.[index]?.fabricColorId?.message}
                       queryKey={[...catalogKey, 'colors']}
                       load={lookupColors}
                     />
@@ -242,24 +261,28 @@ export function ReceiptEditor({
                       type="number"
                       value={value.width}
                       onChange={(v) => field(index, 'width', v)}
+                      error={errors.items?.[index]?.width?.message}
                     />
                     <TextField
                       label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
                       type="number"
                       value={value.length}
                       onChange={(v) => field(index, 'length', v)}
+                      error={errors.items?.[index]?.length?.message}
                     />
                     <TextField
                       label="Quantity"
                       type="number"
                       value={value.quantity}
                       onChange={(v) => field(index, 'quantity', v)}
+                      error={errors.items?.[index]?.quantity?.message}
                     />
                     <div className="span-full">
                       <Lookup
                         label="Destination"
                         value={value.locationId}
                         onChange={(v) => field(index, 'locationId', v)}
+                        error={errors.items?.[index]?.locationId?.message}
                         queryKey={locationsKey}
                         load={lookupLocations}
                       />
@@ -272,6 +295,7 @@ export function ReceiptEditor({
           {(save.error || validationError || submit.error) && (
             <ErrorNotice
               error={save.error ?? validationError ?? submit.error}
+              inline={(issue) => fieldName(issue) !== null}
             />
           )}
           {save.error && recovery.success && (
@@ -288,7 +312,7 @@ export function ReceiptEditor({
           )}
           <div className="form-actions">
             <span className="draft-state">
-              {form.formState.isDirty
+              {isDirty
                 ? 'Unsaved changes'
                 : saved
                   ? 'All changes saved'
@@ -309,14 +333,14 @@ export function ReceiptEditor({
             </Button>
             <Button
               type="button"
-              disabled={!saved || form.formState.isDirty}
+              disabled={!saved || isDirty}
               onClick={confirmSubmit}
             >
               <Check size={16} />
               Submit receipt
             </Button>
           </div>
-          {form.formState.isDirty && saved && (
+          {isDirty && saved && (
             <p
               className="muted"
               style={{ textAlign: 'right', marginTop: 10, fontSize: 11 }}

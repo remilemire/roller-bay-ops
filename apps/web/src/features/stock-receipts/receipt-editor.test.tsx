@@ -135,7 +135,10 @@ it('limits the purchase-order number to five characters and requires digits befo
   // A saved draft may hold partial or older input.
   const partial = {
     ...receiptDraft,
-    data: { ...receiptDraft.data, purchaseOrderNumber: 'PO-1' },
+    data: {
+      purchaseOrderNumber: 'PO-1',
+      items: [{ ...receiptDraft.data.items[0]!, widthMm: null }],
+    },
   };
   const view = render(
     <QueryClientProvider client={client}>
@@ -143,9 +146,18 @@ it('limits the purchase-order number to five characters and requires digits befo
     </QueryClientProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Submit receipt' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Purchase order number: Must be 5 digits.',
-  );
+  // Problems show beside their fields rather than in the notice's list.
+  expect(
+    screen.getByLabelText('Purchase-order number'),
+  ).toHaveAccessibleDescription('Must be 5 digits.');
+  const width = screen.getByLabelText('Width (in)');
+  expect(width).toBeInvalid();
+  expect(width).toHaveAccessibleDescription('Required.');
+  const notice = await screen.findByRole('alert');
+  expect(notice).toHaveTextContent('Some fields are missing or invalid.');
+  expect(notice).not.toHaveTextContent(/digits|width/i);
+  await user.type(width, '54');
+  expect(width).not.toBeInvalid();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   view.unmount();
   render(

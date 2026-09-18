@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FieldPath } from 'react-hook-form';
 import {
   stockReceiptDraftDataSchema,
   type StockReceiptDraftData,
@@ -19,6 +20,24 @@ export const receiptFormSchema = z.object({
   ),
 });
 export type ReceiptForm = z.infer<typeof receiptFormSchema>;
+const LINE_FIELDS: Record<string, keyof ReceiptForm['items'][number]> = {
+  fabricColorId: 'fabricColorId',
+  widthMm: 'width',
+  initialLengthMm: 'length',
+  quantity: 'quantity',
+  locationId: 'locationId',
+};
+/**
+ * The form field that shows an issue reported against the API payload, or
+ * null when the issue belongs to no single field.
+ */
+export function receiptFieldName(path: string): FieldPath<ReceiptForm> | null {
+  const local = path.replace(/^data\./, '');
+  if (local === 'purchaseOrderNumber') return local;
+  const [, line, key] = local.match(/^items\.(\d+)\.(\w+)$/) ?? [];
+  const field = key && LINE_FIELDS[key];
+  return field ? `items.${Number(line)}.${field}` : null;
+}
 export const emptyReceiptLine = () => ({
   fabricColorId: '',
   width: '',

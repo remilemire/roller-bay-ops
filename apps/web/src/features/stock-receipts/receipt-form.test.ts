@@ -4,6 +4,7 @@ import {
   type MeasurementUnits,
 } from '@roller-bay/shared/users';
 import {
+  receiptFieldName,
   receiptFromForm,
   receiptToForm,
   emptyReceiptLine,
@@ -83,4 +84,12 @@ it('reads and writes each field in the unit chosen for it', () => {
     width: '54',
     length: '2.5',
   });
+});
+it('places API issues on the receipt field that fixes them', () => {
+  expect(receiptFieldName('purchaseOrderNumber')).toBe('purchaseOrderNumber');
+  expect(receiptFieldName('data.items.1.widthMm')).toBe('items.1.width');
+  expect(receiptFieldName('items.0.initialLengthMm')).toBe('items.0.length');
+  expect(receiptFieldName('items.0.locationId')).toBe('items.0.locationId');
+  // Issues about the whole list stay in the notice.
+  expect(receiptFieldName('items')).toBeNull();
 });
