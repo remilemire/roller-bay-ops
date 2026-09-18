@@ -5,7 +5,6 @@ import {
 } from '@roller-bay/shared/users';
 import {
   allocationFieldName,
-  allocationFormSchema,
   allocationFromForm,
   allocationToForm,
   emptyRequirement,
@@ -116,13 +115,4 @@ it('places API and plan-validator issues on the field that fixes them', () => {
   // Issues about the whole list or unknown records stay in the notice.
   expect(name('requirements')).toBeNull();
   expect(name(`context.requirements.${crypto.randomUUID()}`)).toBeNull();
-});
-it('accepts a blank or six-digit order number only', () => {
-  const parse = (orderNumber: string) =>
-    allocationFormSchema.safeParse({ orderNumber, requirements: [], cuts: [] })
-      .success;
-  expect(parse('')).toBe(true);
-  expect(parse('104802')).toBe(true);
-  expect(parse('1048')).toBe(false);
-  expect(parse('10480A')).toBe(false);
 });

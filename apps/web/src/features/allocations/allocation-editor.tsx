@@ -109,6 +109,13 @@ export function AllocationEditor({
   const [saved, setSaved] = useState(initial);
   const [confirm, setConfirm] = useState<'submit' | 'delete' | null>(null);
   const [validationError, setValidationError] = useState<unknown>(null);
+  // A draft may keep a partly entered number, so this only warns once the
+  // operator has left the field; confirming is what requires all six digits.
+  const [numberLeft, setNumberLeft] = useState(false);
+  const numberWarning =
+    numberLeft && !/^(\d{6})?$/.test(values.orderNumber)
+      ? 'Must be 6 digits.'
+      : undefined;
   const [preview, setPreview] = useState<
     AllocationOptimization | AllocationValidation | null
   >(null);
@@ -286,19 +293,17 @@ export function AllocationEditor({
                 <TextField
                   label="Order number"
                   value={values.orderNumber}
-                  // Check once the operator leaves the field, then keep
-                  // checking while they correct it.
-                  onChange={(v) =>
+                  onChange={(v) => {
                     form.setValue('orderNumber', v.replace(/\D/g, ''), {
                       shouldDirty: true,
-                      shouldValidate: Boolean(errors.orderNumber),
-                    })
-                  }
-                  onBlur={() => void form.trigger('orderNumber')}
+                    });
+                    form.clearErrors('orderNumber');
+                  }}
+                  onBlur={() => setNumberLeft(true)}
                   maxLength={6}
                   inputMode="numeric"
                   hint="6 digits"
-                  error={errors.orderNumber?.message}
+                  error={errors.orderNumber?.message ?? numberWarning}
                 />
               </div>
             </section>

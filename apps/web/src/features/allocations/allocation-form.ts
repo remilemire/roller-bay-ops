@@ -8,8 +8,7 @@ import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { nullableText, nullableNumber } from '@/lib/format';
 import { fieldInput, fieldValue } from '@/lib/measurements';
 export const allocationFormSchema = z.object({
-  // A draft may leave the order number blank, but never partly entered.
-  orderNumber: z.string().regex(/^(\d{6})?$/, 'Must be 6 digits.'),
+  orderNumber: z.string(),
   requirements: z.array(
     z.object({
       id: z.string(),
