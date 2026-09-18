@@ -193,28 +193,30 @@ function AllocationRecord({
                     className="plan-strip"
                     aria-label={`Blind order within cut ${index + 1}`}
                   >
-                    {cut.items.map((assignment) => {
+                    {cut.items.flatMap((assignment) => {
                       const ri = allocation.requirements.findIndex(
                         (r) => r.id === assignment.requirementId,
                       );
                       const requirement = allocation.requirements[ri];
-                      return (
-                        <span
-                          key={assignment.requirementId}
-                          style={{
-                            flex:
-                              (requirement?.widthMm ?? 1) * assignment.quantity,
-                          }}
-                        >
-                          Blind {ri + 1} × {assignment.quantity}
-                          <br />
-                          {requirement &&
-                            fieldLabel(
-                              units,
-                              'blindWidth',
-                              requirement.widthMm,
-                            )}
-                        </span>
+                      // One span per physical blind so the strip shows every
+                      // piece across the width rather than a combined count.
+                      return Array.from(
+                        { length: assignment.quantity },
+                        (_, copy) => (
+                          <span
+                            key={`${assignment.requirementId}-${copy}`}
+                            style={{ flex: requirement?.widthMm ?? 1 }}
+                          >
+                            Blind {ri + 1}
+                            <br />
+                            {requirement &&
+                              fieldLabel(
+                                units,
+                                'blindWidth',
+                                requirement.widthMm,
+                              )}
+                          </span>
+                        ),
                       );
                     })}
                   </div>
