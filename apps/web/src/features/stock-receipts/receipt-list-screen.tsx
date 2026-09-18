@@ -52,7 +52,7 @@ export function ReceiptListScreen() {
             className={`tab ${draft ? 'active' : ''}`}
             onClick={() => params.set({ state: 'draft' })}
           >
-            Shared drafts
+            Drafts
           </button>
         </div>
       </SearchToolbar>
