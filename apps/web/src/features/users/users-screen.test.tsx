@@ -20,6 +20,7 @@ const person = (id: string, name: string, role: User['role']): User => ({
   email: `${name.split(' ')[0]!.toLowerCase()}@example.com`,
   createdAt: '2026-09-16T12:00:00.000Z',
   measurementUnits: defaultMeasurementUnits,
+  colorTheme: 'slate',
 });
 const owner = person('owner-1', 'Olive Owner', 'owner');
 const admin = person('admin-1', 'Ada Admin', 'admin');

@@ -38,8 +38,8 @@ export function SettingsScreen() {
           <div className="panel-body">
             <ColorThemePicker />
             <p className="muted">
-              Saved in this browser. Reduced motion follows your device
-              settings.
+              Color theme is saved to your account; light or dark mode is saved
+              in this browser. Reduced motion follows your device settings.
             </p>
           </div>
         </section>

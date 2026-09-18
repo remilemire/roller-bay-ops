@@ -88,7 +88,7 @@ test('preview cards select all five palettes in light and dark mode and survive 
   ).toBe(true);
 });
 
-test('palette follows local storage across tabs and system mode stays independent', async ({
+test('palette follows the account over the browser cache and system mode stays independent', async ({
   page,
   context,
 }) => {
@@ -106,27 +106,23 @@ test('palette follows local storage across tabs and system mode stays independen
     'background-color',
     palettes[2].dark,
   );
+  // Another account in the same browser starts from the cached Ocean but
+  // settles on its own palette.
   const other = await context.newPage();
-  await mockApi(other);
-  await other.goto('/');
-  await expect(other.locator('html')).toHaveAttribute(
-    'data-color-theme',
-    'ocean',
-  );
-  await appearance.getByText('Sand', { exact: true }).click();
+  const otherAccount = await mockApi(other);
+  otherAccount.colorTheme = 'sand';
+  await other.goto('/settings');
   await expect(other.locator('html')).toHaveAttribute(
     'data-color-theme',
     'sand',
   );
-  await other.evaluate(() => localStorage.removeItem('roller-bay-color-theme'));
   await expect(
-    appearance.getByRole('radio', { name: 'Slate', exact: true }),
+    other.getByRole('radio', { name: 'Sand', exact: true }),
   ).toBeChecked();
-  await expect(page.locator('html')).toHaveClass('dark');
   await other.close();
 });
 
-test('saved palette is applied before React loads and invalid storage falls back to Slate', async ({
+test('cached palette is applied before React loads and invalid storage falls back to Slate', async ({
   page,
 }) => {
   await page.addInitScript(() =>

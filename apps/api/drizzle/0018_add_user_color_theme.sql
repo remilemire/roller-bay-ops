@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "color_theme" varchar(20) DEFAULT 'slate' NOT NULL;

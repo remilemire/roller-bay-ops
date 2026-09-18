@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  updateColorThemeSchema,
+  type UpdateColorTheme,
   updateMeasurementUnitsSchema,
   type UpdateMeasurementUnits,
   updateUserActivationSchema,
@@ -37,7 +39,8 @@ export class UsersController {
     return this.users.list(query);
   }
 
-  // Any active user may change their own units; the target is never a path id.
+  // Any active user may change their own preferences; the target is never a
+  // path id.
   @Patch('me/measurement-units')
   setMeasurementUnits(
     @Req() request: Request,
@@ -45,6 +48,15 @@ export class UsersController {
     input: UpdateMeasurementUnits,
   ) {
     return this.users.setMeasurementUnits(request.currentUser!.id, input);
+  }
+
+  @Patch('me/color-theme')
+  setColorTheme(
+    @Req() request: Request,
+    @Body(new ZodValidationPipe(updateColorThemeSchema))
+    input: UpdateColorTheme,
+  ) {
+    return this.users.setColorTheme(request.currentUser!.id, input.colorTheme);
   }
 
   @Patch(':id/activation')

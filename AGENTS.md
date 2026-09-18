@@ -34,7 +34,7 @@ Roller Bay Ops tracks physical fabric rolls and remnants, receiving, storage loc
 
 ## Frontend and authentication
 
-- Keep the UI practical and minimalist: concise labels, useful instructions, and operational data. Avoid promotional banners, slogans, and redundant descriptions. Preserve the glassy light/dark theme, accessible controls, and desktop/tablet usability.
+- Keep the UI practical and minimalist: concise labels, useful instructions, and operational data. Avoid promotional banners, slogans, and redundant descriptions. Preserve the glassy light/dark theme, accessible controls, and desktop/tablet usability. The color palette is stored on the user record; light/dark/system mode stays in the browser.
 - TanStack Query owns server data; URL parameters own filters and pagination; forms own unsaved input. Validate API responses using shared schemas.
 - Do not optimistically update balances, reservations, or submissions. Background refetches must not overwrite dirty forms; conflicts preserve input and retries preserve the original submission key/payload or revision.
 - Microsoft OAuth and Redis sessions belong to the backend. Browser requests include session credentials; the backend remains authoritative for permissions. Preserve CSRF/Origin checks, CORS, rate limiting, and private-cache clearing on session expiry/logout.

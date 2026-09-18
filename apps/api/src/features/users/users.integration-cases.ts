@@ -342,6 +342,48 @@ export async function testUserRoles(
   );
 
   await t.test(
+    'users choose their own color theme without affecting other accounts',
+    async () => {
+      const patchTheme = (
+        cookie: string | null,
+        body: unknown,
+        withOrigin = true,
+      ) => {
+        let call = request(server).patch('/api/users/me/color-theme');
+        if (cookie) call = call.set('Cookie', cookie);
+        if (withOrigin) call = call.set('Origin', origin);
+        return call.send(body as object);
+      };
+      await patchTheme(null, { colorTheme: 'plum' }).expect(401);
+      await patchTheme(recipientCookie, { colorTheme: 'plum' }, false).expect(
+        403,
+      );
+      for (const body of [
+        {},
+        { colorTheme: 'neon' },
+        { colorTheme: null },
+        { colorTheme: 'plum', extra: true },
+      ])
+        await patchTheme(recipientCookie, body).expect(400);
+      assert.equal((await me(recipientCookie)).colorTheme, 'slate');
+      const updated = userSchema.parse(
+        (await patchTheme(recipientCookie, { colorTheme: 'plum' }).expect(200))
+          .body,
+      );
+      assert.equal(updated.id, recipientId);
+      assert.equal(updated.colorTheme, 'plum');
+      assert.equal((await me(recipientCookie)).colorTheme, 'plum');
+      assert.equal((await me(adminCookie)).colorTheme, 'slate');
+      // A stored palette that is no longer offered falls back to the default.
+      await pool.query(
+        `UPDATE "${schema}".users SET color_theme='neon' WHERE id=$1`,
+        [recipientId],
+      );
+      assert.equal((await me(recipientCookie)).colorTheme, 'slate');
+    },
+  );
+
+  await t.test(
     'ownership transfer is owner-only, requires an active recipient, and rolls back on failure',
     async () => {
       for (const cookie of [adminCookie, recipientCookie])

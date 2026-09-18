@@ -89,6 +89,27 @@ export function resolveMeasurementUnits(stored: unknown): MeasurementUnits {
   return units;
 }
 
+// Palette only; light/dark mode stays a per-browser preference.
+export const colorThemes = ['slate', 'sage', 'ocean', 'sand', 'plum'] as const;
+
+export const colorThemeSchema = z.enum(colorThemes);
+
+export type ColorTheme = z.infer<typeof colorThemeSchema>;
+
+export const defaultColorTheme: ColorTheme = 'slate';
+
+/** A stored palette that is no longer offered falls back to the default. */
+export function resolveColorTheme(stored: unknown): ColorTheme {
+  const parsed = colorThemeSchema.safeParse(stored);
+  return parsed.success ? parsed.data : defaultColorTheme;
+}
+
+export const updateColorThemeSchema = z.strictObject({
+  colorTheme: colorThemeSchema,
+});
+
+export type UpdateColorTheme = z.infer<typeof updateColorThemeSchema>;
+
 export const userSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
@@ -97,6 +118,7 @@ export const userSchema = z.object({
   email: emailSchema,
   createdAt: z.iso.datetime(),
   measurementUnits: measurementUnitsSchema,
+  colorTheme: colorThemeSchema,
 });
 
 export type User = z.infer<typeof userSchema>;

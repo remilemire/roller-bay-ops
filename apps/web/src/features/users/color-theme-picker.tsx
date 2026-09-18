@@ -1,12 +1,21 @@
 'use client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
+import { ErrorNotice } from '@/components/ui/feedback';
+import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { sessionKey } from '@/features/auth/auth.queries';
 import { colorThemes } from '@/lib/color-themes';
-import { useColorTheme } from '@/lib/use-color-theme';
-import { useHydrated } from '@/lib/use-hydrated';
+import { updateColorTheme } from './users.api';
 
 export function ColorThemePicker() {
-  const { colorTheme, setColorTheme } = useColorTheme();
-  const hydrated = useHydrated();
+  const { colorTheme } = useCurrentUser();
+  const client = useQueryClient();
+  const change = useMutation({
+    mutationFn: updateColorTheme,
+    // The session's value drives both the radios and the applied palette, so
+    // a failed change visibly stays on the saved one.
+    onSuccess: (user) => client.setQueryData(sessionKey, user),
+  });
 
   return (
     <fieldset className="color-theme-picker">
@@ -20,8 +29,8 @@ export function ColorThemePicker() {
               name="color-theme"
               value={value}
               checked={colorTheme === value}
-              disabled={!hydrated}
-              onChange={() => setColorTheme(value)}
+              // Disabling the radios would drop keyboard focus mid-navigation.
+              onChange={() => change.isPending || change.mutate(value)}
             />
             <span
               className="color-theme-preview"
@@ -59,6 +68,7 @@ export function ColorThemePicker() {
           </label>
         ))}
       </div>
+      {change.error && <ErrorNotice error={change.error} />}
     </fieldset>
   );
 }

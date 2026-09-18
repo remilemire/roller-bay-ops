@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { asc, count, eq, ilike, or, sql } from 'drizzle-orm';
 import type {
+  ColorTheme,
   UpdateMeasurementUnits,
   UserQuery,
   UserRole,
@@ -139,6 +140,10 @@ export class UsersRepository {
     return user;
   }
 
+  setColorTheme(id: string, colorTheme: ColorTheme) {
+    return this.update(id, { colorTheme });
+  }
+
   async withLockedTransaction<T>(
     operation: (repository: UsersRepository) => Promise<T>,
   ): Promise<T> {
@@ -155,7 +160,7 @@ export class UsersRepository {
 
   private async update(
     id: string,
-    values: { role?: UserRole; isActive?: boolean },
+    values: { role?: UserRole; isActive?: boolean; colorTheme?: ColorTheme },
   ) {
     const [user] = await this.db
       .update(users)

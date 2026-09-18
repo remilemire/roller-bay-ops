@@ -127,6 +127,13 @@
       "when": 1789700284283,
       "tag": "0017_narrow_fabric_color_code",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789715953801,
+      "tag": "0018_add_user_color_theme",
+      "breakpoints": true
     }
   ]
 }

@@ -94,12 +94,15 @@ Roles form a hierarchy: `owner` inherits all `admin` permissions, and both inher
 | `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to user or admin.                      |
 | `POST /api/users/transfer-ownership`    | Current owner only | Transfer ownership to `newOwnerId` from the JSON body.        |
 | `PATCH /api/users/me/measurement-units` | Any active user    | Set the caller's own unit for one or more measurement fields. |
+| `PATCH /api/users/me/color-theme`       | Any active user    | Set the caller's own color palette.                           |
 
 The list accepts `page`, `pageSize` (1–100, default 25), and `search`, which matches the name or email as a case-insensitive literal substring. Unknown query parameters receive 400. It returns `{ items, total, page, pageSize }` with public user records ordered by name, including inactive users, read from one snapshot so the page and total agree.
 
 Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body must contain only `role`; assigning `owner` through this endpoint is rejected with 400. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
 
 Measurement unit updates accept a partial object such as `{ "blindWidth": "mm" }` whose keys are measurement fields and whose values are `in`, `ft`, `yd`, `mm`, `cm`, or `m`. The body must not be empty and may not name other fields. Keys merge with earlier choices in a single statement, the target is always the signed-in user, and the response is the caller's public user record. Stored values that are no longer offered fall back to the default for that field. The `0011_add_user_measurement_units.sql` migration adds `measurement_units jsonb NOT NULL DEFAULT '{}'`, so existing users start with the defaults.
+
+Color theme updates accept exactly `{ "colorTheme": "slate" | "sage" | "ocean" | "sand" | "plum" }` and return the caller's public user record. The `0018_add_user_color_theme.sql` migration adds `color_theme varchar(20) NOT NULL DEFAULT 'slate'`, so existing users start on Slate. The column is text rather than an enum; a stored palette that is no longer offered resolves to Slate. Light/dark mode is not stored on the account.
 
 Ownership transfer accepts `{ "newOwnerId": "<user UUID>" }` and returns `{ previousOwner, newOwner }` with both public user records. The recipient must be an existing active user or admin. Transferring to yourself or an inactive user returns 409; a missing recipient returns 404. The previous owner becomes an admin. Both updates commit atomically, and failure rolls both back. Concurrent transfers by the same owner have only one winner; the other request receives 403 after its owner permission is rechecked.
 

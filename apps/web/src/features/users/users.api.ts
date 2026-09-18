@@ -5,6 +5,7 @@ import {
   updateUserRoleSchema,
   userListSchema,
   userSchema,
+  type ColorTheme,
   type UpdateMeasurementUnits,
   type UpdateUserRole,
 } from '@roller-bay/shared/users';
@@ -14,6 +15,11 @@ export const updateMeasurementUnits = (patch: UpdateMeasurementUnits) =>
   api('/users/me/measurement-units', userSchema, {
     method: 'PATCH',
     body: patch,
+  });
+export const updateColorTheme = (colorTheme: ColorTheme) =>
+  api('/users/me/color-theme', userSchema, {
+    method: 'PATCH',
+    body: { colorTheme },
   });
 export const listUsers = (search: string, page: number, signal?: AbortSignal) =>
   api(`/users${queryString({ search, page, pageSize: 25 })}`, userListSchema, {

@@ -31,6 +31,11 @@ export const users = pgTable(
       .$type<Partial<MeasurementUnits>>()
       .notNull()
       .default({}),
+    // Text rather than an enum so retiring a palette needs no migration; the
+    // service resolves unknown values to the default.
+    colorTheme: varchar('color_theme', { length: 20 })
+      .notNull()
+      .default('slate'),
   },
   (table) => [
     uniqueIndex('users_email_unique').on(sql`lower(${table.email})`),

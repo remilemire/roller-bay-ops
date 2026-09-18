@@ -79,6 +79,7 @@ export async function mockApi(
     role: options.role ?? 'admin',
     measurementUnits: { ...defaultMeasurementUnits } as MeasurementUnits,
     unitRequests: [] as unknown[],
+    colorTheme: 'slate',
     teammateRole: 'user',
     userRequests: [] as unknown[],
     receiptDraft: structuredClone(receiptDraft),
@@ -131,6 +132,7 @@ export async function mockApi(
               ...user,
               role: state.role,
               measurementUnits: state.measurementUnits,
+              colorTheme: state.colorTheme,
             }
           : { message: 'Sign in required' },
         state.authenticated ? 200 : 401,
@@ -149,6 +151,18 @@ export async function mockApi(
         ...user,
         role: state.role,
         measurementUnits: state.measurementUnits,
+        colorTheme: state.colorTheme,
+      });
+    }
+    if (path === '/users/me/color-theme' && method === 'PATCH') {
+      state.colorTheme = (
+        request.postDataJSON() as { colorTheme: string }
+      ).colorTheme;
+      return send({
+        ...user,
+        role: state.role,
+        measurementUnits: state.measurementUnits,
+        colorTheme: state.colorTheme,
       });
     }
     if (path === '/users' && method === 'GET')

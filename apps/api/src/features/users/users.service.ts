@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  resolveColorTheme,
   resolveMeasurementUnits,
   userSchema,
+  type ColorTheme,
   type UpdateMeasurementUnits,
   type UserQuery,
   type UserRole,
@@ -152,6 +154,16 @@ export class UsersService {
     }
   }
 
+  async setColorTheme(userId: string, colorTheme: ColorTheme) {
+    try {
+      return this.toPublic(
+        await this.repository.setColorTheme(userId, colorTheme),
+      );
+    } catch (error) {
+      this.rethrowStorageError(error);
+    }
+  }
+
   private async requireUser(users: UsersRepository, id: string) {
     const user = await users.findById(id);
     if (!user) throw new NotFoundException('User not found.');
@@ -181,6 +193,7 @@ export class UsersService {
       ...user,
       createdAt: user.createdAt.toISOString(),
       measurementUnits: resolveMeasurementUnits(user.measurementUnits),
+      colorTheme: resolveColorTheme(user.colorTheme),
     });
   }
 }

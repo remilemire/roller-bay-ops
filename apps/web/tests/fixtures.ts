@@ -30,6 +30,7 @@ export const user = {
   isActive: true,
   createdAt: timestamp,
   measurementUnits: defaultMeasurementUnits,
+  colorTheme: 'slate',
 };
 export const color = {
   id: ids.color,
