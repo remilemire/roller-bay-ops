@@ -160,17 +160,28 @@ export function AllocationEditor({
       client.setQueryData([...allocationKey, record.id], record);
       await refresh();
       if (active) close?.();
-      else if (!initial) router.replace(`/allocations/${record.id}`);
+      // A save made on the way to confirming stays put: the dialog is still
+      // open, and navigating would remount the form underneath it.
+      else if (!initial && confirm !== 'submit')
+        router.replace(`/allocations/${record.id}`);
     },
   });
   const submit = useMutation({
-    mutationFn: () => submitAllocation(saved!.id, saved!.revision),
+    mutationFn: async () => {
+      // Submission carries no payload: the API confirms the stored draft. So
+      // unsaved input is saved to the same draft first, as its own revision.
+      const draft =
+        saved && !form.formState.isDirty
+          ? saved
+          : await save.mutateAsync(form.getValues());
+      return submitAllocation(draft.id, draft.revision);
+    },
     onError: (error) => showIssues(errorIssues(error)),
-    onSuccess: async () => {
+    onSuccess: async (record) => {
       form.reset(form.getValues());
       await refresh();
       onSubmitted?.();
-      router.replace(`/allocations/${saved!.id}`);
+      router.replace(`/allocations/${record.id}`);
     },
   });
   const remove = useMutation({
@@ -241,6 +252,12 @@ export function AllocationEditor({
       setValidationError(error);
       showIssues(errorIssues(error));
     }
+  }
+  function closeConfirm() {
+    setConfirm(null);
+    // A failed confirmation may still have saved a new draft; move to its URL
+    // so a reload reopens it.
+    if (saved && !initial) router.replace(`/allocations/${saved.id}`);
   }
   return (
     <>
@@ -386,11 +403,7 @@ export function AllocationEditor({
                 : 'Save draft'}
           </Button>
           {!active && (
-            <Button
-              type="button"
-              disabled={busy || !saved || isDirty}
-              onClick={confirmSubmit}
-            >
+            <Button type="button" disabled={busy} onClick={confirmSubmit}>
               <Check size={16} />
               Confirm allocation
             </Button>
@@ -424,7 +437,7 @@ export function AllocationEditor({
       <Dialog
         open={confirm !== null}
         onOpenChange={(open) => {
-          if (!open && !busy) setConfirm(null);
+          if (!open && !busy) closeConfirm();
         }}
         title={
           confirm === 'submit'
@@ -433,7 +446,7 @@ export function AllocationEditor({
         }
         description={
           confirm === 'submit'
-            ? 'The complete plan is checked against current stock before reservations are created.'
+            ? `${isDirty || !saved ? 'Your changes are saved to the draft first. ' : ''}The complete plan is checked against current stock before reservations are created.`
             : 'This removes the shared draft for everyone.'
         }
       >
@@ -441,11 +454,7 @@ export function AllocationEditor({
           <ErrorNotice error={submit.error ?? remove.error} />
         )}
         <div className="form-actions">
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => setConfirm(null)}
-          >
+          <Button variant="outline" disabled={busy} onClick={closeConfirm}>
             Go back
           </Button>
           <Button

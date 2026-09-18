@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -12,9 +12,11 @@ import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
 import { ApiError } from '@/lib/api';
 
-const { replace, optimize } = vi.hoisted(() => ({
+const { replace, optimize, saveDraft, submit } = vi.hoisted(() => ({
   replace: vi.fn(),
   optimize: vi.fn(),
+  saveDraft: vi.fn(),
+  submit: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -36,6 +38,8 @@ vi.mock('./allocations.api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./allocations.api')>()),
   replaceAllocation: replace,
   optimizeAllocation: optimize,
+  saveAllocationDraft: saveDraft,
+  submitAllocation: submit,
 }));
 const draft = allocationDraftSchema.parse({
   id: allocation.id,
@@ -190,4 +194,31 @@ it('shows submission problems beside their fields instead of listing them', asyn
   expect(notice).not.toHaveTextContent('width');
   await user.type(width, '54');
   expect(width).not.toBeInvalid();
+});
+
+it('saves unsaved edits to the draft before confirming it', async () => {
+  const user = userEvent.setup();
+  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
+  submit.mockResolvedValue({ ...allocation, revision: 3 });
+  render(
+    <QueryClientProvider client={client()}>
+      <AllocationEditor initial={draft} />
+    </QueryClientProvider>,
+  );
+  await user.clear(screen.getByLabelText('Order number'));
+  await user.type(screen.getByLabelText('Order number'), '104802');
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  expect(
+    screen.getByText(/Your changes are saved to the draft first\./),
+  ).toBeInTheDocument();
+  const dialog = screen.getByRole('dialog');
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Confirm allocation' }),
+  );
+  await waitFor(() => expect(submit).toHaveBeenCalledWith(draft.id, 2));
+  expect(saveDraft).toHaveBeenCalledWith(
+    draft.id,
+    1,
+    expect.objectContaining({ orderNumber: '104802' }),
+  );
 });
