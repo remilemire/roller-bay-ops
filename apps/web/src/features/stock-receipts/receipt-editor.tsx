@@ -123,17 +123,28 @@ export function ReceiptEditor({
       form.reset(receiptToForm(draft.data, units));
       client.setQueryData([...receiptKey, draft.id], draft);
       await refresh();
-      if (!initial) router.replace(`/stock-receipts/${draft.id}`);
+      // A save made on the way to submitting stays put: the dialog is still
+      // open, and navigating would remount the form underneath it.
+      if (!initial && confirmation !== 'submit')
+        router.replace(`/stock-receipts/${draft.id}`);
     },
   });
   const submit = useMutation({
-    mutationFn: () => submitReceipt(saved!.id, saved!.revision),
+    mutationFn: async () => {
+      // Submission carries no payload: the API submits the stored draft. So
+      // unsaved input is saved to the same draft first, as its own revision.
+      const draft =
+        saved && !form.formState.isDirty
+          ? saved
+          : await save.mutateAsync(form.getValues());
+      return submitReceipt(draft.id, draft.revision);
+    },
     onError: (error) => showIssues(error),
-    onSuccess: async () => {
+    onSuccess: async (record) => {
       form.reset(form.getValues());
       await refresh();
       onSubmitted?.();
-      router.replace(`/stock-receipts/${saved!.id}`);
+      router.replace(`/stock-receipts/${record.id}`);
     },
   });
   const remove = useMutation({
@@ -179,6 +190,12 @@ export function ReceiptEditor({
       setValidationError(error);
       showIssues(error);
     }
+  }
+  function closeConfirmation() {
+    setConfirmation(null);
+    // A failed submission may still have saved a new draft; move to its URL
+    // so a reload reopens it.
+    if (saved && !initial) router.replace(`/stock-receipts/${saved.id}`);
   }
   return (
     <>
@@ -331,23 +348,11 @@ export function ReceiptEditor({
               <Save size={16} />
               {save.isPending ? 'Saving…' : 'Save draft'}
             </Button>
-            <Button
-              type="button"
-              disabled={!saved || isDirty}
-              onClick={confirmSubmit}
-            >
+            <Button type="button" onClick={confirmSubmit}>
               <Check size={16} />
               Submit receipt
             </Button>
           </div>
-          {isDirty && saved && (
-            <p
-              className="muted"
-              style={{ textAlign: 'right', marginTop: 10, fontSize: 11 }}
-            >
-              Save your changes before submitting.
-            </p>
-          )}
         </fieldset>
       </form>
       {saved && conflict && (
@@ -377,7 +382,7 @@ export function ReceiptEditor({
       <Dialog
         open={confirmation !== null}
         onOpenChange={(open) => {
-          if (!open && !busy) setConfirmation(null);
+          if (!open && !busy) closeConfirmation();
         }}
         title={
           confirmation === 'submit'
@@ -386,18 +391,14 @@ export function ReceiptEditor({
         }
         description={
           confirmation === 'submit'
-            ? 'This creates stock items for every roll. Submitted receipts cannot be edited.'
+            ? `${isDirty || !saved ? 'Your changes are saved to the draft first. ' : ''}This creates stock items for every roll. Submitted receipts cannot be edited.`
             : 'This removes the shared draft for everyone.'
         }
       >
         {remove.error && <ErrorNotice error={remove.error} />}
         {submit.error && <ErrorNotice error={submit.error} />}
         <div className="form-actions">
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => setConfirmation(null)}
-          >
+          <Button variant="outline" disabled={busy} onClick={closeConfirmation}>
             Go back
           </Button>
           <Button

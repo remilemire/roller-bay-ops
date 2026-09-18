@@ -1,5 +1,5 @@
 import { it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { receiptDraft } from '../../../tests/fixtures';
@@ -8,8 +8,9 @@ import { ReceiptDetailScreen } from './receipt-detail-screen';
 import { receiptKey } from './stock-receipts.api';
 import { ApiError } from '@/lib/api';
 import { receipt } from '../../../tests/fixtures';
-const { save, replace } = vi.hoisted(() => ({
+const { save, submit, replace } = vi.hoisted(() => ({
   save: vi.fn(),
+  submit: vi.fn(),
   replace: vi.fn(),
 }));
 vi.mock('next/navigation', () => ({
@@ -31,6 +32,7 @@ vi.mock('@/components/ui/lookup', () => ({
 vi.mock('./stock-receipts.api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./stock-receipts.api')>()),
   saveReceiptDraft: save,
+  submitReceipt: submit,
 }));
 it('keeps dirty values and the original expected revision after a shared draft changes', async () => {
   const user = userEvent.setup();
@@ -169,4 +171,35 @@ it('limits the purchase-order number to five characters and requires digits befo
   await user.clear(field);
   await user.type(field, '1234567');
   expect(field).toHaveValue('12345');
+});
+
+it('saves unsaved edits to the draft before submitting it', async () => {
+  const user = userEvent.setup();
+  save.mockResolvedValue({ ...receiptDraft, revision: 2 });
+  submit.mockResolvedValue(receipt);
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <ReceiptEditor initial={receiptDraft} />
+    </QueryClientProvider>,
+  );
+  await user.clear(screen.getByLabelText('Purchase-order number'));
+  await user.type(screen.getByLabelText('Purchase-order number'), '55555');
+  await user.click(screen.getByRole('button', { name: 'Submit receipt' }));
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent(
+    'Your changes are saved to the draft first.',
+  );
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Submit receipt' }),
+  );
+  await waitFor(() => expect(submit).toHaveBeenCalledWith(receiptDraft.id, 2));
+  expect(save).toHaveBeenCalledWith(
+    receiptDraft.id,
+    1,
+    expect.objectContaining({ purchaseOrderNumber: '55555' }),
+  );
 });
