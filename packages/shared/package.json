@@ -32,6 +32,10 @@
       "types": "./dist/features/allocations/index.d.ts",
       "default": "./dist/features/allocations/index.js"
     },
+    "./order-schedule": {
+      "types": "./dist/features/order-schedule/index.d.ts",
+      "default": "./dist/features/order-schedule/index.js"
+    },
     "./errors": {
       "types": "./dist/errors/index.d.ts",
       "default": "./dist/errors/index.js"
