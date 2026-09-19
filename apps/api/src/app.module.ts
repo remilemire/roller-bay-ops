@@ -10,6 +10,7 @@ import { FabricCatalogModule } from './features/fabric-catalog/fabric-catalog.mo
 import { AuthModule } from './features/auth/auth.module.js';
 import { LocationsModule } from './features/locations/locations.module.js';
 import { StockItemsModule } from './features/stock-items/stock-items.module.js';
+import { OrderScheduleModule } from './features/order-schedule/order-schedule.module.js';
 import { RateLimitingModule } from './rate-limiting/rate-limiting.module.js';
 import { FrontendProxyModule } from './frontend-proxy/frontend-proxy.module.js';
 import { ErrorsModule } from './common/errors/errors.module.js';
@@ -31,6 +32,7 @@ import { ErrorsModule } from './common/errors/errors.module.js';
     LocationsModule,
     StockItemsModule,
     StockReceiptsModule,
+    OrderScheduleModule,
     AllocationsModule,
   ],
 })

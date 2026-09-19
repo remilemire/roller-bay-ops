@@ -4,6 +4,8 @@ import { AllocationsModule } from '../allocations/allocations.module.js';
 import { testAllocations } from '../allocations/allocations.integration-cases.js';
 import { testStockReceipts } from '../stock-receipts/stock-receipts.integration-cases.js';
 import { StockReceiptsModule } from '../stock-receipts/stock-receipts.module.js';
+import { testOrderSchedule } from '../order-schedule/order-schedule.integration-cases.js';
+import { OrderScheduleModule } from '../order-schedule/order-schedule.module.js';
 import 'reflect-metadata';
 import { testUserRoles } from '../users/users.integration-cases.js';
 import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
@@ -105,6 +107,7 @@ test(
         LocationsModule,
         StockItemsModule,
         StockReceiptsModule,
+        OrderScheduleModule,
         AllocationsModule,
       ],
     })
@@ -280,6 +283,16 @@ test(
       );
 
       await testStockReceipts(
+        t,
+        app,
+        pool,
+        schema,
+        authenticated,
+        userId,
+        config.WEB_ORIGIN,
+      );
+
+      await testOrderSchedule(
         t,
         app,
         pool,

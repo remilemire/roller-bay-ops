@@ -11,6 +11,7 @@ const tables = [
   'stock_receipts',
   'stock_receipt_items',
   'fabric_stock_items',
+  'scheduled_orders',
   'allocations',
   'allocation_requirements',
   'allocation_items',
@@ -43,6 +44,9 @@ export async function copyApplicationTables(pool: Pool, schema: string) {
     );
     await client.query(
       `ALTER TABLE ${target}.fabric_colors RENAME CONSTRAINT fabric_colors_code_key TO fabric_colors_code_unique`,
+    );
+    await client.query(
+      `ALTER TABLE ${target}.scheduled_orders RENAME CONSTRAINT scheduled_orders_order_number_key TO scheduled_orders_order_number_unique`,
     );
     await client.query(
       `ALTER INDEX ${target}.location_zones_lower_idx RENAME TO location_zones_name_unique`,

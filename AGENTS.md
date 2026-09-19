@@ -24,7 +24,7 @@ Roller Bay Ops tracks physical fabric rolls and remnants, receiving, storage loc
 
 ## Domain boundaries
 
-- A fabric **color** is the company's unique fabric identifier, not simply a visual color. Keep the manufacturer → material → color hierarchy and the established feature names: `fabric-catalog`, `locations`, `stock-items`, `stock-receipts`, and `allocations`.
+- A fabric **color** is the company's unique fabric identifier, not simply a visual color. Keep the manufacturer → material → color hierarchy and the established feature names: `fabric-catalog`, `locations`, `stock-items`, `stock-receipts`, `order-schedule`, and `allocations`.
 - Stock receipts record fabric that has arrived. Keep `purchaseOrderNumber` for supplier paperwork; do not rename the receiving workflow to purchase orders.
 - The API and database use millimetres. The UI defaults to inches for widths, drops, and cutting measurements, yards for roll length, and millimetres for thickness and roll measurements, including tube outer diameter; each user may choose a unit per measurement field in Settings, stored on the user record. Preserve the shared contracts' precision; blanks must not become zero.
 - Roll depth is radial: `(outer diameter − tube diameter) / 2`. Explicit remaining length belongs to remnants. Consult [stock-items](docs/stock-items.md) and [roll measurement](docs/roll-measurement.md) before changing measurement or lifecycle rules.

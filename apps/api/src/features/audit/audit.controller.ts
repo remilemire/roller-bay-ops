@@ -29,4 +29,12 @@ export class AuditController {
   ) {
     return this.audit.history('allocations', id, query);
   }
+  @Get('order-schedule/:id/history')
+  order(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query(new ZodValidationPipe(historyQuerySchema))
+    query: { page: number; pageSize: number },
+  ) {
+    return this.audit.history('order-schedule', id, query);
+  }
 }

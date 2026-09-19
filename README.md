@@ -8,6 +8,8 @@ See [deployment](docs/deployment.md) for the Vercel frontend, Render API and sol
 
 The [locations API](docs/locations.md) manages zones, sections, and storage levels with admin-controlled writes.
 
+The [order schedule API](docs/order-schedule.md) lists production orders with ship dates and a status derived from their milestones.
+
 The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, shared Zod contracts, and a standalone Python solver. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning and cutting-result entry. The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership). API failures share one [error envelope](docs/errors.md).
 
 ## Get started
@@ -74,6 +76,7 @@ apps/
       locations/                # Zones, sections, and storage levels
       stock-items/              # Physical rolls/remnants and admin CRUD
       stock-receipts/            # Receipts, drafts, and idempotent submission
+      order-schedule/           # Production orders, ship dates, and milestones
       allocations/              # Cutting plans, reservations, and completion
       audit/                    # Stock and workflow change history
     src/solver/                 # Generic HTTP client for the Python solver
@@ -95,6 +98,7 @@ packages/
     src/features/locations/     # Storage location contracts
     src/features/stock-items/   # Physical stock contracts
     src/features/stock-receipts/ # Receipt and draft contracts
+    src/features/order-schedule/ # Scheduled order contracts
     src/features/allocations/   # Planning, draft, and completion contracts
     src/features/corrections/   # Correction contracts
     src/features/audit/         # History contracts

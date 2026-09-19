@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { stockSnapshotSchema } from '../stock-items/index.js';
 import { stockReceiptRecordSchema } from '../stock-receipts/index.js';
 import { allocationRecordSchema } from '../allocations/index.js';
+import { scheduledOrderSchema } from '../order-schedule/index.js';
 export const auditRecordTypeSchema = z.enum([
   'stock-items',
   'stock-receipts',
   'allocations',
+  'order-schedule',
 ]);
 export const auditSnapshotSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('stock-items'), value: stockSnapshotSchema }),
@@ -14,6 +16,7 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
     value: stockReceiptRecordSchema,
   }),
   z.object({ type: z.literal('allocations'), value: allocationRecordSchema }),
+  z.object({ type: z.literal('order-schedule'), value: scheduledOrderSchema }),
 ]);
 export const auditChangeSchema = z.object({
   recordType: auditRecordTypeSchema,
