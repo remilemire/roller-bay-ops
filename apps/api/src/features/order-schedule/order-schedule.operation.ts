@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   HttpException,
   NotFoundException,
@@ -71,6 +72,12 @@ export async function orderScheduleOperation<T>(
         if (cause.code === '23503')
           throw new ConflictException(
             'This order has allocations or drafts and cannot be deleted.',
+            { cause: error },
+          );
+        // The contracts reject these first; the checks are the backstop.
+        if (cause.code === '23514')
+          throw new BadRequestException(
+            'Order values violate storage constraints.',
             { cause: error },
           );
         if (['40001', '40P01', '55P03'].includes(String(cause.code)))

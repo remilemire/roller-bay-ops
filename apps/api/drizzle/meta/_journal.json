@@ -148,6 +148,13 @@
       "when": 1789862307023,
       "tag": "0020_link_allocations_to_order_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789880210973,
+      "tag": "0021_require_weekday_ship_dates",
+      "breakpoints": true
     }
   ]
 }

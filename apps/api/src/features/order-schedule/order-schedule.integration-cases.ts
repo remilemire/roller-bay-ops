@@ -137,6 +137,15 @@ export async function testOrderSchedule(
         }).expect(400);
         assert.deepEqual(weekend.body.issues[0].path, ['shipDate']);
         assert.equal(weekend.body.issues[0].message, 'Must be a weekday.');
+        // The database holds the same rule for writes that bypass the API.
+        for (const shipDate of ['2026-10-03', '2026-10-04'])
+          await assert.rejects(
+            pool.query(
+              `UPDATE "${schema}".scheduled_orders SET ship_date=$1 WHERE id=$2`,
+              [shipDate, created.id],
+            ),
+            { code: '23514', constraint: 'scheduled_orders_ship_date_weekday' },
+          );
         const updated = scheduledOrderSchema.parse(
           (
             await patch(created.id, {
@@ -214,8 +223,8 @@ export async function testOrderSchedule(
         const at = '2026-09-01T12:00:00Z';
         // [order number, ship date, allocated, cut, shipped]
         const rows: [string, string, boolean, boolean, boolean][] = [
-          ['210004', '2026-10-04', false, false, false],
-          ['210003', '2026-10-03', true, false, false],
+          ['210004', '2026-10-06', false, false, false],
+          ['210003', '2026-10-05', true, false, false],
           ['210002', '2026-10-02', true, true, false],
           ['210001', '2026-10-01', true, true, true],
           ['210005', '2026-10-01', false, false, true],

@@ -36,6 +36,11 @@ export const scheduledOrders = pgTable(
       'scheduled_orders_order_number_format',
       sql`${table.orderNumber} ~ '^[0-9]{6}$'`,
     ),
+    // Orders ship Monday to Friday (ISO weekdays 1-5).
+    check(
+      'scheduled_orders_ship_date_weekday',
+      sql`EXTRACT(ISODOW FROM ${table.shipDate}) < 6`,
+    ),
     check('scheduled_orders_revision_positive', sql`${table.revision} > 0`),
     // allocated_at and cut_at mirror the order's one live allocation, which is
     // confirmed before it is completed.

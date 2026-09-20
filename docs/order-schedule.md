@@ -47,7 +47,7 @@ Stamps do not increment the order's `revision`. They write columns no edit touch
 
 Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
 
-POST accepts `orderNumber`, `shipDate`, and an optional `note`. The order number is trimmed and must be exactly six digits; it is unique and cannot be changed afterwards, so a mistyped order is deleted and added again. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`) on create and on edit. The rule lives in the shared `shipDateSchema`, not in the database, so rows written directly with SQL are not checked and an order already on the schedule is unaffected until its date is edited. Notes are trimmed and limited to 1,000 characters; a blank note is stored as null.
+POST accepts `orderNumber`, `shipDate`, and an optional `note`. The order number is trimmed and must be exactly six digits; it is unique and cannot be changed afterwards, so a mistyped order is deleted and added again. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`) on create and on edit. The shared `shipDateSchema` supplies the field message, and the `scheduled_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. Notes are trimmed and limited to 1,000 characters; a blank note is stored as null.
 
 PATCH requires `expectedRevision` and at least one of `shipDate`, `note`, or `shipped`. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
 
@@ -68,6 +68,8 @@ Adding, editing, shipping, unshipping, and deleting are recorded through the [au
 ## Setup and tests
 
 Apply `0019_add_order_schedule.sql` before using the endpoints or running integration tests. No orders are seeded.
+
+`0021_require_weekday_ship_dates.sql` adds the weekday check constraint.
 
 `0020_link_allocations_to_order_schedule.sql` adds the foreign key and the one-live-allocation index. It backfills nothing: the schedule starts empty, so the migration aborts, changing nothing, while any allocation or draft still carries an order number. Check first with:
 

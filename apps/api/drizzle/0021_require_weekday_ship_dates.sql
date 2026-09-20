@@ -1,0 +1,1 @@
+ALTER TABLE "scheduled_orders" ADD CONSTRAINT "scheduled_orders_ship_date_weekday" CHECK (EXTRACT(ISODOW FROM "scheduled_orders"."ship_date") < 6);

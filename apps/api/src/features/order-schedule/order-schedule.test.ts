@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import {
+  BadRequestException,
   ConflictException,
   NotFoundException,
   ServiceUnavailableException,
@@ -59,7 +60,7 @@ test('scheduled order status is the furthest milestone reached', () => {
   });
 });
 
-test('order schedule driver errors map to conflict or unavailable without leaking details', async () => {
+test('order schedule driver errors map to conflict, bad request, or unavailable without leaking details', async () => {
   const failures = [
     {
       cause: {
@@ -69,6 +70,7 @@ test('order schedule driver errors map to conflict or unavailable without leakin
       expected: ConflictException,
     },
     { cause: { code: '23503' }, expected: ConflictException },
+    { cause: { code: '23514' }, expected: BadRequestException },
     ...['40001', '40P01', '55P03'].map((code) => ({
       cause: { code },
       expected: ConflictException,
