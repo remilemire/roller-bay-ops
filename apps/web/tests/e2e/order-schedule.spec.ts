@@ -111,7 +111,9 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
-  await expect(page.getByText('1 order · 1 allocated')).toBeVisible();
+  await expect(
+    page.getByText('1 order · 14 blinds · 1 allocated'),
+  ).toBeVisible();
   const day = (name: string) => page.getByRole('region', { name });
   const card = day('Fri, Oct 2, 2026').getByRole('link', { name: '104801' });
   await expect(card).toBeVisible();

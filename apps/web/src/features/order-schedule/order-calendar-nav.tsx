@@ -1,22 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import {
-  orderStatusSchema,
-  type ScheduledOrder,
-} from '@roller-bay/shared/order-schedule';
 import { Button } from '@/components/ui/button';
-
-/** `12 orders · 5 scheduled · 4 allocated · 3 shipped`; empty statuses drop out. */
-export function orderTotals(orders: ScheduledOrder[]) {
-  const total = `${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`;
-  const byStatus = orderStatusSchema.options
-    .map((status) => ({
-      status,
-      count: orders.filter((order) => order.status === status).length,
-    }))
-    .filter(({ count }) => count)
-    .map(({ status, count }) => `${count} ${status}`);
-  return [total, ...byStatus].join(' · ');
-}
 
 /**
  * Steps the week and month views through time and names the period shown.

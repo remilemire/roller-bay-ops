@@ -1251,6 +1251,10 @@ td strong {
   list-style: none;
 }
 .week-day > footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
   padding: 11px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface-soft);

@@ -30,7 +30,8 @@ import {
 import { calendarDateLabel, dayLabel, weekdayLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { cn } from '@/lib/utils';
-import { OrderCalendarNav, orderTotals } from './order-calendar-nav';
+import { OrderCalendarNav } from './order-calendar-nav';
+import { blindCount, orderTotals, totalBlinds } from './order-totals';
 import {
   orderRange,
   orderScheduleKey,
@@ -270,6 +271,10 @@ function WeekDay({
           <strong>{orders.length}</strong>{' '}
           {orders.length === 1 ? 'order' : 'orders'}
         </span>
+        <span>
+          <strong>{totalBlinds(orders)}</strong>{' '}
+          {totalBlinds(orders) === 1 ? 'blind' : 'blinds'}
+        </span>
       </footer>
     </section>
   );
@@ -343,7 +348,10 @@ function OrderCard({
           )}
           <Status value={order.status} />
         </div>
-        {order.note && <small>{order.note}</small>}
+        <small>
+          {blindCount(order.quantity)}
+          {order.note && ` · ${order.note}`}
+        </small>
       </div>
     </div>
   );

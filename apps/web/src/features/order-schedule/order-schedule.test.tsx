@@ -387,7 +387,7 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   ).toBeInTheDocument();
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-02');
   expect(
-    await screen.findByText('3 orders · 1 scheduled · 2 allocated'),
+    await screen.findByText('3 orders · 42 blinds · 1 scheduled · 2 allocated'),
   ).toBeInTheDocument();
   const friday = within(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
@@ -395,14 +395,14 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   // Each day's totals sit in its footer.
   expect(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
-  ).toHaveTextContent(/Fri\s*Oct 2.*2 orders$/);
+  ).toHaveTextContent(/Fri\s*Oct 2.*2 orders\s*28 blinds$/);
   expect(friday.getAllByRole('link').map((link) => link.textContent)).toEqual([
     '104801',
     '104820',
   ]);
   // An empty day is its add button and a zero in the footer.
   const tuesday = screen.getByRole('region', { name: 'Tue, Sep 29, 2026' });
-  expect(tuesday).toHaveTextContent(/Add order\s*0 orders$/);
+  expect(tuesday).toHaveTextContent(/Add order\s*0 orders\s*0 blinds$/);
   expect(within(tuesday).queryByText('No orders')).toBeNull();
 
   await user.click(
@@ -439,7 +439,7 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   expect(
     await screen.findByRole('heading', { name: 'Oct 12 – Oct 16, 2026' }),
   ).toBeInTheDocument();
-  await screen.findByText('6 orders · 6 allocated');
+  await screen.findByText('6 orders · 84 blinds · 6 allocated');
   expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
   // With nothing to add, a read-only board says when a day is empty.
@@ -465,7 +465,9 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-30');
   // September's order shows in its edge day but is not an October order.
   expect(
-    await screen.findByText('8 orders · 1 scheduled · 7 allocated'),
+    await screen.findByText(
+      '8 orders · 112 blinds · 1 scheduled · 7 allocated',
+    ),
   ).toBeInTheDocument();
   expect(
     within(
@@ -475,7 +477,7 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   const busy = within(
     screen.getByRole('gridcell', { name: 'Tue, Oct 13, 2026' }),
   );
-  expect(busy.getByText('6 orders')).toBeInTheDocument();
+  expect(busy.getByText('6 orders · 84 blinds')).toBeInTheDocument();
   expect(busy.getByRole('link', { name: '+2 more' })).toHaveAttribute(
     'href',
     '/order-schedule?view=week&week=2026-10-13',

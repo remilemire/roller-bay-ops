@@ -14,8 +14,14 @@ import {
 import { calendarDateLabel, monthLabel, weekdayLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { cn } from '@/lib/utils';
-import { OrderCalendarNav, orderTotals } from './order-calendar-nav';
+import { OrderCalendarNav } from './order-calendar-nav';
 import { orderRange } from './order-schedule.api';
+import {
+  blindCount,
+  orderCount,
+  orderTotals,
+  totalBlinds,
+} from './order-totals';
 
 // A day lists this many orders; the rest are a link to its week.
 const SHOWN = 4;
@@ -89,8 +95,8 @@ export function OrderMonthView({
                       </span>
                       {dayOrders.length > 0 && (
                         <small>
-                          {dayOrders.length}{' '}
-                          {dayOrders.length === 1 ? 'order' : 'orders'}
+                          {orderCount(dayOrders.length)} ·{' '}
+                          {blindCount(totalBlinds(dayOrders))}
                         </small>
                       )}
                       {onAdd && (
@@ -110,7 +116,9 @@ export function OrderMonthView({
                           <Link
                             href={`/order-schedule/${order.id}`}
                             className={`month-order status-${order.status}`}
-                            title={order.note ?? undefined}
+                            title={[blindCount(order.quantity), order.note]
+                              .filter(Boolean)
+                              .join(' · ')}
                           >
                             {order.orderNumber}
                             <span className="sr-only">, {order.status}</span>
