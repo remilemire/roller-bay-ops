@@ -26,6 +26,7 @@ test('scheduled order status is the furthest milestone reached', () => {
     shippedAt: null,
     updatedAt: at,
     revision: 1,
+    deletedAt: null,
   };
   assert.equal(presentScheduledOrder(row).status, 'scheduled');
   assert.equal(
@@ -71,7 +72,6 @@ test('order schedule driver errors map to conflict, bad request, or unavailable 
       },
       expected: ConflictException,
     },
-    { cause: { code: '23503' }, expected: ConflictException },
     { cause: { code: '23514' }, expected: BadRequestException },
     ...['40001', '40P01', '55P03'].map((code) => ({
       cause: { code },

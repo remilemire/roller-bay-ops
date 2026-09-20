@@ -36,6 +36,9 @@ const statusFilters = {
   shipped: isNotNull(shippedAt),
 };
 
+// Deleted orders are kept for their number and history; reads leave them out.
+const present = isNull(scheduledOrders.deletedAt);
+
 @Injectable()
 export class OrderScheduleRepository {
   private readonly db: OrderScheduleDatabase;
@@ -60,6 +63,7 @@ export class OrderScheduleRepository {
 
   list(query: ScheduledOrderQuery) {
     const where = and(
+      present,
       query.search
         ? ilike(
             scheduledOrders.orderNumber,
@@ -100,7 +104,7 @@ export class OrderScheduleRepository {
     const [row] = await this.db
       .select()
       .from(scheduledOrders)
-      .where(eq(scheduledOrders.id, id));
+      .where(and(eq(scheduledOrders.id, id), present));
     return row;
   }
 
@@ -114,8 +118,16 @@ export class OrderScheduleRepository {
     const [row] = await this.db
       .select()
       .from(scheduledOrders)
-      .where(eq(scheduledOrders.id, id))
+      .where(and(eq(scheduledOrders.id, id), present))
       .for('no key update');
+    return row;
+  }
+
+  async findByOrderNumber(orderNumber: string) {
+    const [row] = await this.db
+      .select()
+      .from(scheduledOrders)
+      .where(and(eq(scheduledOrders.orderNumber, orderNumber), present));
     return row;
   }
 
@@ -123,17 +135,34 @@ export class OrderScheduleRepository {
     const [row] = await this.db
       .select()
       .from(scheduledOrders)
-      .where(eq(scheduledOrders.orderNumber, orderNumber))
+      .where(and(eq(scheduledOrders.orderNumber, orderNumber), present))
       .for('no key update');
     return row;
   }
 
+  /**
+   * Schedules a new order, or restores the deleted one that holds the number.
+   * Returns nothing when the number belongs to an order still on the schedule.
+   * A restored row is recognisable by its revision, which a new row starts at 1.
+   */
   async create(values: CreateScheduledOrder) {
     const [row] = await this.db
       .insert(scheduledOrders)
       .values(values)
+      .onConflictDoUpdate({
+        target: scheduledOrders.orderNumber,
+        set: {
+          ...values,
+          scheduledAt: new Date(),
+          shippedAt: null,
+          deletedAt: null,
+          revision: sql`${scheduledOrders.revision} + 1`,
+          updatedAt: new Date(),
+        },
+        setWhere: isNotNull(scheduledOrders.deletedAt),
+      })
       .returning();
-    return row!;
+    return row;
   }
 
   async update(
@@ -172,18 +201,15 @@ export class OrderScheduleRepository {
     return row!;
   }
 
-  /**
-   * Checks the revision in the delete itself, which takes its own row lock;
-   * locking first with the weaker edit lock would mean upgrading it while an
-   * allocation may hold the order's key-share lock.
-   */
-  async delete(id: string, revision: number) {
-    const [row] = await this.db
-      .delete(scheduledOrders)
-      .where(
-        and(eq(scheduledOrders.id, id), eq(scheduledOrders.revision, revision)),
-      )
-      .returning();
-    return row;
+  /** The service locks the row and checks it may go; see findByIdForUpdate. */
+  async delete(id: string) {
+    await this.db
+      .update(scheduledOrders)
+      .set({
+        deletedAt: new Date(),
+        revision: sql`${scheduledOrders.revision} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(scheduledOrders.id, id));
   }
 }

@@ -15,6 +15,7 @@ import type { DatabaseTransaction } from '../../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import {
   orderAlreadyAllocated,
+  orderAlreadyScheduled,
   orderNotScheduled,
   orderScheduleOperation,
 } from './order-schedule.operation.js';
@@ -97,9 +98,15 @@ export class OrderScheduleService {
     return orderScheduleOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const row = await repository.create(input);
-        await this.audit.record(tx, userId, 'order.scheduled', [
-          change(null, row),
-        ]);
+        if (!row) throw orderAlreadyScheduled();
+        // A deleted order's history ends with no record, so restoring it
+        // starts from none as well.
+        await this.audit.record(
+          tx,
+          userId,
+          row.revision > 1 ? 'order.restored' : 'order.scheduled',
+          [change(null, row)],
+        );
         return presentScheduledOrder(row);
       }),
     );
@@ -157,14 +164,17 @@ export class OrderScheduleService {
   delete(id: string, revision: number, userId: string) {
     return orderScheduleOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        const previous = await repository.delete(id, revision);
-        if (!previous) {
-          if (await repository.findById(id))
-            throw new ConflictException(
-              'Order changed; refresh before saving.',
-            );
-          throw new NotFoundException('Order not found.');
-        }
+        // Holding the row's lock keeps an allocation from confirming against
+        // the order between this check and the delete.
+        const previous = requireRevision(
+          await repository.findByIdForUpdate(id),
+          revision,
+        );
+        if (previous.allocatedAt)
+          throw new ConflictException(
+            'This order has an allocation. Cancel it before deleting the order.',
+          );
+        await repository.delete(id);
         await this.audit.record(tx, userId, 'order.deleted', [
           change(previous, null),
         ]);
@@ -175,6 +185,13 @@ export class OrderScheduleService {
   // The allocation workflow stamps the order inside its own transaction and
   // records the returned change on its own audit event. allocated_at and
   // cut_at mirror the live allocation's confirmed_at and completed_at.
+
+  /** A draft may only name an order that is on the schedule. */
+  async requireScheduled(tx: DatabaseTransaction, orderNumber: string) {
+    const repository = new OrderScheduleRepository({ db: tx });
+    if (!(await repository.findByOrderNumber(orderNumber)))
+      throw orderNotScheduled();
+  }
 
   /** `quantity` is the total of the allocation's blinds. */
   async allocate(

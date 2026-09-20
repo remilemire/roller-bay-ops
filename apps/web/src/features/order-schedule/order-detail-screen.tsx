@@ -135,7 +135,7 @@ function OrderRecord({ order }: { order: ScheduledOrder }) {
           if (!open && !remove.isPending) setDeleting(false);
         }}
         title={`Delete order ${order.orderNumber}?`}
-        description="Orders named by an allocation or draft cannot be deleted."
+        description="An order with an allocation cannot be deleted; cancel the allocation first. Adding the order number again restores a deleted order."
       >
         {remove.error && <ErrorNotice error={remove.error} />}
         <div className="form-actions">

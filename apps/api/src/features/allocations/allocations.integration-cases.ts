@@ -854,6 +854,118 @@ export async function testAllocations(
       },
     );
     await t.test(
+      'an order can be deleted once its allocation is cancelled, and is then off the schedule',
+      async () => {
+        const body = input(await seed());
+        const allocation = await create(body);
+        const draft = (
+          await post(`${path}/drafts`, {
+            data: { orderNumber: body.orderNumber },
+          }).expect(201)
+        ).body;
+        const order = (
+          await pool.query(
+            `SELECT id FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+            [body.orderNumber],
+          )
+        ).rows[0];
+        const asAdmin = async <T>(work: () => Promise<T>) => {
+          await pool.query(
+            `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
+            [userId],
+          );
+          try {
+            return await work();
+          } finally {
+            await pool.query(
+              `UPDATE "${schema}".users SET role='user' WHERE id=$1`,
+              [userId],
+            );
+          }
+        };
+        const schedule = (method: 'delete' | 'post', url: string) => {
+          const agent = request(server);
+          return (method === 'post' ? agent.post(url) : agent.delete(url))
+            .set('Cookie', cookie)
+            .set('Origin', origin);
+        };
+        const remove = () =>
+          asAdmin(() =>
+            schedule('delete', `/api/order-schedule/${order.id}`).send({
+              // Milestone stamps leave the order's revision alone.
+              expectedRevision: 1,
+            }),
+          );
+
+        const refused = await remove();
+        assert.equal(refused.status, 409);
+        assert.equal(
+          refused.body.message,
+          'This order has an allocation. Cancel it before deleting the order.',
+        );
+        await post(`${path}/${allocation.id}/cancel`, {
+          expectedRevision: allocation.revision,
+        }).expect(200);
+        // Neither the cancelled allocation nor the draft holds the order now.
+        assert.equal((await remove()).status, 204);
+
+        // A deleted order is not on the schedule for new work or drafts.
+        const missing = [
+          { code: 'order_not_scheduled', path: ['orderNumber'] },
+        ];
+        const issue = (reply: {
+          body: { issues?: { code: string; path: unknown }[] };
+        }) => reply.body.issues?.map(({ code, path }) => ({ code, path }));
+        const again = { ...input(await seed()), orderNumber: body.orderNumber };
+        assert.deepEqual(issue(await post(path, again).expect(404)), missing);
+        assert.deepEqual(
+          issue(
+            await post(`${path}/drafts`, {
+              data: { orderNumber: body.orderNumber },
+            }).expect(404),
+          ),
+          missing,
+        );
+        assert.deepEqual(
+          issue(
+            await request(server)
+              .put(`${path}/${draft.id}/draft`)
+              .set('Cookie', cookie)
+              .set('Origin', origin)
+              .send({
+                expectedRevision: 1,
+                data: { orderNumber: body.orderNumber },
+              })
+              .expect(404),
+          ),
+          missing,
+        );
+        // The cancelled allocation still reads as it was.
+        assert.equal(
+          (await get(`${path}/${allocation.id}`).expect(200)).body.orderNumber,
+          body.orderNumber,
+        );
+
+        // Scheduling the number again restores the order, ready to allocate.
+        const restored = await asAdmin(() =>
+          schedule('post', '/api/order-schedule').send({
+            orderNumber: body.orderNumber,
+            shipDate: '2026-10-01',
+            quantity: 1,
+          }),
+        );
+        assert.equal(restored.status, 201);
+        assert.equal(restored.body.id, order.id);
+        await create(again);
+        await request(server)
+          .delete(`${path}/${draft.id}/draft`)
+          .set('Cookie', cookie)
+          .set('Origin', origin)
+          .send({ expectedRevision: 1 })
+          .expect(204);
+      },
+    );
+    await t.test(
       'confirming, moving, cancelling, and completing an allocation stamp its scheduled order',
       async () => {
         const order = async (orderNumber: string) =>

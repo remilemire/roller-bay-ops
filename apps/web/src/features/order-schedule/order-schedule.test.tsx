@@ -330,7 +330,7 @@ it('keeps a refused delete in its dialog', async () => {
   vi.mocked(deleteOrder).mockRejectedValue(
     new ApiError(
       409,
-      'This order has allocations or drafts and cannot be deleted.',
+      'This order has an allocation. Cancel it before deleting the order.',
     ),
   );
   show(<OrderDetailScreen id={order.id} />);
@@ -339,7 +339,7 @@ it('keeps a refused delete in its dialog', async () => {
   const dialog = within(screen.getByRole('dialog'));
   await user.click(dialog.getByRole('button', { name: 'Delete' }));
   expect(await dialog.findByRole('alert')).toHaveTextContent(
-    'This order has allocations or drafts and cannot be deleted.',
+    'This order has an allocation. Cancel it before deleting the order.',
   );
   expect(state.push).not.toHaveBeenCalled();
 });

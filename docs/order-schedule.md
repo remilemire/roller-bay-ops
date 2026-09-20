@@ -19,7 +19,7 @@ Shipping is not gated on cutting, and a shipped order reports `shipped` whatever
 
 ## Allocations
 
-`allocations.order_number` references `scheduled_orders.order_number` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name scheduled orders, and an order that any allocation or draft names cannot be deleted; the attempt returns 409. Because only admins schedule orders, an order must be scheduled before anyone can allocate fabric for it. An order has at most one live allocation.
+`allocations.order_number` references `scheduled_orders.order_number` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name scheduled orders. An order with a live allocation cannot be deleted; see [Deleting and restoring](#deleting-and-restoring). Because only admins schedule orders, an order must be scheduled before anyone can allocate fabric for it. An order has at most one live allocation.
 
 An allocation's blinds add up to its order's `quantity`: confirming an allocation, moving it to another order, and replanning it on the same order all compare the total of its requirements' quantities with the order, under the order's row lock. A mismatch returns 400 with an issue on `orderNumber` (`order_quantity_mismatch`) and stamps nothing. Drafts are not checked.
 
@@ -55,23 +55,31 @@ PATCH requires `expectedRevision` and at least one of `shipDate`, `quantity`, `n
 
 Records include `id`, `orderNumber`, `shipDate`, `quantity`, `note`, `status`, the four milestone timestamps, `updatedAt`, and `revision`.
 
+## Deleting and restoring
+
+Deleting an order sets `deleted_at` and keeps the row. A foreign key can only reference a fully unique column, so the order number stays unique across deleted orders too, and cancelled allocations and old drafts go on referencing it. A deleted order is left out of lists, lookups by ID, the allocation picker, and milestone stamps, so it answers 404 and counts as not on the schedule: confirming an allocation for it, or saving a draft that names it, returns the usual `order_not_scheduled` error. Its history stays readable.
+
+Only a live allocation blocks deletion: DELETE returns 409 (`This order has an allocation. Cancel it before deleting the order.`) while `allocated_at` is set, which a completed allocation keeps set. Cancelled allocations and drafts do not block it. The check and the delete happen under the order's row lock, so an allocation cannot confirm in between, and a check constraint keeps a deleted order from holding `allocated_at`.
+
+POST with a deleted order's number restores that order instead of reporting a duplicate: same `id`, the new ship date, quantity, and note, a fresh `scheduled_at`, `shipped_at` cleared, and the next revision. It is recorded as `order.restored`. A number held by an order still on the schedule returns the usual 409.
+
 ## Lists
 
 Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the four statuses or `open`, which lists every order that has not shipped. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. Orders sort by ship date, then order number; page data and totals use the same database snapshot.
 
 ## Concurrency and errors
 
-An edit locks the row, compares `expectedRevision`, and increments `revision`; a delete checks the revision in the `DELETE` itself. A stale revision returns 409 (`Order changed; refresh before saving.`). A duplicate order number returns 409 with an issue on `orderNumber`, including when two requests race. Missing orders return 404, invalid input returns 400, and storage failures return a generic 503. Lock waits are limited to five seconds and surface as a 409.
+An edit locks the row, compares `expectedRevision`, and increments `revision`; a delete checks the revision in the `DELETE` itself. A stale revision returns 409 (`Order changed; refresh before saving.`). A duplicate order number returns 409 with an issue on `orderNumber`, including when two requests race. Missing and deleted orders return 404, invalid input returns 400, and storage failures return a generic 503. Lock waits are limited to five seconds and surface as a 409.
 
 ## History
 
-Adding, editing, shipping, unshipping, and deleting are recorded through the [audit service](corrections-and-audit.md) in the same transaction, as `order.scheduled`, `order.updated`, `order.shipped`, `order.unshipped`, and `order.deleted`. Snapshots use the public order record under the `order-schedule` record type. Milestone stamps are not separate events: the order's before/after change is attached to the allocation's own `allocation.confirmed`, `allocation.replaced`, `allocation.cancelled`, or `allocation.completed` event, so both the allocation's and the order's history show it.
+Adding, restoring, editing, shipping, unshipping, and deleting are recorded through the [audit service](corrections-and-audit.md) in the same transaction, as `order.scheduled`, `order.restored`, `order.updated`, `order.shipped`, `order.unshipped`, and `order.deleted`. Snapshots use the public order record under the `order-schedule` record type. Milestone stamps are not separate events: the order's before/after change is attached to the allocation's own `allocation.confirmed`, `allocation.replaced`, `allocation.cancelled`, or `allocation.completed` event, so both the allocation's and the order's history show it.
 
 ## Setup and tests
 
 Apply `0019_add_order_schedule.sql` before using the endpoints or running integration tests. No orders are seeded.
 
-`0021_require_weekday_ship_dates.sql` adds the weekday check constraint. `0022_add_order_quantity.sql` adds the required `quantity`; orders scheduled before it take a placeholder of 1 to correct by hand, and the default is dropped so new orders must state theirs.
+`0021_require_weekday_ship_dates.sql` adds the weekday check constraint. `0023_soft_delete_scheduled_orders.sql` adds `deleted_at` and its check constraint. `0022_add_order_quantity.sql` adds the required `quantity`; orders scheduled before it take a placeholder of 1 to correct by hand, and the default is dropped so new orders must state theirs.
 
 `0020_link_allocations_to_order_schedule.sql` adds the foreign key and the one-live-allocation index. It backfills nothing: the schedule starts empty, so the migration aborts, changing nothing, while any allocation or draft still carries an order number. Check first with:
 

@@ -162,6 +162,13 @@
       "when": 1789886025775,
       "tag": "0022_add_order_quantity",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789887696247,
+      "tag": "0023_soft_delete_scheduled_orders",
+      "breakpoints": true
     }
   ]
 }

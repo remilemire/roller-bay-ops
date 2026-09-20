@@ -123,6 +123,7 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
+        await this.requireScheduled(tx, data.orderNumber);
         await repository.replacePlan(header.id, configured);
         const result = await this.detail(repository, tx, header);
         await this.audit.record(tx, userId, 'allocation.draft-created', [
@@ -151,6 +152,7 @@ export class AllocationsService {
           revision,
         );
         const before = await this.detail(repository, tx, previous);
+        await this.requireScheduled(tx, data.orderNumber);
         const configured = this.configure(data, {
           settings: previous.settings,
           requirements: await repository.requirements(id),
@@ -240,6 +242,15 @@ export class AllocationsService {
         );
       }),
     );
+  }
+
+  // The foreign key admits a deleted order's number, which is kept; a draft
+  // may only name an order that is on the schedule.
+  private async requireScheduled(
+    tx: DatabaseTransaction,
+    orderNumber: string | null,
+  ) {
+    if (orderNumber) await this.orders.requireScheduled(tx, orderNumber);
   }
 
   private async confirmPlan(

@@ -1,0 +1,2 @@
+ALTER TABLE "scheduled_orders" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "scheduled_orders" ADD CONSTRAINT "scheduled_orders_deleted_unallocated" CHECK ("scheduled_orders"."deleted_at" IS NULL OR "scheduled_orders"."allocated_at" IS NULL);

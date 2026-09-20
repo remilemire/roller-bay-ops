@@ -241,6 +241,54 @@ export async function testOrderSchedule(
         );
         assert.equal(deleted.items[0]!.action, 'order.deleted');
         assert.equal(deleted.items[0]!.changes[0]!.after, null);
+
+        // The order is kept, out of sight: allocations reference its number.
+        assert.deepEqual(
+          scheduledOrderListSchema
+            .parse((await get(`${path}?search=200002`).expect(200)).body)
+            .items.map((order) => order.orderNumber),
+          [],
+        );
+        await patch(created.id, { expectedRevision: 6, note: 'gone' }).expect(
+          404,
+        );
+        await remove(created.id, 6).expect(404);
+        const kept = await pool.query(
+          `SELECT deleted_at FROM "${schema}".scheduled_orders WHERE id=$1`,
+          [created.id],
+        );
+        assert.ok(kept.rows[0].deleted_at);
+
+        // Scheduling the number again restores that order with the new details.
+        const restored = scheduledOrderSchema.parse(
+          (
+            await post({
+              orderNumber: '200002',
+              shipDate: '2026-11-02',
+              quantity: 3,
+            }).expect(201)
+          ).body,
+        );
+        assert.equal(restored.id, created.id);
+        assert.deepEqual(
+          [restored.shipDate, restored.quantity, restored.note],
+          ['2026-11-02', 3, null],
+        );
+        assert.equal(restored.status, 'scheduled');
+        assert.equal(restored.shippedAt, null);
+        assert.equal(restored.revision, 7);
+        assert.ok(restored.scheduledAt > created.scheduledAt);
+        const history2 = historySchema.parse(
+          (await get(`${path}/${created.id}/history`).expect(200)).body,
+        );
+        assert.equal(history2.items[0]!.action, 'order.restored');
+        assert.equal(history2.items[0]!.changes[0]!.before, null);
+        // Once restored it is an ordinary scheduled order again.
+        await post({
+          orderNumber: '200002',
+          shipDate: '2026-11-03',
+          quantity: 3,
+        }).expect(409);
       },
     );
 

@@ -38,6 +38,21 @@ export const orderAlreadyAllocated = (cause?: unknown) =>
     { cause },
   );
 
+export const orderAlreadyScheduled = (cause?: unknown) =>
+  new ConflictException(
+    {
+      message: 'This order is already on the schedule.',
+      issues: [
+        {
+          code: 'order_already_scheduled',
+          path: ['orderNumber'],
+          message: 'Already scheduled.',
+        },
+      ],
+    },
+    { cause },
+  );
+
 export async function orderScheduleOperation<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
@@ -50,30 +65,14 @@ export async function orderScheduleOperation<T>(
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {
       seen.add(cause);
       if ('code' in cause) {
+        // A number held by an order still on the schedule is answered without
+        // an error, so this is only two requests adding it at once.
         if (
           cause.code === '23505' &&
           'constraint' in cause &&
           cause.constraint === 'scheduled_orders_order_number_unique'
         )
-          throw new ConflictException(
-            {
-              message: 'This order is already on the schedule.',
-              issues: [
-                {
-                  code: 'order_already_scheduled',
-                  path: ['orderNumber'],
-                  message: 'Already scheduled.',
-                },
-              ],
-            },
-            { cause: error },
-          );
-        // Scheduled orders reference nothing, so only a delete can fail here.
-        if (cause.code === '23503')
-          throw new ConflictException(
-            'This order has allocations or drafts and cannot be deleted.',
-            { cause: error },
-          );
+          throw orderAlreadyScheduled(error);
         // The contracts reject these first; the checks are the backstop.
         if (cause.code === '23514')
           throw new BadRequestException(

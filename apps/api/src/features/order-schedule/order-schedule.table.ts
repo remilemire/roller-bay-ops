@@ -32,6 +32,9 @@ export const scheduledOrders = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
     revision: integer('revision').default(1).notNull(),
+    // A deleted order is kept: allocations reference its number, which stays
+    // unique, so scheduling that number again restores this row.
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
     check(
@@ -45,6 +48,11 @@ export const scheduledOrders = pgTable(
     ),
     check('scheduled_orders_quantity_positive', sql`${table.quantity} > 0`),
     check('scheduled_orders_revision_positive', sql`${table.revision} > 0`),
+    // Only an order without a live allocation can be deleted.
+    check(
+      'scheduled_orders_deleted_unallocated',
+      sql`${table.deletedAt} IS NULL OR ${table.allocatedAt} IS NULL`,
+    ),
     // allocated_at and cut_at mirror the order's one live allocation, which is
     // confirmed before it is completed.
     check(
