@@ -262,6 +262,17 @@ export async function testOrderSchedule(
         assert.deepEqual(await numbers('status=allocated'), ['210003']);
         assert.deepEqual(await numbers('status=cut'), ['210002']);
         assert.deepEqual(await numbers('status=shipped'), ['210001', '210005']);
+        // Ship-date bounds are inclusive and combine with the status filter.
+        assert.deepEqual(
+          await numbers('shipDateFrom=2026-10-02&shipDateTo=2026-10-05'),
+          ['210002', '210003'],
+        );
+        assert.deepEqual(
+          await numbers('shipDateTo=2026-10-01&status=open'),
+          [],
+        );
+        assert.deepEqual(await numbers('shipDateFrom=2026-10-06'), ['210004']);
+        await get(`${path}?shipDateFrom=2026-02-30`).expect(400);
         assert.deepEqual(await numbers('search=0003'), ['210003']);
         assert.deepEqual(await numbers('search=%25'), []);
         const page = scheduledOrderListSchema.parse(

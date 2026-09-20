@@ -55,7 +55,7 @@ Records include `id`, `orderNumber`, `shipDate`, `note`, `status`, the four mile
 
 ## Lists
 
-Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, and `status`. Search is a case-insensitive literal substring of the order number. `status` is one of the four statuses or `open`, which lists every order that has not shipped. Orders sort by ship date, then order number; page data and totals use the same database snapshot.
+Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the four statuses or `open`, which lists every order that has not shipped. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. Orders sort by ship date, then order number; page data and totals use the same database snapshot.
 
 ## Concurrency and errors
 

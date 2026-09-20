@@ -99,6 +99,25 @@ test('scheduled order queries accept each status and the open filter', () => {
     scheduledOrderQuerySchema.safeParse({ status: 'ready' }).success,
     false,
   );
+  // The calendar views bound the list by ship date; the bounds may be any
+  // calendar day, including a weekend.
+  assert.deepEqual(
+    scheduledOrderQuerySchema.parse({
+      shipDateFrom: '2026-10-03',
+      shipDateTo: '2026-10-31',
+    }),
+    {
+      page: 1,
+      pageSize: 25,
+      shipDateFrom: '2026-10-03',
+      shipDateTo: '2026-10-31',
+    },
+  );
+  for (const shipDateFrom of ['2026-02-30', '2026-10', 'today'])
+    assert.equal(
+      scheduledOrderQuerySchema.safeParse({ shipDateFrom }).success,
+      false,
+    );
   assert.deepEqual(scheduledOrderQuerySchema.parse({}), {
     page: 1,
     pageSize: 25,

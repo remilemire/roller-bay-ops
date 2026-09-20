@@ -61,6 +61,9 @@ export const scheduledOrderQuerySchema = z.strictObject({
   search: z.string().trim().max(6).optional(),
   // `open` lists every order that has not shipped.
   status: z.enum(['open', ...orderStatusSchema.options]).optional(),
+  // Inclusive ship-date bounds, for the week and month views.
+  shipDateFrom: z.iso.date().optional(),
+  shipDateTo: z.iso.date().optional(),
 });
 
 export const scheduledOrderSchema = z.object({

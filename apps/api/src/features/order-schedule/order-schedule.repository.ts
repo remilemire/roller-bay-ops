@@ -4,9 +4,11 @@ import {
   asc,
   count,
   eq,
+  gte,
   ilike,
   isNotNull,
   isNull,
+  lte,
   sql,
 } from 'drizzle-orm';
 import type {
@@ -65,6 +67,12 @@ export class OrderScheduleRepository {
           )
         : undefined,
       query.status ? statusFilters[query.status] : undefined,
+      query.shipDateFrom
+        ? gte(scheduledOrders.shipDate, query.shipDateFrom)
+        : undefined,
+      query.shipDateTo
+        ? lte(scheduledOrders.shipDate, query.shipDateTo)
+        : undefined,
     );
     return this.db.transaction(
       async (tx) => {
