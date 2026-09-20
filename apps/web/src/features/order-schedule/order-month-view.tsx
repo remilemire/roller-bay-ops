@@ -44,11 +44,10 @@ export function OrderMonthView({
               )
             : 'Loading…'
         }
-        isCurrent={month === thisMonth}
         onStep={(direction) =>
           params.set({ month: addMonths(month, direction) })
         }
-        onCurrent={() => params.set({ month: '' })}
+        onToday={() => params.set({ month: '' })}
       />
       {query.isPending ? (
         <Loading />

@@ -384,10 +384,6 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   expect(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
   ).toHaveTextContent(/Fri\s*Oct 2.*2 orders$/);
-  // This is the current week, so there is nothing to go back to.
-  expect(
-    screen.queryByRole('button', { name: /Back to this week/ }),
-  ).toBeNull();
   expect(friday.getAllByRole('link').map((link) => link.textContent)).toEqual([
     '104801',
     '104820',
@@ -433,9 +429,10 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   await screen.findByText('6 orders · 6 allocated');
   expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
-  expect(
-    screen.getByRole('button', { name: 'Back to this week' }),
-  ).toBeInTheDocument();
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Today' }));
+  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=week', {
+    scroll: false,
+  });
 });
 
 it('lays the month out Monday to Friday and adds an order to a day', async () => {
@@ -478,7 +475,7 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   await user.click(
     within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }),
   );
-  await user.click(screen.getByRole('button', { name: 'Back to this month' }));
+  await user.click(screen.getByRole('button', { name: 'Today' }));
   expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=month', {
     scroll: false,
   });

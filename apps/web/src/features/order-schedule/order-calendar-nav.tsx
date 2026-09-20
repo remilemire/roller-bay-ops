@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   orderStatusSchema,
   type ScheduledOrder,
@@ -18,21 +18,23 @@ export function orderTotals(orders: ScheduledOrder[]) {
   return [total, ...byStatus].join(' · ');
 }
 
-/** Steps the week and month views through time and names the period shown. */
+/**
+ * Steps the week and month views through time and names the period shown.
+ * Today sits between the arrows, as it does in most calendars, so it reads
+ * as the third way to move rather than as a label.
+ */
 export function OrderCalendarNav({
   period,
   label,
   summary,
-  isCurrent,
   onStep,
-  onCurrent,
+  onToday,
 }: {
   period: 'week' | 'month';
   label: string;
   summary: string;
-  isCurrent: boolean;
   onStep: (direction: -1 | 1) => void;
-  onCurrent: () => void;
+  onToday: () => void;
 }) {
   return (
     <div className="toolbar">
@@ -47,6 +49,13 @@ export function OrderCalendarNav({
         </Button>
         <Button
           variant="outline"
+          title={`Go to this ${period}`}
+          onClick={onToday}
+        >
+          Today
+        </Button>
+        <Button
+          variant="outline"
           size="icon"
           aria-label={`Next ${period}`}
           onClick={() => onStep(1)}
@@ -58,14 +67,6 @@ export function OrderCalendarNav({
           <p className="muted">{summary}</p>
         </div>
       </div>
-      {/* Shown only when away from it, so it reads as the way back rather
-          than as a label for the period on show. */}
-      {!isCurrent && (
-        <Button variant="outline" onClick={onCurrent}>
-          <Undo2 size={16} />
-          Back to this {period}
-        </Button>
-      )}
     </div>
   );
 }

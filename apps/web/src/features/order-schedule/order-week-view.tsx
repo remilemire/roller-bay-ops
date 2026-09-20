@@ -123,11 +123,10 @@ export function OrderWeekView({
         period="week"
         label={`${dayLabel(monday)} – ${dayLabel(friday)}, ${year}`}
         summary={query.data ? orderTotals(orders) : 'Loading…'}
-        isCurrent={monday === thisWeek}
         onStep={(direction) =>
           params.set({ week: addDays(monday, direction * 7) })
         }
-        onCurrent={() => params.set({ week: '' })}
+        onToday={() => params.set({ week: '' })}
       />
       {move.error && <ErrorNotice error={move.error} />}
       <span className="sr-only" role="status">
