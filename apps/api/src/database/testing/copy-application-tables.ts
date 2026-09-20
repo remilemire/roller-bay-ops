@@ -48,6 +48,10 @@ export async function copyApplicationTables(pool: Pool, schema: string) {
     await client.query(
       `ALTER TABLE ${target}.scheduled_orders RENAME CONSTRAINT scheduled_orders_order_number_key TO scheduled_orders_order_number_unique`,
     );
+    // The older plain order-number index is copied first and takes `_idx`.
+    await client.query(
+      `ALTER INDEX ${target}.allocations_order_number_idx1 RENAME TO allocations_live_order_number_unique`,
+    );
     await client.query(
       `ALTER INDEX ${target}.location_zones_lower_idx RENAME TO location_zones_name_unique`,
     );

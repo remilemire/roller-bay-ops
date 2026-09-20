@@ -1,0 +1,4 @@
+ALTER TABLE "allocations" DROP CONSTRAINT "allocations_order_number_format";--> statement-breakpoint
+ALTER TABLE "allocations" ALTER COLUMN "order_number" SET DATA TYPE varchar(6);--> statement-breakpoint
+ALTER TABLE "allocations" ADD CONSTRAINT "allocations_order_number_scheduled_orders_order_number_fk" FOREIGN KEY ("order_number") REFERENCES "public"."scheduled_orders"("order_number") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "allocations_live_order_number_unique" ON "allocations" USING btree ("order_number") WHERE NOT "allocations"."is_draft" AND "allocations"."cancelled_at" IS NULL;

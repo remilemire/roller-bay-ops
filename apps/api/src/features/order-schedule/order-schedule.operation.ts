@@ -1,8 +1,41 @@
 import {
   ConflictException,
   HttpException,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+
+// Allocation errors about the order carry an issue on `orderNumber` so the
+// form can show them beside that field.
+export const orderNotScheduled = (cause?: unknown) =>
+  new NotFoundException(
+    {
+      message:
+        'This order is not on the schedule. Add it before allocating fabric.',
+      issues: [
+        {
+          code: 'order_not_scheduled',
+          path: ['orderNumber'],
+          message: 'Not on the order schedule.',
+        },
+      ],
+    },
+    { cause },
+  );
+export const orderAlreadyAllocated = (cause?: unknown) =>
+  new ConflictException(
+    {
+      message: 'This order already has an allocation.',
+      issues: [
+        {
+          code: 'order_already_allocated',
+          path: ['orderNumber'],
+          message: 'Already allocated.',
+        },
+      ],
+    },
+    { cause },
+  );
 
 export async function orderScheduleOperation<T>(
   operation: () => Promise<T>,

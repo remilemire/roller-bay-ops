@@ -17,6 +17,10 @@ Each order carries four milestone timestamps. The status is derived from the fur
 
 Shipping is not gated on cutting, and a shipped order reports `shipped` whatever its other milestones. The server owns every timestamp; marking a shipped order shipped again keeps the original time. A check constraint keeps `cut_at` from being set without `allocated_at`.
 
+## Allocations
+
+`allocations.order_number` references `scheduled_orders.order_number` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name scheduled orders, and an order that any allocation or draft names cannot be deleted; the attempt returns 409. Because only admins schedule orders, an order must be scheduled before anyone can allocate fabric for it. An order has at most one live allocation.
+
 ## Endpoints
 
 | Method | Path                              | Access       |
@@ -51,5 +55,11 @@ Adding, editing, shipping, unshipping, and deleting are recorded through the [au
 ## Setup and tests
 
 Apply `0019_add_order_schedule.sql` before using the endpoints or running integration tests. No orders are seeded.
+
+`0020_link_allocations_to_order_schedule.sql` adds the foreign key and the one-live-allocation index. It backfills nothing: the schedule starts empty, so the migration aborts, changing nothing, while any allocation or draft still carries an order number. Check first with:
+
+```sql
+SELECT is_draft, count(*) FROM allocations WHERE order_number IS NOT NULL GROUP BY 1;
+```
 
 The [auth integration suite](authentication.md#tests) copies `scheduled_orders` into its disposable schema and covers role and Origin checks, validation, duplicate and concurrent creation, revision conflicts, shipping, history, status filters, literal search, ordering, and pagination. Unit tests cover the contracts, status derivation, and driver-error mapping.

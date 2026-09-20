@@ -121,10 +121,16 @@ export async function testCorrections(
         stockItemId: e.stockItemId,
         expectedRevision: e.revision,
       }));
+    // Each allocation needs its own scheduled order.
+    await pool.query(
+      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date)
+       SELECT n::text, '2026-10-01' FROM generate_series(300001, 300100) n`,
+    );
+    let orderNumber = 300000;
     const plan = (stockId: string) => {
       const requirementId = randomUUID();
       return {
-        orderNumber: '300001',
+        orderNumber: String(++orderNumber),
         requirements: [
           {
             id: requirementId,

@@ -4,9 +4,12 @@ import { test } from 'node:test';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  allocationDraftDataSchema,
+  allocationDraftInputSchema,
   allocationIdempotencyKeySchema,
   completeAllocationSchema,
   createAllocationSchema,
@@ -51,6 +54,23 @@ test('allocation contracts normalize keys, require revisions, and reject client-
       createAllocationSchema.safeParse({ ...input, orderNumber }).success,
       false,
     );
+  // Drafts name a scheduled order or none. Stored drafts and their audit
+  // snapshots may still hold the partial numbers older versions accepted.
+  assert.equal(
+    allocationDraftInputSchema.parse({ orderNumber: ' 104801 ' }).orderNumber,
+    '104801',
+  );
+  assert.equal(allocationDraftInputSchema.parse({}).orderNumber, null);
+  for (const orderNumber of ['1048', 'RB-1']) {
+    assert.equal(
+      allocationDraftInputSchema.safeParse({ orderNumber }).success,
+      false,
+    );
+    assert.equal(
+      allocationDraftDataSchema.parse({ orderNumber }).orderNumber,
+      orderNumber,
+    );
+  }
   assert.equal(replaceAllocationSchema.safeParse(input).success, false);
   assert.equal(
     replaceAllocationSchema.safeParse({ ...input, expectedRevision: 1 })
@@ -169,6 +189,40 @@ test('allocation storage errors preserve domain responses and do not expose driv
         !error.message.includes('secret'),
     );
   }
+  // Order constraints answer with an issue the form places on the order number.
+  for (const [code, constraint, status, issue] of [
+    [
+      '23503',
+      'allocations_order_number_scheduled_orders_order_number_fk',
+      404,
+      'order_not_scheduled',
+    ],
+    [
+      '23505',
+      'allocations_live_order_number_unique',
+      409,
+      'order_already_allocated',
+    ],
+  ] as const)
+    await assert.rejects(
+      allocationOperation(async () => {
+        throw { cause: { code, constraint, message: 'secret driver detail' } };
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof HttpException);
+        assert.equal(error.getStatus(), status);
+        assert.deepEqual((error.getResponse() as { issues: object[] }).issues, [
+          {
+            code: issue,
+            path: ['orderNumber'],
+            message: (error.getResponse() as { issues: { message: string }[] })
+              .issues[0]!.message,
+          },
+        ]);
+        assert.doesNotMatch(error.message, /secret/);
+        return true;
+      },
+    );
   await assert.rejects(
     allocationOperation(async () => {
       throw new Error('secret');

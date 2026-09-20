@@ -17,6 +17,7 @@ import type {
   AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
+import { scheduledOrders } from '../../order-schedule/order-schedule.table.js';
 import { users } from '../../users/users.table.js';
 
 export const allocations = pgTable(
@@ -24,7 +25,11 @@ export const allocations = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     isDraft: boolean('is_draft').default(true).notNull(),
-    orderNumber: varchar('order_number', { length: 50 }),
+    // Drafts may name no order yet; any order named must be scheduled.
+    orderNumber: varchar('order_number', { length: 6 }).references(
+      () => scheduledOrders.orderNumber,
+      { onDelete: 'restrict' },
+    ),
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -69,11 +74,12 @@ export const allocations = pgTable(
     ),
     check('allocations_revision_positive', sql`${table.revision} > 0`),
     index('allocations_order_number_idx').on(table.orderNumber),
+    // An order has at most one live allocation: confirmed and not cancelled,
+    // including once completed. Drafts may share an order number.
+    uniqueIndex('allocations_live_order_number_unique')
+      .on(table.orderNumber)
+      .where(sql`NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL`),
     index('allocations_created_by_user_id_idx').on(table.createdByUserId),
-    check(
-      'allocations_order_number_format',
-      sql`length(${table.orderNumber}) > 0 AND ${table.orderNumber} !~ '^[[:space:]]|[[:space:]]$'`,
-    ),
     // Non-draft allocations are active until completed or cancelled.
     check(
       'allocations_completion_or_cancellation',

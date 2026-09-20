@@ -5,6 +5,7 @@ import {
   legacyStockCuttingOutcomeSchema,
   recordedStockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
+import { orderNumberSchema } from '../order-schedule/index.js';
 
 export const allocationStateSchema = z.enum([
   'draft',
@@ -136,13 +137,10 @@ export const validateAllocationSchema = z
     previewRevision,
     'Provide allocationId and expectedRevision together.',
   );
-// Confirmed allocations require the six-digit production order number. Drafts
-// may hold partial input, and older records may predate this format.
+// An allocation names a scheduled order by its six-digit production order
+// number; the API rejects numbers that are not on the order schedule.
 const allocationSubmission = z.strictObject({
-  orderNumber: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, 'Must be 6 digits.'),
+  orderNumber: orderNumberSchema,
   ...planningFields,
   plan: cuttingPlanInputSchema,
 });
@@ -248,6 +246,8 @@ const draftPlan = <T extends z.ZodType>(cut: T) =>
   z.strictObject({ cuts: z.array(cut).max(10000).default([]) }).prefault({});
 export const allocationDraftDataSchema = z
   .strictObject({
+    // Read shape: audit snapshots of older drafts hold partial order numbers.
+    // New input goes through allocationDraftInputSchema.
     orderNumber: draftField(z.string().trim().min(1).max(50)),
     requirements: z
       .array(
@@ -321,7 +321,8 @@ function validateDraftAssignments(
 
 export const allocationDraftInputSchema = z
   .strictObject({
-    orderNumber: allocationDraftDataSchema.shape.orderNumber,
+    // A draft names a scheduled order or none; partial numbers are not saved.
+    orderNumber: draftField(orderNumberSchema),
     requirements: z
       .array(
         allocationDraftDataSchema.shape.requirements

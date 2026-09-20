@@ -151,6 +151,12 @@ export async function testAllocations(
       `INSERT INTO "${schema}".locations (id,section_id,label) VALUES ($1,$2,'1')`,
       [ids.location, ids.section],
     );
+    // Allocations must name a scheduled order.
+    await pool.query(
+      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date)
+       SELECT n::text, '2026-10-01' FROM generate_series(100001, 100400) n
+       UNION ALL VALUES ('999998', '2026-10-01'::date), ('999999', '2026-10-01')`,
+    );
     await pool.query(
       `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
       [userId],
@@ -683,6 +689,112 @@ export async function testAllocations(
         assert.equal(unchanged.items[0].stockItem.consumedAt, null);
       },
     );
+    await t.test(
+      'allocations name a scheduled order, and an order has one live allocation',
+      async () => {
+        const unscheduled = { ...input(await seed()), orderNumber: '888888' };
+        const issue = (body: { issues?: { code: string; path: unknown }[] }) =>
+          body.issues?.map(({ code, path }) => ({ code, path }));
+        const missing = [
+          { code: 'order_not_scheduled', path: ['orderNumber'] },
+        ];
+        assert.deepEqual(
+          issue((await post(path, unscheduled).expect(404)).body),
+          missing,
+        );
+        assert.deepEqual(
+          issue(
+            (
+              await post(`${path}/drafts`, {
+                data: { orderNumber: '888888' },
+              }).expect(404)
+            ).body,
+          ),
+          missing,
+        );
+        // Partial order numbers are no longer saved on drafts.
+        await post(`${path}/drafts`, { data: { orderNumber: '8888' } }).expect(
+          400,
+        );
+
+        const first = await create(input(await seed()));
+        const again = {
+          ...input(await seed()),
+          orderNumber: first.orderNumber,
+        };
+        const taken = [
+          { code: 'order_already_allocated', path: ['orderNumber'] },
+        ];
+        assert.deepEqual(
+          issue((await post(path, again).expect(409)).body),
+          taken,
+        );
+        const other = await create(input(await seed()));
+        assert.deepEqual(
+          issue(
+            (
+              await put(other.id, {
+                ...again,
+                expectedRevision: other.revision,
+              }).expect(409)
+            ).body,
+          ),
+          taken,
+        );
+        await put(other.id, {
+          ...unscheduled,
+          expectedRevision: other.revision,
+        }).expect(404);
+
+        // Drafts claim nothing, so they may share the order's number.
+        const drafts = [];
+        for (let count = 0; count < 2; count++)
+          drafts.push(
+            (
+              await post(`${path}/drafts`, {
+                data: { orderNumber: first.orderNumber },
+              }).expect(201)
+            ).body,
+          );
+        for (const draft of drafts)
+          await request(server)
+            .delete(`${path}/${draft.id}/draft`)
+            .set('Cookie', cookie)
+            .set('Origin', origin)
+            .send({ expectedRevision: 1 })
+            .expect(204);
+
+        // A cancelled allocation frees its order; a completed one does not.
+        await post(`${path}/${first.id}/cancel`, {
+          expectedRevision: first.revision,
+        }).expect(200);
+        await create(again);
+
+        const order = (
+          await pool.query(
+            `SELECT id, revision FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+            [first.orderNumber],
+          )
+        ).rows[0];
+        await pool.query(
+          `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
+          [userId],
+        );
+        try {
+          await request(server)
+            .delete(`/api/order-schedule/${order.id}`)
+            .set('Cookie', cookie)
+            .set('Origin', origin)
+            .send({ expectedRevision: order.revision })
+            .expect(409);
+        } finally {
+          await pool.query(
+            `UPDATE "${schema}".users SET role='user' WHERE id=$1`,
+            [userId],
+          );
+        }
+      },
+    );
     await testAllocationDrafts(
       t,
       app,
@@ -716,6 +828,7 @@ export async function testAllocations(
         `DELETE FROM "${schema}".allocations WHERE id=ANY($1::uuid[])`,
         [rows.rows.map((row: { allocation_id: string }) => row.allocation_id)],
       );
+    await pool.query(`DELETE FROM "${schema}".scheduled_orders`);
     await pool.query(
       `DELETE FROM "${schema}".fabric_stock_items WHERE fabric_color_id=$1`,
       [ids.color],

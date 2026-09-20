@@ -5,6 +5,10 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import {
+  orderAlreadyAllocated,
+  orderNotScheduled,
+} from '../order-schedule/order-schedule.operation.js';
 
 export async function allocationOperation<T>(
   operation: () => Promise<T>,
@@ -18,6 +22,19 @@ export async function allocationOperation<T>(
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {
       seen.add(cause);
       if ('code' in cause) {
+        const constraint = 'constraint' in cause ? cause.constraint : undefined;
+        // The foreign key is the race-free check that an order is scheduled.
+        if (
+          cause.code === '23503' &&
+          constraint ===
+            'allocations_order_number_scheduled_orders_order_number_fk'
+        )
+          throw orderNotScheduled(error);
+        if (
+          cause.code === '23505' &&
+          constraint === 'allocations_live_order_number_unique'
+        )
+          throw orderAlreadyAllocated(error);
         if (cause.code === '23503')
           throw new NotFoundException(
             'A referenced allocation, fabric, stock item, or location no longer exists.',

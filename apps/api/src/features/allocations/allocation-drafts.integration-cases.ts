@@ -161,7 +161,7 @@ export async function testAllocationDrafts(
         );
         await post(
           `${path}/drafts`,
-          { data: { orderNumber: 'different' } },
+          { data: { orderNumber: '999999' } },
           key,
         ).expect(409);
         await put(draft.id, 1, {
@@ -174,8 +174,8 @@ export async function testAllocationDrafts(
           plan: { cuts: [{ items: [{ requirementId: randomUUID() }] }] },
         }).expect(400);
         const updates = await Promise.all([
-          put(draft.id, 1, { orderNumber: 'A' }),
-          put(draft.id, 1, { orderNumber: 'B' }),
+          put(draft.id, 1, { orderNumber: '999998' }),
+          put(draft.id, 1, { orderNumber: '999999' }),
         ]);
         assert.deepEqual(
           updates.map((value) => value.status).sort(),
@@ -194,13 +194,13 @@ export async function testAllocationDrafts(
           await app
             .get(AllocationsService)
             .createDraft(
-              allocationDraftDataSchema.parse({ ...body, orderNumber: 'RB-1' }),
+              allocationDraftDataSchema.parse({ ...body, orderNumber: null }),
               colleague,
               randomUUID(),
             ),
         );
         ids.push(draft.id);
-        // Drafts keep partial order numbers; submission requires six digits.
+        // Drafts may leave the order unnamed; submission requires it.
         await post(`${path}/${draft.id}/submit`, {
           expectedRevision: 1,
         }).expect(400);
@@ -350,7 +350,7 @@ export async function testAllocationDrafts(
             }
           }
           const partial = await create({
-            orderNumber: 'INCOMPLETE',
+            orderNumber: '999999',
             requirements: [{ id: randomUUID() }],
           });
           await assert.rejects(
