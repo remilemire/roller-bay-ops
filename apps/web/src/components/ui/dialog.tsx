@@ -24,11 +24,13 @@ export function Dialog({
         <Primitive.Content
           className="dialog-content"
           {...(!description ? { 'aria-describedby': undefined } : {})}
-          // Escape on an open lookup list closes the list, not the dialog.
+          // Escape on an open lookup list or date calendar closes that, not
+          // the dialog.
           onEscapeKeyDown={(event) => {
             if (
               event.target instanceof HTMLElement &&
-              event.target.getAttribute('aria-expanded') === 'true'
+              (event.target.getAttribute('aria-expanded') === 'true' ||
+                event.target.closest('[data-keeps-escape]'))
             )
               event.preventDefault();
           }}

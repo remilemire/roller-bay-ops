@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
+import { DateField } from '@/components/ui/date-field';
 import { TextField } from '@/components/ui/field';
 import { issuePath } from '@/lib/errors';
 import { showFieldIssues } from '@/lib/field-issues';
@@ -34,9 +35,12 @@ const fieldName = (issue: ErrorIssue) =>
 
 export function OrderEditor({
   order,
+  shipDate = '',
   close,
 }: {
   order?: ScheduledOrder;
+  /** The day a new order was added from, in the week and month views. */
+  shipDate?: string;
   close: () => void;
 }) {
   // Pin the record this form opened with: a background refetch must not swap
@@ -46,7 +50,7 @@ export function OrderEditor({
     resolver: zodResolver(formSchema),
     defaultValues: {
       orderNumber: opened?.orderNumber ?? '',
-      shipDate: opened?.shipDate ?? '',
+      shipDate: opened?.shipDate ?? shipDate,
       note: opened?.note ?? '',
     },
   });
@@ -99,14 +103,12 @@ export function OrderEditor({
               hint="6 digits"
             />
           )}
-          <TextField
+          <DateField
             label="Ship date"
-            type="date"
             value={values.shipDate}
             onChange={(v) => set('shipDate', v)}
             error={errors.shipDate?.message}
-            required
-            hint="Monday to Friday"
+            weekdaysOnly
           />
           <TextField
             label="Note"

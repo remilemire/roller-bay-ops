@@ -17,6 +17,19 @@ export const calendarDateLabel = (value: string) =>
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(value));
+const calendarPart = (options: Intl.DateTimeFormatOptions) => {
+  const format = new Intl.DateTimeFormat('en-CA', {
+    ...options,
+    timeZone: 'UTC',
+  });
+  return (day: string) => format.format(new Date(day));
+};
+/** `October 2026`, from a day or a `YYYY-MM` month. */
+export const monthLabel = calendarPart({ month: 'long', year: 'numeric' });
+/** `Mon` */
+export const weekdayLabel = calendarPart({ weekday: 'short' });
+/** `Oct 5` */
+export const dayLabel = calendarPart({ month: 'short', day: 'numeric' });
 export function nullableNumber(value: string) {
   return value.trim() === '' ? null : Number(value);
 }

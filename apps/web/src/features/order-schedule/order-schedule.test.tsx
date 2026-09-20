@@ -36,6 +36,10 @@ vi.mock('@/features/auth/auth-boundary', () => ({
   useCanManage: () => state.canManage,
 }));
 vi.mock('@/features/audit/history', () => ({ History: () => null }));
+vi.mock('@/lib/calendar-dates', async (original) => ({
+  ...(await original<typeof import('@/lib/calendar-dates')>()),
+  today: () => '2026-09-28',
+}));
 vi.mock('./order-schedule.api', async (original) => ({
   ...(await original<typeof import('./order-schedule.api')>()),
   orderList: vi.fn(),
@@ -201,20 +205,22 @@ it('adds an order and shows rejected fields beside them', async () => {
   await user.click(await screen.findByRole('button', { name: 'Add order' }));
   const dialog = within(screen.getByRole('dialog'));
   const number = dialog.getByLabelText(/Order number/);
-  const date = dialog.getByLabelText(/Ship date/);
   await user.type(number, '10-48x01');
   expect(number).toHaveValue('104801');
 
-  // Saturday: caught before any request is made.
-  await user.type(date, '2026-10-03');
+  // A missing date is caught before any request is made.
   await user.click(dialog.getByRole('button', { name: 'Save order' }));
+  const date = dialog.getByRole('button', { name: 'Ship date' });
   await waitFor(() =>
-    expect(date).toHaveAccessibleDescription(/Must be a weekday\./),
+    expect(date).toHaveAccessibleDescription('Choose a ship date.'),
   );
   expect(createOrder).not.toHaveBeenCalled();
 
-  await user.clear(date);
-  await user.type(date, '2026-10-02');
+  // The calendar opens on the current month and offers weekdays only.
+  await user.click(date);
+  await user.click(dialog.getByRole('button', { name: 'Next month' }));
+  await user.click(dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
+  expect(date).toHaveTextContent('Fri, Oct 2, 2026');
   await user.type(dialog.getByLabelText('Note'), ' Rush ');
   await user.click(dialog.getByRole('button', { name: 'Save order' }));
   const notice = await dialog.findByRole('alert');
@@ -249,9 +255,8 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
   const editor = within(screen.getByRole('dialog'));
   // The order number is fixed once scheduled.
   expect(editor.queryByLabelText(/Order number/)).toBeNull();
-  const date = editor.getByLabelText(/Ship date/);
-  await user.clear(date);
-  await user.type(date, '2026-10-09');
+  await user.click(editor.getByRole('button', { name: 'Ship date' }));
+  await user.click(editor.getByRole('button', { name: 'Fri, Oct 9, 2026' }));
   await user.clear(editor.getByLabelText('Note'));
   await user.click(editor.getByRole('button', { name: 'Save order' }));
   await waitFor(() =>

@@ -4,6 +4,8 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   page,
 }, testInfo) => {
   const state = await mockApi(page);
+  // The date calendar opens on the current month.
+  await page.clock.setFixedTime(new Date('2026-09-28T12:00:00'));
   await page.goto('/');
   if (testInfo.project.name === 'tablet')
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -18,12 +20,13 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await page.getByRole('button', { name: 'Add order' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Order number').fill('104900');
-  // A Saturday is refused before anything is sent.
-  await dialog.getByLabel('Ship date').fill('2026-10-10');
-  await dialog.getByRole('button', { name: 'Save order' }).click();
-  await expect(dialog.getByText('Must be a weekday.')).toBeVisible();
-  expect(state.orderRequests).toEqual([]);
-  await dialog.getByLabel('Ship date').fill('2026-10-09');
+  // Dates are picked from a weekday calendar rather than typed.
+  await dialog.getByRole('button', { name: 'Ship date' }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Sat, Oct 3, 2026' }),
+  ).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Next month' }).click();
+  await dialog.getByRole('button', { name: 'Fri, Oct 9, 2026' }).click();
   await dialog.getByLabel('Note').fill('Motorised');
   await dialog.getByRole('button', { name: 'Save order' }).click();
   await expect(dialog).toBeHidden();
@@ -50,7 +53,8 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await expect(page).toHaveURL(new RegExp(`/order-schedule/${ids.order}$`));
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   await page.getByRole('button', { name: 'Edit' }).click();
-  await dialog.getByLabel('Ship date').fill('2026-10-06');
+  await dialog.getByRole('button', { name: 'Ship date' }).click();
+  await dialog.getByRole('button', { name: 'Tue, Oct 6, 2026' }).click();
   await dialog.getByRole('button', { name: 'Save order' }).click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
   await page.getByRole('button', { name: 'Mark shipped' }).click();
