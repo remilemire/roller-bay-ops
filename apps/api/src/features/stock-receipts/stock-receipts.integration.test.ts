@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { stockCorrectionRequest } from '../stock-items/testing/stock-correction-request.js';
+import { stockCommands } from '../stock-items/testing/stock-commands.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -167,34 +167,16 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
         }
       }
       const stockId = receipt.items[0]!.stockItemIds[0]!;
-      await stockCorrectionRequest(
-        server,
-        cookie,
-        origin,
-        `/api/stock-items/${stockId}`,
-        { widthMm: 1500 },
-      ).expect(403);
+      const { correct, voidStock } = stockCommands({ server, cookie, origin });
+      await correct(stockId, { widthMm: 1500 }, 403);
       await role('admin');
-      await stockCorrectionRequest(
-        server,
-        cookie,
-        origin,
-        `/api/stock-items/${stockId}`,
-      ).expect(409);
-      await stockCorrectionRequest(
-        server,
-        cookie,
-        origin,
-        `/api/stock-items/${stockId}`,
-        { isUsed: true, tubeOuterDiameterMm: 50, radialDepthMm: 10 },
-      ).expect(200);
-      await stockCorrectionRequest(
-        server,
-        cookie,
-        origin,
-        `/api/stock-items/${stockId}`,
-        { stockReceiptItemId: null },
-      ).expect(400);
+      await voidStock(stockId, 409);
+      await correct(stockId, {
+        isUsed: true,
+        tubeOuterDiameterMm: 50,
+        radialDepthMm: 10,
+      });
+      await correct(stockId, { stockReceiptItemId: null }, 400);
       await role('user');
       const replay = await submit(
         { items: input.items, purchaseOrderNumber: '12345' },

@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { stockCorrectionRequest } from './testing/stock-correction-request.js';
+import { stockCommands } from './testing/stock-commands.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -24,17 +24,14 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       .set('Origin', origin)
       .send(body);
   const patch = (url: string, body: object) =>
-    url.startsWith(path + '/')
-      ? stockCorrectionRequest(server, cookie, origin, url, body)
-      : request(server)
-          .patch(url)
-          .set('Cookie', cookie)
-          .set('Origin', origin)
-          .send(body);
+    request(server)
+      .patch(url)
+      .set('Cookie', cookie)
+      .set('Origin', origin)
+      .send(body);
   const remove = (url: string) =>
-    url.startsWith(path + '/')
-      ? stockCorrectionRequest(server, cookie, origin, url)
-      : request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
+    request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
+  const { correct, voidStock } = stockCommands({ server, cookie, origin });
   const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   const read = async (id: string) =>
     stockItemSchema.parse((await get(`${path}/${id}`).expect(200)).body);
@@ -60,13 +57,13 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       await role('user');
       await get(path).expect(200);
       await post(path, {}).expect(403);
-      await patch(`${path}/${randomUUID()}`, {}).expect(403);
-      await remove(`${path}/${randomUUID()}`).expect(403);
+      await correct(randomUUID(), {}, 403);
+      await voidStock(randomUUID(), 403);
       for (const value of ['owner', 'admin'] as const) {
         await role(value);
         await post(path, {}).expect(400);
-        await patch(`${path}/${randomUUID()}`, {}).expect(400);
-        await remove(`${path}/${randomUUID()}`).expect(404);
+        await correct(randomUUID(), {}, 400);
+        await voidStock(randomUUID(), 404);
       }
       await request(server)
         .post(path)
@@ -236,7 +233,7 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
         sourceStockItemId: roll.id,
       });
       assert.equal(remnant.isUsed, false);
-      await patch(`${path}/${remnant.id}`, { isUsed: true }).expect(200);
+      await correct(remnant.id, { isUsed: true });
       assert.equal((await read(remnant.id)).tubeOuterDiameterMm, null);
       assert.equal(remnant.remainingLengthMm, 1800);
       assert.equal(remnant.zoneId, zone.id);
@@ -307,8 +304,8 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       }).expect(400);
       await get(`${path}/invalid`).expect(400);
       await get(`${path}/${randomUUID()}`).expect(404);
-      await patch(`${path}/${randomUUID()}`, { widthMm: 100 }).expect(404);
-      await patch(`${path}/${roll.id}`, {}).expect(400);
+      await correct(randomUUID(), { widthMm: 100 }, 404);
+      await correct(roll.id, {}, 400);
       for (const invalid of [
         { isRemnant: true },
         { fabricColorId: otherColor.id },
@@ -316,70 +313,50 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
         { remainingLengthMm: 1 },
         { measurementThicknessMm: 0.3 },
       ])
-        await patch(`${path}/${roll.id}`, invalid).expect(400);
-      await patch(`${path}/${roll.id}`, { explicitLengthMm: 100 }).expect(400);
-      await patch(`${path}/${remnant.id}`, { explicitLengthMm: null }).expect(
-        400,
-      );
-      await patch(`${path}/${measured.id}`, {
-        tubeOuterDiameterMm: null,
-      }).expect(400);
+        await correct(roll.id, invalid, 400);
+      await correct(roll.id, { explicitLengthMm: 100 }, 400);
+      await correct(remnant.id, { explicitLengthMm: null }, 400);
+      await correct(measured.id, { tubeOuterDiameterMm: null }, 400);
       assert.equal((await read(measured.id)).tubeOuterDiameterMm, 50);
-      await patch(`${path}/${measured.id}`, { isUsed: false }).expect(400);
-      await patch(`${path}/${roll.id}`, { isUsed: true }).expect(400);
-      await patch(`${path}/${roll.id}`, { tubeOuterDiameterMm: 50 }).expect(
-        400,
-      );
-      const used = stockItemSchema.parse(
-        (
-          await patch(`${path}/${roll.id}`, {
-            isUsed: true,
-            tubeOuterDiameterMm: 50,
-          }).expect(200)
-        ).body,
-      );
-      assert.equal(used.isUsed, true);
-      await patch(`${path}/${roll.id}`, {
+      await correct(measured.id, { isUsed: false }, 400);
+      await correct(roll.id, { isUsed: true }, 400);
+      await correct(roll.id, { tubeOuterDiameterMm: 50 }, 400);
+      await correct(roll.id, { isUsed: true, tubeOuterDiameterMm: 50 });
+      assert.equal((await read(roll.id)).isUsed, true);
+      await correct(roll.id, {
         isUsed: false,
         tubeOuterDiameterMm: null,
-      }).expect(200);
+      });
 
       await patch(`/api/fabric-catalog/colors/${color.id}`, {
         thicknessMm: 0.25,
       }).expect(200);
-      await patch(`${path}/${measured.id}`, { locationId: null }).expect(400);
-      await patch(`${path}/${measured.id}`, {
-        locationId: location.id,
-      }).expect(400);
+      await correct(measured.id, { locationId: null }, 400);
+      await correct(measured.id, { locationId: location.id }, 400);
       assert.equal((await read(measured.id)).measurementThicknessMm, 0.5);
       assert.equal((await read(measured.id)).remainingLengthMm, 3769.911);
-      const remeasured = stockItemSchema.parse(
-        (
-          await patch(`${path}/${measured.id}`, { radialDepthMm: 10 }).expect(
-            200,
-          )
-        ).body,
-      );
+      await correct(measured.id, { radialDepthMm: 10 });
+      const remeasured = await read(measured.id);
       assert.equal(remeasured.measurementThicknessMm, 0.25);
       assert.equal(remeasured.remainingLengthMm, 7539.822);
       assert.equal(remeasured.createdAt, measured.createdAt);
       assert.ok(
         Date.parse(remeasured.updatedAt) > Date.parse(measured.updatedAt),
       );
-      await patch(`${path}/${measured.id}`, {
-        radialDepthMm: 999999999,
-        tubeOuterDiameterMm: 2147483645,
-      }).expect(400);
-      assert.equal((await read(measured.id)).radialDepthMm, 10);
-      await patch(`${path}/${measured.id}`, { radialDepthMm: null }).expect(
-        200,
+      await correct(
+        measured.id,
+        {
+          radialDepthMm: 999999999,
+          tubeOuterDiameterMm: 2147483645,
+        },
+        400,
       );
+      assert.equal((await read(measured.id)).radialDepthMm, 10);
+      await correct(measured.id, { radialDepthMm: null });
       assert.equal((await read(measured.id)).measurementThicknessMm, null);
       assert.equal((await read(measured.id)).remainingLengthMm, 10000);
       assert.equal((await read(measured.id)).isUsed, true);
-      await patch(`${path}/${measured.id}`, {
-        tubeOuterDiameterMm: null,
-      }).expect(400);
+      await correct(measured.id, { tubeOuterDiameterMm: null }, 400);
       const revision = (await read(remnant.id)).revision;
       const parallel = await Promise.all(
         [{ explicitLengthMm: 1200 }, { widthMm: 800 }].map((changes) =>
@@ -397,10 +374,10 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       );
       assert.deepEqual(parallel.map((r) => r.status).sort(), [200, 409]);
       const current = await read(remnant.id);
-      await patch(
-        `${path}/${remnant.id}`,
+      await correct(
+        remnant.id,
         current.widthMm === 800 ? { explicitLengthMm: 1200 } : { widthMm: 800 },
-      ).expect(200);
+      );
       assert.equal((await read(remnant.id)).widthMm, 800);
       assert.equal((await read(remnant.id)).remainingLengthMm, 1200);
 
@@ -442,34 +419,34 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       ])
         await get(`${path}?${query}`).expect(400);
       const consumedAt = new Date().toISOString();
-      await patch(`${path}/${roll.id}`, { consumedAt }).expect(200);
+      await correct(roll.id, { consumedAt });
       assert.equal((await read(roll.id)).remainingLengthMm, 0);
       assert.equal((await read(roll.id)).locationId, location.id);
-      await patch(`${path}/${roll.id}`, { locationId: null }).expect(400);
+      await correct(roll.id, { locationId: null }, 400);
       assert.equal(await total('isConsumed=false'), 3);
       assert.equal(await total('isConsumed=true'), 1);
       assert.equal((await get(path).expect(200)).body.total, 3);
-      await patch(`${path}/${roll.id}`, { consumedAt: null }).expect(200);
+      await correct(roll.id, { consumedAt: null });
       assert.equal((await read(roll.id)).remainingLengthMm, 10000);
 
-      await remove(`${path}/${roll.id}`).expect(409);
+      await voidStock(roll.id, 409);
       await remove(`/api/fabric-catalog/colors/${color.id}`).expect(409);
       await remove(`/api/locations/${location.id}`).expect(409);
       await role('user');
       await get(`${path}/${roll.id}`).expect(200);
-      await patch(`${path}/${roll.id}`, { consumedAt }).expect(403);
-      await remove(`${path}/${roll.id}`).expect(403);
+      await correct(roll.id, { consumedAt }, 403);
+      await voidStock(roll.id, 403);
       await role('owner');
       const owned = await create(input);
-      await patch(`${path}/${owned.id}`, { widthMm: 1000 }).expect(200);
-      await remove(`${path}/${owned.id}`).expect(200);
+      await correct(owned.id, { widthMm: 1000 });
+      await voidStock(owned.id);
       await role('admin');
       for (const item of [remnant, measured, other]) {
-        await remove(`${path}/${item.id}`).expect(200);
+        await voidStock(item.id);
         assert.ok((await read(item.id)).voidedAt);
       }
       // A voided descendant still preserves its source relationship.
-      await remove(`${path}/${roll.id}`).expect(409);
+      await voidStock(roll.id, 409);
       assert.equal((await read(roll.id)).voidedAt, null);
       // Voiding retains stock and its references; catalog and storage records remain protected.
       await remove(`/api/locations/${location.id}`).expect(409);
