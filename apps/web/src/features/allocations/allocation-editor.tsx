@@ -39,7 +39,6 @@ import {
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { issuePath } from '@/lib/errors';
-import { cn } from '@/lib/utils';
 import { showFieldIssues } from '@/lib/field-issues';
 import {
   allocationFormSchema,
@@ -124,7 +123,9 @@ export function AllocationEditor({
   const router = useRouter();
   useEffect(() => () => abort.current?.abort(), []);
   // The API refuses an allocation whose blinds do not add up to its order's
-  // quantity, so the form shows both and checks before asking to confirm.
+  // quantity. The form shows both counts as plain information while the
+  // blinds are being entered, and calls a difference an error only once the
+  // operator has tried to confirm; from then on it follows their corrections.
   const order = useQuery({
     ...orderByNumber(values.orderNumber),
     enabled: /^\d{6}$/.test(values.orderNumber),
@@ -133,7 +134,17 @@ export function AllocationEditor({
     (total, row) => total + (Number(row.quantity) || 0),
     0,
   );
-  const mismatch = order ? order.quantity !== entered : false;
+  const [attempted, setAttempted] = useState(false);
+  const quantityError =
+    attempted && order && order.quantity !== entered
+      ? `The order has ${blindCount(order.quantity)}; ${entered} entered.`
+      : undefined;
+  /** Whether a confirmation may go ahead; marks the attempt if it may not. */
+  function quantitiesMatch() {
+    if (!order || order.quantity === entered) return true;
+    setAttempted(true);
+    return false;
+  }
   const { errors, isDirty } = form.formState;
   useUnsavedChanges(isDirty);
   const fieldName = (issue: ErrorIssue) =>
@@ -272,13 +283,7 @@ export function AllocationEditor({
       createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
       setValidationError(null);
       form.clearErrors();
-      if (order && mismatch) {
-        form.setError('orderNumber', {
-          message: `The order has ${blindCount(order.quantity)}; ${entered} entered.`,
-        });
-        return;
-      }
-      setConfirm('submit');
+      if (quantitiesMatch()) setConfirm('submit');
     } catch (error) {
       setValidationError(error);
       showIssues(error);
@@ -309,7 +314,12 @@ export function AllocationEditor({
         }
         description="Enter the required blinds, then generate a cutting plan or build one by hand."
       />
-      <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
+      <form
+        onSubmit={form.handleSubmit((value) => {
+          // Saving an active plan confirms it again; saving a draft does not.
+          if (!active || quantitiesMatch()) save.mutate(value);
+        })}
+      >
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="stack">
             <section className="panel">
@@ -322,17 +332,16 @@ export function AllocationEditor({
                   onChange={(v) => {
                     form.setValue('orderNumber', v, { shouldDirty: true });
                     form.clearErrors('orderNumber');
+                    // Another order is a fresh start.
+                    setAttempted(false);
                   }}
                   selectedLabel={values.orderNumber}
                   queryKey={[...orderScheduleKey, 'schedulable']}
                   load={lookupSchedulableOrders}
-                  error={errors.orderNumber?.message}
+                  error={errors.orderNumber?.message ?? quantityError}
                 />
-                {order ? (
-                  <p
-                    className={cn('order-count', mismatch && 'is-mismatch')}
-                    role="status"
-                  >
+                {quantityError ? null : order ? (
+                  <p className="order-count" role="status">
                     The order has {blindCount(order.quantity)}; {entered}{' '}
                     entered.
                   </p>

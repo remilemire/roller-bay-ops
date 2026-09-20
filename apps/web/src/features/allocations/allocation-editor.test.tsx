@@ -294,7 +294,7 @@ it('saves unsaved edits to the draft before confirming it', async () => {
   );
 });
 
-it('shows the blinds entered against the order and will not confirm a mismatch', async () => {
+it('calls a quantity mismatch an error only after trying to confirm', async () => {
   const user = userEvent.setup();
   scheduled.quantity = 3;
   try {
@@ -303,25 +303,84 @@ it('shows the blinds entered against the order and will not confirm a mismatch',
         <AllocationEditor initial={draft} />
       </QueryClientProvider>,
     );
-    expect(
-      await screen.findByText('The order has 3 blinds; 1 entered.'),
-    ).toBeInTheDocument();
+    // While the blinds are being entered the counts are plain information.
+    const counts = await screen.findByText(
+      'The order has 3 blinds; 1 entered.',
+    );
+    expect(counts).toHaveAttribute('role', 'status');
+    const order = screen.getByLabelText(/^Order number/);
+    expect(order).not.toBeInvalid();
+    expect(order).not.toHaveAccessibleDescription();
+
     await user.click(
       screen.getByRole('button', { name: 'Confirm allocation' }),
     );
     expect(screen.queryByRole('dialog')).toBeNull();
-    // The stand-in's label also wraps the error, so match its start.
+    expect(submit).not.toHaveBeenCalled();
+    // The error takes the place of the information rather than repeating it.
+    expect(order).toBeInvalid();
+    expect(order).toHaveAccessibleDescription(
+      'The order has 3 blinds; 1 entered.',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+
+    // From then on it follows the correction, and clears once they match.
+    const quantity = screen.getByLabelText('Quantity');
+    await user.clear(quantity);
+    await user.type(quantity, '2');
+    expect(order).toHaveAccessibleDescription(
+      'The order has 3 blinds; 2 entered.',
+    );
+    await user.clear(quantity);
+    await user.type(quantity, '3');
+    expect(order).not.toBeInvalid();
+    expect(
+      screen.getByText('The order has 3 blinds; 3 entered.'),
+    ).toHaveAttribute('role', 'status');
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm allocation' }),
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  } finally {
+    scheduled.quantity = 1;
+  }
+});
+
+it('checks the quantity before replacing an active plan, but not before saving a draft', async () => {
+  const user = userEvent.setup();
+  scheduled.quantity = 3;
+  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
+  try {
+    const queries = client();
+    queries.setQueryData([...allocationKey, allocation.id], allocation);
+    const { unmount } = render(
+      <QueryClientProvider client={queries}>
+        <AllocationDetailScreen id={allocation.id} />
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit plan' }));
+    await screen.findByText('The order has 3 blinds; 1 entered.');
+    await user.click(
+      screen.getByRole('button', { name: 'Update reservations' }),
+    );
     expect(screen.getByLabelText(/^Order number/)).toHaveAccessibleDescription(
       'The order has 3 blinds; 1 entered.',
     );
-    expect(submit).not.toHaveBeenCalled();
-    // Entering the missing blinds clears the way.
-    const quantity = screen.getByLabelText('Quantity');
-    await user.clear(quantity);
-    await user.type(quantity, '3');
-    expect(
-      screen.getByText('The order has 3 blinds; 3 entered.'),
-    ).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    unmount();
+
+    // A draft may be saved short of its order; only confirming is held back.
+    render(
+      <QueryClientProvider client={client()}>
+        <AllocationEditor initial={draft} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('The order has 3 blinds; 1 entered.');
+    await user.clear(screen.getByLabelText('Quantity'));
+    await user.type(screen.getByLabelText('Quantity'), '2');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled());
+    expect(screen.getByLabelText(/^Order number/)).not.toBeInvalid();
   } finally {
     scheduled.quantity = 1;
   }
