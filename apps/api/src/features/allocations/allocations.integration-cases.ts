@@ -7,6 +7,7 @@ import type { TestContext } from 'node:test';
 import type { INestApplication } from '@nestjs/common';
 import type { Pool } from 'pg';
 import request from 'supertest';
+import { historySchema } from '@roller-bay/shared/audit';
 import {
   allocationDetailSchema,
   allocationListSchema,
@@ -793,6 +794,129 @@ export async function testAllocations(
             [userId],
           );
         }
+      },
+    );
+    await t.test(
+      'confirming, moving, cancelling, and completing an allocation stamp its scheduled order',
+      async () => {
+        const order = async (orderNumber: string) =>
+          (
+            await pool.query(
+              `SELECT * FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+              [orderNumber],
+            )
+          ).rows[0];
+        const allocationRow = async (id: string) =>
+          (
+            await pool.query(
+              `SELECT confirmed_at, completed_at FROM "${schema}".allocations WHERE id=$1`,
+              [id],
+            )
+          ).rows[0];
+        const stockId = await seed();
+        const body = input(stockId);
+        const allocation = await create(body);
+        const confirmedAt = (await allocationRow(allocation.id)).confirmed_at;
+        let row = await order(body.orderNumber);
+        assert.deepEqual(row.allocated_at, confirmedAt);
+        assert.equal(row.cut_at, null);
+        // Stamps leave the revision alone so an open admin edit stays current.
+        assert.equal(row.revision, 1);
+
+        // Both requests hold the foreign key's share lock on the order; the
+        // loser must wait and see the stamp rather than deadlock.
+        const contested = input(await seed()).orderNumber;
+        const racers = await Promise.all(
+          [await seed(), await seed()].map((stock) =>
+            post(path, { ...input(stock), orderNumber: contested }),
+          ),
+        );
+        assert.deepEqual(
+          racers.map((reply) => reply.status).sort(),
+          [201, 409],
+        );
+        assert.equal(
+          racers.find((reply) => reply.status === 409)!.body.issues[0].code,
+          'order_already_allocated',
+        );
+
+        // Replacing onto another order moves the milestone, keeping its time.
+        const target = input(stockId).orderNumber;
+        const moved = allocationDetailSchema.parse(
+          (
+            await put(allocation.id, {
+              ...body,
+              orderNumber: target,
+              expectedRevision: allocation.revision,
+            }).expect(200)
+          ).body,
+        );
+        assert.equal((await order(body.orderNumber)).allocated_at, null);
+        assert.deepEqual((await order(target)).allocated_at, confirmedAt);
+
+        const shipped = input(stockId).orderNumber;
+        await pool.query(
+          `UPDATE "${schema}".scheduled_orders SET shipped_at=now() WHERE order_number=$1`,
+          [shipped],
+        );
+        const late = await post(path, {
+          ...input(await seed()),
+          orderNumber: shipped,
+        }).expect(409);
+        assert.equal(late.body.issues[0].code, 'order_shipped');
+
+        // Cancelling returns the order to scheduled, free to allocate again.
+        await post(`${path}/${moved.id}/cancel`, {
+          expectedRevision: moved.revision,
+        }).expect(200);
+        assert.equal((await order(target)).allocated_at, null);
+        await post(`${path}/${moved.id}/cancel`, {
+          expectedRevision: moved.revision,
+        }).expect(200);
+        const again = await create({ ...input(stockId), orderNumber: target });
+
+        const completion = {
+          expectedRevision: again.revision,
+          items: [
+            {
+              stockItemId: stockId,
+              expectedRevision: again.items[0]!.stockItem.revision,
+              outcome: 'consumed',
+              tubeOuterDiameterMm: 50,
+            },
+          ],
+        };
+        const key = randomUUID();
+        await post(`${path}/${again.id}/complete`, completion, key).expect(200);
+        await post(`${path}/${again.id}/complete`, completion, key).expect(200);
+        const stamps = await allocationRow(again.id);
+        row = await order(target);
+        assert.deepEqual(row.allocated_at, stamps.confirmed_at);
+        assert.deepEqual(row.cut_at, stamps.completed_at);
+        assert.equal(row.revision, 1);
+        assert.equal(
+          (await get(`/api/order-schedule/${row.id}`).expect(200)).body.status,
+          'cut',
+        );
+
+        // Each allocation event carries the order's change, so the order's
+        // own history explains its milestones.
+        const history = historySchema.parse(
+          (await get(`/api/order-schedule/${row.id}/history`).expect(200)).body,
+        );
+        assert.deepEqual(history.items.map((event) => event.action).sort(), [
+          'allocation.cancelled',
+          'allocation.completed',
+          'allocation.confirmed',
+          'allocation.replaced',
+        ]);
+        const completedEvent = history.items.find(
+          (event) => event.action === 'allocation.completed',
+        )!;
+        assert.deepEqual(
+          completedEvent.changes.map((c) => c.recordType).slice(0, 2),
+          ['allocations', 'order-schedule'],
+        );
       },
     );
     await testAllocationDrafts(

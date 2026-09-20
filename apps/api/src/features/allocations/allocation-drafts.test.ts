@@ -2,6 +2,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { ConfigService } from '@nestjs/config';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import { AllocationsService } from './allocations.service.js';
+import type { OrderScheduleService } from '../order-schedule/order-schedule.service.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -156,6 +157,12 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       writes++;
     },
   };
+  // An incomplete draft must not claim its scheduled order either.
+  const orders = {
+    allocate: async () => {
+      writes++;
+    },
+  };
   const service = new AllocationsService(
     {} as AuditService,
     repository as unknown as AllocationsRepository,
@@ -168,6 +175,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
         CUTTING_DROP_ALLOWANCE_MM: 0,
       }),
     ),
+    orders as unknown as OrderScheduleService,
   );
   await assert.rejects(
     service.submitDraft(draft.id, 1, randomUUID()),

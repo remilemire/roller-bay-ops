@@ -112,13 +112,14 @@ export class AllocationsRepository {
     id: string,
     settings: AllocationDraftData['settings'],
     plannedSummary: CuttingPlanSummary,
+    confirmedAt: Date,
   ) {
     const [row] = await this.db
       .update(allocations)
       .set({
         settings,
         plannedSummary,
-        confirmedAt: new Date(),
+        confirmedAt,
         isDraft: false,
       })
       .where(eq(allocations.id, id))

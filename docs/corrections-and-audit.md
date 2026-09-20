@@ -23,6 +23,7 @@ Existing rows start at stock revision 1 without invented history. Existing recei
 | GET    | `/api/stock-items/:id/history`                | Employee-readable stock history                                            |
 | GET    | `/api/stock-receipts/:id/history`             | Employee-readable receipt history                                          |
 | GET    | `/api/allocations/:id/history`                | Employee-readable allocation history                                       |
+| GET    | `/api/order-schedule/:id/history`             | Employee-readable scheduled order history                                  |
 
 The former stock PATCH and DELETE endpoints are removed. Stock creation remains `POST /api/stock-items`; it records an audit event atomically. History accepts `page` and `pageSize` (defaults 1 and 25, maximum size 100) and sorts newest first. History remains accessible by ID after draft deletion because audit links do not cascade with operational records.
 

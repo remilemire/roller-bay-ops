@@ -12,8 +12,13 @@ import {
   type ScheduledOrderQuery,
   type UpdateScheduledOrder,
 } from '@roller-bay/shared/order-schedule';
+import type { DatabaseTransaction } from '../../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
-import { orderScheduleOperation } from './order-schedule.operation.js';
+import {
+  orderAlreadyAllocated,
+  orderNotScheduled,
+  orderScheduleOperation,
+} from './order-schedule.operation.js';
 import {
   OrderScheduleRepository,
   type ScheduledOrderRecord,
@@ -142,5 +147,60 @@ export class OrderScheduleService {
         await repository.delete(id);
       }),
     );
+  }
+
+  // The allocation workflow stamps the order inside its own transaction and
+  // records the returned change on its own audit event. allocated_at and
+  // cut_at mirror the live allocation's confirmed_at and completed_at.
+
+  async allocate(
+    tx: DatabaseTransaction,
+    orderNumber: string,
+    at: Date,
+  ): Promise<AuditChange> {
+    const repository = new OrderScheduleRepository({ db: tx });
+    const order = await repository.findByOrderNumber(
+      orderNumber,
+      'no key update',
+    );
+    if (!order) throw orderNotScheduled();
+    if (order.allocatedAt) throw orderAlreadyAllocated();
+    // The derived status would hide an allocation made after shipping.
+    if (order.shippedAt)
+      throw new ConflictException({
+        message: 'This order has already shipped.',
+        issues: [
+          {
+            code: 'order_shipped',
+            path: ['orderNumber'],
+            message: 'Already shipped.',
+          },
+        ],
+      });
+    return change(order, await repository.stamp(order.id, { allocatedAt: at }));
+  }
+
+  /** The order's allocation was cancelled or moved to another order. */
+  release(tx: DatabaseTransaction, orderNumber: string) {
+    return this.restamp(tx, orderNumber, { allocatedAt: null });
+  }
+
+  markCut(tx: DatabaseTransaction, orderNumber: string, at: Date) {
+    return this.restamp(tx, orderNumber, { cutAt: at });
+  }
+
+  private async restamp(
+    tx: DatabaseTransaction,
+    orderNumber: string,
+    values: Parameters<OrderScheduleRepository['stamp']>[1],
+  ): Promise<AuditChange> {
+    const repository = new OrderScheduleRepository({ db: tx });
+    const order = await repository.findByOrderNumber(
+      orderNumber,
+      'no key update',
+    );
+    // The foreign key keeps an allocation's order on the schedule.
+    if (!order) throw orderNotScheduled();
+    return change(order, await repository.stamp(order.id, values));
   }
 }

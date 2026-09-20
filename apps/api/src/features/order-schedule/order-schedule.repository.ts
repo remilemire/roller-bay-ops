@@ -102,6 +102,15 @@ export class OrderScheduleRepository {
     return row;
   }
 
+  async findByOrderNumber(orderNumber: string, lock: 'no key update') {
+    const [row] = await this.db
+      .select()
+      .from(scheduledOrders)
+      .where(eq(scheduledOrders.orderNumber, orderNumber))
+      .for(lock);
+    return row;
+  }
+
   async create(values: CreateScheduledOrder) {
     const [row] = await this.db
       .insert(scheduledOrders)
@@ -123,6 +132,24 @@ export class OrderScheduleRepository {
         revision: sql`${scheduledOrders.revision} + 1`,
         updatedAt: new Date(),
       })
+      .where(eq(scheduledOrders.id, id))
+      .returning();
+    return row!;
+  }
+
+  /**
+   * Milestones mirrored from the order's allocation. They leave `revision`
+   * alone: they touch columns no edit writes, and the row lock already
+   * serialises them against edits, so allocating fabric never makes an
+   * admin's open edit stale.
+   */
+  async stamp(
+    id: string,
+    values: Partial<Pick<ScheduledOrderRecord, 'allocatedAt' | 'cutAt'>>,
+  ) {
+    const [row] = await this.db
+      .update(scheduledOrders)
+      .set({ ...values, updatedAt: new Date() })
       .where(eq(scheduledOrders.id, id))
       .returning();
     return row!;

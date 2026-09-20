@@ -5,6 +5,7 @@ import { DatabaseModule } from '../../database/database.module.js';
 import type { Environment } from '../../config/environment.js';
 import { SolverModule } from '../../solver/solver.module.js';
 import { SolverClient } from '../../solver/solver.client.js';
+import { OrderScheduleModule } from '../order-schedule/order-schedule.module.js';
 import { StockItemsModule } from '../stock-items/stock-items.module.js';
 import { AllocationsController } from './allocations.controller.js';
 import { AllocationsRepository } from './allocations.repository.js';
@@ -18,6 +19,7 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
     AuditModule,
     ConfigModule,
     DatabaseModule,
+    OrderScheduleModule,
     StockItemsModule,
     SolverModule.registerAsync({
       imports: [ConfigModule],

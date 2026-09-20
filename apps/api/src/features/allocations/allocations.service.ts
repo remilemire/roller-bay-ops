@@ -13,8 +13,8 @@ import {
   type CompletionCorrection,
 } from '@roller-bay/shared/corrections';
 /**
- * Reservation-changing writes lock the allocation header, then stock in a
- * common order before checking availability.
+ * Reservation-changing writes lock the allocation header, then its scheduled
+ * order, then stock in a common order before checking availability.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -35,6 +35,7 @@ import {
   completeAllocationSchema,
   type CompleteAllocationRequest,
 } from '@roller-bay/shared/allocations';
+import { OrderScheduleService } from '../order-schedule/order-schedule.service.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
@@ -66,6 +67,7 @@ export class AllocationsService {
     private readonly repository: AllocationsRepository,
     private readonly stockItems: StockItemsService,
     private readonly cuttingRules: CuttingRulesService,
+    private readonly orders: OrderScheduleService,
   ) {}
 
   create(input: CreateAllocation, userId: string, key: string) {
@@ -246,6 +248,9 @@ export class AllocationsService {
     userId: string,
   ) {
     const before = fromDraft ? await this.detail(repository, tx, header) : null;
+    // The order's allocated_at mirrors this allocation's confirmed_at.
+    const now = new Date();
+    const order = await this.orders.allocate(tx, header.orderNumber!, now);
     const summary = await this.validateForWrite(
       repository,
       tx,
@@ -256,12 +261,17 @@ export class AllocationsService {
     const saved = fromDraft
       ? await repository.update(header.id, {
           isDraft: false,
-          confirmedAt: new Date(),
+          confirmedAt: now,
           submittedDraftRevision: header.revision,
           settings: input.settings,
           plannedSummary: summary,
         })
-      : await repository.initializePlan(header.id, input.settings, summary);
+      : await repository.initializePlan(
+          header.id,
+          input.settings,
+          summary,
+          now,
+        );
     const result = await this.detail(repository, tx, saved);
     await this.audit.record(tx, userId, 'allocation.confirmed', [
       {
@@ -270,6 +280,7 @@ export class AllocationsService {
         before: before ? { type: 'allocations', value: before } : null,
         after: { type: 'allocations', value: result },
       },
+      order,
     ]);
     return result;
   }
@@ -282,6 +293,18 @@ export class AllocationsService {
           input.expectedRevision,
         );
         const before = await this.detail(repository, tx, header);
+        // Moving the allocation to another order moves the milestone with it.
+        const orders =
+          input.orderNumber === header.orderNumber
+            ? []
+            : [
+                await this.orders.release(tx, header.orderNumber!),
+                await this.orders.allocate(
+                  tx,
+                  input.orderNumber,
+                  header.confirmedAt!,
+                ),
+              ];
         const configured = this.configure(input, {
           settings: header.settings,
           requirements: await repository.requirements(id),
@@ -308,6 +331,7 @@ export class AllocationsService {
             before: { type: 'allocations', value: before },
             after: { type: 'allocations', value: result },
           },
+          ...orders,
         ]);
         return result;
       }),
@@ -321,6 +345,7 @@ export class AllocationsService {
         if (!header) throw new NotFoundException('Allocation not found.');
         if (header.cancelledAt) return this.detail(repository, tx, header);
         requireActiveRevision(header, revision);
+        const order = await this.orders.release(tx, header.orderNumber!);
         const items = await repository.items(id);
         await this.stockItems.findForAllocation(tx, {
           stockIds: items.map((item) => item.stockItemId!),
@@ -341,6 +366,7 @@ export class AllocationsService {
             before: { type: 'allocations', value: before },
             after: { type: 'allocations', value: result },
           },
+          order,
         ]);
         return result;
       }),
@@ -389,12 +415,14 @@ export class AllocationsService {
           throw new BadRequestException(
             'Provide exactly one cutting result for every allocated stock item.',
           );
+        // The order's cut_at mirrors this allocation's completed_at.
+        const now = new Date();
+        const order = await this.orders.markCut(tx, header.orderNumber!, now);
         await this.stockItems.findForAllocation(tx, {
           stockIds: ids,
           lock: true,
         });
         const before = await this.detail(repository, tx, header);
-        const now = new Date();
         const effects = await this.stockItems.recordCuttingResults(
           input.items,
           tx,
@@ -429,6 +457,7 @@ export class AllocationsService {
             before: { type: 'allocations', value: before },
             after: { type: 'allocations', value: result },
           },
+          order,
           ...stockChanges(effects),
         ]);
         return result;
