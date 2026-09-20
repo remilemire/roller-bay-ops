@@ -243,8 +243,13 @@ export function AllocationEditor({
       setValidationError(null);
     },
   });
+  // A 409 about a field, such as an order that is already allocated, is fixed
+  // in the form; only a stale record is fixed by reloading it.
   const conflict = [save.error, submit.error].some(
-    (error) => error instanceof ApiError && error.status === 409,
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 409 &&
+      !error.issues.some(fieldName),
   );
   const busy =
     save.isPending ||

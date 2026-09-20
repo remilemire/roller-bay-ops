@@ -241,6 +241,45 @@ it('saves unsaved edits to the draft before confirming it', async () => {
   );
 });
 
+it('offers to reload a stale draft, but not for an order that is already allocated', async () => {
+  const user = userEvent.setup();
+  submit.mockRejectedValueOnce(
+    new ApiError(409, 'Allocation changed; refresh before submitting.'),
+  );
+  submit.mockRejectedValueOnce(
+    new ApiError(409, 'This order already has an allocation.', undefined, [
+      {
+        code: 'order_already_allocated',
+        path: ['orderNumber'],
+        message: 'Already allocated.',
+      },
+    ]),
+  );
+  render(
+    <QueryClientProvider client={client()}>
+      <AllocationEditor initial={draft} />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+    name: 'Confirm allocation',
+  });
+  // The open dialog hides the page behind it from the accessibility tree.
+  const reload = () =>
+    screen.queryByRole('button', { name: 'Reload saved draft', hidden: true });
+  await user.click(confirm);
+  await waitFor(() => expect(reload()).toBeInTheDocument());
+
+  // Reloading the draft would not fix the order number.
+  await user.click(confirm);
+  await waitFor(() =>
+    expect(
+      screen.getByRole('textbox', { name: /Order number/, hidden: true }),
+    ).toHaveAccessibleDescription('Already allocated.'),
+  );
+  expect(reload()).toBeNull();
+});
+
 it('leaves a pending new-allocation request alone while editing an active plan', async () => {
   const user = userEvent.setup();
   const pending = JSON.stringify({
