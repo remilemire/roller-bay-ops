@@ -132,7 +132,7 @@ Development conventions and contribution instructions are maintained in [AGENTS.
 
 Local migrations run explicitly. Render applies committed migrations in the API pre-deploy step, never at app startup. Database commands load `apps/api/.env`, because npm runs them from the API workspace. The web application reads `apps/web/.env.local`; `NEXT_PUBLIC_API_URL` is public and is embedded at build time.
 
-See [AGENTS.md](AGENTS.md#verification-and-local-development) for verification commands and the feature documents for test setup and scope. The root lint and test commands also require the solver's Python environment. Browser tests use intercepted API responses; PostgreSQL, Redis, solver HTTP, and live Microsoft sign-in checks are separate integrations.
+See [AGENTS.md](AGENTS.md#verification-and-local-development) for verification commands and [testing](docs/testing.md) for the suites, their setup, and the [CI](docs/testing.md#ci) that runs them on pull requests and on `dev` and `main`. The root lint and test commands also require the solver's Python environment. Browser tests use intercepted API responses; PostgreSQL, Redis, solver HTTP, and live Microsoft sign-in checks are separate integrations.
 
 The root package overrides Nest's transitive `multer` dependency and Drizzle Kit's legacy loader's `esbuild` dependency to patched releases. Recheck those overrides when upgrading the parent packages. ESLint stays on version 9 to match the peer dependencies of Next.js's React, import, and accessibility plugins.
 

@@ -48,6 +48,20 @@ Every API response is intercepted by `mockApi` in `apps/web/tests/e2e/fixtures.t
 
 Nothing is retried, locally or on CI. Intercepted responses and a fixed clock make these tests deterministic, so a test that passes on a second attempt has found a race in the UI, which is worth a failure.
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `dev` and `main`; a newer push to the same ref cancels the run in progress. Five jobs run in parallel, each the same commands as above on the Node version in `.nvmrc`:
+
+| Job      | Runs                                                                                    |
+| -------- | --------------------------------------------------------------------------------------- |
+| `static` | Prettier check, lint and typecheck of the TypeScript workspaces                         |
+| `api`    | API unit tests, then the integration suite against PostgreSQL and Redis containers      |
+| `web`    | Vitest and the production build                                                         |
+| `e2e`    | Browser tests; traces of failed tests are uploaded as the `playwright-results` artifact |
+| `solver` | Solver unit tests and Ruff, then the API's solver tests over HTTP                       |
+
+A CI checkout has no `.env` files, so a test that came to depend on one fails there. The `api` job sets `TEST_DATABASE_URL` and `TEST_REDIS_URL` for its containers; no other job sets a variable, and the workflow uses no secrets. There is no separate migration check, because every integration file applies all migrations to an empty database. CI does not deploy, and deploys do not wait for it ([deployment](deployment.md)). Requiring the jobs before a merge is a branch protection setting on GitHub.
+
 ## Listeners
 
 A test that uses Supertest against a server that is not yet listening must listen first on `127.0.0.1` (`await app.listen(0, '127.0.0.1')`). Given a non-listening server, Supertest binds a wildcard port for every request and then connects to `127.0.0.1`; on macOS that port can already belong to another local process on IPv4, which then answers the request.

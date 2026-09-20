@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# No job reads a .env file, and a checkout has none. The only variables set
+# are the two service URLs of the api job; see docs/testing.md.
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      # Type-aware lint rules read the shared package's built types.
+      - run: npm run build --workspace=@roller-bay/shared
+      - run: npx turbo run lint typecheck --filter='!@roller-bay/solver'
+
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: roller_bay
+          POSTGRES_PASSWORD: roller_bay_local
+          POSTGRES_DB: roller_bay_ops
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U roller_bay -d roller_bay_ops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=@roller-bay/shared
+      - run: npm test --workspace=@roller-bay/api
+      # Every file applies all migrations to an empty database of its own,
+      # which is also the check that the migrations apply from scratch.
+      - run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://roller_bay:roller_bay_local@localhost:5432/roller_bay_ops
+          TEST_REDIS_URL: redis://localhost:6379
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=@roller-bay/shared
+      - run: npm test --workspace=@roller-bay/web
+      - run: npm run build --workspace=@roller-bay/web
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=@roller-bay/shared
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # Always run: the cache holds the browser, not its system libraries.
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run test:e2e --workspace=@roller-bay/web
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results
+          path: apps/web/test-results
+          retention-days: 7
+
+  solver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: apps/solver/.python-version
+          cache: pip
+          cache-dependency-path: apps/solver/requirements*.txt
+      - run: npm ci
+      # The solver's scripts and the live-solver tests use this exact path.
+      - run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-dev.txt
+        working-directory: apps/solver
+      - run: npm test --workspace=@roller-bay/solver
+      - run: npm run lint --workspace=@roller-bay/solver
+      - run: npm run build --workspace=@roller-bay/shared
+      # Starts and stops its own solver; nothing to orchestrate here.
+      - run: npm run test:solver --workspace=@roller-bay/api

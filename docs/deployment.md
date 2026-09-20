@@ -45,7 +45,7 @@ Supply the API settings from [authentication](authentication.md) and `apps/api/.
 
 Register the same callback in Microsoft Entra as a **Web** redirect URI. Login begins through the frontend's `/api/auth/login`; the API exchanges the code and redirects back to `WEB_ORIGIN`. Keep Microsoft and database credentials exclusively on the API.
 
-Render deploys are triggered deliberately (`autoDeployTrigger: off`). Deploy coordinated API/frontend changes in a compatible order; a Vercel deployment does not trigger a Render deployment. Configure the Vercel Git deployment workflow accordingly. No service is created merely by adding these files to the repository.
+Render deploys are triggered deliberately (`autoDeployTrigger: off`). Deploy coordinated API/frontend changes in a compatible order; a Vercel deployment does not trigger a Render deployment. Configure the Vercel Git deployment workflow accordingly. No service is created merely by adding these files to the repository. [CI](testing.md#ci) checks pull requests and pushes but neither deploys nor gates a deploy; confirm it passed before deploying.
 
 Sources: [Render Node versions](https://render.com/docs/node-version), [Python versions](https://render.com/docs/python-version), [monorepos](https://render.com/docs/monorepo-support), [private services](https://render.com/docs/private-services).
 
