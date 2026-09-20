@@ -25,7 +25,7 @@ Existing rows start at stock revision 1 without invented history. Existing recei
 | GET    | `/api/allocations/:id/history`                | Employee-readable allocation history                                       |
 | GET    | `/api/order-schedule/:id/history`             | Employee-readable scheduled order history                                  |
 
-The former stock PATCH and DELETE endpoints are removed. Stock creation remains `POST /api/stock-items`; it records an audit event atomically. History accepts `page` and `pageSize` (defaults 1 and 25, maximum size 100) and sorts newest first. History remains accessible by ID after draft deletion because audit links do not cascade with operational records.
+The former stock PATCH and DELETE endpoints are removed. Stock creation remains `POST /api/stock-items`; it records an audit event atomically. History accepts `page` and `pageSize` (defaults 1 and 25, maximum size 100) and sorts newest first. A receipt's or allocation's history begins at its submission or confirmation, whose event has no `before`; draft saves and deletions are not recorded. Audit links do not cascade with operational records, so draft events recorded before this rule remain readable by ID.
 
 Corrections return `{ eventId, recordId, revision, affectedAllocationIds, createdStockItemIds }`. Fetch the record afterward to display its current effective state. Replays return the saved result, even if subsequent activity has advanced the record. Keys are scoped to actor, operation, and record; identical normalized requests replay, changed payloads return 409, and failed transactions do not consume keys. Business reasons are trimmed, required, and limited to 1,000 characters. Actors and timestamps come from the server.
 
@@ -57,7 +57,7 @@ The corrected result is reconstructed from the captured pre-completion measureme
 
 Services pass the authenticated actor and the current transaction to an injected `AuditService`. The audit service owns attribution, snapshot validation and retry/conflict rules; its repository owns database queries. No audit write opens an independent transaction. Receipt/allocation services coordinate workflows; stock-items performs stock writes. Operations lock the workflow header, then affected stock in sorted ID order. Reservation checks run after stock locks without acquiring unrelated allocation-header locks.
 
-Audit storage exposes insertion and reading only, with no HTTP mutation endpoints. Events preserve the actor's name at the time, reason, public before/after snapshots and related record IDs. Actor email, credentials, request hashes and private profile attributes are never included. Draft deletion retains its final snapshot. Failed changes and successful idempotent replays produce no extra audit events.
+Audit storage exposes insertion and reading only, with no HTTP mutation endpoints. Events preserve the actor's name at the time, reason, public before/after snapshots and related record IDs. Actor email, credentials, request hashes and private profile attributes are never included. Failed changes and successful idempotent replays produce no extra audit events.
 
 ## Verification
 

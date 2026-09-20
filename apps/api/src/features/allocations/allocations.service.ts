@@ -125,33 +125,19 @@ export class AllocationsService {
         }
         await this.requireScheduled(tx, data.orderNumber);
         await repository.replacePlan(header.id, configured);
-        const result = await this.detail(repository, tx, header);
-        await this.audit.record(tx, userId, 'allocation.draft-created', [
-          {
-            recordType: 'allocations',
-            recordId: header.id,
-            before: null,
-            after: { type: 'allocations', value: result },
-          },
-        ]);
-        return result;
+        // Drafts stay out of history, which begins at confirmation.
+        return this.detail(repository, tx, header);
       }),
     );
   }
 
-  updateDraft(
-    id: string,
-    revision: number,
-    data: AllocationDraftInput,
-    userId: string,
-  ) {
+  updateDraft(id: string, revision: number, data: AllocationDraftInput) {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const previous = requireDraftRevision(
           await repository.findById(id, true),
           revision,
         );
-        const before = await this.detail(repository, tx, previous);
         await this.requireScheduled(tx, data.orderNumber);
         const configured = this.configure(data, {
           settings: previous.settings,
@@ -162,36 +148,15 @@ export class AllocationsService {
           orderNumber: data.orderNumber,
           settings: configured.settings,
         });
-        const result = await this.detail(repository, tx, header);
-        await this.audit.record(tx, userId, 'allocation.draft-updated', [
-          {
-            recordType: 'allocations',
-            recordId: id,
-            before: { type: 'allocations', value: before },
-            after: { type: 'allocations', value: result },
-          },
-        ]);
-        return result;
+        return this.detail(repository, tx, header);
       }),
     );
   }
 
-  deleteDraft(id: string, revision: number, userId: string) {
+  deleteDraft(id: string, revision: number) {
     return allocationOperation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = requireDraftRevision(
-          await repository.findById(id, true),
-          revision,
-        );
-        const before = await this.detail(repository, tx, header);
-        await this.audit.record(tx, userId, 'allocation.draft-deleted', [
-          {
-            recordType: 'allocations',
-            recordId: id,
-            before: { type: 'allocations', value: before },
-            after: null,
-          },
-        ]);
+      this.repository.withTransaction(async (repository) => {
+        requireDraftRevision(await repository.findById(id, true), revision);
         await repository.delete(id);
       }),
     );
@@ -261,7 +226,6 @@ export class AllocationsService {
     fromDraft: boolean,
     userId: string,
   ) {
-    const before = fromDraft ? await this.detail(repository, tx, header) : null;
     // The order's allocated_at mirrors this allocation's confirmed_at.
     const now = new Date();
     const order = await this.orders.allocate(
@@ -296,7 +260,8 @@ export class AllocationsService {
       {
         recordType: 'allocations',
         recordId: header.id,
-        before: before ? { type: 'allocations', value: before } : null,
+        // The draft it may have come from is not part of its history.
+        before: null,
         after: { type: 'allocations', value: result },
       },
       order,

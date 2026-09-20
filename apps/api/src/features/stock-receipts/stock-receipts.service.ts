@@ -94,71 +94,31 @@ export class StockReceiptsService {
           return this.detail(repository, tx, existing);
         }
         await this.writeLines(repository, header.id, data);
-        if (draft) {
-          const result = await this.detail(repository, tx, header);
-          await this.audit.record(tx, userId, 'receipt.draft-created', [
-            {
-              recordType: 'stock-receipts',
-              recordId: header.id,
-              before: null,
-              after: { type: 'stock-receipts', value: result },
-            },
-          ]);
-          return result;
-        }
+        // Drafts stay out of history, which begins at submission.
+        if (draft) return this.detail(repository, tx, header);
         return this.submitRecords(repository, tx, header, userId, false);
       }),
     );
   }
 
-  updateDraft(
-    id: string,
-    revision: number,
-    data: StockReceiptDraftData,
-    userId: string,
-  ) {
+  updateDraft(id: string, revision: number, data: StockReceiptDraftData) {
     return this.operation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        const previous = this.requireDraft(
-          await repository.findById(id, true),
-          revision,
-        );
-        const before = await this.detail(repository, tx, previous);
+        this.requireDraft(await repository.findById(id, true), revision);
         await repository.deleteItems(id);
         await this.writeLines(repository, id, data);
         const header = await repository.update(id, {
           purchaseOrderNumber: data.purchaseOrderNumber,
         });
-        const result = await this.detail(repository, tx, header);
-        await this.audit.record(tx, userId, 'receipt.draft-updated', [
-          {
-            recordType: 'stock-receipts',
-            recordId: id,
-            before: { type: 'stock-receipts', value: before },
-            after: { type: 'stock-receipts', value: result },
-          },
-        ]);
-        return result;
+        return this.detail(repository, tx, header);
       }),
     );
   }
 
-  deleteDraft(id: string, revision: number, userId: string) {
+  deleteDraft(id: string, revision: number) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const previous = this.requireDraft(
-          await repository.findById(id, true),
-          revision,
-        );
-        const before = await this.detail(repository, tx, previous);
-        await this.audit.record(tx, userId, 'receipt.draft-deleted', [
-          {
-            recordType: 'stock-receipts',
-            recordId: id,
-            before: { type: 'stock-receipts', value: before },
-            after: null,
-          },
-        ]);
+      this.repository.withTransaction(async (repository) => {
+        this.requireDraft(await repository.findById(id, true), revision);
         await repository.deleteItems(id);
         await repository.delete(id);
       }),
@@ -231,7 +191,6 @@ export class StockReceiptsService {
         message: 'Complete all receipt fields before submitting.',
         issues: parsed.error.issues,
       });
-    const before = fromDraft ? await this.detail(repository, tx, header) : null;
     const effects = await this.stockItems.receiveRolls(
       parsed.data.items.map((line, index) => ({
         ...line,
@@ -255,7 +214,8 @@ export class StockReceiptsService {
       {
         recordType: 'stock-receipts',
         recordId: header.id,
-        before: before ? { type: 'stock-receipts', value: before } : null,
+        // The draft it may have come from is not part of its history.
+        before: null,
         after: { type: 'stock-receipts', value: result },
       },
       ...stockChanges(effects),

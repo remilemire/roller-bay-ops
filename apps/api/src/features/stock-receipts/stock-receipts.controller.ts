@@ -61,14 +61,8 @@ export class StockReceiptsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateStockReceiptDraftSchema))
     input: { expectedRevision: number; data: StockReceiptDraftData },
-    @Req() request: Request,
   ) {
-    return this.service.updateDraft(
-      id,
-      input.expectedRevision,
-      input.data,
-      request.currentUser!.id,
-    );
+    return this.service.updateDraft(id, input.expectedRevision, input.data);
   }
 
   @Delete(':id/draft')
@@ -77,13 +71,8 @@ export class StockReceiptsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(stockReceiptDraftRevisionSchema))
     input: { expectedRevision: number },
-    @Req() request: Request,
   ) {
-    return this.service.deleteDraft(
-      id,
-      input.expectedRevision,
-      request.currentUser!.id,
-    );
+    return this.service.deleteDraft(id, input.expectedRevision);
   }
 
   @Post(':id/submit')

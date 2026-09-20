@@ -8,6 +8,7 @@ import {
   stockReceiptDraftSchema,
   stockReceiptRecordSchema,
 } from '@roller-bay/shared/stock-receipts';
+import { historySchema } from '@roller-bay/shared/audit';
 import { startSignedInApp } from '../../testing/integration-app.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
@@ -53,6 +54,11 @@ test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
   const stockCount = async () =>
     (await pool.query(`SELECT count(*)::int AS n FROM fabric_stock_items`))
       .rows[0].n;
+  // Draft saves and deletions stay out of history; it begins at submission.
+  const history = async (id: string) =>
+    historySchema
+      .parse((await get(`${id}/history`).expect(200)).body)
+      .items.map((event) => [event.action, event.changes[0]!.before]);
   const colleague = await fixtures.createUser('Draft colleague');
   await t.test(
     'receipt drafts round-trip incomplete typed rows, preserve ordering and require auth/origin',
@@ -129,6 +135,7 @@ test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
       await remove(draft.id, 1).expect(409);
       await remove(draft.id, 2).expect(204);
       await get(draft.id).expect(404);
+      assert.deepEqual(await history(draft.id), []);
     },
   );
   await t.test(
@@ -182,6 +189,7 @@ test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
         saved.items.map((item) => item.id),
         lines,
       );
+      assert.deepEqual(await history(shared.id), [['receipt.submitted', null]]);
       await put(shared.id, 3, data).expect(409);
       await remove(shared.id, 3).expect(409);
       await post(`${path}/${shared.id}/submit`, {

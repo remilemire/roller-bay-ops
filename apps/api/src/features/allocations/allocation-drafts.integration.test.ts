@@ -8,6 +8,7 @@ import {
   allocationDraftDataSchema,
   allocationRecordSchema,
 } from '@roller-bay/shared/allocations';
+import { historySchema } from '@roller-bay/shared/audit';
 import { startAllocationsApp } from './testing/allocations-app.js';
 import { AllocationsService } from './allocations.service.js';
 import { AllocationsRepository } from './allocations.repository.js';
@@ -38,6 +39,11 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       .set('Cookie', cookie)
       .set('Origin', origin)
       .send({ expectedRevision });
+  // Draft saves and deletions stay out of history; it begins at confirmation.
+  const history = async (id: string) =>
+    historySchema
+      .parse((await get(`${id}/history`).expect(200)).body)
+      .items.map((event) => [event.action, event.changes[0]!.before]);
   const create = async (data: object, key: string = randomUUID()) =>
     allocationDraftSchema.parse(
       (await post(`${path}/drafts`, { data }, key).expect(201)).body,
@@ -161,6 +167,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       await remove(draft.id, 1).expect(409);
       await remove(draft.id, 2).expect(204);
       await get(draft.id).expect(404);
+      assert.deepEqual(await history(draft.id), []);
     },
   );
   await t.test(
@@ -198,6 +205,9 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       assert.equal(saved.requirements[0]!.id, body.requirements[0]!.id);
       assert.equal(saved.items[0]!.reservedLengthMm, 1000);
       assert.equal(saved.revision, 3);
+      assert.deepEqual(await history(draft.id), [
+        ['allocation.confirmed', null],
+      ]);
       await put(draft.id, 3, body).expect(409);
       await remove(draft.id, 3).expect(409);
       await post(`${path}/${draft.id}/submit`, {
