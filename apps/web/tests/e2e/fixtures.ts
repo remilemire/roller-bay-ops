@@ -98,7 +98,19 @@ export async function mockApi(
     > | null,
     allocation: structuredClone(allocation),
     completionRequests: [] as unknown[],
-    orders: [structuredClone(order)],
+    orders: [
+      structuredClone(order),
+      // Not allocated yet, so the allocation editor offers it.
+      {
+        ...structuredClone(order),
+        id: 'ffffffff-ffff-4fff-8fff-fffffffffff0',
+        orderNumber: '104877',
+        shipDate: '2026-10-05',
+        note: null,
+        status: 'scheduled' as const,
+        allocatedAt: null,
+      },
+    ],
     orderRequests: [] as { method: string; body: unknown }[],
   };
   const paged = (items: unknown[], url: URL, total = items.length) => ({

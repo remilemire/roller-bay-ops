@@ -21,8 +21,12 @@ import {
 import { Save, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { TextField } from '@/components/ui/field';
+import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
+import {
+  lookupSchedulableOrders,
+  orderScheduleKey,
+} from '@/features/order-schedule/order-schedule.api';
 import { stockKey } from '@/features/stock-items/stock-items.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -109,13 +113,6 @@ export function AllocationEditor({
   const [saved, setSaved] = useState(initial);
   const [confirm, setConfirm] = useState<'submit' | 'delete' | null>(null);
   const [validationError, setValidationError] = useState<unknown>(null);
-  // A draft may keep a partly entered number, so this only warns once the
-  // operator has left the field; confirming is what requires all six digits.
-  const [numberLeft, setNumberLeft] = useState(false);
-  const numberWarning =
-    numberLeft && !/^(\d{6})?$/.test(values.orderNumber)
-      ? 'Must be 6 digits.'
-      : undefined;
   const [preview, setPreview] = useState<
     AllocationOptimization | AllocationValidation | null
   >(null);
@@ -136,7 +133,7 @@ export function AllocationEditor({
       client.invalidateQueries({ queryKey: allocationKey }),
       client.invalidateQueries({ queryKey: stockKey }),
       // Confirming or moving an allocation changes its order's status.
-      client.invalidateQueries({ queryKey: ['order-schedule'] }),
+      client.invalidateQueries({ queryKey: orderScheduleKey }),
     ]);
   const save = useMutation({
     mutationFn: async (value: AllocationForm) => {
@@ -297,21 +294,23 @@ export function AllocationEditor({
           <div className="stack">
             <section className="panel">
               <div className="panel-body">
-                <TextField
+                {/* An allocation names an order from the schedule, so the
+                    number is picked rather than typed. */}
+                <Lookup
                   label="Order number"
                   value={values.orderNumber}
                   onChange={(v) => {
-                    form.setValue('orderNumber', v.replace(/\D/g, ''), {
-                      shouldDirty: true,
-                    });
+                    form.setValue('orderNumber', v, { shouldDirty: true });
                     form.clearErrors('orderNumber');
                   }}
-                  onBlur={() => setNumberLeft(true)}
-                  maxLength={6}
-                  inputMode="numeric"
-                  hint="6 digits"
-                  error={errors.orderNumber?.message ?? numberWarning}
+                  selectedLabel={values.orderNumber}
+                  queryKey={[...orderScheduleKey, 'schedulable']}
+                  load={lookupSchedulableOrders}
+                  error={errors.orderNumber?.message}
                 />
+                <p className="muted">
+                  Lists scheduled orders that have no allocation yet.
+                </p>
               </div>
             </section>
             <RequirementsEditor

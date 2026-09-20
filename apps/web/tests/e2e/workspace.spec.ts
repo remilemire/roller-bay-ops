@@ -287,7 +287,11 @@ test('allocation optimization is a preview until the shared draft is confirmed',
 }, testInfo) => {
   const state = await mockApi(page);
   await page.goto('/allocations/new');
-  await page.getByLabel('Order number', { exact: true }).fill('104877');
+  // The order number is picked from the schedule's unallocated orders.
+  await page.getByLabel('Order number', { exact: true }).click();
+  await page
+    .getByRole('option', { name: '104877 · ships Mon, Oct 5, 2026' })
+    .click();
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page

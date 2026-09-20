@@ -31,9 +31,38 @@ vi.mock('@/features/auth/auth-boundary', async () => {
     }),
   };
 });
-vi.mock('@/components/ui/lookup', () => ({
-  Lookup: ({ label }: { label: string }) => <div>{label}</div>,
-}));
+// A plain text box stands in for the searchable list: what is typed is the
+// picked option's id. The order number is one of these pickers.
+vi.mock('@/components/ui/lookup', async () => {
+  const { useId } = await import('react');
+  return {
+    Lookup: ({
+      label,
+      value,
+      onChange,
+      error,
+    }: {
+      label: string;
+      value: string;
+      onChange: (value: string) => void;
+      error?: string;
+    }) => {
+      const id = useId();
+      return (
+        <label>
+          {label}
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? id : undefined}
+          />
+          {error && <small id={id}>{error}</small>}
+        </label>
+      );
+    },
+  };
+});
 vi.mock('./allocations.api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./allocations.api')>()),
   replaceAllocation: replace,
@@ -170,22 +199,26 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(save).toBeEnabled();
 });
 
-it('keeps the order number to digits and flags a partial one beside the field', async () => {
+it('picks the order number from the schedule and marks the form dirty', async () => {
   const user = userEvent.setup();
+  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
   render(
     <QueryClientProvider client={client()}>
-      <AllocationEditor />
+      <AllocationEditor initial={draft} />
     </QueryClientProvider>,
   );
-  const input = screen.getByLabelText('Order number');
-  await user.type(input, '10a4-8');
-  expect(input).toHaveValue('1048');
-  expect(input).not.toBeInvalid();
-  await user.tab();
-  expect(input).toBeInvalid();
-  expect(input).toHaveAccessibleDescription('Must be 6 digits.');
-  await user.type(input, '02');
-  expect(input).not.toBeInvalid();
+  const order = screen.getByLabelText('Order number');
+  expect(order).toHaveValue('104801');
+  await user.clear(order);
+  await user.type(order, '104802');
+  await user.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() =>
+    expect(saveDraft).toHaveBeenCalledWith(
+      draft.id,
+      1,
+      expect.objectContaining({ orderNumber: '104802' }),
+    ),
+  );
 });
 
 it('shows submission problems beside their fields instead of listing them', async () => {

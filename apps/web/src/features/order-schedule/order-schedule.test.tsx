@@ -15,6 +15,7 @@ import { OrderScheduleScreen } from './order-schedule-screen';
 import {
   createOrder,
   deleteOrder,
+  lookupSchedulableOrders,
   orderDetail,
   orderList,
   updateOrder,
@@ -81,6 +82,32 @@ function show(ui: ReactNode) {
 it('formats a ship date as its calendar day in every timezone', () => {
   // Midnight UTC is still Thursday evening west of Greenwich.
   expect(calendarDateLabel('2026-10-02')).toBe('Fri, Oct 2, 2026');
+});
+
+it('offers the allocation editor only orders that can still be allocated', async () => {
+  const fetched = vi.fn<(url: string) => Promise<Response>>(
+    async () =>
+      new Response(
+        JSON.stringify({ items: [order], total: 1, page: 1, pageSize: 25 }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+  );
+  vi.stubGlobal('fetch', fetched);
+  const result = await lookupSchedulableOrders(
+    '1048019',
+    1,
+    new AbortController().signal,
+  );
+  const url = new URL(String(fetched.mock.calls[0]![0]), 'http://localhost');
+  expect(url.pathname).toMatch(/\/order-schedule$/);
+  expect(url.searchParams.get('status')).toBe('scheduled');
+  // The API caps the search at an order number's six characters.
+  expect(url.searchParams.get('search')).toBe('104801');
+  // The option id is the order number the allocation stores.
+  expect(result).toEqual({
+    total: 1,
+    items: [{ id: '104801', label: '104801 · ships Fri, Oct 2, 2026' }],
+  });
 });
 
 it('opens on unshipped orders and keeps the filter and search in the URL', async () => {
