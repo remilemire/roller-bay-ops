@@ -15,7 +15,6 @@ export async function testCatalog(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -42,10 +41,7 @@ export async function testCatalog(
       .set('Cookie', cookie)
       .set('Origin', origin);
   const role = (value: string) =>
-    pool.query(`UPDATE "${schema}".users SET role = $1 WHERE id = $2`, [
-      value,
-      userId,
-    ]);
+    pool.query(`UPDATE users SET role = $1 WHERE id = $2`, [value, userId]);
 
   try {
     await t.test(

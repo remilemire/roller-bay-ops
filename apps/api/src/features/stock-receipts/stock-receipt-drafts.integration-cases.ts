@@ -16,7 +16,6 @@ export async function testStockReceiptDrafts(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -60,14 +59,11 @@ export async function testStockReceiptDrafts(
     return draft;
   };
   const stockCount = async () =>
-    (
-      await pool.query(
-        `SELECT count(*)::int AS n FROM "${schema}".fabric_stock_items`,
-      )
-    ).rows[0].n;
+    (await pool.query(`SELECT count(*)::int AS n FROM fabric_stock_items`))
+      .rows[0].n;
   try {
     await pool.query(
-      `INSERT INTO "${schema}".users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Draft colleague',$2,$3,'user')`,
+      `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Draft colleague',$2,$3,'user')`,
       [colleague, `${colleague}@example.com`, colleague],
     );
     await t.test(
@@ -93,7 +89,7 @@ export async function testStockReceiptDrafts(
           draft.data,
         );
         const rows = await pool.query(
-          `SELECT position,width_mm,quantity FROM "${schema}".stock_receipt_items WHERE stock_receipt_id=$1 ORDER BY position`,
+          `SELECT position,width_mm,quantity FROM stock_receipt_items WHERE stock_receipt_id=$1 ORDER BY position`,
           [draft.id],
         );
         assert.deepEqual(
@@ -182,7 +178,7 @@ export async function testStockReceiptDrafts(
         await put(shared.id, 1, data).expect(200);
         const lines = (
           await pool.query(
-            `SELECT id FROM "${schema}".stock_receipt_items WHERE stock_receipt_id=$1`,
+            `SELECT id FROM stock_receipt_items WHERE stock_receipt_id=$1`,
             [shared.id],
           )
         ).rows.map((row) => row.id);
@@ -272,7 +268,7 @@ export async function testStockReceiptDrafts(
           ]) {
             await client.query('BEGIN');
             await client.query(
-              `UPDATE "${schema}".stock_receipt_items SET ${field}=NULL WHERE stock_receipt_id=$1`,
+              `UPDATE stock_receipt_items SET ${field}=NULL WHERE stock_receipt_id=$1`,
               [draft.id],
             );
             await assert.rejects(client.query('COMMIT'), {
@@ -286,7 +282,7 @@ export async function testStockReceiptDrafts(
           });
           await assert.rejects(
             pool.query(
-              `UPDATE "${schema}".stock_receipts SET is_draft=false, submitted_at=now(), submitted_by_user_id=$2 WHERE id=$1`,
+              `UPDATE stock_receipts SET is_draft=false, submitted_at=now(), submitted_by_user_id=$2 WHERE id=$1`,
               [partial.id, userId],
             ),
             {
@@ -311,12 +307,12 @@ export async function testStockReceiptDrafts(
           try {
             await child.query(`BEGIN ISOLATION LEVEL ${isolation}`);
             await child.query(
-              `INSERT INTO "${schema}".stock_receipt_items (stock_receipt_id,position) VALUES ($1,1)`,
+              `INSERT INTO stock_receipt_items (stock_receipt_id,position) VALUES ($1,1)`,
               [draft.id],
             );
             await header.query('BEGIN');
             await header.query(
-              `UPDATE "${schema}".stock_receipts SET is_draft=false, submitted_at=now(), submitted_by_user_id=$2 WHERE id=$1`,
+              `UPDATE stock_receipts SET is_draft=false, submitted_at=now(), submitted_by_user_id=$2 WHERE id=$1`,
               [draft.id, userId],
             );
             const rejected = assert.rejects(child.query('COMMIT'), {
@@ -325,7 +321,7 @@ export async function testStockReceiptDrafts(
             await header.query('COMMIT');
             await rejected;
             const rows = await pool.query(
-              `SELECT id FROM "${schema}".stock_receipt_items WHERE stock_receipt_id=$1`,
+              `SELECT id FROM stock_receipt_items WHERE stock_receipt_id=$1`,
               [draft.id],
             );
             assert.equal(rows.rowCount, 0);
@@ -340,17 +336,16 @@ export async function testStockReceiptDrafts(
     );
   } finally {
     await pool.query(
-      `DELETE FROM "${schema}".fabric_stock_items WHERE stock_receipt_item_id IN (SELECT id FROM "${schema}".stock_receipt_items WHERE stock_receipt_id=ANY($1::uuid[]))`,
+      `DELETE FROM fabric_stock_items WHERE stock_receipt_item_id IN (SELECT id FROM stock_receipt_items WHERE stock_receipt_id=ANY($1::uuid[]))`,
       [ids],
     );
     await pool.query(
-      `DELETE FROM "${schema}".stock_receipt_items WHERE stock_receipt_id=ANY($1::uuid[])`,
+      `DELETE FROM stock_receipt_items WHERE stock_receipt_id=ANY($1::uuid[])`,
       [ids],
     );
-    await pool.query(
-      `DELETE FROM "${schema}".stock_receipts WHERE id=ANY($1::uuid[])`,
-      [ids],
-    );
-    await pool.query(`DELETE FROM "${schema}".users WHERE id=$1`, [colleague]);
+    await pool.query(`DELETE FROM stock_receipts WHERE id=ANY($1::uuid[])`, [
+      ids,
+    ]);
+    await pool.query(`DELETE FROM users WHERE id=$1`, [colleague]);
   }
 }

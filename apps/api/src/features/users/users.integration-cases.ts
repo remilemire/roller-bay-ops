@@ -20,7 +20,6 @@ export async function testUserRoles(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   adminCookie: string,
   origin: string,
   setProfile: (profile: MicrosoftProfileInput) => void,
@@ -58,7 +57,7 @@ export async function testUserRoles(
     );
   const ownerId = async () => {
     const { rows } = await pool.query(
-      `SELECT id FROM "${schema}".users WHERE role='owner'`,
+      `SELECT id FROM users WHERE role='owner'`,
     );
     assert.equal(rows.length, 1);
     return rows[0].id as string;
@@ -78,15 +77,12 @@ export async function testUserRoles(
     'bootstrap uses the normalized configured email and never activates a disabled account',
     async () => {
       assert.equal(
-        (
-          await pool.query(
-            `SELECT count(*) FROM "${schema}".users WHERE role='owner'`,
-          )
-        ).rows[0].count,
+        (await pool.query(`SELECT count(*) FROM users WHERE role='owner'`))
+          .rows[0].count,
         '0',
       );
       const { rows } = await pool.query(
-        `INSERT INTO "${schema}".users (name,email,microsoft_subject_id,is_active) VALUES ($1,$2,$3,false) RETURNING id`,
+        `INSERT INTO users (name,email,microsoft_subject_id,is_active) VALUES ($1,$2,$3,false) RETURNING id`,
         [
           ownerProfile.name,
           'owner@example.com',
@@ -101,11 +97,8 @@ export async function testUserRoles(
         false,
       );
       assert.equal(
-        (
-          await pool.query(
-            `SELECT count(*) FROM "${schema}".users WHERE role='owner'`,
-          )
-        ).rows[0].count,
+        (await pool.query(`SELECT count(*) FROM users WHERE role='owner'`))
+          .rows[0].count,
         '0',
       );
       await activate(originalOwnerId, true).expect(200);
@@ -121,7 +114,7 @@ export async function testUserRoles(
   await t.test('the users table itself rejects a second owner', async () => {
     await assert.rejects(
       pool.query(
-        `INSERT INTO "${schema}".users (name,email,microsoft_subject_id,role) VALUES ('Extra owner',$1,$2,'owner')`,
+        `INSERT INTO users (name,email,microsoft_subject_id,role) VALUES ('Extra owner',$1,$2,'owner')`,
         [`${randomUUID()}@example.com`, randomUUID()],
       ),
       (error: unknown) => {
@@ -318,7 +311,7 @@ export async function testUserRoles(
         defaultMeasurementUnits,
       );
       const { rows } = await pool.query(
-        `SELECT measurement_units FROM "${schema}".users WHERE id=$1`,
+        `SELECT measurement_units FROM users WHERE id=$1`,
         [recipientId],
       );
       assert.deepEqual(rows[0].measurement_units, {
@@ -327,17 +320,16 @@ export async function testUserRoles(
       });
       // Stored values that are no longer offered fall back per field.
       await pool.query(
-        `UPDATE "${schema}".users SET measurement_units='{"rollWidth":"furlong","radialDepth":"in"}' WHERE id=$1`,
+        `UPDATE users SET measurement_units='{"rollWidth":"furlong","radialDepth":"in"}' WHERE id=$1`,
         [recipientId],
       );
       assert.deepEqual((await me(recipientCookie)).measurementUnits, {
         ...defaultMeasurementUnits,
         radialDepth: 'in',
       });
-      await pool.query(
-        `UPDATE "${schema}".users SET measurement_units='{}' WHERE id=$1`,
-        [recipientId],
-      );
+      await pool.query(`UPDATE users SET measurement_units='{}' WHERE id=$1`, [
+        recipientId,
+      ]);
     },
   );
 
@@ -375,10 +367,9 @@ export async function testUserRoles(
       assert.equal((await me(recipientCookie)).colorTheme, 'plum');
       assert.equal((await me(adminCookie)).colorTheme, 'slate');
       // A stored palette that is no longer offered falls back to the default.
-      await pool.query(
-        `UPDATE "${schema}".users SET color_theme='neon' WHERE id=$1`,
-        [recipientId],
-      );
+      await pool.query(`UPDATE users SET color_theme='neon' WHERE id=$1`, [
+        recipientId,
+      ]);
       assert.equal((await me(recipientCookie)).colorTheme, 'slate');
     },
   );
@@ -475,9 +466,7 @@ export async function testUserRoles(
       const blocker = await pool.connect();
       try {
         await blocker.query('BEGIN');
-        await blocker.query(
-          `LOCK TABLE "${schema}".users IN ROW EXCLUSIVE MODE`,
-        );
+        await blocker.query(`LOCK TABLE users IN ROW EXCLUSIVE MODE`);
         await setRole(alternateId, 'admin', recipientCookie).expect(503);
       } finally {
         await blocker.query('ROLLBACK');

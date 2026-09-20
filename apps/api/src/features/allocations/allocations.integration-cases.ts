@@ -22,7 +22,6 @@ export async function testAllocations(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -54,7 +53,7 @@ export async function testAllocations(
   const seed = async (length = 10000, remnant = false) => {
     const id = randomUUID();
     await pool.query(
-      `INSERT INTO "${schema}".fabric_stock_items (id, fabric_color_id, width_mm, initial_length_mm, explicit_length_mm, location_id, is_remnant, is_used)
+      `INSERT INTO fabric_stock_items (id, fabric_color_id, width_mm, initial_length_mm, explicit_length_mm, location_id, is_remnant, is_used)
       VALUES ($1, $2, 1200, $3, $4, $5, $6, $6)`,
       [id, ids.color, length, remnant ? length : null, ids.location, remnant],
     );
@@ -90,7 +89,7 @@ export async function testAllocations(
     Number(
       (
         await pool.query(
-          `SELECT count(*) AS total FROM "${schema}".fabric_stock_items WHERE fabric_color_id=$1`,
+          `SELECT count(*) AS total FROM fabric_stock_items WHERE fabric_color_id=$1`,
           [ids.color],
         )
       ).rows[0].total,
@@ -129,38 +128,38 @@ export async function testAllocations(
   );
   try {
     await pool.query(
-      `INSERT INTO "${schema}".manufacturers (id,name) VALUES ($1,'Allocation manufacturer')`,
+      `INSERT INTO manufacturers (id,name) VALUES ($1,'Allocation manufacturer')`,
       [ids.maker],
     );
     await pool.query(
-      `INSERT INTO "${schema}".fabric_materials (id,manufacturer_id,name) VALUES ($1,$2,'Allocation material')`,
+      `INSERT INTO fabric_materials (id,manufacturer_id,name) VALUES ($1,$2,'Allocation material')`,
       [ids.material, ids.maker],
     );
     await pool.query(
-      `INSERT INTO "${schema}".fabric_colors (id,material_id,code,thickness_mm) VALUES ($1,$2,'ALLOC-TEST',0.5)`,
+      `INSERT INTO fabric_colors (id,material_id,code,thickness_mm) VALUES ($1,$2,'ALLOC-TEST',0.5)`,
       [ids.color, ids.material],
     );
     await pool.query(
-      `INSERT INTO "${schema}".location_zones (id,name) VALUES ($1,'Allocation warehouse')`,
+      `INSERT INTO location_zones (id,name) VALUES ($1,'Allocation warehouse')`,
       [ids.zone],
     );
     await pool.query(
-      `INSERT INTO "${schema}".location_sections (id,zone_id,label) VALUES ($1,$2,'A')`,
+      `INSERT INTO location_sections (id,zone_id,label) VALUES ($1,$2,'A')`,
       [ids.section, ids.zone],
     );
     await pool.query(
-      `INSERT INTO "${schema}".locations (id,section_id,label) VALUES ($1,$2,'1')`,
+      `INSERT INTO locations (id,section_id,label) VALUES ($1,$2,'1')`,
       [ids.location, ids.section],
     );
     // Allocations must name a scheduled order and match its quantity; every
     // allocation here plans one blind.
     await pool.query(
-      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date, quantity)
+      `INSERT INTO scheduled_orders (order_number, ship_date, quantity)
        SELECT n::text, '2026-10-01', 1 FROM generate_series(100001, 100400) n
        UNION ALL VALUES ('999998', '2026-10-01'::date, 1), ('999999', '2026-10-01', 1)`,
     );
     await pool.query(
-      `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
+      `UPDATE users SET role='user', is_active=true WHERE id=$1`,
       [userId],
     );
 
@@ -753,7 +752,7 @@ export async function testAllocations(
         const counted = input(await seed());
         const setQuantity = (quantity: number) =>
           pool.query(
-            `UPDATE "${schema}".scheduled_orders SET quantity=$1 WHERE order_number=$2`,
+            `UPDATE scheduled_orders SET quantity=$1 WHERE order_number=$2`,
             [quantity, counted.orderNumber],
           );
         await setQuantity(3);
@@ -769,7 +768,7 @@ export async function testAllocations(
         assert.equal(
           (
             await pool.query(
-              `SELECT allocated_at FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+              `SELECT allocated_at FROM scheduled_orders WHERE order_number=$1`,
               [counted.orderNumber],
             )
           ).rows[0].allocated_at,
@@ -817,14 +816,11 @@ export async function testAllocations(
 
         const order = (
           await pool.query(
-            `SELECT id, revision FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+            `SELECT id, revision FROM scheduled_orders WHERE order_number=$1`,
             [first.orderNumber],
           )
         ).rows[0];
-        await pool.query(
-          `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
         try {
           await request(server)
             .delete(`/api/order-schedule/${order.id}`)
@@ -846,10 +842,9 @@ export async function testAllocations(
           ]);
           await edit({ quantity: 1, note: 'Same quantity' }).expect(200);
         } finally {
-          await pool.query(
-            `UPDATE "${schema}".users SET role='user' WHERE id=$1`,
-            [userId],
-          );
+          await pool.query(`UPDATE users SET role='user' WHERE id=$1`, [
+            userId,
+          ]);
         }
       },
     );
@@ -865,22 +860,20 @@ export async function testAllocations(
         ).body;
         const order = (
           await pool.query(
-            `SELECT id FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+            `SELECT id FROM scheduled_orders WHERE order_number=$1`,
             [body.orderNumber],
           )
         ).rows[0];
         const asAdmin = async <T>(work: () => Promise<T>) => {
-          await pool.query(
-            `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
-            [userId],
-          );
+          await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
+            userId,
+          ]);
           try {
             return await work();
           } finally {
-            await pool.query(
-              `UPDATE "${schema}".users SET role='user' WHERE id=$1`,
-              [userId],
-            );
+            await pool.query(`UPDATE users SET role='user' WHERE id=$1`, [
+              userId,
+            ]);
           }
         };
         const schedule = (method: 'delete' | 'post', url: string) => {
@@ -1014,7 +1007,7 @@ export async function testAllocations(
         assert.ok(
           (
             await pool.query(
-              `SELECT allocated_at FROM "${schema}".scheduled_orders WHERE id=$1`,
+              `SELECT allocated_at FROM scheduled_orders WHERE id=$1`,
               [order.id],
             )
           ).rows[0].allocated_at,
@@ -1033,14 +1026,14 @@ export async function testAllocations(
         const order = async (orderNumber: string) =>
           (
             await pool.query(
-              `SELECT * FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+              `SELECT * FROM scheduled_orders WHERE order_number=$1`,
               [orderNumber],
             )
           ).rows[0];
         const allocationRow = async (id: string) =>
           (
             await pool.query(
-              `SELECT confirmed_at, completed_at FROM "${schema}".allocations WHERE id=$1`,
+              `SELECT confirmed_at, completed_at FROM allocations WHERE id=$1`,
               [id],
             )
           ).rows[0];
@@ -1087,7 +1080,7 @@ export async function testAllocations(
 
         const shipped = input(stockId).orderNumber;
         await pool.query(
-          `UPDATE "${schema}".scheduled_orders SET shipped_at=now() WHERE order_number=$1`,
+          `UPDATE scheduled_orders SET shipped_at=now() WHERE order_number=$1`,
           [shipped],
         );
         const late = await post(path, {
@@ -1150,61 +1143,43 @@ export async function testAllocations(
         );
       },
     );
-    await testAllocationDrafts(
-      t,
-      app,
-      pool,
-      schema,
-      cookie,
-      origin,
-      seed,
-      input,
-    );
+    await testAllocationDrafts(t, app, pool, cookie, origin, seed, input);
   } finally {
     mock.mock.restore();
     await pool.query(
-      `DELETE FROM "${schema}".allocation_cut_items WHERE allocation_cut_id IN (SELECT c.id FROM "${schema}".allocation_cuts c JOIN "${schema}".allocation_items i ON i.id=c.allocation_item_id JOIN "${schema}".fabric_stock_items s ON s.id=i.stock_item_id WHERE s.fabric_color_id=$1)`,
+      `DELETE FROM allocation_cut_items WHERE allocation_cut_id IN (SELECT c.id FROM allocation_cuts c JOIN allocation_items i ON i.id=c.allocation_item_id JOIN fabric_stock_items s ON s.id=i.stock_item_id WHERE s.fabric_color_id=$1)`,
       [ids.color],
     );
     await pool.query(
-      `DELETE FROM "${schema}".allocation_cuts WHERE allocation_item_id IN (SELECT i.id FROM "${schema}".allocation_items i JOIN "${schema}".fabric_stock_items s ON s.id=i.stock_item_id WHERE s.fabric_color_id=$1)`,
+      `DELETE FROM allocation_cuts WHERE allocation_item_id IN (SELECT i.id FROM allocation_items i JOIN fabric_stock_items s ON s.id=i.stock_item_id WHERE s.fabric_color_id=$1)`,
       [ids.color],
     );
     await pool.query(
-      `DELETE FROM "${schema}".allocation_items WHERE allocation_id IN (SELECT allocation_id FROM "${schema}".allocation_requirements WHERE fabric_color_id=$1)`,
+      `DELETE FROM allocation_items WHERE allocation_id IN (SELECT allocation_id FROM allocation_requirements WHERE fabric_color_id=$1)`,
       [ids.color],
     );
     const rows = await pool.query(
-      `DELETE FROM "${schema}".allocation_requirements WHERE fabric_color_id=$1 RETURNING allocation_id`,
+      `DELETE FROM allocation_requirements WHERE fabric_color_id=$1 RETURNING allocation_id`,
       [ids.color],
     );
     if (rows.rows.length)
-      await pool.query(
-        `DELETE FROM "${schema}".allocations WHERE id=ANY($1::uuid[])`,
-        [rows.rows.map((row: { allocation_id: string }) => row.allocation_id)],
-      );
-    await pool.query(`DELETE FROM "${schema}".scheduled_orders`);
+      await pool.query(`DELETE FROM allocations WHERE id=ANY($1::uuid[])`, [
+        rows.rows.map((row: { allocation_id: string }) => row.allocation_id),
+      ]);
+    await pool.query(`DELETE FROM scheduled_orders`);
     await pool.query(
-      `DELETE FROM "${schema}".fabric_stock_items WHERE fabric_color_id=$1`,
+      `DELETE FROM fabric_stock_items WHERE fabric_color_id=$1`,
       [ids.color],
     );
-    await pool.query(`DELETE FROM "${schema}".locations WHERE id=$1`, [
-      ids.location,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".location_sections WHERE id=$1`, [
+    await pool.query(`DELETE FROM locations WHERE id=$1`, [ids.location]);
+    await pool.query(`DELETE FROM location_sections WHERE id=$1`, [
       ids.section,
     ]);
-    await pool.query(`DELETE FROM "${schema}".location_zones WHERE id=$1`, [
-      ids.zone,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".fabric_colors WHERE id=$1`, [
-      ids.color,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".fabric_materials WHERE id=$1`, [
+    await pool.query(`DELETE FROM location_zones WHERE id=$1`, [ids.zone]);
+    await pool.query(`DELETE FROM fabric_colors WHERE id=$1`, [ids.color]);
+    await pool.query(`DELETE FROM fabric_materials WHERE id=$1`, [
       ids.material,
     ]);
-    await pool.query(`DELETE FROM "${schema}".manufacturers WHERE id=$1`, [
-      ids.maker,
-    ]);
+    await pool.query(`DELETE FROM manufacturers WHERE id=$1`, [ids.maker]);
   }
 }

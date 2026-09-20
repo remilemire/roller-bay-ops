@@ -17,7 +17,6 @@ export async function testAllocationDrafts(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   origin: string,
   seed: (length?: number, remnant?: boolean) => Promise<string>,
@@ -57,7 +56,7 @@ export async function testAllocationDrafts(
   };
   try {
     await pool.query(
-      `INSERT INTO "${schema}".users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Allocation draft colleague',$2,$3,'user')`,
+      `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Allocation draft colleague',$2,$3,'user')`,
       [colleague, `${colleague}@example.com`, colleague],
     );
     await t.test(
@@ -94,7 +93,7 @@ export async function testAllocationDrafts(
           draft.data,
         );
         const savedItems = await pool.query(
-          `SELECT stock_item_id,reserved_length_mm FROM "${schema}".allocation_items WHERE allocation_id=$1`,
+          `SELECT stock_item_id,reserved_length_mm FROM allocation_items WHERE allocation_id=$1`,
           [draft.id],
         );
         assert.equal(savedItems.rowCount, 3);
@@ -288,7 +287,7 @@ export async function testAllocationDrafts(
         assert.deepEqual(unchanged.data, draft.data);
         assert.equal(unchanged.revision, 1);
         const reservations = await pool.query(
-          `SELECT reserved_length_mm FROM "${schema}".allocation_items WHERE allocation_id=$1`,
+          `SELECT reserved_length_mm FROM allocation_items WHERE allocation_id=$1`,
           [draft.id],
         );
         assert.ok(
@@ -327,12 +326,12 @@ export async function testAllocationDrafts(
           {
             table: 'allocation_cuts',
             fields: ['planned_length_mm', 'edge_trim_mm'],
-            where: `allocation_item_id IN (SELECT id FROM "${schema}".allocation_items WHERE allocation_id=$1)`,
+            where: `allocation_item_id IN (SELECT id FROM allocation_items WHERE allocation_id=$1)`,
           },
           {
             table: 'allocation_cut_items',
             fields: ['quantity'],
-            where: `allocation_cut_id IN (SELECT c.id FROM "${schema}".allocation_cuts c JOIN "${schema}".allocation_items i ON i.id=c.allocation_item_id WHERE i.allocation_id=$1)`,
+            where: `allocation_cut_id IN (SELECT c.id FROM allocation_cuts c JOIN allocation_items i ON i.id=c.allocation_item_id WHERE i.allocation_id=$1)`,
           },
         ];
         try {
@@ -340,7 +339,7 @@ export async function testAllocationDrafts(
             for (const field of fields) {
               await client.query('BEGIN');
               await client.query(
-                `UPDATE "${schema}".${table} SET ${field}=NULL WHERE ${where}`,
+                `UPDATE ${table} SET ${field}=NULL WHERE ${where}`,
                 [draft.id],
               );
               await assert.rejects(client.query('COMMIT'), {
@@ -355,7 +354,7 @@ export async function testAllocationDrafts(
           });
           await assert.rejects(
             pool.query(
-              `UPDATE "${schema}".allocations SET is_draft=false, confirmed_at=now() WHERE id=$1`,
+              `UPDATE allocations SET is_draft=false, confirmed_at=now() WHERE id=$1`,
               [partial.id],
             ),
             {
@@ -372,25 +371,22 @@ export async function testAllocationDrafts(
     );
   } finally {
     await pool.query(
-      `DELETE FROM "${schema}".allocation_cut_items WHERE allocation_cut_id IN (SELECT c.id FROM "${schema}".allocation_cuts c JOIN "${schema}".allocation_items i ON i.id=c.allocation_item_id WHERE i.allocation_id=ANY($1::uuid[]))`,
+      `DELETE FROM allocation_cut_items WHERE allocation_cut_id IN (SELECT c.id FROM allocation_cuts c JOIN allocation_items i ON i.id=c.allocation_item_id WHERE i.allocation_id=ANY($1::uuid[]))`,
       [ids],
     );
     await pool.query(
-      `DELETE FROM "${schema}".allocation_cuts WHERE allocation_item_id IN (SELECT id FROM "${schema}".allocation_items WHERE allocation_id=ANY($1::uuid[]))`,
+      `DELETE FROM allocation_cuts WHERE allocation_item_id IN (SELECT id FROM allocation_items WHERE allocation_id=ANY($1::uuid[]))`,
       [ids],
     );
     await pool.query(
-      `DELETE FROM "${schema}".allocation_items WHERE allocation_id=ANY($1::uuid[])`,
+      `DELETE FROM allocation_items WHERE allocation_id=ANY($1::uuid[])`,
       [ids],
     );
     await pool.query(
-      `DELETE FROM "${schema}".allocation_requirements WHERE allocation_id=ANY($1::uuid[])`,
+      `DELETE FROM allocation_requirements WHERE allocation_id=ANY($1::uuid[])`,
       [ids],
     );
-    await pool.query(
-      `DELETE FROM "${schema}".allocations WHERE id=ANY($1::uuid[])`,
-      [ids],
-    );
-    await pool.query(`DELETE FROM "${schema}".users WHERE id=$1`, [colleague]);
+    await pool.query(`DELETE FROM allocations WHERE id=ANY($1::uuid[])`, [ids]);
+    await pool.query(`DELETE FROM users WHERE id=$1`, [colleague]);
   }
 }

@@ -17,7 +17,6 @@ export async function testStockReceipts(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -33,10 +32,10 @@ export async function testStockReceipts(
       .set('Idempotency-Key', key)
       .send(body);
   const role = (value: string) =>
-    pool.query(
-      `UPDATE "${schema}".users SET role=$1, is_active=true WHERE id=$2`,
-      [value, userId],
-    );
+    pool.query(`UPDATE users SET role=$1, is_active=true WHERE id=$2`, [
+      value,
+      userId,
+    ]);
   const makerId = randomUUID(),
     materialId = randomUUID(),
     colorId = randomUUID();
@@ -46,35 +45,32 @@ export async function testStockReceipts(
   const count = async (
     table: 'stock_receipts' | 'stock_receipt_items' | 'fabric_stock_items',
   ) =>
-    (
-      await pool.query(
-        `SELECT count(*)::int AS total FROM "${schema}"."${table}"`,
-      )
-    ).rows[0].total as number;
+    (await pool.query(`SELECT count(*)::int AS total FROM "${table}"`)).rows[0]
+      .total as number;
   const initialStockCount = await count('fabric_stock_items');
   try {
     await pool.query(
-      `INSERT INTO "${schema}".manufacturers (id, name) VALUES ($1, 'Receipt manufacturer')`,
+      `INSERT INTO manufacturers (id, name) VALUES ($1, 'Receipt manufacturer')`,
       [makerId],
     );
     await pool.query(
-      `INSERT INTO "${schema}".fabric_materials (id, manufacturer_id, name) VALUES ($1, $2, 'Receipt material')`,
+      `INSERT INTO fabric_materials (id, manufacturer_id, name) VALUES ($1, $2, 'Receipt material')`,
       [materialId, makerId],
     );
     await pool.query(
-      `INSERT INTO "${schema}".fabric_colors (id, material_id, code, thickness_mm) VALUES ($1, $2, 'PO-TEST', 0.5)`,
+      `INSERT INTO fabric_colors (id, material_id, code, thickness_mm) VALUES ($1, $2, 'PO-TEST', 0.5)`,
       [colorId, materialId],
     );
     await pool.query(
-      `INSERT INTO "${schema}".location_zones (id, name) VALUES ($1, 'Receipt warehouse')`,
+      `INSERT INTO location_zones (id, name) VALUES ($1, 'Receipt warehouse')`,
       [zoneId],
     );
     await pool.query(
-      `INSERT INTO "${schema}".location_sections (id, zone_id, label) VALUES ($1, $2, 'A')`,
+      `INSERT INTO location_sections (id, zone_id, label) VALUES ($1, $2, 'A')`,
       [sectionId, zoneId],
     );
     await pool.query(
-      `INSERT INTO "${schema}".locations (id, section_id, label) VALUES ($1, $2, '1')`,
+      `INSERT INTO locations (id, section_id, label) VALUES ($1, $2, '1')`,
       [locationId, sectionId],
     );
     const line = {
@@ -161,10 +157,9 @@ export async function testStockReceipts(
           { ...input, submittedByUserId: randomUUID() },
         ])
           await submit(invalid).expect(400);
-        await pool.query(
-          `UPDATE "${schema}".users SET is_active=false WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
+          userId,
+        ]);
         await submit(input).expect(403);
         await get(path).expect(403);
         await get(`${path}/${randomUUID()}`).expect(403);
@@ -405,47 +400,26 @@ export async function testStockReceipts(
         ).expect(201);
       },
     );
-    await testStockReceiptDrafts(
-      t,
-      app,
-      pool,
-      schema,
-      cookie,
-      userId,
-      origin,
-      line,
-    );
+    await testStockReceiptDrafts(t, app, pool, cookie, userId, origin, line);
   } finally {
     await role('user');
     await pool.query(
-      `DELETE FROM "${schema}".fabric_stock_items WHERE fabric_color_id=$1`,
+      `DELETE FROM fabric_stock_items WHERE fabric_color_id=$1`,
       [colorId],
     );
     await pool.query(
-      `DELETE FROM "${schema}".stock_receipt_items WHERE fabric_color_id=$1`,
+      `DELETE FROM stock_receipt_items WHERE fabric_color_id=$1`,
       [colorId],
     );
     await pool.query(
-      `DELETE FROM "${schema}".stock_receipts WHERE submitted_by_user_id=$1`,
+      `DELETE FROM stock_receipts WHERE submitted_by_user_id=$1`,
       [userId],
     );
-    await pool.query(`DELETE FROM "${schema}".locations WHERE id=$1`, [
-      locationId,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".location_sections WHERE id=$1`, [
-      sectionId,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".location_zones WHERE id=$1`, [
-      zoneId,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".fabric_colors WHERE id=$1`, [
-      colorId,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".fabric_materials WHERE id=$1`, [
-      materialId,
-    ]);
-    await pool.query(`DELETE FROM "${schema}".manufacturers WHERE id=$1`, [
-      makerId,
-    ]);
+    await pool.query(`DELETE FROM locations WHERE id=$1`, [locationId]);
+    await pool.query(`DELETE FROM location_sections WHERE id=$1`, [sectionId]);
+    await pool.query(`DELETE FROM location_zones WHERE id=$1`, [zoneId]);
+    await pool.query(`DELETE FROM fabric_colors WHERE id=$1`, [colorId]);
+    await pool.query(`DELETE FROM fabric_materials WHERE id=$1`, [materialId]);
+    await pool.query(`DELETE FROM manufacturers WHERE id=$1`, [makerId]);
   }
 }

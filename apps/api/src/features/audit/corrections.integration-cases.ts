@@ -22,7 +22,6 @@ export async function testCorrections(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -40,10 +39,7 @@ export async function testCorrections(
       .set('Idempotency-Key', key)
       .send(body);
   const role = (value: string) =>
-    pool.query(`UPDATE "${schema}".users SET role=$1 WHERE id=$2`, [
-      value,
-      userId,
-    ]);
+    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
   const suffix = randomUUID().slice(0, 5);
   await role('admin');
   try {
@@ -123,7 +119,7 @@ export async function testCorrections(
       }));
     // Each allocation needs its own scheduled order, for the one blind it plans.
     await pool.query(
-      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date, quantity)
+      `INSERT INTO scheduled_orders (order_number, ship_date, quantity)
        SELECT n::text, '2026-10-01', 1 FROM generate_series(300001, 300100) n`,
     );
     let orderNumber = 300000;
@@ -392,7 +388,7 @@ export async function testCorrections(
       async () => {
         const r = await receipt(1);
         await pool.query(
-          `UPDATE "${schema}".stock_receipts SET stock_effects=NULL WHERE id=$1`,
+          `UPDATE stock_receipts SET stock_effects=NULL WHERE id=$1`,
           [r.id],
         );
         const c = await receiptContext(r.id);
@@ -780,7 +776,7 @@ export async function testCorrections(
         draft.requirements[0]!.quantity = 2;
         // The order's quantity has to match the two blinds planned.
         await pool.query(
-          `UPDATE "${schema}".scheduled_orders SET quantity=2 WHERE order_number=$1`,
+          `UPDATE scheduled_orders SET quantity=2 WHERE order_number=$1`,
           [draft.orderNumber],
         );
         draft.plan.cuts.push({
@@ -868,7 +864,7 @@ export async function testCorrections(
           ],
         }).expect(400);
         await pool.query(
-          `UPDATE "${schema}".allocations SET stock_effects=NULL WHERE id=$1`,
+          `UPDATE allocations SET stock_effects=NULL WHERE id=$1`,
           [a.id],
         );
         const legacyInput = completeAllocationRequestSchema.parse({
@@ -884,7 +880,7 @@ export async function testCorrections(
         });
         const legacyKey = randomUUID();
         await pool.query(
-          `UPDATE "${schema}".allocations SET completion=$2, completion_key=$3, completion_request_hash=$4, effective_completion=NULL WHERE id=$1`,
+          `UPDATE allocations SET completion=$2, completion_key=$3, completion_request_hash=$4, effective_completion=NULL WHERE id=$1`,
           [
             a.id,
             JSON.stringify({ ...done.completion, items: legacyInput.items }),

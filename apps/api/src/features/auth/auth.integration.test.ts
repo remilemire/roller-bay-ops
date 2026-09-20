@@ -54,7 +54,6 @@ test(
   'auth integration with real Redis and isolated PostgreSQL tables',
   { skip: !enabled, timeout: 90000 },
   async (t) => {
-    const schema = 'public';
     const rateLimitPrefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
     const database = await createTestDatabase(testDatabaseUrl);
     // Registered at once, so a failure while the app boots cannot leak it.
@@ -248,21 +247,12 @@ test(
         },
       );
 
-      await testCatalog(
-        t,
-        app,
-        pool,
-        schema,
-        authenticated,
-        userId,
-        config.WEB_ORIGIN,
-      );
+      await testCatalog(t, app, pool, authenticated, userId, config.WEB_ORIGIN);
 
       await testLocations(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -272,7 +262,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -282,7 +271,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -292,7 +280,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -302,7 +289,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -312,7 +298,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         userId,
         config.WEB_ORIGIN,
@@ -431,10 +416,9 @@ test(
       await t.test(
         'existing identities retain roles and history while emails change; email conflicts never link accounts',
         async () => {
-          await pool.query(
-            `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
-            [userId],
-          );
+          await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
+            userId,
+          ]);
           const before = await app.get(UsersService).findById(userId);
           profile = {
             ...profile,
@@ -456,8 +440,7 @@ test(
           const conflict = await start();
           await rejectedCallback(conflict, 'account_conflict');
           assert.equal(
-            (await pool.query(`SELECT count(*) FROM "${schema}".users`)).rows[0]
-              .count,
+            (await pool.query(`SELECT count(*) FROM users`)).rows[0].count,
             '1',
           );
           await request(app.getHttpServer())
@@ -536,10 +519,9 @@ test(
           await change({ isActive: false }, targetLogin.authenticated).expect(
             403,
           );
-          await pool.query(
-            `UPDATE "${schema}".users SET role='admin' WHERE id=$1`,
-            [target.id],
-          );
+          await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
+            target.id,
+          ]);
           await request(app.getHttpServer())
             .patch(path)
             .set('Cookie', authenticated)
@@ -627,7 +609,6 @@ test(
         t,
         app,
         pool,
-        schema,
         authenticated,
         config.WEB_ORIGIN,
         (next) => {
@@ -727,7 +708,7 @@ test(
             .get('/api/auth/me')
             .set('Cookie', active.authenticated)
             .expect(200);
-          await pool.query(`DELETE FROM "${schema}".users WHERE id=$1`, [
+          await pool.query(`DELETE FROM users WHERE id=$1`, [
             activeUser.body.id,
           ]);
           await request(app.getHttpServer())

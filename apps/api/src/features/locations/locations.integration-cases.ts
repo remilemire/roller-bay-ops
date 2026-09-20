@@ -15,7 +15,6 @@ export async function testLocations(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -43,10 +42,7 @@ export async function testLocations(
   const remove = (path: string) =>
     request(server).delete(path).set('Cookie', cookie).set('Origin', origin);
   const role = (value: string) =>
-    pool.query(`UPDATE "${schema}".users SET role=$1 WHERE id=$2`, [
-      value,
-      userId,
-    ]);
+    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
   try {
     await t.test(
       'location reads require active sessions and every mutation requires admin or owner',
@@ -98,15 +94,13 @@ export async function testLocations(
             .send(input)
             .expect(403);
         }
-        await pool.query(
-          `UPDATE "${schema}".users SET is_active=false WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
+          userId,
+        ]);
         for (const path of paths) await get(path).expect(403);
-        await pool.query(
-          `UPDATE "${schema}".users SET is_active=true WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [
+          userId,
+        ]);
         await remove(`${levels}/${level.id}`).expect(204);
         await remove(`${sections}/${section.id}`).expect(204);
         await remove(`${zones}/${zone.id}`).expect(204);
@@ -406,19 +400,17 @@ export async function testLocations(
         );
         // A database failure during the write must leave every sibling unchanged.
         await pool.query(
-          `CREATE FUNCTION "${schema}".reject_location_move() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated write failure'; END $$`,
+          `CREATE FUNCTION reject_location_move() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated write failure'; END $$`,
         );
         await pool.query(
-          `CREATE TRIGGER reject_location_move BEFORE UPDATE ON "${schema}".locations FOR EACH ROW EXECUTE FUNCTION "${schema}".reject_location_move()`,
+          `CREATE TRIGGER reject_location_move BEFORE UPDATE ON locations FOR EACH ROW EXECUTE FUNCTION reject_location_move()`,
         );
         try {
           await move(rows[25]!.id, rows[0]!.id).expect(503);
           assert.deepEqual(await ordered(), result);
         } finally {
-          await pool.query(
-            `DROP TRIGGER reject_location_move ON "${schema}".locations`,
-          );
-          await pool.query(`DROP FUNCTION "${schema}".reject_location_move()`);
+          await pool.query(`DROP TRIGGER reject_location_move ON locations`);
+          await pool.query(`DROP FUNCTION reject_location_move()`);
         }
         await post(`${sections}/${otherSection.id}/move`, {
           targetId: section.id,
@@ -453,7 +445,7 @@ export async function testLocations(
     );
   } finally {
     await pool.query(
-      `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
+      `UPDATE users SET role='user', is_active=true WHERE id=$1`,
       [userId],
     );
   }

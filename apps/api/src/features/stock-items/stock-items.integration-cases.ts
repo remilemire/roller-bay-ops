@@ -14,7 +14,6 @@ export async function testStockItems(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -41,10 +40,7 @@ export async function testStockItems(
       ? stockCorrectionRequest(server, cookie, origin, url)
       : request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
   const role = (value: string) =>
-    pool.query(`UPDATE "${schema}".users SET role=$1 WHERE id=$2`, [
-      value,
-      userId,
-    ]);
+    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
   const read = async (id: string) =>
     stockItemSchema.parse((await get(`${path}/${id}`).expect(200)).body);
   try {
@@ -89,16 +85,14 @@ export async function testStockItems(
           .set('Origin', 'https://attacker.example')
           .send({})
           .expect(403);
-        await pool.query(
-          `UPDATE "${schema}".users SET is_active=false WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
+          userId,
+        ]);
         await get(path).expect(403);
         await post(path, {}).expect(403);
-        await pool.query(
-          `UPDATE "${schema}".users SET is_active=true WHERE id=$1`,
-          [userId],
-        );
+        await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [
+          userId,
+        ]);
       },
     );
 
@@ -203,7 +197,7 @@ export async function testStockItems(
         ] as const) {
           await assert.rejects(
             pool.query(
-              `INSERT INTO "${schema}".fabric_stock_items
+              `INSERT INTO fabric_stock_items
                 (fabric_color_id, is_remnant, is_used, width_mm, initial_length_mm,
                  explicit_length_mm, tube_outer_diameter_mm, radial_depth_mm,
                  measurement_thickness_mm, location_id)
@@ -507,7 +501,7 @@ export async function testStockItems(
     );
   } finally {
     await pool.query(
-      `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
+      `UPDATE users SET role='user', is_active=true WHERE id=$1`,
       [userId],
     );
   }

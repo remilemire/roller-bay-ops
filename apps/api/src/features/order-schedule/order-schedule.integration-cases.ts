@@ -14,7 +14,6 @@ export async function testOrderSchedule(
   t: TestContext,
   app: INestApplication,
   pool: Pool,
-  schema: string,
   cookie: string,
   userId: string,
   origin: string,
@@ -30,10 +29,7 @@ export async function testOrderSchedule(
   const remove = (id: string, expectedRevision: number) =>
     send('delete', `${path}/${id}`).send({ expectedRevision });
   const role = (value: string) =>
-    pool.query(`UPDATE "${schema}".users SET role=$1 WHERE id=$2`, [
-      value,
-      userId,
-    ]);
+    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
   try {
     await t.test(
       'schedule reads require a session and every write requires admin or owner',
@@ -162,10 +158,10 @@ export async function testOrderSchedule(
         // The database holds the same rule for writes that bypass the API.
         for (const shipDate of ['2026-10-03', '2026-10-04'])
           await assert.rejects(
-            pool.query(
-              `UPDATE "${schema}".scheduled_orders SET ship_date=$1 WHERE id=$2`,
-              [shipDate, created.id],
-            ),
+            pool.query(`UPDATE scheduled_orders SET ship_date=$1 WHERE id=$2`, [
+              shipDate,
+              created.id,
+            ]),
             { code: '23514', constraint: 'scheduled_orders_ship_date_weekday' },
           );
         const updated = scheduledOrderSchema.parse(
@@ -254,7 +250,7 @@ export async function testOrderSchedule(
         );
         await remove(created.id, 6).expect(404);
         const kept = await pool.query(
-          `SELECT deleted_at FROM "${schema}".scheduled_orders WHERE id=$1`,
+          `SELECT deleted_at FROM scheduled_orders WHERE id=$1`,
           [created.id],
         );
         assert.ok(kept.rows[0].deleted_at);
@@ -295,7 +291,7 @@ export async function testOrderSchedule(
     await t.test(
       'the schedule lists by ship date and filters by derived status and literal search',
       async () => {
-        await pool.query(`DELETE FROM "${schema}".scheduled_orders`);
+        await pool.query(`DELETE FROM scheduled_orders`);
         const at = '2026-09-01T12:00:00Z';
         // [order number, ship date, allocated, cut, shipped]
         const rows: [string, string, boolean, boolean, boolean][] = [
@@ -307,7 +303,7 @@ export async function testOrderSchedule(
         ];
         for (const [orderNumber, shipDate, allocated, cut, shipped] of rows)
           await pool.query(
-            `INSERT INTO "${schema}".scheduled_orders
+            `INSERT INTO scheduled_orders
                (order_number, ship_date, quantity, allocated_at, cut_at, shipped_at)
              VALUES ($1, $2, 1, $3, $4, $5)`,
             [
@@ -362,9 +358,9 @@ export async function testOrderSchedule(
       },
     );
   } finally {
-    await pool.query(`DELETE FROM "${schema}".scheduled_orders`);
+    await pool.query(`DELETE FROM scheduled_orders`);
     await pool.query(
-      `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
+      `UPDATE users SET role='user', is_active=true WHERE id=$1`,
       [userId],
     );
   }
