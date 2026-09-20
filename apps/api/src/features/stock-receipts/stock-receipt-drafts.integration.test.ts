@@ -1,36 +1,30 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
 import {
   stockReceiptDraftDataSchema,
   stockReceiptDraftSchema,
   stockReceiptRecordSchema,
 } from '@roller-bay/shared/stock-receipts';
-import { createFixtures } from '../../testing/fixtures.js';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
 
-export async function testStockReceiptDrafts(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-  line: {
-    fabricColorId: string;
-    widthMm: number;
-    initialLengthMm: number;
-    quantity: number;
-    locationId: string;
-  },
-) {
+test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
+  const { color, location } = await fixtures.createColorAndLocation();
+  const line = {
+    fabricColorId: color,
+    widthMm: 2000,
+    initialLengthMm: 50000,
+    quantity: 3,
+    locationId: location,
+  };
   const server = app.getHttpServer();
   const path = '/api/stock-receipts';
-  const ids: string[] = [];
   const get = (id: string) =>
     request(server).get(`${path}/${id}`).set('Cookie', cookie);
   const post = (url: string, body: object, key: string = randomUUID()) =>
@@ -54,14 +48,12 @@ export async function testStockReceiptDrafts(
       .send({ expectedRevision });
   const create = async (data: object = {}, key: string = randomUUID()) => {
     const response = await post(`${path}/drafts`, { data }, key).expect(201);
-    const draft = stockReceiptDraftSchema.parse(response.body);
-    ids.push(draft.id);
-    return draft;
+    return stockReceiptDraftSchema.parse(response.body);
   };
   const stockCount = async () =>
     (await pool.query(`SELECT count(*)::int AS n FROM fabric_stock_items`))
       .rows[0].n;
-  const colleague = await createFixtures(pool).createUser('Draft colleague');
+  const colleague = await fixtures.createUser('Draft colleague');
   await t.test(
     'receipt drafts round-trip incomplete typed rows, preserve ordering and require auth/origin',
     async () => {
@@ -155,7 +147,6 @@ export async function testStockReceiptDrafts(
             randomUUID(),
           ),
       );
-      ids.push(shared.id);
       await get(shared.id).expect(200);
       // Drafts keep partial purchase-order numbers; submission requires five digits.
       await post(`${path}/${shared.id}/submit`, {
@@ -320,4 +311,4 @@ export async function testStockReceiptDrafts(
       }
     },
   );
-}
+});

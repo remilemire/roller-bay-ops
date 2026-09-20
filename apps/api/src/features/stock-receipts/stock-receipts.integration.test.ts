@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
-import { testStockReceiptDrafts } from './stock-receipt-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -353,5 +352,4 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
       );
     },
   );
-  await testStockReceiptDrafts(t, app, pool, cookie, userId, origin, line);
 });
