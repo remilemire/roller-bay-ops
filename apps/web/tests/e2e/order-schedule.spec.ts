@@ -5,7 +5,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
 }, testInfo) => {
   const state = await mockApi(page);
   // The date calendar opens on the current month.
-  await page.clock.setFixedTime(new Date('2026-09-28T12:00:00'));
+  await page.clock.setFixedTime(new Date('2026-09-28T12:00:00-06:00'));
   await page.goto('/');
   if (testInfo.project.name === 'tablet')
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -111,7 +111,7 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
   page,
 }) => {
   const state = await mockApi(page);
-  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00'));
+  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
   await page.goto('/order-schedule');
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
@@ -169,7 +169,7 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
 });
 test('admins add an order to a day of the month', async ({ page }) => {
   const state = await mockApi(page);
-  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00'));
+  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
   await page.goto('/order-schedule?view=month&month=2026-10');
   const dialog = page.getByRole('dialog');
   await page
@@ -200,7 +200,7 @@ test('admins add an order to a day of the month', async ({ page }) => {
 });
 test('admins reschedule an order from its list row', async ({ page }) => {
   const state = await mockApi(page);
-  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00'));
+  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
   await page.goto('/order-schedule?view=list');
   const dialog = page.getByRole('dialog');
   await page.getByRole('button', { name: 'Reschedule order 104877' }).click();
