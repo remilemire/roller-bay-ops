@@ -1,8 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Scissors } from 'lucide-react';
+import { useState } from 'react';
+import type { AllocationList } from '@roller-bay/shared/allocations';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import {
   Empty,
   ErrorNotice,
@@ -14,7 +17,13 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
 import { dateLabel, shortId } from '@/lib/format';
-import { allocationList } from './allocations.api';
+import {
+  allocationKey,
+  allocationList,
+  cancelAllocation,
+} from './allocations.api';
+
+type AllocationRow = AllocationList['items'][number];
 
 // Allocations open on the work in hand; `all` adds drafts and finished work.
 const tabs = [
@@ -36,6 +45,27 @@ export function AllocationListScreen() {
       state: state === 'all' ? '' : state,
     }),
   );
+  // Pin the row the dialog opened on; the revision the employee saw is the one
+  // the cancellation is checked against.
+  const [cancelling, setCancelling] = useState<AllocationRow | null>(null);
+  const client = useQueryClient();
+  const cancelMutation = useMutation({
+    mutationFn: (item: AllocationRow) =>
+      cancelAllocation(item.id, item.revision),
+    onSuccess: async () => {
+      setCancelling(null);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: allocationKey }),
+        client.invalidateQueries({ queryKey: ['stock-items'] }),
+        // Cancelling returns the scheduled order to `scheduled`.
+        client.invalidateQueries({ queryKey: ['order-schedule'] }),
+      ]);
+    },
+  });
+  const closeCancel = () => {
+    setCancelling(null);
+    cancelMutation.reset();
+  };
   return (
     <>
       <PageHeading title="Allocations">
@@ -83,7 +113,7 @@ export function AllocationListScreen() {
                   <th>Order</th>
                   <th>Last updated</th>
                   <th>Status</th>
-                  <th>Revision</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,7 +143,19 @@ export function AllocationListScreen() {
                         }
                       />
                     </td>
-                    <td>{item.revision}</td>
+                    <td>
+                      {item.state === 'active' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          // Every row has this button; name the order it acts on.
+                          aria-label={`Cancel allocation ${item.orderNumber ?? shortId(item.id)}`}
+                          onClick={() => setCancelling(item)}
+                        >
+                          Cancel allocation
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -128,6 +170,34 @@ export function AllocationListScreen() {
           />
         )}
       </section>
+      <Dialog
+        open={!!cancelling}
+        onOpenChange={(open) => !open && closeCancel()}
+        title={
+          cancelling
+            ? `Cancel allocation ${cancelling.orderNumber ?? shortId(cancelling.id)}?`
+            : 'Cancel allocation?'
+        }
+        description="The order stays in history and its reservations are released. No stock measurements are changed."
+      >
+        {cancelMutation.error && <ErrorNotice error={cancelMutation.error} />}
+        <div className="form-actions">
+          <Button
+            variant="outline"
+            onClick={closeCancel}
+            disabled={cancelMutation.isPending}
+          >
+            Keep allocation
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => cancelling && cancelMutation.mutate(cancelling)}
+            disabled={cancelMutation.isPending}
+          >
+            Cancel allocation
+          </Button>
+        </div>
+      </Dialog>
     </>
   );
 }
