@@ -232,10 +232,9 @@ export class StockItemsRepository {
     values: StockItemWrite[],
   ) {
     return stockItemsQuery(() =>
-      transaction.insert(stockItems).values(values).returning({
-        id: stockItems.id,
-        stockReceiptItemId: stockItems.stockReceiptItemId,
-      }),
+      // Whole rows, generated balance included: the caller snapshots them
+      // without reading each one back.
+      transaction.insert(stockItems).values(values).returning(),
     );
   }
 

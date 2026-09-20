@@ -238,16 +238,13 @@ export class StockItemsService {
         transaction,
         values,
       );
-      const repository = new StockItemsRepository({ db: transaction });
-      return Promise.all(
-        created.map(async (row) => ({
-          calculationThicknessMm: null,
-          stockItemId: row.id,
-          sourceStockItemId: null,
-          before: null,
-          after: stockSnapshot((await repository.findById(row.id))!),
-        })),
-      );
+      return created.map((row) => ({
+        calculationThicknessMm: null,
+        stockItemId: row.id,
+        sourceStockItemId: null,
+        before: null,
+        after: stockSnapshot(row),
+      }));
     });
   }
 
