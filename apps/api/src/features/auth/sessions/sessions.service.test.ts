@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { test } from 'node:test';
 import { ConfigService } from '@nestjs/config';
 import express from 'express';
@@ -27,16 +28,24 @@ test('production sessions are issued behind a TLS-terminating host that Express 
     response.end();
   });
 
-  const forwarded = await request(app)
-    .get('/')
-    .set('X-Forwarded-Proto', 'https')
-    .expect(200);
-  const cookies = forwarded.headers['set-cookie'] as unknown as string[];
-  assert.equal(cookies.length, 1);
-  assert.match(cookies[0]!, /^__Host-roller_bay\.sid=/);
-  assert.match(cookies[0]!, /; Secure/);
+  // One loopback listener: given the bare app, Supertest binds a wildcard port
+  // per request, which another local process on 127.0.0.1 can answer instead.
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const forwarded = await request(server)
+      .get('/')
+      .set('X-Forwarded-Proto', 'https')
+      .expect(200);
+    const cookies = forwarded.headers['set-cookie'] as unknown as string[];
+    assert.equal(cookies.length, 1);
+    assert.match(cookies[0]!, /^__Host-roller_bay\.sid=/);
+    assert.match(cookies[0]!, /; Secure/);
 
-  // A plain-HTTP hop still never receives the Secure cookie.
-  const plain = await request(app).get('/').expect(200);
-  assert.equal(plain.headers['set-cookie'], undefined);
+    // A plain-HTTP hop still never receives the Secure cookie.
+    const plain = await request(server).get('/').expect(200);
+    assert.equal(plain.headers['set-cookie'], undefined);
+  } finally {
+    server.close();
+  }
 });

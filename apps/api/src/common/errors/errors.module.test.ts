@@ -84,7 +84,9 @@ test('every failure leaves the API as the shared envelope without internal detai
     { logger: false },
   );
   app.setGlobalPrefix('/api');
-  await app.init();
+  // Supertest would otherwise bind a wildcard port per request, which another
+  // local process holding that port on 127.0.0.1 can answer instead.
+  await app.listen(0, '127.0.0.1');
   try {
     const server = app.getHttpServer();
     const malformed = await request(server)
