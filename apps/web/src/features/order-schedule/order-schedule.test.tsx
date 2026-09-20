@@ -7,6 +7,7 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
@@ -18,6 +19,7 @@ import {
   lookupSchedulableOrders,
   orderDetail,
   orderList,
+  orderRange,
   updateOrder,
 } from './order-schedule.api';
 
@@ -44,6 +46,7 @@ vi.mock('./order-schedule.api', async (original) => ({
   ...(await original<typeof import('./order-schedule.api')>()),
   orderList: vi.fn(),
   orderDetail: vi.fn(),
+  orderRange: vi.fn(),
   createOrder: vi.fn(),
   updateOrder: vi.fn(),
   deleteOrder: vi.fn(),
@@ -71,6 +74,33 @@ beforeEach(() => {
       queryOptions({
         queryKey: ['order-schedule', id],
         queryFn: async () => order,
+      }),
+    );
+  // Monday 104790, Friday 104801 and 104820, and one order outside October.
+  vi.mocked(orderRange)
+    .mockReset()
+    .mockImplementation((from, to) =>
+      queryOptions({
+        queryKey: ['order-schedule', 'range', from, to],
+        queryFn: async () =>
+          (
+            [
+              order,
+              { ...order, id: 'b', orderNumber: '104820', status: 'scheduled' },
+              {
+                ...order,
+                id: 'c',
+                orderNumber: '104790',
+                shipDate: '2026-09-28',
+              },
+              ...['1', '2', '3', '4', '5', '6'].map((n) => ({
+                ...order,
+                id: `d${n}`,
+                orderNumber: `10483${n}`,
+                shipDate: '2026-10-13',
+              })),
+            ] as ScheduledOrder[]
+          ).filter((row) => row.shipDate >= from && row.shipDate <= to),
       }),
     );
   for (const write of [createOrder, updateOrder, deleteOrder])
@@ -308,4 +338,116 @@ it('shows employees the order without its admin actions', async () => {
   await screen.findByRole('heading', { name: '104801' });
   for (const name of ['Edit', 'Mark shipped', 'Delete'])
     expect(screen.queryByRole('button', { name })).toBeNull();
+});
+
+it('groups the working week by day with totals and adds an order to a day', async () => {
+  state.search = 'view=week';
+  vi.mocked(createOrder).mockResolvedValue(order);
+  show(<OrderScheduleScreen />);
+  const user = userEvent.setup();
+  // Today is Monday 28 September, so this is the week on show.
+  expect(
+    await screen.findByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
+  ).toBeInTheDocument();
+  expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-02');
+  expect(
+    await screen.findByText('3 orders · 1 scheduled · 2 allocated'),
+  ).toBeInTheDocument();
+  const friday = within(
+    screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
+  );
+  expect(friday.getByText('Oct 2 · 2 orders')).toBeInTheDocument();
+  expect(friday.getAllByRole('link').map((link) => link.textContent)).toEqual([
+    '104801',
+    '104820',
+  ]);
+  expect(
+    within(screen.getByRole('region', { name: 'Tue, Sep 29, 2026' })).getByText(
+      'No orders',
+    ),
+  ).toBeInTheDocument();
+
+  await user.click(
+    screen.getByRole('button', { name: 'Add order on Thu, Oct 1, 2026' }),
+  );
+  const dialog = within(screen.getByRole('dialog'));
+  // The day it was added from is already the ship date.
+  expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveTextContent(
+    'Thu, Oct 1, 2026',
+  );
+  await user.type(dialog.getByLabelText(/Order number/), '104900');
+  await user.click(dialog.getByRole('button', { name: 'Save order' }));
+  await waitFor(() =>
+    expect(createOrder).toHaveBeenLastCalledWith({
+      orderNumber: '104900',
+      shipDate: '2026-10-01',
+      note: '',
+    }),
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Next week' }));
+  expect(state.replace).toHaveBeenLastCalledWith(
+    '/order-schedule?view=week&week=2026-10-05',
+    { scroll: false },
+  );
+});
+
+it('shows any day of a week as that week, and employees a read-only board', async () => {
+  state.canManage = false;
+  state.search = 'view=week&week=2026-10-14';
+  show(<OrderScheduleScreen />);
+  expect(
+    await screen.findByRole('heading', { name: 'Oct 12 – Oct 16, 2026' }),
+  ).toBeInTheDocument();
+  await screen.findByText('6 orders · 6 allocated');
+  expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'This week' })).toBeEnabled();
+});
+
+it('lays the month out Monday to Friday and adds an order to a day', async () => {
+  state.search = 'view=month&month=2026-10';
+  show(<OrderScheduleScreen />);
+  const user = userEvent.setup();
+  expect(
+    await screen.findByRole('heading', { name: 'October 2026' }),
+  ).toBeInTheDocument();
+  // The grid runs from the Monday before the 1st to the Friday after the 31st.
+  expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-30');
+  // September's order shows in its edge day but is not an October order.
+  expect(
+    await screen.findByText('8 orders · 1 scheduled · 7 allocated'),
+  ).toBeInTheDocument();
+  expect(
+    within(
+      screen.getByRole('gridcell', { name: 'Mon, Sep 28, 2026' }),
+    ).getByRole('link'),
+  ).toHaveTextContent('104790');
+  const busy = within(
+    screen.getByRole('gridcell', { name: 'Tue, Oct 13, 2026' }),
+  );
+  expect(busy.getByText('6 orders')).toBeInTheDocument();
+  expect(busy.getByRole('link', { name: '+2 more' })).toHaveAttribute(
+    'href',
+    '/order-schedule?view=week&week=2026-10-13',
+  );
+  expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Add order on Wed, Oct 21, 2026' }),
+  );
+  expect(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Ship date',
+    }),
+  ).toHaveTextContent('Wed, Oct 21, 2026');
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Previous month' }));
+  expect(state.replace).toHaveBeenLastCalledWith(
+    '/order-schedule?view=month&month=2026-09',
+    { scroll: false },
+  );
 });

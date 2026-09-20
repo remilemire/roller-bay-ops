@@ -1135,6 +1135,198 @@ td strong {
   font-weight: 600;
   opacity: 1;
 }
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.calendar-nav h2 {
+  margin-left: 8px;
+  font-size: 17px;
+}
+.calendar-nav p {
+  margin-left: 8px;
+  font-size: 11px;
+}
+.week-board {
+  display: grid;
+  /* All five days fit a portrait tablet; narrower screens scroll sideways. */
+  grid-template-columns: repeat(5, minmax(128px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.week-day {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  padding: 12px;
+  overflow: visible;
+}
+.week-day[aria-current='date'] {
+  border-color: var(--ring);
+}
+.week-day.is-over {
+  background: var(--primary-soft);
+}
+.week-day > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.week-day > header > div {
+  display: grid;
+  margin-right: auto;
+}
+.week-day > header small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.week-day > header .button-icon,
+.month-day > header .button-icon {
+  width: 30px;
+  min-height: 30px;
+  padding: 4px;
+}
+.week-day ul,
+.month-day ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.week-day > p {
+  font-size: 11px;
+}
+.order-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 12px;
+  /* The pointer drags the card, so it must not scroll or select text. */
+  touch-action: none;
+  user-select: none;
+}
+.order-card.is-dragging {
+  opacity: 0.35;
+}
+.order-card.is-overlay {
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+.order-card > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.order-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+.order-card small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.order-card-handle {
+  display: inline-flex;
+  /* Room for the focus ring, which would otherwise crowd the order number. */
+  margin-right: 4px;
+  padding: 2px 0;
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: grab;
+}
+.month-grid [role='row'] {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.month-grid [role='columnheader'] {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.month-day {
+  min-height: 132px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+.month-day:first-child {
+  border-left: 0;
+}
+.month-grid [role='row']:last-child .month-day {
+  border-bottom: 0;
+}
+.month-day.is-outside {
+  background: var(--surface-soft);
+}
+.month-day.is-outside .month-day-number {
+  color: var(--muted);
+}
+.month-day > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin-bottom: 6px;
+}
+.month-day > header small {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.month-day-number {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.month-day:not(:has(small)) .month-day-number {
+  margin-right: auto;
+}
+.month-day[aria-current='date'] .month-day-number {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.month-day ul {
+  gap: 4px;
+}
+/* Zero specificity, so an order's status class supplies its colours. */
+:where(.month-order) {
+  background: var(--muted-surface);
+}
+.month-order {
+  display: block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.month-day .text-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+}
 .plan-cut {
   padding: 18px;
   border: 1px solid var(--border);

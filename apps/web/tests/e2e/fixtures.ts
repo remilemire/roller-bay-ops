@@ -183,11 +183,15 @@ export async function mockApi(
     if (path === '/order-schedule' && method === 'GET') {
       const status = url.searchParams.get('status');
       const search = url.searchParams.get('search') ?? '';
+      const from = url.searchParams.get('shipDateFrom') ?? '0000';
+      const to = url.searchParams.get('shipDateTo') ?? '9999';
       return send(
         paged(
           state.orders.filter(
             (row) =>
               row.orderNumber.includes(search) &&
+              row.shipDate >= from &&
+              row.shipDate <= to &&
               (!status ||
                 (status === 'open'
                   ? row.status !== 'shipped'

@@ -13,6 +13,24 @@ export const orderList = (filters: Record<string, unknown> = {}) =>
         { signal },
       ),
   });
+// The week and month views need every order in their range, while the API
+// returns at most 100 a page, so this reads pages until it has them all.
+export const orderRange = (shipDateFrom: string, shipDateTo: string) =>
+  queryOptions({
+    queryKey: [...orderScheduleKey, 'range', shipDateFrom, shipDateTo],
+    queryFn: async ({ signal }) => {
+      const orders: s.ScheduledOrder[] = [];
+      for (let page = 1; ; page++) {
+        const data = await api(
+          `/order-schedule${queryString({ shipDateFrom, shipDateTo, page, pageSize: 100 })}`,
+          s.scheduledOrderListSchema,
+          { signal },
+        );
+        orders.push(...data.items);
+        if (orders.length >= data.total || !data.items.length) return orders;
+      }
+    },
+  });
 export const orderDetail = (id: string) =>
   queryOptions({
     queryKey: [...orderScheduleKey, id],
