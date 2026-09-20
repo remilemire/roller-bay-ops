@@ -155,6 +155,34 @@ it('hides schedule writes from employees who cannot manage', async () => {
   show(<OrderScheduleScreen />);
   await screen.findByText('104801');
   expect(screen.queryByRole('button', { name: 'Add order' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Mark order/ })).toBeNull();
+  expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+});
+
+it('marks an order shipped from its row with the revision the row shows', async () => {
+  vi.mocked(updateOrder).mockResolvedValueOnce(order);
+  vi.mocked(updateOrder).mockRejectedValueOnce(
+    new ApiError(409, 'Order changed; refresh before saving.'),
+  );
+  show(<OrderScheduleScreen />);
+  const user = userEvent.setup();
+  const button = await screen.findByRole('button', {
+    name: 'Mark order 104801 shipped',
+  });
+  await user.click(button);
+  await waitFor(() =>
+    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
+      expectedRevision: 3,
+      shipped: true,
+    }),
+  );
+  // A stale row is reported above the list.
+  await user.click(
+    await screen.findByRole('button', { name: 'Mark order 104801 shipped' }),
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Order changed; refresh before saving.',
+  );
 });
 
 it('adds an order and shows rejected fields beside them', async () => {

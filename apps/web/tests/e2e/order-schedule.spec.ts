@@ -79,6 +79,21 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
     ),
   ).toBe(true);
 });
+test('admins mark an order shipped from its row and it leaves the open list', async ({
+  page,
+}) => {
+  const state = await mockApi(page);
+  await page.goto('/order-schedule');
+  await page.getByRole('button', { name: 'Mark order 104877 shipped' }).click();
+  await expect(page.getByRole('row', { name: /104877/ })).toHaveCount(0);
+  expect(state.orderRequests).toEqual([
+    { method: 'PATCH', body: { expectedRevision: 3, shipped: true } },
+  ]);
+  await page.getByRole('button', { name: 'Shipped', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Mark order 104877 not shipped' }),
+  ).toBeVisible();
+});
 test('employees read the schedule and an order without admin actions', async ({
   page,
 }) => {
@@ -86,6 +101,7 @@ test('employees read the schedule and an order without admin actions', async ({
   await page.goto('/order-schedule');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add order' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Mark order/ })).toHaveCount(0);
   await page.goto(`/order-schedule/${ids.order}`);
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   for (const name of ['Edit', 'Mark shipped', 'Delete'])

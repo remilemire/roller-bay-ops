@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Plus } from 'lucide-react';
 import { useState } from 'react';
+import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,7 +18,7 @@ import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { OrderEditor } from './order-editor';
-import { orderList } from './order-schedule.api';
+import { orderList, orderScheduleKey, updateOrder } from './order-schedule.api';
 
 // The schedule opens on orders that still need work; `all` includes shipped.
 const tabs = [
@@ -42,6 +43,16 @@ export function OrderScheduleScreen() {
       status: status === 'all' ? '' : status,
     }),
   );
+  const client = useQueryClient();
+  const ship = useMutation({
+    mutationFn: (order: ScheduledOrder) =>
+      updateOrder(order.id, {
+        expectedRevision: order.revision,
+        shipped: !order.shippedAt,
+      }),
+    // A refused request usually means the row is stale, so refresh either way.
+    onSettled: () => client.invalidateQueries({ queryKey: orderScheduleKey }),
+  });
   return (
     <>
       <PageHeading title="Order schedule">
@@ -73,6 +84,7 @@ export function OrderScheduleScreen() {
           ))}
         </div>
       </SearchToolbar>
+      {ship.error && <ErrorNotice error={ship.error} />}
       <section className="panel">
         {query.isPending ? (
           <Loading />
@@ -93,6 +105,7 @@ export function OrderScheduleScreen() {
                   <th>Ship date</th>
                   <th>Status</th>
                   <th>Note</th>
+                  {canManage && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +127,24 @@ export function OrderScheduleScreen() {
                       <Status value={order.status} />
                     </td>
                     <td>{order.note}</td>
+                    {canManage && (
+                      <td>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={ship.isPending}
+                          // Every row has this button; name the order it acts on.
+                          aria-label={`Mark order ${order.orderNumber} ${order.shippedAt ? 'not shipped' : 'shipped'}`}
+                          onClick={() => ship.mutate(order)}
+                        >
+                          {ship.isPending && ship.variables.id === order.id
+                            ? 'Saving…'
+                            : order.shippedAt
+                              ? 'Mark not shipped'
+                              : 'Mark shipped'}
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
