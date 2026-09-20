@@ -4,13 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditChange } from '@roller-bay/shared/audit';
-import {
-  scheduledOrderSchema,
-  type CreateScheduledOrder,
-  type ScheduledOrder,
-  type ScheduledOrderList,
-  type ScheduledOrderQuery,
-  type UpdateScheduledOrder,
+import type {
+  CreateScheduledOrder,
+  ScheduledOrderList,
+  ScheduledOrderQuery,
+  UpdateScheduledOrder,
 } from '@roller-bay/shared/order-schedule';
 import type { DatabaseTransaction } from '../../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -19,28 +17,11 @@ import {
   orderNotScheduled,
   orderScheduleOperation,
 } from './order-schedule.operation.js';
+import { presentScheduledOrder } from './order-schedule.presenter.js';
 import {
   OrderScheduleRepository,
   type ScheduledOrderRecord,
 } from './order-schedule.repository.js';
-
-export function toPublic(row: ScheduledOrderRecord): ScheduledOrder {
-  return scheduledOrderSchema.parse({
-    ...row,
-    status: row.shippedAt
-      ? 'shipped'
-      : row.cutAt
-        ? 'cut'
-        : row.allocatedAt
-          ? 'allocated'
-          : 'scheduled',
-    scheduledAt: row.scheduledAt.toISOString(),
-    allocatedAt: row.allocatedAt?.toISOString() ?? null,
-    cutAt: row.cutAt?.toISOString() ?? null,
-    shippedAt: row.shippedAt?.toISOString() ?? null,
-    updatedAt: row.updatedAt.toISOString(),
-  });
-}
 
 function change(
   before: ScheduledOrderRecord | null,
@@ -49,8 +30,14 @@ function change(
   return {
     recordType: 'order-schedule',
     recordId: (after ?? before)!.id,
-    before: before && { type: 'order-schedule', value: toPublic(before) },
-    after: after && { type: 'order-schedule', value: toPublic(after) },
+    before: before && {
+      type: 'order-schedule',
+      value: presentScheduledOrder(before),
+    },
+    after: after && {
+      type: 'order-schedule',
+      value: presentScheduledOrder(after),
+    },
   };
 }
 
@@ -75,7 +62,7 @@ export class OrderScheduleService {
     return orderScheduleOperation(async () => {
       const { items, total } = await this.repository.list(query);
       return {
-        items: items.map(toPublic),
+        items: items.map(presentScheduledOrder),
         total,
         page: query.page,
         pageSize: query.pageSize,
@@ -87,7 +74,7 @@ export class OrderScheduleService {
     return orderScheduleOperation(async () => {
       const row = await this.repository.findById(id);
       if (!row) throw new NotFoundException('Order not found.');
-      return toPublic(row);
+      return presentScheduledOrder(row);
     });
   }
 
@@ -98,7 +85,7 @@ export class OrderScheduleService {
         await this.audit.record(tx, userId, 'order.scheduled', [
           change(null, row),
         ]);
-        return toPublic(row);
+        return presentScheduledOrder(row);
       }),
     );
   }
@@ -129,7 +116,7 @@ export class OrderScheduleService {
               ? 'order.shipped'
               : 'order.unshipped';
         await this.audit.record(tx, userId, action, [change(previous, row)]);
-        return toPublic(row);
+        return presentScheduledOrder(row);
       }),
     );
   }

@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { orderScheduleOperation } from './order-schedule.operation.js';
 import type { ScheduledOrderRecord } from './order-schedule.repository.js';
-import { toPublic } from './order-schedule.service.js';
+import { presentScheduledOrder } from './order-schedule.presenter.js';
 
 test('scheduled order status is the furthest milestone reached', () => {
   const at = new Date('2026-09-19T12:00:00.000Z');
@@ -25,16 +25,26 @@ test('scheduled order status is the furthest milestone reached', () => {
     updatedAt: at,
     revision: 1,
   };
-  assert.equal(toPublic(row).status, 'scheduled');
-  assert.equal(toPublic({ ...row, allocatedAt: at }).status, 'allocated');
-  assert.equal(toPublic({ ...row, allocatedAt: at, cutAt: at }).status, 'cut');
-  // Shipping is not gated on cutting, and outranks every other milestone.
-  assert.equal(toPublic({ ...row, shippedAt: at }).status, 'shipped');
+  assert.equal(presentScheduledOrder(row).status, 'scheduled');
   assert.equal(
-    toPublic({ ...row, allocatedAt: at, cutAt: at, shippedAt: at }).status,
+    presentScheduledOrder({ ...row, allocatedAt: at }).status,
+    'allocated',
+  );
+  assert.equal(
+    presentScheduledOrder({ ...row, allocatedAt: at, cutAt: at }).status,
+    'cut',
+  );
+  // Shipping is not gated on cutting, and outranks every other milestone.
+  assert.equal(
+    presentScheduledOrder({ ...row, shippedAt: at }).status,
     'shipped',
   );
-  assert.deepEqual(toPublic({ ...row, allocatedAt: at }), {
+  assert.equal(
+    presentScheduledOrder({ ...row, allocatedAt: at, cutAt: at, shippedAt: at })
+      .status,
+    'shipped',
+  );
+  assert.deepEqual(presentScheduledOrder({ ...row, allocatedAt: at }), {
     id: row.id,
     orderNumber: '104801',
     shipDate: '2026-10-02',
