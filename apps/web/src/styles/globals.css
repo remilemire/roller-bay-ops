@@ -1886,21 +1886,60 @@ td strong {
 .history {
   margin-top: 22px;
 }
+.history summary {
+  padding: 7px 0;
+  cursor: pointer;
+}
+.history details > :not(summary) {
+  margin-left: 16px;
+}
+.history h3 {
+  margin-top: 12px;
+}
+/* Before and after sit side by side only where both fit. */
+.audit-change {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 0 24px;
+  margin-bottom: 12px;
+}
 .audit-values {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  margin: 12px 0;
+  gap: 10px;
+  margin: 10px 0;
 }
 .audit-values > div {
   display: grid;
-  grid-template-columns: minmax(100px, 0.8fr) minmax(0, 1.5fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.5fr);
+  gap: 4px 12px;
+  align-items: baseline;
+}
+/* A nested record takes the full width below its label; a rule marks its depth. */
+.audit-values > .nested {
+  grid-template-columns: minmax(0, 1fr);
+}
+.audit-values > .nested > dd {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.audit-values .audit-values {
+  margin: 0;
 }
 .audit-values dd {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.audit-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.audit-list > li + li {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 .correction-check {
   display: flex;

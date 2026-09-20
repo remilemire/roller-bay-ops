@@ -36,6 +36,11 @@ const labels: Record<string, string> = {
   widthMm: 'Width',
   lengthMm: 'Length',
   remainingLengthMm: 'Remaining length',
+  reservedLengthMm: 'Reserved length',
+  lengthAllowanceMm: 'Length allowance',
+  edgeTrimMm: 'Edge trim',
+  minimumRemnantWidthMm: 'Minimum remnant width',
+  minimumRemnantLengthMm: 'Minimum remnant length',
   purchaseOrderNumber: 'Purchase order',
   orderNumber: 'Production order',
   shipDate: 'Ship date',
@@ -95,7 +100,7 @@ export function RecordValues({
   }
   if (Array.isArray(value))
     return (
-      <ol>
+      <ol className="audit-list">
         {value.map((v, i) => (
           <li key={i}>
             <RecordValues
@@ -126,7 +131,11 @@ export function RecordValues({
             ].includes(k),
         )
         .map(([k, v]) => (
-          <div key={k}>
+          // Nested records stack under their label so depth does not squeeze them.
+          <div
+            key={k}
+            className={v && typeof v === 'object' ? 'nested' : undefined}
+          >
             <dt className="detail-label">
               {labels[k] ??
                 k
@@ -198,7 +207,7 @@ export function History({ type, id }: { type: AuditRecordType; id: string }) {
                 {event.changes
                   .filter((c) => c.recordType === type && c.recordId === id)
                   .map((change, i) => (
-                    <div key={i} className="details-grid">
+                    <div key={i} className="audit-change">
                       <div>
                         <h3>Before</h3>
                         <RecordValues value={change.before?.value} />
@@ -227,16 +236,12 @@ export function History({ type, id }: { type: AuditRecordType; id: string }) {
                 )}
               </details>
             ))}
-            {query.data && (
-              <Pagination
-                page={page}
-                total={query.data.total}
-                onPage={setPage}
-              />
-            )}
           </>
         )}
       </div>
+      {query.data && (
+        <Pagination page={page} total={query.data.total} onPage={setPage} />
+      )}
     </section>
   );
 }
