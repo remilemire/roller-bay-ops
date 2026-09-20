@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
 import {
   orderStatusSchema,
   type ScheduledOrder,
@@ -58,9 +58,14 @@ export function OrderCalendarNav({
           <p className="muted">{summary}</p>
         </div>
       </div>
-      <Button variant="outline" disabled={isCurrent} onClick={onCurrent}>
-        This {period}
-      </Button>
+      {/* Shown only when away from it, so it reads as the way back rather
+          than as a label for the period on show. */}
+      {!isCurrent && (
+        <Button variant="outline" onClick={onCurrent}>
+          <Undo2 size={16} />
+          Back to this {period}
+        </Button>
+      )}
     </div>
   );
 }
