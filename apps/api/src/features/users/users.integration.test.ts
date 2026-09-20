@@ -1,9 +1,9 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   defaultMeasurementUnits,
   ownershipTransferResultSchema,
@@ -14,18 +14,23 @@ import { UsersRepository } from './users.repository.js';
 import { UsersService } from './users.service.js';
 import type { MicrosoftProfileInput } from './microsoft-profile.schema.js';
 
-type SignIn = () => Promise<{ authenticated: string }>;
-
-export async function testUserRoles(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  adminCookie: string,
-  origin: string,
-  setProfile: (profile: MicrosoftProfileInput) => void,
-  signIn: SignIn,
-  rejectedLogin: () => Promise<void>,
-) {
+test('user roles integration', { timeout: 60_000 }, async (t) => {
+  const {
+    app,
+    pool,
+    cookie: adminCookie,
+    origin,
+    provider,
+    signIn,
+    start,
+    rejectedCallback,
+  } = await startSignedInApp(t);
+  const setProfile = (profile: MicrosoftProfileInput) => {
+    provider.profile = profile;
+  };
+  const rejectedLogin = async () => {
+    await rejectedCallback(await start(), 'account_inactive');
+  };
   const server = app.getHttpServer();
   const post = (path: string, cookie: string, body?: object) => {
     const call = request(server)
@@ -520,4 +525,4 @@ export async function testUserRoles(
       );
     },
   );
-}
+});

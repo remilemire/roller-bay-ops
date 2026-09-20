@@ -1,23 +1,17 @@
+import 'reflect-metadata';
 import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   stockItemSchema,
   stockItemListSchema,
 } from '@roller-bay/shared/stock-items';
 
-export async function testStockItems(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('stock items integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/stock-items';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -505,4 +499,4 @@ export async function testStockItems(
       [userId],
     );
   }
-}
+});

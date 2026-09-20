@@ -1,9 +1,9 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   receiptCorrectionContextSchema,
   completionCorrectionContextSchema,
@@ -18,14 +18,8 @@ import {
 import { historySchema } from '@roller-bay/shared/audit';
 import { AuditRepository } from './audit.repository.js';
 
-export async function testCorrections(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('corrections integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const get = (path: string) =>
     request(server)
@@ -954,4 +948,4 @@ export async function testCorrections(
   } finally {
     await role('user');
   }
-}
+});

@@ -11,7 +11,7 @@
     "lint": "eslint src drizzle.config.ts",
     "test:build": "rm -rf .test-dist && tsc -p tsconfig.test.json",
     "test": "npm run test:build && node --throw-deprecation --test \".test-dist/**/!(*.integration|*.live-solver).test.js\"",
-    "test:integration": "npm run test:build && node --throw-deprecation --test \".test-dist/**/*.integration.test.js\"",
+    "test:integration": "npm run test:build && node --throw-deprecation --test --test-concurrency=4 \".test-dist/**/*.integration.test.js\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",

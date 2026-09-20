@@ -1,9 +1,9 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   locationSchema,
   locationZoneSchema,
@@ -11,14 +11,8 @@ import {
   locationListSchema,
 } from '@roller-bay/shared/locations';
 
-export async function testLocations(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('locations integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const paths = [
     '/api/locations/zones',
@@ -449,4 +443,4 @@ export async function testLocations(
       [userId],
     );
   }
-}
+});

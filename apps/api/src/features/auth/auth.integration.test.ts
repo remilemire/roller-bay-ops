@@ -1,13 +1,5 @@
-import { testCorrections } from '../audit/corrections.integration-cases.js';
-import { testAllocations } from '../allocations/allocations.integration-cases.js';
-import { testStockReceipts } from '../stock-receipts/stock-receipts.integration-cases.js';
-import { testOrderSchedule } from '../order-schedule/order-schedule.integration-cases.js';
 import 'reflect-metadata';
-import { testUserRoles } from '../users/users.integration-cases.js';
 import { startIntegrationApp } from '../../testing/integration-app.js';
-import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
-import { testLocations } from '../locations/locations.integration-cases.js';
-import { testStockItems } from '../stock-items/stock-items.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -93,55 +85,6 @@ test(
         const ttl = await redis.client.ttl(SESSION_PREFIX + sid(authenticated));
         assert.ok(ttl > 0 && ttl <= 60);
       },
-    );
-
-    await testCatalog(t, app, pool, authenticated, userId, config.WEB_ORIGIN);
-
-    await testLocations(t, app, pool, authenticated, userId, config.WEB_ORIGIN);
-
-    await testStockItems(
-      t,
-      app,
-      pool,
-      authenticated,
-      userId,
-      config.WEB_ORIGIN,
-    );
-
-    await testStockReceipts(
-      t,
-      app,
-      pool,
-      authenticated,
-      userId,
-      config.WEB_ORIGIN,
-    );
-
-    await testOrderSchedule(
-      t,
-      app,
-      pool,
-      authenticated,
-      userId,
-      config.WEB_ORIGIN,
-    );
-
-    await testAllocations(
-      t,
-      app,
-      pool,
-      authenticated,
-      userId,
-      config.WEB_ORIGIN,
-    );
-
-    await testCorrections(
-      t,
-      app,
-      pool,
-      authenticated,
-      userId,
-      config.WEB_ORIGIN,
     );
 
     await t.test(
@@ -434,23 +377,6 @@ test(
         provider.profile = savedProfile;
       },
     );
-
-    const savedOwnershipProfile = provider.profile;
-    await testUserRoles(
-      t,
-      app,
-      pool,
-      authenticated,
-      config.WEB_ORIGIN,
-      (next) => {
-        provider.profile = next;
-      },
-      signIn,
-      async () => {
-        await rejectedCallback(await start(), 'account_inactive');
-      },
-    );
-    provider.profile = savedOwnershipProfile;
 
     await t.test(
       'absolute expiry survives resaves and stale session data is denied',

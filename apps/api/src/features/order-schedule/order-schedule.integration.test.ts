@@ -1,23 +1,17 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import { historySchema } from '@roller-bay/shared/audit';
 import {
   scheduledOrderListSchema,
   scheduledOrderSchema,
 } from '@roller-bay/shared/order-schedule';
 
-export async function testOrderSchedule(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('order schedule integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/order-schedule';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -364,4 +358,4 @@ export async function testOrderSchedule(
       [userId],
     );
   }
-}
+});

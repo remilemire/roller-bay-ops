@@ -1,12 +1,12 @@
+import 'reflect-metadata';
 import { ConfigService } from '@nestjs/config';
 import type { Environment } from '../../config/environment.js';
 import { testAllocationDrafts } from './allocation-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import { historySchema } from '@roller-bay/shared/audit';
 import {
   allocationDetailSchema,
@@ -18,14 +18,8 @@ import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 
-export async function testAllocations(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('allocations integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/allocations';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -1182,4 +1176,4 @@ export async function testAllocations(
     ]);
     await pool.query(`DELETE FROM manufacturers WHERE id=$1`, [ids.maker]);
   }
-}
+});

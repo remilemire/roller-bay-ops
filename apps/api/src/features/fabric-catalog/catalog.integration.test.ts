@@ -1,9 +1,9 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   fabricColorListSchema,
   fabricColorSchema,
@@ -11,14 +11,8 @@ import {
   manufacturerSchema,
 } from '@roller-bay/shared/fabric-catalog';
 
-export async function testCatalog(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const routes = ['manufacturers', 'materials', 'colors'];
   const server = app.getHttpServer();
   const read = (path: string) =>
@@ -258,4 +252,4 @@ export async function testCatalog(
   } finally {
     await role('user');
   }
-}
+});

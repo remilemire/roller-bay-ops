@@ -1,11 +1,11 @@
+import 'reflect-metadata';
 import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
 import { testStockReceiptDrafts } from './stock-receipt-drafts.integration-cases.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
+import { startSignedInApp } from '../../testing/integration-app.js';
 import {
   stockReceiptSchema,
   stockReceiptDetailSchema,
@@ -13,14 +13,8 @@ import {
 } from '@roller-bay/shared/stock-receipts';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
 
-export async function testStockReceipts(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  userId: string,
-  origin: string,
-) {
+test('stock receipts integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/stock-receipts';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -422,4 +416,4 @@ export async function testStockReceipts(
     await pool.query(`DELETE FROM fabric_materials WHERE id=$1`, [materialId]);
     await pool.query(`DELETE FROM manufacturers WHERE id=$1`, [makerId]);
   }
-}
+});
