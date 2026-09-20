@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { stockCorrectionRequest } from '../../database/testing/stock-correction-request.js';
+import { stockCorrectionRequest } from '../stock-items/testing/stock-correction-request.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
