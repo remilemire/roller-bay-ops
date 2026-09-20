@@ -1,31 +1,22 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { TestContext } from 'node:test';
-import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import { test } from 'node:test';
 import request from 'supertest';
 import {
   allocationDraftSchema,
   allocationDraftDataSchema,
   allocationRecordSchema,
-  type CreateAllocation,
 } from '@roller-bay/shared/allocations';
-import { createFixtures } from '../../testing/fixtures.js';
+import { startAllocationsApp } from './testing/allocations-app.js';
 import { AllocationsService } from './allocations.service.js';
 import { AllocationsRepository } from './allocations.repository.js';
 
-export async function testAllocationDrafts(
-  t: TestContext,
-  app: INestApplication,
-  pool: Pool,
-  cookie: string,
-  origin: string,
-  seed: (length?: number, remnant?: boolean) => Promise<string>,
-  input: (id: string, length?: number) => CreateAllocation,
-) {
+test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
+  const { app, pool, cookie, origin, fixtures, seed, input } =
+    await startAllocationsApp(t);
   const path = '/api/allocations';
   const server = app.getHttpServer();
-  const ids: string[] = [];
   const get = (id: string) =>
     request(server).get(`${path}/${id}`).set('Cookie', cookie);
   const post = (url: string, body: object, key: string = randomUUID()) =>
@@ -47,14 +38,11 @@ export async function testAllocationDrafts(
       .set('Cookie', cookie)
       .set('Origin', origin)
       .send({ expectedRevision });
-  const create = async (data: object, key: string = randomUUID()) => {
-    const draft = allocationDraftSchema.parse(
+  const create = async (data: object, key: string = randomUUID()) =>
+    allocationDraftSchema.parse(
       (await post(`${path}/drafts`, { data }, key).expect(201)).body,
     );
-    ids.push(draft.id);
-    return draft;
-  };
-  const colleague = await createFixtures(pool).createUser('Draft colleague');
+  const colleague = await fixtures.createUser('Draft colleague');
   await t.test(
     'allocation drafts preserve ordered partial rows and unassigned cuts without reserving stock',
     async () => {
@@ -188,7 +176,6 @@ export async function testAllocationDrafts(
             randomUUID(),
           ),
       );
-      ids.push(draft.id);
       // Drafts may leave the order unnamed; submission requires it.
       await post(`${path}/${draft.id}/submit`, {
         expectedRevision: 1,
@@ -359,4 +346,4 @@ export async function testAllocationDrafts(
       }
     },
   );
-}
+});
