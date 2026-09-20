@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, LoaderCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { usePageTitle } from '@/components/layout/breadcrumbs';
 import { describeError } from '@/lib/errors';
 import { Button } from './button';
 export function ErrorNotice({
@@ -73,6 +74,7 @@ export function PageHeading({
   description?: string;
   children?: ReactNode;
 }) {
+  usePageTitle(title);
   return (
     <div className="page-heading">
       <div>

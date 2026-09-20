@@ -22,6 +22,7 @@ import { clearPrivateData, sessionKey } from '@/features/auth/auth.queries';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
+import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
 import { ThemeSwitch } from './theme-switch';
 const navigation = [
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
@@ -33,12 +34,14 @@ const navigation = [
   { href: '/locations', label: 'Locations', Icon: MapPin },
   { href: '/users', label: 'Users', Icon: Users, manageOnly: true },
 ];
+const sections = [...navigation, { href: '/settings', label: 'Settings' }];
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const user = useCurrentUser();
   const canManage = useCanManage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
   const client = useQueryClient();
   const router = useRouter();
   const logout = useMutation({
@@ -136,21 +139,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               <Menu size={22} />
             </Button>
-            <span className="breadcrumb">
-              <strong>
-                {navigation.find(
-                  (n) => n.href !== '/' && pathname.startsWith(n.href),
-                )?.label ??
-                  (pathname === '/settings' ? 'Settings' : 'Overview')}
-              </strong>
-            </span>
+            <Breadcrumbs sections={sections} title={pageTitle} />
           </div>
           <div className="topbar-actions">
             <ThemeSwitch />
           </div>
         </header>
         <main id="workspace-content" className="workspace-content">
-          {children}
+          <PageTitleContext value={setPageTitle}>{children}</PageTitleContext>
         </main>
       </div>
       <Dialog

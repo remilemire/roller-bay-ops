@@ -268,10 +268,38 @@ textarea {
 }
 .breadcrumb {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
   color: var(--muted);
   font-size: 12px;
+  min-width: 0;
+}
+.breadcrumb ol,
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.breadcrumb li > svg {
+  flex-shrink: 0;
+}
+.breadcrumb li > a,
+.breadcrumb strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.breadcrumb li > a {
+  color: inherit;
+  text-decoration: none;
+}
+.breadcrumb li > a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
 }
 .breadcrumb strong {
   font-weight: 500;
@@ -282,6 +310,9 @@ textarea {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+.topbar-title {
+  min-width: 0;
 }
 .theme-switch {
   display: flex;
@@ -1557,7 +1588,6 @@ td strong {
   }
   .breadcrumb {
     font-size: 11px;
-    gap: 8px;
   }
   .page-heading {
     align-items: flex-start;
@@ -1622,7 +1652,7 @@ td strong {
   .details-grid {
     grid-template-columns: 1fr;
   }
-  .breadcrumb {
+  .breadcrumb ol {
     display: none;
   }
   .pagination {
