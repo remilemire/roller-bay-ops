@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import * as s from '@roller-bay/shared/order-schedule';
 import { api, noContent, queryString } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
+import { blindCount } from './order-totals';
 export const orderScheduleKey = ['order-schedule'] as const;
 export const orderList = (filters: Record<string, unknown> = {}) =>
   queryOptions({
@@ -37,6 +38,21 @@ export const orderDetail = (id: string) =>
     queryFn: ({ signal }) =>
       api(`/order-schedule/${id}`, s.scheduledOrderSchema, { signal }),
   });
+// The order an allocation names, for the quantity its blinds must add up to.
+export const orderByNumber = (orderNumber: string) =>
+  queryOptions({
+    queryKey: [...orderScheduleKey, 'number', orderNumber],
+    queryFn: async ({ signal }) => {
+      const data = await api(
+        `/order-schedule${queryString({ search: orderNumber, pageSize: 1 })}`,
+        s.scheduledOrderListSchema,
+        { signal },
+      );
+      return (
+        data.items.find((order) => order.orderNumber === orderNumber) ?? null
+      );
+    },
+  });
 export const createOrder = (body: unknown) =>
   api('/order-schedule', s.scheduledOrderSchema, {
     method: 'POST',
@@ -68,7 +84,7 @@ export const lookupSchedulableOrders = async (
     total: data.total,
     items: data.items.map((order) => ({
       id: order.orderNumber,
-      label: `${order.orderNumber} · ships ${calendarDateLabel(order.shipDate)}`,
+      label: `${order.orderNumber} · ${blindCount(order.quantity)} · ships ${calendarDateLabel(order.shipDate)}`,
     })),
   };
 };

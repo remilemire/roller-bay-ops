@@ -57,6 +57,9 @@ import {
 } from './cutting-rules.service.js';
 import { toLengthUnits } from './cutting-plan/cutting-dimensions.js';
 
+// The total an order's quantity must equal.
+const blinds = (input: { requirements: readonly { quantity: number }[] }) =>
+  input.requirements.reduce((total, item) => total + item.quantity, 0);
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -250,7 +253,12 @@ export class AllocationsService {
     const before = fromDraft ? await this.detail(repository, tx, header) : null;
     // The order's allocated_at mirrors this allocation's confirmed_at.
     const now = new Date();
-    const order = await this.orders.allocate(tx, header.orderNumber!, now);
+    const order = await this.orders.allocate(
+      tx,
+      header.orderNumber!,
+      blinds(input),
+      now,
+    );
     const summary = await this.validateForWrite(
       repository,
       tx,
@@ -294,6 +302,12 @@ export class AllocationsService {
         );
         const before = await this.detail(repository, tx, header);
         // Moving the allocation to another order moves the milestone with it.
+        if (input.orderNumber === header.orderNumber)
+          await this.orders.verifyQuantity(
+            tx,
+            input.orderNumber,
+            blinds(input),
+          );
         const orders =
           input.orderNumber === header.orderNumber
             ? []
@@ -302,6 +316,7 @@ export class AllocationsService {
                 await this.orders.allocate(
                   tx,
                   input.orderNumber,
+                  blinds(input),
                   header.confirmedAt!,
                 ),
               ];

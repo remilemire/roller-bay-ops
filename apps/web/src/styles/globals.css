@@ -761,6 +761,15 @@ td strong {
 .field small.field-error {
   color: var(--danger);
 }
+/* The blinds entered against the order's quantity, under its picker. */
+.order-count {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.order-count.is-mismatch {
+  color: var(--danger);
+}
 .input[aria-invalid='true'],
 .input[data-invalid] {
   border-color: var(--danger);

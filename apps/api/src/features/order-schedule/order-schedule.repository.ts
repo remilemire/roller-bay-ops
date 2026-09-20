@@ -139,7 +139,7 @@ export class OrderScheduleRepository {
   async update(
     id: string,
     values: Partial<
-      Pick<ScheduledOrderRecord, 'shipDate' | 'note' | 'shippedAt'>
+      Pick<ScheduledOrderRecord, 'shipDate' | 'quantity' | 'note' | 'shippedAt'>
     >,
   ) {
     const [row] = await this.db

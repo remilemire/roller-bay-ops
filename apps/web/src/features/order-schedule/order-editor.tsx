@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
 import {
   orderNumberSchema,
+  orderQuantitySchema,
   shipDateSchema,
   type ScheduledOrder,
 } from '@roller-bay/shared/order-schedule';
@@ -26,10 +27,17 @@ import {
 const formSchema = z.object({
   orderNumber: orderNumberSchema,
   shipDate: z.string().min(1, 'Choose a ship date.').pipe(shipDateSchema),
+  // Typed as text; a blank is a missing quantity, never zero.
+  quantity: z
+    .string()
+    .min(1, 'Enter the number of blinds.')
+    .transform(Number)
+    .pipe(orderQuantitySchema),
   note: z.string().trim().max(1000),
 });
-type OrderForm = z.infer<typeof formSchema>;
-const FIELDS = ['orderNumber', 'shipDate', 'note'] as const;
+type OrderFields = z.input<typeof formSchema>;
+type OrderForm = z.output<typeof formSchema>;
+const FIELDS = ['orderNumber', 'shipDate', 'quantity', 'note'] as const;
 const fieldName = (issue: ErrorIssue) =>
   FIELDS.find((field) => field === issuePath(issue)) ?? null;
 
@@ -51,10 +59,14 @@ export function OrderEditor({
     defaultValues: {
       orderNumber: opened?.orderNumber ?? '',
       shipDate: opened?.shipDate ?? shipDate,
+      quantity: opened ? String(opened.quantity) : '',
       note: opened?.note ?? '',
     },
   });
-  const values = useWatch({ control: form.control }) as OrderForm;
+  const values = useWatch({ control: form.control }) as OrderFields;
+  // The allocation's blinds were checked against the quantity, so it is fixed
+  // until that allocation is cancelled or replaced.
+  const allocated = !!opened?.allocatedAt;
   const client = useQueryClient();
   const mutation = useMutation({
     mutationFn: (data: OrderForm) =>
@@ -62,6 +74,7 @@ export function OrderEditor({
         ? updateOrder(opened.id, {
             expectedRevision: opened.revision,
             shipDate: data.shipDate,
+            quantity: allocated ? undefined : data.quantity,
             note: data.note,
           })
         : createOrder(data),
@@ -72,7 +85,7 @@ export function OrderEditor({
     },
   });
   const { errors } = form.formState;
-  const set = (name: keyof OrderForm, value: string) => {
+  const set = (name: keyof OrderFields, value: string) => {
     form.setValue(name, value);
     form.clearErrors(name);
   };
@@ -109,6 +122,21 @@ export function OrderEditor({
             onChange={(v) => set('shipDate', v)}
             error={errors.shipDate?.message}
             weekdaysOnly
+          />
+          <TextField
+            label="Blinds"
+            value={values.quantity}
+            onChange={(v) => set('quantity', v.replace(/\D/g, ''))}
+            error={errors.quantity?.message}
+            required
+            disabled={allocated}
+            maxLength={7}
+            inputMode="numeric"
+            hint={
+              allocated
+                ? 'Fixed while the order has an allocation.'
+                : 'Total on the order'
+            }
           />
           <TextField
             label="Note"

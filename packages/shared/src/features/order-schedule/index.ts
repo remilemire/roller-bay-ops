@@ -23,6 +23,9 @@ export const shipDateSchema = z.iso
     'Must be a weekday.',
   );
 
+// The blinds on the order. An allocation's blinds must add up to it.
+export const orderQuantitySchema = z.number().int().min(1).max(1000000);
+
 const revision = z.number().int().positive().max(2147483646);
 // A blank note clears the note.
 const noteSchema = z
@@ -35,6 +38,7 @@ const noteSchema = z
 export const createScheduledOrderSchema = z.strictObject({
   orderNumber: orderNumberSchema,
   shipDate: shipDateSchema,
+  quantity: orderQuantitySchema,
   note: noteSchema.default(null),
 });
 // The order number is fixed once scheduled. `shipped` stamps or clears the
@@ -43,12 +47,13 @@ export const updateScheduledOrderSchema = z
   .strictObject({
     expectedRevision: revision,
     shipDate: shipDateSchema.optional(),
+    quantity: orderQuantitySchema.optional(),
     note: noteSchema.optional(),
     shipped: z.boolean().optional(),
   })
   .refine(
-    ({ shipDate, note, shipped }) =>
-      [shipDate, note, shipped].some((field) => field !== undefined),
+    ({ shipDate, quantity, note, shipped }) =>
+      [shipDate, quantity, note, shipped].some((field) => field !== undefined),
     'Provide at least one field.',
   );
 export const deleteScheduledOrderSchema = z.strictObject({
@@ -70,6 +75,7 @@ export const scheduledOrderSchema = z.object({
   id: z.uuid(),
   orderNumber: z.string(),
   shipDate: z.iso.date(),
+  quantity: z.number().int().positive(),
   note: z.string().nullable(),
   status: orderStatusSchema,
   scheduledAt: z.iso.datetime(),

@@ -290,7 +290,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   // The order number is picked from the schedule's unallocated orders.
   await page.getByLabel('Order number', { exact: true }).click();
   await page
-    .getByRole('option', { name: '104877 · ships Mon, Oct 5, 2026' })
+    .getByRole('option', { name: '104877 · 1 blind · ships Mon, Oct 5, 2026' })
     .click();
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();

@@ -121,10 +121,10 @@ export async function testCorrections(
         stockItemId: e.stockItemId,
         expectedRevision: e.revision,
       }));
-    // Each allocation needs its own scheduled order.
+    // Each allocation needs its own scheduled order, for the one blind it plans.
     await pool.query(
-      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date)
-       SELECT n::text, '2026-10-01' FROM generate_series(300001, 300100) n`,
+      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date, quantity)
+       SELECT n::text, '2026-10-01', 1 FROM generate_series(300001, 300100) n`,
     );
     let orderNumber = 300000;
     const plan = (stockId: string) => {
@@ -778,6 +778,11 @@ export async function testCorrections(
           [first, second] = r.items[0]!.stockItems;
         const draft = plan(first!.id);
         draft.requirements[0]!.quantity = 2;
+        // The order's quantity has to match the two blinds planned.
+        await pool.query(
+          `UPDATE "${schema}".scheduled_orders SET quantity=2 WHERE order_number=$1`,
+          [draft.orderNumber],
+        );
         draft.plan.cuts.push({
           ...draft.plan.cuts[0]!,
           stockItemId: second!.id,

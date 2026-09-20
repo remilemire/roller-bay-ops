@@ -155,6 +155,13 @@
       "when": 1789880210973,
       "tag": "0021_require_weekday_ship_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789886025775,
+      "tag": "0022_add_order_quantity",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -39,6 +40,20 @@ function change(
       value: presentScheduledOrder(after),
     },
   };
+}
+
+function requireQuantity(order: ScheduledOrderRecord, quantity: number) {
+  if (order.quantity !== quantity)
+    throw new BadRequestException({
+      message: `The order has ${order.quantity} blinds but the allocation has ${quantity}.`,
+      issues: [
+        {
+          code: 'order_quantity_mismatch',
+          path: ['orderNumber'],
+          message: `The order has ${order.quantity} blinds; ${quantity} entered.`,
+        },
+      ],
+    });
 }
 
 function requireRevision(
@@ -97,9 +112,27 @@ export class OrderScheduleService {
           await repository.findByIdForUpdate(id),
           input.expectedRevision,
         );
+        // The allocation's blinds were checked against this quantity.
+        if (
+          previous.allocatedAt &&
+          input.quantity !== undefined &&
+          input.quantity !== previous.quantity
+        )
+          throw new ConflictException({
+            message:
+              'This order has an allocation. Cancel or replace it before changing the quantity.',
+            issues: [
+              {
+                code: 'order_allocated',
+                path: ['quantity'],
+                message: 'Fixed while the order has an allocation.',
+              },
+            ],
+          });
         const { shipped } = input;
         const row = await repository.update(id, {
           shipDate: input.shipDate,
+          quantity: input.quantity,
           note: input.note,
           // Marking a shipped order shipped again keeps its original time.
           shippedAt:
@@ -143,9 +176,11 @@ export class OrderScheduleService {
   // records the returned change on its own audit event. allocated_at and
   // cut_at mirror the live allocation's confirmed_at and completed_at.
 
+  /** `quantity` is the total of the allocation's blinds. */
   async allocate(
     tx: DatabaseTransaction,
     orderNumber: string,
+    quantity: number,
     at: Date,
   ): Promise<AuditChange> {
     const repository = new OrderScheduleRepository({ db: tx });
@@ -164,7 +199,20 @@ export class OrderScheduleService {
           },
         ],
       });
+    requireQuantity(order, quantity);
     return change(order, await repository.stamp(order.id, { allocatedAt: at }));
+  }
+
+  /** A replanned allocation must still add up to its order. */
+  async verifyQuantity(
+    tx: DatabaseTransaction,
+    orderNumber: string,
+    quantity: number,
+  ) {
+    const repository = new OrderScheduleRepository({ db: tx });
+    const order = await repository.findByOrderNumberForUpdate(orderNumber);
+    if (!order) throw orderNotScheduled();
+    requireQuantity(order, quantity);
   }
 
   /** The order's allocation was cancelled or moved to another order. */

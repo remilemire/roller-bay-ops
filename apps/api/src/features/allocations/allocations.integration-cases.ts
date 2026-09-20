@@ -152,11 +152,12 @@ export async function testAllocations(
       `INSERT INTO "${schema}".locations (id,section_id,label) VALUES ($1,$2,'1')`,
       [ids.location, ids.section],
     );
-    // Allocations must name a scheduled order.
+    // Allocations must name a scheduled order and match its quantity; every
+    // allocation here plans one blind.
     await pool.query(
-      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date)
-       SELECT n::text, '2026-10-01' FROM generate_series(100001, 100400) n
-       UNION ALL VALUES ('999998', '2026-10-01'::date), ('999999', '2026-10-01')`,
+      `INSERT INTO "${schema}".scheduled_orders (order_number, ship_date, quantity)
+       SELECT n::text, '2026-10-01', 1 FROM generate_series(100001, 100400) n
+       UNION ALL VALUES ('999998', '2026-10-01'::date, 1), ('999999', '2026-10-01', 1)`,
     );
     await pool.query(
       `UPDATE "${schema}".users SET role='user', is_active=true WHERE id=$1`,
@@ -747,6 +748,49 @@ export async function testAllocations(
           expectedRevision: other.revision,
         }).expect(404);
 
+        // An allocation's blinds add up to its order's quantity, when it is
+        // confirmed and again when it is replanned.
+        const counted = input(await seed());
+        const setQuantity = (quantity: number) =>
+          pool.query(
+            `UPDATE "${schema}".scheduled_orders SET quantity=$1 WHERE order_number=$2`,
+            [quantity, counted.orderNumber],
+          );
+        await setQuantity(3);
+        const short = await post(path, counted).expect(400);
+        assert.deepEqual(issue(short.body), [
+          { code: 'order_quantity_mismatch', path: ['orderNumber'] },
+        ]);
+        assert.equal(
+          short.body.message,
+          'The order has 3 blinds but the allocation has 1.',
+        );
+        // The refused allocation claimed nothing.
+        assert.equal(
+          (
+            await pool.query(
+              `SELECT allocated_at FROM "${schema}".scheduled_orders WHERE order_number=$1`,
+              [counted.orderNumber],
+            )
+          ).rows[0].allocated_at,
+          null,
+        );
+        await setQuantity(1);
+        const matched = await create(counted);
+        await setQuantity(2);
+        assert.deepEqual(
+          issue(
+            (
+              await put(matched.id, {
+                ...counted,
+                expectedRevision: matched.revision,
+              }).expect(400)
+            ).body,
+          ),
+          [{ code: 'order_quantity_mismatch', path: ['orderNumber'] }],
+        );
+        await setQuantity(1);
+
         // Drafts claim nothing, so they may share the order's number.
         const drafts = [];
         for (let count = 0; count < 2; count++)
@@ -788,6 +832,19 @@ export async function testAllocations(
             .set('Origin', origin)
             .send({ expectedRevision: order.revision })
             .expect(409);
+          // Its quantity is fixed while an allocation was checked against it;
+          // other fields still change.
+          const edit = (body: object) =>
+            request(server)
+              .patch(`/api/order-schedule/${order.id}`)
+              .set('Cookie', cookie)
+              .set('Origin', origin)
+              .send({ expectedRevision: order.revision, ...body });
+          const fixed = await edit({ quantity: 5 }).expect(409);
+          assert.deepEqual(issue(fixed.body), [
+            { code: 'order_allocated', path: ['quantity'] },
+          ]);
+          await edit({ quantity: 1, note: 'Same quantity' }).expect(200);
         } finally {
           await pool.query(
             `UPDATE "${schema}".users SET role='user' WHERE id=$1`,

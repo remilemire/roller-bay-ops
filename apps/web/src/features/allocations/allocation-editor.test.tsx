@@ -12,11 +12,13 @@ import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
 import { ApiError } from '@/lib/api';
 
-const { replace, optimize, saveDraft, submit } = vi.hoisted(() => ({
+const { replace, optimize, saveDraft, submit, scheduled } = vi.hoisted(() => ({
   replace: vi.fn(),
   optimize: vi.fn(),
   saveDraft: vi.fn(),
   submit: vi.fn(),
+  // The quantity of whichever order the form names; the fixture plans 1 blind.
+  scheduled: { quantity: 1 },
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -61,6 +63,24 @@ vi.mock('@/components/ui/lookup', async () => {
         </label>
       );
     },
+  };
+});
+vi.mock('@/features/order-schedule/order-schedule.api', async (original) => {
+  const { queryOptions } = await import('@tanstack/react-query');
+  const { order } = await import('../../../tests/fixtures');
+  return {
+    ...(await original<
+      typeof import('@/features/order-schedule/order-schedule.api')
+    >()),
+    orderByNumber: (orderNumber: string) =>
+      queryOptions({
+        queryKey: ['order-schedule', 'number', orderNumber],
+        queryFn: async () => ({
+          ...order,
+          orderNumber,
+          quantity: scheduled.quantity,
+        }),
+      }),
   };
 });
 vi.mock('./allocations.api', async (importOriginal) => ({
@@ -272,6 +292,39 @@ it('saves unsaved edits to the draft before confirming it', async () => {
     1,
     expect.objectContaining({ orderNumber: '104802' }),
   );
+});
+
+it('shows the blinds entered against the order and will not confirm a mismatch', async () => {
+  const user = userEvent.setup();
+  scheduled.quantity = 3;
+  try {
+    render(
+      <QueryClientProvider client={client()}>
+        <AllocationEditor initial={draft} />
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByText('The order has 3 blinds; 1 entered.'),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm allocation' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The stand-in's label also wraps the error, so match its start.
+    expect(screen.getByLabelText(/^Order number/)).toHaveAccessibleDescription(
+      'The order has 3 blinds; 1 entered.',
+    );
+    expect(submit).not.toHaveBeenCalled();
+    // Entering the missing blinds clears the way.
+    const quantity = screen.getByLabelText('Quantity');
+    await user.clear(quantity);
+    await user.type(quantity, '3');
+    expect(
+      screen.getByText('The order has 3 blinds; 3 entered.'),
+    ).toBeInTheDocument();
+  } finally {
+    scheduled.quantity = 1;
+  }
 });
 
 it('offers to reload a stale draft, but not for an order that is already allocated', async () => {

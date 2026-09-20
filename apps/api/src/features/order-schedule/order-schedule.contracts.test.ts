@@ -7,10 +7,15 @@ import {
 } from '@roller-bay/shared/order-schedule';
 
 test('scheduled order contracts require a six-digit number and a real calendar date', () => {
-  const input = { orderNumber: ' 104801 ', shipDate: '2026-10-02' };
+  const input = {
+    orderNumber: ' 104801 ',
+    shipDate: '2026-10-02',
+    quantity: 12,
+  };
   assert.deepEqual(createScheduledOrderSchema.parse(input), {
     orderNumber: '104801',
     shipDate: '2026-10-02',
+    quantity: 12,
     note: null,
   });
   for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
@@ -51,8 +56,27 @@ test('scheduled order contracts require a six-digit number and a real calendar d
   );
 });
 
-test('scheduled order notes are trimmed, bounded, and blank notes clear the note', () => {
+test('scheduled orders state a whole, positive number of blinds', () => {
   const input = { orderNumber: '104801', shipDate: '2026-10-02' };
+  assert.equal(createScheduledOrderSchema.safeParse(input).success, false);
+  for (const quantity of [0, -3, 1.5, '12', null, 1000001])
+    assert.equal(
+      createScheduledOrderSchema.safeParse({ ...input, quantity }).success,
+      false,
+    );
+  assert.equal(
+    createScheduledOrderSchema.parse({ ...input, quantity: 1 }).quantity,
+    1,
+  );
+  // On its own, a quantity is a change.
+  assert.deepEqual(
+    updateScheduledOrderSchema.parse({ expectedRevision: 1, quantity: 14 }),
+    { expectedRevision: 1, quantity: 14 },
+  );
+});
+
+test('scheduled order notes are trimmed, bounded, and blank notes clear the note', () => {
+  const input = { orderNumber: '104801', shipDate: '2026-10-02', quantity: 12 };
   const note = (value: string | null) =>
     createScheduledOrderSchema.parse({ ...input, note: value }).note;
   assert.equal(note('  Rush  '), 'Rush');

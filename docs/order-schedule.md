@@ -21,6 +21,8 @@ Shipping is not gated on cutting, and a shipped order reports `shipped` whatever
 
 `allocations.order_number` references `scheduled_orders.order_number` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name scheduled orders, and an order that any allocation or draft names cannot be deleted; the attempt returns 409. Because only admins schedule orders, an order must be scheduled before anyone can allocate fabric for it. An order has at most one live allocation.
 
+An allocation's blinds add up to its order's `quantity`: confirming an allocation, moving it to another order, and replanning it on the same order all compare the total of its requirements' quantities with the order, under the order's row lock. A mismatch returns 400 with an issue on `orderNumber` (`order_quantity_mismatch`) and stamps nothing. Drafts are not checked.
+
 The allocation workflow stamps the order inside its own transaction through `OrderScheduleService`; these columns are not writable through the endpoints below.
 
 | Allocation event                   | Order                                                         |
@@ -47,11 +49,11 @@ Stamps do not increment the order's `revision`. They write columns no edit touch
 
 Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
 
-POST accepts `orderNumber`, `shipDate`, and an optional `note`. The order number is trimmed and must be exactly six digits; it is unique and cannot be changed afterwards, so a mistyped order is deleted and added again. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`) on create and on edit. The shared `shipDateSchema` supplies the field message, and the `scheduled_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. Notes are trimmed and limited to 1,000 characters; a blank note is stored as null.
+POST accepts `orderNumber`, `shipDate`, `quantity`, and an optional `note`. `quantity` is the number of blinds on the order, a whole number from 1 to 1,000,000; it is required, and a check constraint keeps it positive. The order number is trimmed and must be exactly six digits; it is unique and cannot be changed afterwards, so a mistyped order is deleted and added again. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`) on create and on edit. The shared `shipDateSchema` supplies the field message, and the `scheduled_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. Notes are trimmed and limited to 1,000 characters; a blank note is stored as null.
 
-PATCH requires `expectedRevision` and at least one of `shipDate`, `note`, or `shipped`. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
+PATCH requires `expectedRevision` and at least one of `shipDate`, `quantity`, `note`, or `shipped`. Changing the quantity of an order that has an allocation returns 409 with an issue on `quantity` (`order_allocated`), because that allocation's blinds were checked against it; cancel or replace the allocation first. Sending the unchanged quantity is accepted. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
 
-Records include `id`, `orderNumber`, `shipDate`, `note`, `status`, the four milestone timestamps, `updatedAt`, and `revision`.
+Records include `id`, `orderNumber`, `shipDate`, `quantity`, `note`, `status`, the four milestone timestamps, `updatedAt`, and `revision`.
 
 ## Lists
 
@@ -69,7 +71,7 @@ Adding, editing, shipping, unshipping, and deleting are recorded through the [au
 
 Apply `0019_add_order_schedule.sql` before using the endpoints or running integration tests. No orders are seeded.
 
-`0021_require_weekday_ship_dates.sql` adds the weekday check constraint.
+`0021_require_weekday_ship_dates.sql` adds the weekday check constraint. `0022_add_order_quantity.sql` adds the required `quantity`; orders scheduled before it take a placeholder of 1 to correct by hand, and the default is dropped so new orders must state theirs.
 
 `0020_link_allocations_to_order_schedule.sql` adds the foreign key and the one-live-allocation index. It backfills nothing: the schedule starts empty, so the migration aborts, changing nothing, while any allocation or draft still carries an order number. Check first with:
 

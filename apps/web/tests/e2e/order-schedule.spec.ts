@@ -20,6 +20,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await page.getByRole('button', { name: 'Add order' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Order number').fill('104900');
+  await dialog.getByLabel('Blinds').fill('8');
   // Dates are picked from a weekday calendar rather than typed.
   await dialog.getByRole('button', { name: 'Ship date' }).click();
   await expect(
@@ -36,6 +37,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
       body: {
         orderNumber: '104900',
         shipDate: '2026-10-09',
+        quantity: 8,
         note: 'Motorised',
       },
     },
@@ -170,6 +172,7 @@ test('admins add an order to a day of the month', async ({ page }) => {
     'Wed, Oct 21, 2026',
   );
   await dialog.getByLabel('Order number').fill('104950');
+  await dialog.getByLabel('Blinds').fill('20');
   await dialog.getByRole('button', { name: 'Save order' }).click();
   await expect(
     page
@@ -179,7 +182,12 @@ test('admins add an order to a day of the month', async ({ page }) => {
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',
-      body: { orderNumber: '104950', shipDate: '2026-10-21', note: null },
+      body: {
+        orderNumber: '104950',
+        shipDate: '2026-10-21',
+        quantity: 20,
+        note: null,
+      },
     },
   ]);
 });

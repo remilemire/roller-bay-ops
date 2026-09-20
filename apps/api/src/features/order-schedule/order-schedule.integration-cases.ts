@@ -53,9 +53,11 @@ export async function testOrderSchedule(
         await remove(randomUUID(), 1).expect(403);
         await role('owner');
         const order = (
-          await post({ orderNumber: '200001', shipDate: '2026-10-02' }).expect(
-            201,
-          )
+          await post({
+            orderNumber: '200001',
+            shipDate: '2026-10-02',
+            quantity: 12,
+          }).expect(201)
         ).body;
         for (const untrusted of [undefined, 'https://untrusted.example']) {
           const attempt = request(server)
@@ -81,15 +83,28 @@ export async function testOrderSchedule(
         for (const query of ['page=0', 'pageSize=101', 'status=ready', 'x=1'])
           await get(`${path}?${query}`).expect(400);
         for (const body of [
-          { orderNumber: '20001', shipDate: '2026-10-02' },
-          { orderNumber: '200002', shipDate: '2026-02-30' },
-          { orderNumber: '200002', shipDate: '2026-10-03' },
-          { orderNumber: '200002', shipDate: '2026-10-04' },
+          { orderNumber: '20001', shipDate: '2026-10-02', quantity: 12 },
+          { orderNumber: '200002', shipDate: '2026-02-30', quantity: 12 },
+          { orderNumber: '200002', shipDate: '2026-10-03', quantity: 12 },
+          { orderNumber: '200002', shipDate: '2026-10-04', quantity: 12 },
           { orderNumber: '200002' },
-          { orderNumber: '200002', shipDate: '2026-10-02', shippedAt: null },
           {
             orderNumber: '200002',
             shipDate: '2026-10-02',
+            quantity: 12,
+            shippedAt: null,
+          },
+          // Every order states how many blinds it has.
+          { orderNumber: '200002', shipDate: '2026-10-02' },
+          ...[0, -1, 1.5, '12', null, 1000001].map((quantity) => ({
+            orderNumber: '200002',
+            shipDate: '2026-10-02',
+            quantity,
+          })),
+          {
+            orderNumber: '200002',
+            shipDate: '2026-10-02',
+            quantity: 12,
             note: 'x'.repeat(1001),
           },
         ])
@@ -100,12 +115,14 @@ export async function testOrderSchedule(
             await post({
               orderNumber: ' 200002 ',
               shipDate: '2026-10-02',
+              quantity: 12,
               note: '  Rush  ',
             }).expect(201)
           ).body,
         );
         assert.equal(created.orderNumber, '200002');
         assert.equal(created.note, 'Rush');
+        assert.equal(created.quantity, 12);
         assert.equal(created.status, 'scheduled');
         assert.equal(created.revision, 1);
         assert.deepEqual(
@@ -116,11 +133,16 @@ export async function testOrderSchedule(
         const duplicate = await post({
           orderNumber: '200002',
           shipDate: '2026-11-02',
+          quantity: 12,
         }).expect(409);
         assert.deepEqual(duplicate.body.issues[0].path, ['orderNumber']);
         const concurrent = await Promise.all(
           [1, 2].map(() =>
-            post({ orderNumber: '200003', shipDate: '2026-10-05' }),
+            post({
+              orderNumber: '200003',
+              shipDate: '2026-10-05',
+              quantity: 12,
+            }),
           ),
         );
         assert.deepEqual(concurrent.map((r) => r.status).sort(), [201, 409]);
@@ -151,11 +173,17 @@ export async function testOrderSchedule(
             await patch(created.id, {
               expectedRevision: 1,
               shipDate: '2026-10-09',
+              quantity: 14,
               note: ' ',
             }).expect(200)
           ).body,
         );
         assert.equal(updated.shipDate, '2026-10-09');
+        // An order without an allocation can change its quantity.
+        assert.equal(updated.quantity, 14);
+        await patch(created.id, { expectedRevision: 2, quantity: 0 }).expect(
+          400,
+        );
         assert.equal(updated.note, null);
         assert.equal(updated.revision, 2);
         await patch(created.id, { expectedRevision: 1, note: 'stale' }).expect(
@@ -232,8 +260,8 @@ export async function testOrderSchedule(
         for (const [orderNumber, shipDate, allocated, cut, shipped] of rows)
           await pool.query(
             `INSERT INTO "${schema}".scheduled_orders
-               (order_number, ship_date, allocated_at, cut_at, shipped_at)
-             VALUES ($1, $2, $3, $4, $5)`,
+               (order_number, ship_date, quantity, allocated_at, cut_at, shipped_at)
+             VALUES ($1, $2, 1, $3, $4, $5)`,
             [
               orderNumber,
               shipDate,

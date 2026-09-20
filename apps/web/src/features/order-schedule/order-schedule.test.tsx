@@ -140,7 +140,9 @@ it('offers the allocation editor only orders that can still be allocated', async
   // The option id is the order number the allocation stores.
   expect(result).toEqual({
     total: 1,
-    items: [{ id: '104801', label: '104801 · ships Fri, Oct 2, 2026' }],
+    items: [
+      { id: '104801', label: '104801 · 14 blinds · ships Fri, Oct 2, 2026' },
+    ],
   });
 });
 
@@ -152,6 +154,7 @@ it('opens on unshipped orders and keeps the filter and search in the URL', async
   expect(row).toHaveTextContent('Fri, Oct 2, 2026');
   expect(row).toHaveTextContent('allocated');
   expect(row).toHaveTextContent('Rush');
+  expect(within(row).getByRole('cell', { name: '14' })).toBeInTheDocument();
   expect(within(row).getByRole('link')).toHaveAttribute(
     'href',
     `/order-schedule/${order.id}`,
@@ -237,6 +240,11 @@ it('adds an order and shows rejected fields beside them', async () => {
   const number = dialog.getByLabelText(/Order number/);
   await user.type(number, '10-48x01');
   expect(number).toHaveValue('104801');
+  // The quantity is required and takes digits only; a blank is never zero.
+  const blinds = dialog.getByLabelText(/Blinds/);
+  expect(blinds).toBeRequired();
+  await user.type(blinds, '1x4');
+  expect(blinds).toHaveValue('14');
 
   // A missing date is caught before any request is made.
   await user.click(dialog.getByRole('button', { name: 'Save order' }));
@@ -260,6 +268,7 @@ it('adds an order and shows rejected fields beside them', async () => {
   expect(createOrder).toHaveBeenLastCalledWith({
     orderNumber: '104801',
     shipDate: '2026-10-02',
+    quantity: 14,
     note: 'Rush',
   });
 
@@ -285,6 +294,9 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
   const editor = within(screen.getByRole('dialog'));
   // The order number is fixed once scheduled.
   expect(editor.queryByLabelText(/Order number/)).toBeNull();
+  // So is the quantity, while the order has an allocation.
+  expect(editor.getByLabelText(/Blinds/)).toBeDisabled();
+  expect(editor.getByLabelText(/Blinds/)).toHaveValue('14');
   await user.click(editor.getByRole('button', { name: 'Ship date' }));
   await user.click(editor.getByRole('button', { name: 'Fri, Oct 9, 2026' }));
   await user.clear(editor.getByLabelText('Note'));
@@ -402,11 +414,13 @@ it('groups the working week by day with totals and adds an order to a day', asyn
     'Thu, Oct 1, 2026',
   );
   await user.type(dialog.getByLabelText(/Order number/), '104900');
+  await user.type(dialog.getByLabelText(/Blinds/), '6');
   await user.click(dialog.getByRole('button', { name: 'Save order' }));
   await waitFor(() =>
     expect(createOrder).toHaveBeenLastCalledWith({
       orderNumber: '104900',
       shipDate: '2026-10-01',
+      quantity: 6,
       note: '',
     }),
   );

@@ -25,7 +25,8 @@ export function fieldIssues<Name extends string>(
 
 /** Replaces a React Hook Form's errors with the issues it can place. */
 export function showFieldIssues<Form extends FieldValues>(
-  form: UseFormReturn<Form>,
+  // Only these two, so a form whose schema transforms its values still fits.
+  form: Pick<UseFormReturn<Form>, 'clearErrors' | 'setError'>,
   source: unknown,
   fieldName: (issue: ErrorIssue) => FieldPath<Form> | null,
 ) {

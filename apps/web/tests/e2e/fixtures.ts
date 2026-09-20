@@ -106,6 +106,8 @@ export async function mockApi(
         id: 'ffffffff-ffff-4fff-8fff-fffffffffff0',
         orderNumber: '104877',
         shipDate: '2026-10-05',
+        // The allocation flow plans one blind for this order.
+        quantity: 1,
         note: null,
         status: 'scheduled' as const,
         allocatedAt: null,

@@ -102,6 +102,7 @@ function OrderRecord({ order }: { order: ScheduledOrder }) {
         <div className="panel-body">
           <div className="details-grid">
             {[
+              ['Blinds', String(order.quantity)],
               ['Scheduled', milestone(order.scheduledAt)],
               ['Allocated', milestone(order.allocatedAt)],
               ['Cut', milestone(order.cutAt)],

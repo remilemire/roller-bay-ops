@@ -6,7 +6,7 @@ import { PlanPreview } from './plan-preview';
 import { useRef, useState, useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
@@ -25,8 +25,10 @@ import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import {
   lookupSchedulableOrders,
+  orderByNumber,
   orderScheduleKey,
 } from '@/features/order-schedule/order-schedule.api';
+import { blindCount } from '@/features/order-schedule/order-totals';
 import { stockKey } from '@/features/stock-items/stock-items.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -37,6 +39,7 @@ import {
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { issuePath } from '@/lib/errors';
+import { cn } from '@/lib/utils';
 import { showFieldIssues } from '@/lib/field-issues';
 import {
   allocationFormSchema,
@@ -120,6 +123,17 @@ export function AllocationEditor({
   const client = useQueryClient();
   const router = useRouter();
   useEffect(() => () => abort.current?.abort(), []);
+  // The API refuses an allocation whose blinds do not add up to its order's
+  // quantity, so the form shows both and checks before asking to confirm.
+  const order = useQuery({
+    ...orderByNumber(values.orderNumber),
+    enabled: /^\d{6}$/.test(values.orderNumber),
+  }).data;
+  const entered = values.requirements.reduce(
+    (total, row) => total + (Number(row.quantity) || 0),
+    0,
+  );
+  const mismatch = order ? order.quantity !== entered : false;
   const { errors, isDirty } = form.formState;
   useUnsavedChanges(isDirty);
   const fieldName = (issue: ErrorIssue) =>
@@ -258,6 +272,12 @@ export function AllocationEditor({
       createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
       setValidationError(null);
       form.clearErrors();
+      if (order && mismatch) {
+        form.setError('orderNumber', {
+          message: `The order has ${blindCount(order.quantity)}; ${entered} entered.`,
+        });
+        return;
+      }
       setConfirm('submit');
     } catch (error) {
       setValidationError(error);
@@ -308,9 +328,19 @@ export function AllocationEditor({
                   load={lookupSchedulableOrders}
                   error={errors.orderNumber?.message}
                 />
-                <p className="muted">
-                  Lists scheduled orders that have no allocation yet.
-                </p>
+                {order ? (
+                  <p
+                    className={cn('order-count', mismatch && 'is-mismatch')}
+                    role="status"
+                  >
+                    The order has {blindCount(order.quantity)}; {entered}{' '}
+                    entered.
+                  </p>
+                ) : (
+                  <p className="order-count">
+                    Lists scheduled orders that have no allocation yet.
+                  </p>
+                )}
               </div>
             </section>
             <RequirementsEditor

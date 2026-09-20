@@ -92,6 +92,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                 <tr>
                   <th>Order</th>
                   <th>Ship date</th>
+                  <th>Blinds</th>
                   <th>Status</th>
                   <th>Note</th>
                   {canManage && <th>Actions</th>}
@@ -112,6 +113,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                       </Link>
                     </td>
                     <td>{calendarDateLabel(order.shipDate)}</td>
+                    <td>{order.quantity}</td>
                     <td>
                       <Status value={order.status} />
                     </td>

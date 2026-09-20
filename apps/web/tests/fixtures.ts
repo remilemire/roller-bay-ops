@@ -176,6 +176,7 @@ export const order = scheduledOrderSchema.parse({
   id: ids.order,
   orderNumber: '104801',
   shipDate: '2026-10-02',
+  quantity: 14,
   note: 'Rush',
   status: 'allocated',
   scheduledAt: timestamp,
