@@ -183,6 +183,23 @@ test('admins add an order to a day of the month', async ({ page }) => {
     },
   ]);
 });
+test('admins reschedule an order from its list row', async ({ page }) => {
+  const state = await mockApi(page);
+  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00'));
+  await page.goto('/order-schedule');
+  const dialog = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Reschedule order 104877' }).click();
+  // The calendar is already open on the order's month.
+  await dialog.getByRole('button', { name: 'Wed, Oct 7, 2026' }).click();
+  await dialog.getByRole('button', { name: 'Reschedule', exact: true }).click();
+  await expect(page.getByRole('row', { name: /104877/ })).toContainText(
+    'Wed, Oct 7, 2026',
+  );
+  expect(state.orderRequests.at(-1)).toEqual({
+    method: 'PATCH',
+    body: { expectedRevision: 3, shipDate: '2026-10-07' },
+  });
+});
 test('employees read the schedule and an order without admin actions', async ({
   page,
 }) => {

@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
+import { useState } from 'react';
 import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +15,7 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
+import { OrderReschedule } from './order-reschedule';
 import { orderList, orderScheduleKey, updateOrder } from './order-schedule.api';
 
 // The schedule opens on orders that still need work; `all` includes shipped.
@@ -27,6 +29,7 @@ const tabs = [
 ];
 export function OrderListView({ canManage }: { canManage: boolean }) {
   const params = useListParams();
+  const [rescheduling, setRescheduling] = useState<ScheduledOrder | null>(null);
   const status = tabs.some((tab) => tab.value === params.get('status'))
     ? params.get('status')
     : 'open';
@@ -119,6 +122,14 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label={`Reschedule order ${order.orderNumber}`}
+                            onClick={() => setRescheduling(order)}
+                          >
+                            Reschedule
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             disabled={ship.isPending}
                             // Every row has this button; name the order it acts on.
                             aria-label={`Mark order ${order.orderNumber} ${order.shippedAt ? 'not shipped' : 'shipped'}`}
@@ -147,6 +158,12 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
           />
         )}
       </section>
+      {rescheduling && (
+        <OrderReschedule
+          order={rescheduling}
+          close={() => setRescheduling(null)}
+        />
+      )}
     </>
   );
 }

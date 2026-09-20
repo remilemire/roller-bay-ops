@@ -340,6 +340,30 @@ it('shows employees the order without its admin actions', async () => {
     expect(screen.queryByRole('button', { name })).toBeNull();
 });
 
+it('reschedules an order from its row with the calendar already open', async () => {
+  vi.mocked(updateOrder).mockResolvedValue(order);
+  show(<OrderScheduleScreen />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'Reschedule order 104801' }),
+  );
+  const dialog = within(
+    screen.getByRole('dialog', { name: /Reschedule order/ }),
+  );
+  const save = dialog.getByRole('button', { name: 'Reschedule' });
+  // Nothing to save until the date changes.
+  expect(save).toBeDisabled();
+  await user.click(dialog.getByRole('button', { name: 'Tue, Oct 6, 2026' }));
+  await user.click(save);
+  await waitFor(() =>
+    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
+      expectedRevision: 3,
+      shipDate: '2026-10-06',
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
 it('groups the working week by day with totals and adds an order to a day', async () => {
   state.search = 'view=week';
   vi.mocked(createOrder).mockResolvedValue(order);
