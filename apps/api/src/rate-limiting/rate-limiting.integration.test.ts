@@ -152,13 +152,15 @@ test(
             .expect(200);
           const keys = await redis.client.keys(`${prefix}login:*`);
           assert.equal(keys.length, 1);
-          // Shorten only this test's real key; expiry and recovery still run in Redis.
-          await redis.client.pExpire(keys[0]!, 250);
+          // Shorten only this test's real key; expiry and recovery still run in
+          // Redis. A second leaves room for one request on a slow runner: the
+          // 429 below must arrive before the key expires.
+          await redis.client.pExpire(keys[0]!, 1000);
           await request(first.getHttpServer())
             .get('/api/auth/login')
             .expect(429);
-          assert.ok((await redis.client.pTTL(keys[0]!)) <= 250);
-          await delay(300);
+          assert.ok((await redis.client.pTTL(keys[0]!)) <= 1000);
+          await delay(1100);
           await request(first.getHttpServer())
             .get('/api/auth/login')
             .expect(200);

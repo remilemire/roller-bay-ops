@@ -651,7 +651,8 @@ test(
             .get('/api/auth/me')
             .set('Cookie', authenticated)
             .expect(401);
-          await delay(800);
+          // Past the key's whole-second Redis TTL with room to spare.
+          await delay(1200);
           assert.equal(await redis.client.get(key), null);
         },
       );
