@@ -14,6 +14,15 @@ export const orderStatusSchema = z.enum([
   'shipped',
 ]);
 
+// Orders ship on weekdays. A date-only string parses as UTC midnight, so this
+// reads the calendar's weekday whatever the timezone.
+export const shipDateSchema = z.iso
+  .date()
+  .refine(
+    (value) => ![0, 6].includes(new Date(value).getUTCDay()),
+    'Must be a weekday.',
+  );
+
 const revision = z.number().int().positive().max(2147483646);
 // A blank note clears the note.
 const noteSchema = z
@@ -25,7 +34,7 @@ const noteSchema = z
 
 export const createScheduledOrderSchema = z.strictObject({
   orderNumber: orderNumberSchema,
-  shipDate: z.iso.date(),
+  shipDate: shipDateSchema,
   note: noteSchema.default(null),
 });
 // The order number is fixed once scheduled. `shipped` stamps or clears the
@@ -33,7 +42,7 @@ export const createScheduledOrderSchema = z.strictObject({
 export const updateScheduledOrderSchema = z
   .strictObject({
     expectedRevision: revision,
-    shipDate: z.iso.date().optional(),
+    shipDate: shipDateSchema.optional(),
     note: noteSchema.optional(),
     shipped: z.boolean().optional(),
   })

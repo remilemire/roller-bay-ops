@@ -23,6 +23,28 @@ test('scheduled order contracts require a six-digit number and a real calendar d
       createScheduledOrderSchema.safeParse({ ...input, shipDate }).success,
       false,
     );
+  // Orders ship Monday to Friday, on create and on edit.
+  for (const [shipDate, weekday] of [
+    ['2026-10-02', true],
+    ['2026-10-03', false],
+    ['2026-10-04', false],
+    ['2026-10-05', true],
+  ] as const) {
+    assert.equal(
+      createScheduledOrderSchema.safeParse({ ...input, shipDate }).success,
+      weekday,
+    );
+    assert.equal(
+      updateScheduledOrderSchema.safeParse({ expectedRevision: 1, shipDate })
+        .success,
+      weekday,
+    );
+  }
+  assert.equal(
+    createScheduledOrderSchema.safeParse({ ...input, shipDate: '2026-10-03' })
+      .error!.issues[0]!.message,
+    'Must be a weekday.',
+  );
   assert.equal(
     createScheduledOrderSchema.safeParse({ ...input, shippedAt: null }).success,
     false,

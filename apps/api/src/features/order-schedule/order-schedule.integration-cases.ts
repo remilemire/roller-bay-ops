@@ -83,6 +83,8 @@ export async function testOrderSchedule(
         for (const body of [
           { orderNumber: '20001', shipDate: '2026-10-02' },
           { orderNumber: '200002', shipDate: '2026-02-30' },
+          { orderNumber: '200002', shipDate: '2026-10-03' },
+          { orderNumber: '200002', shipDate: '2026-10-04' },
           { orderNumber: '200002' },
           { orderNumber: '200002', shipDate: '2026-10-02', shippedAt: null },
           {
@@ -113,7 +115,7 @@ export async function testOrderSchedule(
 
         const duplicate = await post({
           orderNumber: '200002',
-          shipDate: '2026-11-01',
+          shipDate: '2026-11-02',
         }).expect(409);
         assert.deepEqual(duplicate.body.issues[0].path, ['orderNumber']);
         const concurrent = await Promise.all(
@@ -129,6 +131,12 @@ export async function testOrderSchedule(
           orderNumber: '200009',
         }).expect(400);
         await patch(created.id, { expectedRevision: 1 }).expect(400);
+        const weekend = await patch(created.id, {
+          expectedRevision: 1,
+          shipDate: '2026-10-10',
+        }).expect(400);
+        assert.deepEqual(weekend.body.issues[0].path, ['shipDate']);
+        assert.equal(weekend.body.issues[0].message, 'Must be a weekday.');
         const updated = scheduledOrderSchema.parse(
           (
             await patch(created.id, {
