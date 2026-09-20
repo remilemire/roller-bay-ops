@@ -388,11 +388,10 @@ it('groups the working week by day with totals and adds an order to a day', asyn
     '104801',
     '104820',
   ]);
-  expect(
-    within(screen.getByRole('region', { name: 'Tue, Sep 29, 2026' })).getByText(
-      'No orders',
-    ),
-  ).toBeInTheDocument();
+  // An empty day is its add button and a zero in the footer.
+  const tuesday = screen.getByRole('region', { name: 'Tue, Sep 29, 2026' });
+  expect(tuesday).toHaveTextContent(/Add order\s*0 orders$/);
+  expect(within(tuesday).queryByText('No orders')).toBeNull();
 
   await user.click(
     screen.getByRole('button', { name: 'Add order on Thu, Oct 1, 2026' }),
@@ -429,6 +428,12 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   await screen.findByText('6 orders · 6 allocated');
   expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
+  // With nothing to add, a read-only board says when a day is empty.
+  expect(
+    within(screen.getByRole('region', { name: 'Mon, Oct 12, 2026' })).getByText(
+      'No orders',
+    ),
+  ).toBeInTheDocument();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Today' }));
   expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=week', {
     scroll: false,

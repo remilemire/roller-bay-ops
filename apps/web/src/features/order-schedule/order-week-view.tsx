@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading, Status } from '@/components/ui/feedback';
 import {
   addDays,
@@ -231,19 +232,9 @@ function WeekDay({
           <span className="week-day-name">{weekdayLabel(day)}</span>
           <strong className="week-day-date">{dayLabel(day)}</strong>
         </div>
-        {onAdd && (
-          <button
-            type="button"
-            className="button button-ghost button-icon"
-            aria-label={`Add order on ${calendarDateLabel(day)}`}
-            onClick={() => onAdd(day)}
-          >
-            <Plus size={16} />
-          </button>
-        )}
       </header>
       <div className="week-day-body">
-        {orders.length ? (
+        {orders.length > 0 && (
           <ul>
             {orders.map((order) => (
               <li key={order.id}>
@@ -255,8 +246,22 @@ function WeekDay({
               </li>
             ))}
           </ul>
+        )}
+        {/* Where the day's next order will go. The footer already says when
+            a day has none, so only a read-only board spells it out. */}
+        {onAdd ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="week-day-add"
+            aria-label={`Add order on ${calendarDateLabel(day)}`}
+            onClick={() => onAdd(day)}
+          >
+            <Plus size={15} />
+            Add order
+          </Button>
         ) : (
-          <p className="muted">No orders</p>
+          !orders.length && <p className="muted">No orders</p>
         )}
       </div>
       {/* The day's totals; the week's are above the board. */}

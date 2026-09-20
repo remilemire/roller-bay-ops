@@ -1208,7 +1208,6 @@ td strong {
   background: var(--primary);
   color: var(--primary-foreground);
 }
-.week-day > header .button-icon,
 .month-day > header .button-icon {
   width: 30px;
   min-height: 30px;
@@ -1218,6 +1217,17 @@ td strong {
   display: flex;
   flex: 1;
   flex-direction: column;
+}
+/* A full-width slot under the day's rows, dashed like an empty place. */
+.week-day-add {
+  justify-content: flex-start;
+  margin: 10px;
+  border: 1px dashed var(--border);
+}
+.week-day-add:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--foreground);
+  filter: none;
 }
 .week-day-body > p {
   margin: auto;
