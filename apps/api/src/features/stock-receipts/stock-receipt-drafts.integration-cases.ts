@@ -9,6 +9,7 @@ import {
   stockReceiptDraftSchema,
   stockReceiptRecordSchema,
 } from '@roller-bay/shared/stock-receipts';
+import { createFixtures } from '../../testing/fixtures.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
 
@@ -30,7 +31,6 @@ export async function testStockReceiptDrafts(
   const server = app.getHttpServer();
   const path = '/api/stock-receipts';
   const ids: string[] = [];
-  const colleague = randomUUID();
   const get = (id: string) =>
     request(server).get(`${path}/${id}`).set('Cookie', cookie);
   const post = (url: string, body: object, key: string = randomUUID()) =>
@@ -61,10 +61,7 @@ export async function testStockReceiptDrafts(
   const stockCount = async () =>
     (await pool.query(`SELECT count(*)::int AS n FROM fabric_stock_items`))
       .rows[0].n;
-  await pool.query(
-    `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Draft colleague',$2,$3,'user')`,
-    [colleague, `${colleague}@example.com`, colleague],
-  );
+  const colleague = await createFixtures(pool).createUser('Draft colleague');
   await t.test(
     'receipt drafts round-trip incomplete typed rows, preserve ordering and require auth/origin',
     async () => {

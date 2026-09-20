@@ -4,6 +4,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import {
   receiptCorrectionContextSchema,
   completionCorrectionContextSchema,
@@ -19,7 +20,8 @@ import { historySchema } from '@roller-bay/shared/audit';
 import { AuditRepository } from './audit.repository.js';
 
 test('corrections integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const get = (path: string) =>
     request(server)
@@ -32,8 +34,7 @@ test('corrections integration', { timeout: 60_000 }, async (t) => {
       .set('Origin', origin)
       .set('Idempotency-Key', key)
       .send(body);
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   const suffix = randomUUID().slice(0, 5);
   await role('admin');
   const maker = (
@@ -108,10 +109,7 @@ test('corrections integration', { timeout: 60_000 }, async (t) => {
       expectedRevision: e.revision,
     }));
   // Each allocation needs its own scheduled order, for the one blind it plans.
-  await pool.query(
-    `INSERT INTO scheduled_orders (order_number, ship_date, quantity)
-       SELECT n::text, '2026-10-01', 1 FROM generate_series(300001, 300100) n`,
-  );
+  await fixtures.createScheduledOrders(300001, 300100);
   let orderNumber = 300000;
   const plan = (stockId: string) => {
     const requirementId = randomUUID();
@@ -753,10 +751,7 @@ test('corrections integration', { timeout: 60_000 }, async (t) => {
       const draft = plan(first!.id);
       draft.requirements[0]!.quantity = 2;
       // The order's quantity has to match the two blinds planned.
-      await pool.query(
-        `UPDATE scheduled_orders SET quantity=2 WHERE order_number=$1`,
-        [draft.orderNumber],
-      );
+      await fixtures.setOrderQuantity(draft.orderNumber, 2);
       draft.plan.cuts.push({
         ...draft.plan.cuts[0]!,
         stockItemId: second!.id,

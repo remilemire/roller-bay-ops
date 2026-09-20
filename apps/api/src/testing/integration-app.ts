@@ -30,6 +30,7 @@ import type { MicrosoftProfileInput } from '../features/users/microsoft-profile.
 import { RateLimitingModule } from '../rate-limiting/rate-limiting.module.js';
 import { RATE_LIMIT_KEY_PREFIX } from '../rate-limiting/rate-limiting.service.js';
 import { RedisService } from '../redis/redis.service.js';
+import { createFixtures } from './fixtures.js';
 import { testDatabaseUrl, testRedisUrl } from './test-services.js';
 
 /**
@@ -203,6 +204,7 @@ export async function startIntegrationApp(t: TestContext) {
   return {
     app,
     pool,
+    fixtures: createFixtures(pool),
     config,
     origin: config.WEB_ORIGIN,
     redis: app.get(RedisService),

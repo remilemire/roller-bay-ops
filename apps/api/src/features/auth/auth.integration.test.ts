@@ -25,6 +25,7 @@ test(
     const {
       app,
       pool,
+      fixtures,
       config,
       redis,
       provider,
@@ -190,7 +191,7 @@ test(
     await t.test(
       'existing identities retain roles and history while emails change; email conflicts never link accounts',
       async () => {
-        await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
+        await fixtures.setUserRole(userId, 'admin');
         const before = await app.get(UsersService).findById(userId);
         provider.profile = {
           ...provider.profile,
@@ -297,9 +298,7 @@ test(
         await change({ isActive: false }, targetLogin.authenticated).expect(
           403,
         );
-        await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
-          target.id,
-        ]);
+        await fixtures.setUserRole(target.id, 'admin');
         await request(app.getHttpServer())
           .patch(path)
           .set('Cookie', authenticated)

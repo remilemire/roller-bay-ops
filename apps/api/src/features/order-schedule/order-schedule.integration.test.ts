@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import { historySchema } from '@roller-bay/shared/audit';
 import {
   scheduledOrderListSchema,
@@ -11,7 +12,8 @@ import {
 } from '@roller-bay/shared/order-schedule';
 
 test('order schedule integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/order-schedule';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -22,8 +24,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
     send('patch', `${path}/${id}`).send(body);
   const remove = (id: string, expectedRevision: number) =>
     send('delete', `${path}/${id}`).send({ expectedRevision });
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   await t.test(
     'schedule reads require a session and every write requires admin or owner',
     async () => {

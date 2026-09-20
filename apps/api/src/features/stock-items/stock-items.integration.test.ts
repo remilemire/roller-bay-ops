@@ -5,13 +5,15 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import {
   stockItemSchema,
   stockItemListSchema,
 } from '@roller-bay/shared/stock-items';
 
 test('stock items integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/stock-items';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -33,8 +35,7 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
     url.startsWith(path + '/')
       ? stockCorrectionRequest(server, cookie, origin, url)
       : request(server).delete(url).set('Cookie', cookie).set('Origin', origin);
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   const read = async (id: string) =>
     stockItemSchema.parse((await get(`${path}/${id}`).expect(200)).body);
   await t.test(
@@ -61,7 +62,7 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       await post(path, {}).expect(403);
       await patch(`${path}/${randomUUID()}`, {}).expect(403);
       await remove(`${path}/${randomUUID()}`).expect(403);
-      for (const value of ['owner', 'admin']) {
+      for (const value of ['owner', 'admin'] as const) {
         await role(value);
         await post(path, {}).expect(400);
         await patch(`${path}/${randomUUID()}`, {}).expect(400);
@@ -78,12 +79,10 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
         .set('Origin', 'https://attacker.example')
         .send({})
         .expect(403);
-      await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
-        userId,
-      ]);
+      await fixtures.setUserActive(userId, false);
       await get(path).expect(403);
       await post(path, {}).expect(403);
-      await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [userId]);
+      await fixtures.setUserActive(userId, true);
     },
   );
 

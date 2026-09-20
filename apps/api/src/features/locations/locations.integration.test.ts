@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import {
   locationSchema,
   locationZoneSchema,
@@ -12,7 +13,8 @@ import {
 } from '@roller-bay/shared/locations';
 
 test('locations integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const paths = [
     '/api/locations/zones',
@@ -35,8 +37,7 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
       .send(body);
   const remove = (path: string) =>
     request(server).delete(path).set('Cookie', cookie).set('Origin', origin);
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role=$1 WHERE id=$2`, [value, userId]);
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   await t.test(
     'location reads require active sessions and every mutation requires admin or owner',
     async () => {
@@ -86,11 +87,9 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
           .send(input)
           .expect(403);
       }
-      await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
-        userId,
-      ]);
+      await fixtures.setUserActive(userId, false);
       for (const path of paths) await get(path).expect(403);
-      await pool.query(`UPDATE users SET is_active=true WHERE id=$1`, [userId]);
+      await fixtures.setUserActive(userId, true);
       await remove(`${levels}/${level.id}`).expect(204);
       await remove(`${sections}/${section.id}`).expect(204);
       await remove(`${zones}/${zone.id}`).expect(204);

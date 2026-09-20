@@ -19,7 +19,8 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
 
 test('allocations integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/allocations';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -36,14 +37,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       .set('Cookie', cookie)
       .set('Origin', origin)
       .send(body);
-  const ids = {
-    maker: randomUUID(),
-    material: randomUUID(),
-    color: randomUUID(),
-    zone: randomUUID(),
-    section: randomUUID(),
-    location: randomUUID(),
-  };
+  const ids = await fixtures.createColorAndLocation();
   const seed = async (length = 10000, remnant = false) => {
     const id = randomUUID();
     await pool.query(
@@ -116,40 +110,10 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
     if (!validation.valid) throw new Error('Invalid fixture plan');
     return { status: 'feasible' as const, plan, summary: validation.summary };
   });
-  await pool.query(
-    `INSERT INTO manufacturers (id,name) VALUES ($1,'Allocation manufacturer')`,
-    [ids.maker],
-  );
-  await pool.query(
-    `INSERT INTO fabric_materials (id,manufacturer_id,name) VALUES ($1,$2,'Allocation material')`,
-    [ids.material, ids.maker],
-  );
-  await pool.query(
-    `INSERT INTO fabric_colors (id,material_id,code,thickness_mm) VALUES ($1,$2,'ALLOC-TEST',0.5)`,
-    [ids.color, ids.material],
-  );
-  await pool.query(
-    `INSERT INTO location_zones (id,name) VALUES ($1,'Allocation warehouse')`,
-    [ids.zone],
-  );
-  await pool.query(
-    `INSERT INTO location_sections (id,zone_id,label) VALUES ($1,$2,'A')`,
-    [ids.section, ids.zone],
-  );
-  await pool.query(
-    `INSERT INTO locations (id,section_id,label) VALUES ($1,$2,'1')`,
-    [ids.location, ids.section],
-  );
   // Allocations must name a scheduled order and match its quantity; every
   // allocation here plans one blind.
-  await pool.query(
-    `INSERT INTO scheduled_orders (order_number, ship_date, quantity)
-       SELECT n::text, '2026-10-01', 1 FROM generate_series(100001, 100400) n
-       UNION ALL VALUES ('999998', '2026-10-01'::date, 1), ('999999', '2026-10-01', 1)`,
-  );
-  await pool.query(`UPDATE users SET role='user', is_active=true WHERE id=$1`, [
-    userId,
-  ]);
+  await fixtures.createScheduledOrders(100001, 100400);
+  await fixtures.createScheduledOrders(999998, 999999);
 
   await t.test(
     'allocation routes require auth and origin checks, but normal users may operate the workflow',
@@ -730,10 +694,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       // confirmed and again when it is replanned.
       const counted = input(await seed());
       const setQuantity = (quantity: number) =>
-        pool.query(
-          `UPDATE scheduled_orders SET quantity=$1 WHERE order_number=$2`,
-          [quantity, counted.orderNumber],
-        );
+        fixtures.setOrderQuantity(counted.orderNumber, quantity);
       await setQuantity(3);
       const short = await post(path, counted).expect(400);
       assert.deepEqual(issue(short.body), [
@@ -745,12 +706,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       );
       // The refused allocation claimed nothing.
       assert.equal(
-        (
-          await pool.query(
-            `SELECT allocated_at FROM scheduled_orders WHERE order_number=$1`,
-            [counted.orderNumber],
-          )
-        ).rows[0].allocated_at,
+        (await fixtures.scheduledOrder(counted.orderNumber)).allocated_at,
         null,
       );
       await setQuantity(1);
@@ -793,13 +749,8 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       }).expect(200);
       await create(again);
 
-      const order = (
-        await pool.query(
-          `SELECT id, revision FROM scheduled_orders WHERE order_number=$1`,
-          [first.orderNumber],
-        )
-      ).rows[0];
-      await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
+      const order = await fixtures.scheduledOrder(first.orderNumber);
+      await fixtures.setUserRole(userId, 'admin');
       try {
         await request(server)
           .delete(`/api/order-schedule/${order.id}`)
@@ -821,7 +772,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         ]);
         await edit({ quantity: 1, note: 'Same quantity' }).expect(200);
       } finally {
-        await pool.query(`UPDATE users SET role='user' WHERE id=$1`, [userId]);
+        await fixtures.setUserRole(userId, 'user');
       }
     },
   );
@@ -835,20 +786,13 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
           data: { orderNumber: body.orderNumber },
         }).expect(201)
       ).body;
-      const order = (
-        await pool.query(
-          `SELECT id FROM scheduled_orders WHERE order_number=$1`,
-          [body.orderNumber],
-        )
-      ).rows[0];
+      const order = await fixtures.scheduledOrder(body.orderNumber);
       const asAdmin = async <T>(work: () => Promise<T>) => {
-        await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
+        await fixtures.setUserRole(userId, 'admin');
         try {
           return await work();
         } finally {
-          await pool.query(`UPDATE users SET role='user' WHERE id=$1`, [
-            userId,
-          ]);
+          await fixtures.setUserRole(userId, 'user');
         }
       };
       const schedule = (method: 'delete' | 'post', url: string) => {
@@ -977,14 +921,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         ).body,
       );
       assert.equal(confirmed.state, 'active');
-      assert.ok(
-        (
-          await pool.query(
-            `SELECT allocated_at FROM scheduled_orders WHERE id=$1`,
-            [order.id],
-          )
-        ).rows[0].allocated_at,
-      );
+      assert.ok((await fixtures.scheduledOrder(body.orderNumber)).allocated_at);
       await request(server)
         .delete(`${path}/${draft.id}/draft`)
         .set('Cookie', cookie)
@@ -996,13 +933,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'confirming, moving, cancelling, and completing an allocation stamp its scheduled order',
     async () => {
-      const order = async (orderNumber: string) =>
-        (
-          await pool.query(
-            `SELECT * FROM scheduled_orders WHERE order_number=$1`,
-            [orderNumber],
-          )
-        ).rows[0];
+      const order = fixtures.scheduledOrder;
       const allocationRow = async (id: string) =>
         (
           await pool.query(

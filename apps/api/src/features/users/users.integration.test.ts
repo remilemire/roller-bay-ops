@@ -18,7 +18,9 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
   const {
     app,
     pool,
+    fixtures,
     cookie: adminCookie,
+    userId: adminId,
     origin,
     provider,
     signIn,
@@ -80,9 +82,7 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
 
   // This suite acts as an admin. Promote its user here instead of relying on
   // an earlier suite having left them promoted.
-  await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
-    (await me(adminCookie)).id,
-  ]);
+  await fixtures.setUserRole(adminId, 'admin');
 
   await t.test(
     'bootstrap uses the normalized configured email and never activates a disabled account',

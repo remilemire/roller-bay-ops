@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import {
   stockReceiptSchema,
   stockReceiptDetailSchema,
@@ -14,7 +15,8 @@ import {
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
 
 test('stock receipts integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, pool, cookie, userId, origin, fixtures } =
+    await startSignedInApp(t);
   const server = app.getHttpServer();
   const path = '/api/stock-receipts';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
@@ -25,47 +27,15 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
       .set('Origin', origin)
       .set('Idempotency-Key', key)
       .send(body);
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role=$1, is_active=true WHERE id=$2`, [
-      value,
-      userId,
-    ]);
-  const makerId = randomUUID(),
-    materialId = randomUUID(),
-    colorId = randomUUID();
-  const zoneId = randomUUID(),
-    sectionId = randomUUID(),
-    locationId = randomUUID();
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   const count = async (
     table: 'stock_receipts' | 'stock_receipt_items' | 'fabric_stock_items',
   ) =>
     (await pool.query(`SELECT count(*)::int AS total FROM "${table}"`)).rows[0]
       .total as number;
   const initialStockCount = await count('fabric_stock_items');
-  await pool.query(
-    `INSERT INTO manufacturers (id, name) VALUES ($1, 'Receipt manufacturer')`,
-    [makerId],
-  );
-  await pool.query(
-    `INSERT INTO fabric_materials (id, manufacturer_id, name) VALUES ($1, $2, 'Receipt material')`,
-    [materialId, makerId],
-  );
-  await pool.query(
-    `INSERT INTO fabric_colors (id, material_id, code, thickness_mm) VALUES ($1, $2, 'PO-TEST', 0.5)`,
-    [colorId, materialId],
-  );
-  await pool.query(
-    `INSERT INTO location_zones (id, name) VALUES ($1, 'Receipt warehouse')`,
-    [zoneId],
-  );
-  await pool.query(
-    `INSERT INTO location_sections (id, zone_id, label) VALUES ($1, $2, 'A')`,
-    [sectionId, zoneId],
-  );
-  await pool.query(
-    `INSERT INTO locations (id, section_id, label) VALUES ($1, $2, '1')`,
-    [locationId, sectionId],
-  );
+  const { color: colorId, location: locationId } =
+    await fixtures.createColorAndLocation();
   const line = {
     fabricColorId: colorId,
     widthMm: 2000,
@@ -150,13 +120,11 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
         { ...input, submittedByUserId: randomUUID() },
       ])
         await submit(invalid).expect(400);
-      await pool.query(`UPDATE users SET is_active=false WHERE id=$1`, [
-        userId,
-      ]);
+      await fixtures.setUserActive(userId, false);
       await submit(input).expect(403);
       await get(path).expect(403);
       await get(`${path}/${randomUUID()}`).expect(403);
-      await role('user');
+      await fixtures.setUserActive(userId, true);
       assert.equal(await count('stock_receipts'), 0);
     },
   );

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
+import type { UserRole } from '@roller-bay/shared/users';
 import {
   fabricColorListSchema,
   fabricColorSchema,
@@ -12,7 +13,7 @@ import {
 } from '@roller-bay/shared/fabric-catalog';
 
 test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
-  const { app, pool, cookie, userId, origin } = await startSignedInApp(t);
+  const { app, cookie, userId, origin, fixtures } = await startSignedInApp(t);
   const routes = ['manufacturers', 'materials', 'colors'];
   const server = app.getHttpServer();
   const read = (path: string) =>
@@ -34,8 +35,7 @@ test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
       .delete(`/api/fabric-catalog/${path}`)
       .set('Cookie', cookie)
       .set('Origin', origin);
-  const role = (value: string) =>
-    pool.query(`UPDATE users SET role = $1 WHERE id = $2`, [value, userId]);
+  const role = (value: UserRole) => fixtures.setUserRole(userId, value);
 
   await t.test(
     'catalog reads require a session; admins and the owner can mutate every resource',
@@ -51,7 +51,7 @@ test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
           .send({})
           .expect(401);
       }
-      for (const value of ['user']) {
+      for (const value of ['user'] as const) {
         await role(value);
         for (const route of routes) {
           await read(route).expect(200);

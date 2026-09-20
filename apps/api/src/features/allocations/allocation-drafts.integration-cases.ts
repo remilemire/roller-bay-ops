@@ -10,6 +10,7 @@ import {
   allocationRecordSchema,
   type CreateAllocation,
 } from '@roller-bay/shared/allocations';
+import { createFixtures } from '../../testing/fixtures.js';
 import { AllocationsService } from './allocations.service.js';
 import { AllocationsRepository } from './allocations.repository.js';
 
@@ -25,7 +26,6 @@ export async function testAllocationDrafts(
   const path = '/api/allocations';
   const server = app.getHttpServer();
   const ids: string[] = [];
-  const colleague = randomUUID();
   const get = (id: string) =>
     request(server).get(`${path}/${id}`).set('Cookie', cookie);
   const post = (url: string, body: object, key: string = randomUUID()) =>
@@ -54,10 +54,7 @@ export async function testAllocationDrafts(
     ids.push(draft.id);
     return draft;
   };
-  await pool.query(
-    `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,'Allocation draft colleague',$2,$3,'user')`,
-    [colleague, `${colleague}@example.com`, colleague],
-  );
+  const colleague = await createFixtures(pool).createUser('Draft colleague');
   await t.test(
     'allocation drafts preserve ordered partial rows and unassigned cuts without reserving stock',
     async () => {
