@@ -169,6 +169,13 @@
       "when": 1789887696247,
       "tag": "0023_soft_delete_scheduled_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789939099247,
+      "tag": "0024_remove_draft_audit_events",
+      "breakpoints": true
     }
   ]
 }
