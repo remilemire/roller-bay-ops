@@ -1160,29 +1160,53 @@ td strong {
 .week-day {
   display: flex;
   flex-direction: column;
-  min-height: 320px;
-  padding: 12px;
-  overflow: visible;
+  min-height: 340px;
 }
 .week-day[aria-current='date'] {
   border-color: var(--ring);
 }
+/* An outline, because the header and footer bands would cover an inset ring. */
 .week-day.is-over {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.week-day.is-over .week-day-body {
   background: var(--primary-soft);
 }
+/* The header and footer are bands like a table's heading and pagination. */
 .week-day > header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  padding: 12px 10px 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
 }
 .week-day > header > div {
   display: grid;
-  margin-right: auto;
+  gap: 3px;
+  justify-items: start;
 }
-.week-day > header small {
+.week-day-name {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+/* Every date has the pill's box so today's header is no taller. */
+.week-day-date {
+  margin-left: -8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.week-day[aria-current='date'] .week-day-date {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .week-day > header .button-icon,
 .month-day > header .button-icon {
@@ -1190,34 +1214,58 @@ td strong {
   min-height: 30px;
   padding: 4px;
 }
+.week-day-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.week-day-body > p {
+  margin: auto;
+  padding: 24px 14px;
+  font-size: 11px;
+}
 .week-day ul,
 .month-day ul {
   display: grid;
-  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.week-day > p {
+.week-day > footer {
+  padding: 11px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
   font-size: 11px;
 }
+.week-day > footer strong {
+  color: var(--foreground);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Orders are rows of one list, divided like a table's, not separate tiles. */
 .order-card {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  padding: 12px 14px 12px 10px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   /* The pointer drags the card, so it must not scroll or select text. */
   touch-action: none;
   user-select: none;
 }
+.order-card:hover {
+  background: var(--surface-soft);
+}
 .order-card.is-dragging {
   opacity: 0.35;
 }
+/* Lifted out of its list, the row becomes a card of its own. */
 .order-card.is-overlay {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
   box-shadow: var(--shadow);
   cursor: grabbing;
 }
@@ -1233,6 +1281,10 @@ td strong {
   align-items: center;
   justify-content: space-between;
   gap: 4px 8px;
+}
+.order-card-title strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .order-card small {
   color: var(--muted);

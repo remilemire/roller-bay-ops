@@ -188,7 +188,17 @@ export function OrderWeekView({
             ))}
           </div>
           <DragOverlay>
-            {dragging && <OrderCard order={dragging} overlay />}
+            {dragging && (
+              <OrderCard
+                order={dragging}
+                overlay
+                handle={
+                  <span className="order-card-handle" aria-hidden>
+                    <GripVertical size={15} />
+                  </span>
+                }
+              />
+            )}
           </DragOverlay>
         </DndContext>
       )}
@@ -219,11 +229,8 @@ function WeekDay({
     >
       <header>
         <div>
-          <strong>{weekdayLabel(day)}</strong>
-          <small>
-            {dayLabel(day)} · {orders.length}{' '}
-            {orders.length === 1 ? 'order' : 'orders'}
-          </small>
+          <span className="week-day-name">{weekdayLabel(day)}</span>
+          <strong className="week-day-date">{dayLabel(day)}</strong>
         </div>
         {onAdd && (
           <button
@@ -236,17 +243,30 @@ function WeekDay({
           </button>
         )}
       </header>
-      {orders.length ? (
-        <ul>
-          {orders.map((order) => (
-            <li key={order.id}>
-              <DraggableOrder order={order} canManage={canManage} busy={busy} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">No orders</p>
-      )}
+      <div className="week-day-body">
+        {orders.length ? (
+          <ul>
+            {orders.map((order) => (
+              <li key={order.id}>
+                <DraggableOrder
+                  order={order}
+                  canManage={canManage}
+                  busy={busy}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No orders</p>
+        )}
+      </div>
+      {/* The day's totals; the week's are above the board. */}
+      <footer>
+        <span>
+          <strong>{orders.length}</strong>{' '}
+          {orders.length === 1 ? 'order' : 'orders'}
+        </span>
+      </footer>
     </section>
   );
 }

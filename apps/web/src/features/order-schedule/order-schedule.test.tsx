@@ -380,7 +380,10 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   const friday = within(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
   );
-  expect(friday.getByText('Oct 2 · 2 orders')).toBeInTheDocument();
+  // Each day's totals sit in its footer.
+  expect(
+    screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
+  ).toHaveTextContent(/Fri\s*Oct 2.*2 orders$/);
   // This is the current week, so there is nothing to go back to.
   expect(
     screen.queryByRole('button', { name: /Back to this week/ }),
