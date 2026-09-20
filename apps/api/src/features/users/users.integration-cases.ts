@@ -73,6 +73,12 @@ export async function testUserRoles(
   let recipientId = '';
   let alternateId = '';
 
+  // This suite acts as an admin. Promote its user here instead of relying on
+  // an earlier suite having left them promoted.
+  await pool.query(`UPDATE users SET role='admin' WHERE id=$1`, [
+    (await me(adminCookie)).id,
+  ]);
+
   await t.test(
     'bootstrap uses the normalized configured email and never activates a disabled account',
     async () => {
