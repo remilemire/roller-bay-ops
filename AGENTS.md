@@ -56,10 +56,11 @@ npm test --workspace=@roller-bay/web
 npm run build --workspace=@roller-bay/web
 ```
 
+- `npm test --workspace=@roller-bay/api` runs unit tests only; `*.integration.test.ts` and `*.live-solver.test.ts` run through their own scripts and fail, never skip, when their services are missing. No suite reads a `.env` file: test modules build their configuration inline with `ignoreEnvFile: true`.
 - Run checks appropriate to the changed workspaces. Add focused tests for meaningful behavior, especially concurrency, validation, and retry handling; copy-only changes do not need new unit tests.
 - Browser workflows: `npm run test:e2e --workspace=@roller-bay/web`. These use intercepted API responses on port 3100. Check for an existing Next dev process before starting another in the same checkout; changing ports does not avoid its dev lock. Do not stop the user's server without coordination.
 - PostgreSQL/Redis integration tests: `npm run test:integration` with the compose services running (`npm run services:up`); `TEST_DATABASE_URL` and `TEST_REDIS_URL` override them. The suite applies the migrations to a throwaway database it creates and drops, and never touches the application database; that is the only place migrations are applied without asking. Missing infrastructure is not a reason to weaken tests.
-- Solver checks: `npm test --workspace=@roller-bay/solver` and `npm run lint --workspace=@roller-bay/solver`. Real HTTP integration: `npm run test:solver --workspace=@roller-bay/api`, with the standalone service running. See [solver setup](docs/solver.md).
+- Solver checks: `npm test --workspace=@roller-bay/solver` and `npm run lint --workspace=@roller-bay/solver`. Real HTTP integration: `npm run test:solver --workspace=@roller-bay/api`, which starts and stops its own solver and needs only the solver virtualenv. See [solver setup](docs/solver.md).
 - Format only touched files with Prettier and check `git diff --check`. Use the solver's Ruff commands for Python.
 - When authorized, generate migrations with `npm run db:generate -- --name=change_name`, inspect the SQL and metadata, then apply with `npm run db:migrate`. Preserve existing data; do not add runtime schema-repair workarounds or reset migration history unless explicitly requested. Commit generated SQL and Drizzle metadata together.
 - Keep credentials in ignored environment files. Never print or commit secrets, overwrite existing local configuration with examples, or put private values in `NEXT_PUBLIC_*` variables.

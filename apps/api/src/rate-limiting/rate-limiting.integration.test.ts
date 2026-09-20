@@ -36,7 +36,6 @@ class ProbeController {
 test(
   'rate limiting uses shared Redis counters before route handlers',
   {
-    skip: process.env.AUTH_INTEGRATION_TESTS !== '1',
     timeout: 15000,
   },
   async (t) => {

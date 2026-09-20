@@ -93,7 +93,7 @@ Model building returns explicit assignment metadata for decoding. Each returned 
 
 ### Verification
 
-Unit tests cover candidate limits, deterministic selection, cancellation, objective locking, search budgets, result/error handling, and numeric/model limits. `npm run test:solver --workspace=@roller-bay/api` runs serial HTTP integration tests against the standalone solver, including the allocator example, a 100-blind order, and tiny exhaustive reference searches that independently partition blinds and try stock assignments. These compare the complete objective priority order, including remnant-tail accounting, decimal allowances, and reservations.
+Unit tests cover candidate limits, deterministic selection, cancellation, objective locking, search budgets, result/error handling, and numeric/model limits. `npm run test:solver --workspace=@roller-bay/api` starts the standalone solver and runs serial HTTP tests against it, including the allocator example, a 100-blind order, and tiny exhaustive reference searches that independently partition blinds and try stock assignments. These compare the complete objective priority order, including remnant-tail accounting, decimal allowances, and reservations.
 
 ## Allocation workflow API
 

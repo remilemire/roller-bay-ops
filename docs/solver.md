@@ -55,8 +55,8 @@ Typed client errors include `invalid_model`, `invalid_options`, `busy`, `unavail
 npm test --workspace=@roller-bay/solver
 npm run lint --workspace=@roller-bay/solver
 npm test --workspace=@roller-bay/api
-# Requires the standalone service running; loads apps/solver/.env for its key.
+# Starts and stops its own solver; needs only the solver's virtualenv.
 npm run test:solver --workspace=@roller-bay/api
 ```
 
-Python tests cover independent validation, authentication, request limits, shared capacity, cancellation cleanup, and a real solver call. Backend unit tests exercise model/response checks and HTTP failure handling without Python. The explicit backend integration suite calls the running HTTP app for real solving and authentication checks.
+Python tests cover independent validation, authentication, request limits, shared capacity, cancellation cleanup, and a real solver call. Backend unit tests exercise model/response checks and HTTP failure handling without Python. The explicit backend suite (`*.live-solver.test.ts`) starts the standalone service itself, on a free port with a generated key and every variable the service reads set explicitly, so it depends on neither `apps/solver/.env` nor a solver already running, and calls it over HTTP for real solving and authentication checks.

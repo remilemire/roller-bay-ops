@@ -48,11 +48,9 @@ import {
 } from './sessions/sessions.repository.js';
 import type { SessionData } from 'express-session';
 
-const enabled = process.env.AUTH_INTEGRATION_TESTS === '1';
-
 test(
   'auth integration with real Redis and isolated PostgreSQL tables',
-  { skip: !enabled, timeout: 90000 },
+  { timeout: 90000 },
   async (t) => {
     const rateLimitPrefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
     const database = await createTestDatabase(testDatabaseUrl);
