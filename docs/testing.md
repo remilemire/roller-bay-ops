@@ -40,6 +40,14 @@ psql "$TEST_DATABASE_URL" -Atc "SELECT format('DROP DATABASE %I WITH (FORCE)', d
 
 `*.live-solver.test.ts` files call `startSolver` in `apps/api/src/testing/live-solver.ts`, which starts the standalone service on a free port with a generated key and every variable the service reads set explicitly, then stops it. They depend on neither `apps/solver/.env` nor a solver already running. Files run one at a time because the service admits one request at a time.
 
+## Browser tests
+
+Playwright builds the app and serves the production build on port 3100: it is what ships, and it runs beside a `next dev` server, where a second `next dev` in the same checkout would fight the first for its dev lock. The server is never reused, because a production server left running would serve a stale build; if port 3100 is taken the run fails instead.
+
+Every API response is intercepted by `mockApi` in `apps/web/tests/e2e/fixtures.ts`; no backend runs. The build's API variables are set in `playwright.config.ts` rather than inherited, which overrides `apps/web/.env.local`, and `mockApi` fails any API call that is not same-origin, so a leaked API URL cannot pass unnoticed. The browser's timezone is pinned to `America/Edmonton`, west of Greenwich, where a calendar day mishandled as a local time slips to the day before; fixed clocks in specs carry an explicit offset.
+
+Nothing is retried, locally or on CI. Intercepted responses and a fixed clock make these tests deterministic, so a test that passes on a second attempt has found a race in the UI, which is worth a failure.
+
 ## Listeners
 
 A test that uses Supertest against a server that is not yet listening must listen first on `127.0.0.1` (`await app.listen(0, '127.0.0.1')`). Given a non-listening server, Supertest binds a wildcard port for every request and then connects to `127.0.0.1`; on macOS that port can already belong to another local process on IPv4, which then answers the request.

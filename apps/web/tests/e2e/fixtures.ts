@@ -126,6 +126,16 @@ export async function mockApi(
     const url = new URL(request.url());
     const path = url.pathname.slice(4);
     const method = request.method();
+    // The app under test calls its own origin. Anything else means a local
+    // .env leaked an API URL into the build, which CI would not reproduce.
+    if (url.origin !== new URL(page.url()).origin)
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: `Browser tests expect same-origin API calls, not ${url.origin}.`,
+        }),
+      });
     const send = (body: unknown, status = 200) =>
       route.fulfill({
         status,

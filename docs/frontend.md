@@ -46,7 +46,7 @@ Every API call uses `credentials: 'include'`. Mutation requests send JSON and, w
 
 TanStack Query owns server data. Queries stay fresh for 30 seconds by default; session data uses 15 seconds and refreshes on window focus. Network, 429, and server failures receive at most two query retries with backoff; `Retry-After` is respected when supplied. Mutations never retry automatically. Successful writes invalidate affected feature queries. There are no optimistic stock, reservation, or submission updates.
 
-Configure the backend's `WEB_ORIGIN` to the actual browser origin. Normal development uses `http://localhost:3000`; browser tests use an isolated server at port 3100 with intercepted API responses. If testing manually on another port, update local backend configuration accordingly. Production requires the same-site HTTPS setup described in [authentication](authentication.md).
+Configure the backend's `WEB_ORIGIN` to the actual browser origin. Normal development uses `http://localhost:3000`; browser tests build the app and serve that production build on port 3100 with intercepted API responses ([testing](testing.md#browser-tests)). If testing manually on another port, update local backend configuration accordingly. Production requires the same-site HTTPS setup described in [authentication](authentication.md).
 
 ## Forms, measurements, and drafts
 

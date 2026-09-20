@@ -27,9 +27,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx next dev --port 3100',
+    // The production build: it is what ships, and unlike a second `next dev`
+    // it does not fight a running dev server for the dev lock.
+    command: 'npx next build && npx next start --port 3100',
     url: 'http://localhost:3100',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    // A reused production server is never rebuilt and would serve stale code;
+    // a port that is already taken failing the run is the louder mistake.
+    reuseExistingServer: false,
+    timeout: 180000,
+    // Set, not inherited: Next only fills variables that are undefined, so
+    // these win over any .env file and a local run builds what CI builds.
+    env: { NEXT_PUBLIC_API_URL: '/api', API_ORIGIN: '', API_PROXY_SECRET: '' },
   },
 });
