@@ -10,6 +10,7 @@ import { OrderListView } from './order-list-view';
 import { OrderMonthView } from './order-month-view';
 import { OrderWeekView } from './order-week-view';
 
+// The schedule opens on the current week; the list is the searchable table.
 const views = [
   { value: 'list', label: 'List' },
   { value: 'week', label: 'Week' },
@@ -22,7 +23,7 @@ export function OrderScheduleScreen() {
   const [adding, setAdding] = useState<{ shipDate: string } | null>(null);
   const view = views.some((item) => item.value === params.get('view'))
     ? params.get('view')
-    : 'list';
+    : 'week';
   const add = canManage
     ? (shipDate: string) => setAdding({ shipDate })
     : undefined;
@@ -36,7 +37,7 @@ export function OrderScheduleScreen() {
               className={`tab ${view === item.value ? 'active' : ''}`}
               aria-pressed={view === item.value}
               onClick={() =>
-                params.set({ view: item.value === 'list' ? '' : item.value })
+                params.set({ view: item.value === 'week' ? '' : item.value })
               }
             >
               {item.label}
@@ -50,12 +51,12 @@ export function OrderScheduleScreen() {
           </Button>
         )}
       </PageHeading>
-      {view === 'week' ? (
-        <OrderWeekView canManage={canManage} onAdd={add} />
+      {view === 'list' ? (
+        <OrderListView canManage={canManage} />
       ) : view === 'month' ? (
         <OrderMonthView onAdd={add} />
       ) : (
-        <OrderListView canManage={canManage} />
+        <OrderWeekView canManage={canManage} onAdd={add} />
       )}
       {adding && (
         <OrderEditor shipDate={adding.shipDate} close={() => setAdding(null)} />

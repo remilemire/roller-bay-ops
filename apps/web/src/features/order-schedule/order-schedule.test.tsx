@@ -146,8 +146,8 @@ it('offers the allocation editor only orders that can still be allocated', async
   });
 });
 
-it('opens on unshipped orders and keeps the filter and search in the URL', async () => {
-  state.search = 'status=bogus';
+it('opens the list on unshipped orders and keeps the filter in the URL', async () => {
+  state.search = 'view=list&status=bogus';
   show(<OrderScheduleScreen />);
   const user = userEvent.setup();
   const row = (await screen.findByText('104801')).closest('tr')!;
@@ -166,18 +166,18 @@ it('opens on unshipped orders and keeps the filter and search in the URL', async
   });
   await user.click(screen.getByRole('button', { name: 'Shipped' }));
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/order-schedule?status=shipped',
+    '/order-schedule?view=list&status=shipped',
     { scroll: false },
   );
   // The default tab needs no parameter.
   await user.click(screen.getByRole('button', { name: 'Open' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule', {
+  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=list', {
     scroll: false,
   });
 });
 
 it('asks the API for every order on the All orders tab', async () => {
-  state.search = 'status=all&search=1048&page=2';
+  state.search = 'view=list&status=all&search=1048&page=2';
   show(<OrderScheduleScreen />);
   await screen.findByText('104801');
   expect(orderList).toHaveBeenLastCalledWith({
@@ -189,6 +189,7 @@ it('asks the API for every order on the All orders tab', async () => {
 
 it('hides schedule writes from employees who cannot manage', async () => {
   state.canManage = false;
+  state.search = 'view=list';
   show(<OrderScheduleScreen />);
   await screen.findByText('104801');
   expect(screen.queryByRole('button', { name: 'Add order' })).toBeNull();
@@ -197,6 +198,7 @@ it('hides schedule writes from employees who cannot manage', async () => {
 });
 
 it('marks an order shipped from its row with the revision the row shows', async () => {
+  state.search = 'view=list';
   vi.mocked(updateOrder).mockResolvedValueOnce(order);
   vi.mocked(updateOrder).mockRejectedValueOnce(
     new ApiError(409, 'Order changed; refresh before saving.'),
@@ -287,7 +289,7 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
   expect(screen.getByText('Ships Fri, Oct 2, 2026')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'View allocation' })).toHaveAttribute(
     'href',
-    '/allocations?search=104801',
+    '/allocations?state=all&search=104801',
   );
 
   await user.click(screen.getByRole('button', { name: 'Edit' }));
@@ -353,6 +355,7 @@ it('shows employees the order without its admin actions', async () => {
 });
 
 it('reschedules an order from its row with the calendar already open', async () => {
+  state.search = 'view=list';
   vi.mocked(updateOrder).mockResolvedValue(order);
   show(<OrderScheduleScreen />);
   const user = userEvent.setup();
@@ -377,7 +380,6 @@ it('reschedules an order from its row with the calendar already open', async () 
 });
 
 it('groups the working week by day with totals and adds an order to a day', async () => {
-  state.search = 'view=week';
   vi.mocked(createOrder).mockResolvedValue(order);
   show(<OrderScheduleScreen />);
   const user = userEvent.setup();
@@ -426,10 +428,16 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   );
 
   await user.click(screen.getByRole('button', { name: 'Next week' }));
+  // The default view needs no parameter of its own.
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/order-schedule?view=week&week=2026-10-05',
+    '/order-schedule?week=2026-10-05',
     { scroll: false },
   );
+
+  await user.click(screen.getByRole('button', { name: 'List' }));
+  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=list', {
+    scroll: false,
+  });
 });
 
 it('shows any day of a week as that week, and employees a read-only board', async () => {

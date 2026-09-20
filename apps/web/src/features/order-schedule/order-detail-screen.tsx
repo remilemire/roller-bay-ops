@@ -119,7 +119,7 @@ function OrderRecord({ order }: { order: ScheduledOrder }) {
             <p style={{ marginTop: 24 }}>
               <Link
                 className="text-link"
-                href={`/allocations?search=${order.orderNumber}`}
+                href={`/allocations?state=all&search=${order.orderNumber}`}
               >
                 View allocation
               </Link>

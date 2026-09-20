@@ -15,15 +15,26 @@ import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
 import { dateLabel, shortId } from '@/lib/format';
 import { allocationList } from './allocations.api';
+
+// Allocations open on the work in hand; `all` adds drafts and finished work.
+const tabs = [
+  { value: 'active', label: 'Active' },
+  { value: 'draft', label: 'Drafts' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'all', label: 'All orders' },
+];
 export function AllocationListScreen() {
   const params = useListParams();
-  const state = ['draft', 'active', 'completed', 'cancelled'].includes(
-    params.get('state'),
-  )
+  const state = tabs.some((tab) => tab.value === params.get('state'))
     ? params.get('state')
-    : '';
+    : 'active';
   const query = useQuery(
-    allocationList({ search: params.search, page: params.page, state }),
+    allocationList({
+      search: params.search,
+      page: params.page,
+      state: state === 'all' ? '' : state,
+    }),
   );
   return (
     <>
@@ -42,17 +53,13 @@ export function AllocationListScreen() {
         placeholder="Search order number…"
       >
         <div className="tabs">
-          {[
-            { value: '', label: 'All orders' },
-            { value: 'active', label: 'Active' },
-            { value: 'draft', label: 'Drafts' },
-            { value: 'completed', label: 'Completed' },
-            { value: 'cancelled', label: 'Cancelled' },
-          ].map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.value}
               className={`tab ${state === tab.value ? 'active' : ''}`}
-              onClick={() => params.set({ state: tab.value })}
+              onClick={() =>
+                params.set({ state: tab.value === 'active' ? '' : tab.value })
+              }
             >
               {tab.label}
             </button>
