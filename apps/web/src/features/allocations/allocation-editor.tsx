@@ -135,6 +135,8 @@ export function AllocationEditor({
     Promise.all([
       client.invalidateQueries({ queryKey: allocationKey }),
       client.invalidateQueries({ queryKey: stockKey }),
+      // Confirming or moving an allocation changes its order's status.
+      client.invalidateQueries({ queryKey: ['order-schedule'] }),
     ]);
   const save = useMutation({
     mutationFn: async (value: AllocationForm) => {

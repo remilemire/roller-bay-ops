@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
+  CalendarDays,
   Layers3,
   LayoutDashboard,
   LogOut,
@@ -26,6 +27,7 @@ const navigation = [
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
   { href: '/stock-items', label: 'Fabric stock', Icon: Layers3 },
   { href: '/stock-receipts', label: 'Stock receipts', Icon: PackagePlus },
+  { href: '/order-schedule', label: 'Order schedule', Icon: CalendarDays },
   { href: '/allocations', label: 'Allocations', Icon: Scissors },
   { href: '/fabric-catalog', label: 'Fabric catalog', Icon: Box },
   { href: '/locations', label: 'Locations', Icon: MapPin },

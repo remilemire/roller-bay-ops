@@ -6,7 +6,7 @@ import { historySchema, type AuditRecordType } from '@roller-bay/shared/audit';
 import type { MeasurementField } from '@roller-bay/shared/users';
 import { api } from '@/lib/api';
 import { useHydrated } from '@/lib/use-hydrated';
-import { dateLabel, shortId } from '@/lib/format';
+import { calendarDateLabel, dateLabel, shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { Loading, ErrorNotice, Pagination } from '@/components/ui/feedback';
@@ -38,6 +38,11 @@ const labels: Record<string, string> = {
   remainingLengthMm: 'Remaining length',
   purchaseOrderNumber: 'Purchase order',
   orderNumber: 'Production order',
+  shipDate: 'Ship date',
+  scheduledAt: 'Scheduled',
+  allocatedAt: 'Allocated',
+  cutAt: 'Cut',
+  shippedAt: 'Shipped',
   voidedAt: 'Voided',
   consumedAt: 'Consumed',
   sourceStockItemId: 'Source stock',
@@ -78,6 +83,7 @@ export function RecordValues({
       return <Link href={`/stock-items/${value}`}>{shortId(value)}</Link>;
     if (field.endsWith('Id') || field === 'id')
       return <span title={value}>{shortId(value)}</span>;
+    if (field === 'shipDate') return <span>{calendarDateLabel(value)}</span>;
     if (field.endsWith('At') && value) return <span>{dateLabel(value)}</span>;
     return (
       <span>

@@ -5,6 +5,7 @@ import {
   type StockReceiptDraftData,
 } from '@roller-bay/shared/stock-receipts';
 import { allocationDetailSchema } from '@roller-bay/shared/allocations';
+import { scheduledOrderSchema } from '@roller-bay/shared/order-schedule';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 export const ids = {
   user: '11111111-1111-4111-8111-111111111111',
@@ -20,6 +21,7 @@ export const ids = {
   section: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   line: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   item: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  order: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
 };
 export const timestamp = '2026-09-16T12:00:00.000Z';
 export const user = {
@@ -168,4 +170,18 @@ export const allocation = allocationDetailSchema.parse({
   ],
   completion: null,
   correctedAt: null,
+});
+// Ships on a Friday; the allocation above names this order.
+export const order = scheduledOrderSchema.parse({
+  id: ids.order,
+  orderNumber: '104801',
+  shipDate: '2026-10-02',
+  note: 'Rush',
+  status: 'allocated',
+  scheduledAt: timestamp,
+  allocatedAt: timestamp,
+  cutAt: null,
+  shippedAt: null,
+  updatedAt: timestamp,
+  revision: 3,
 });

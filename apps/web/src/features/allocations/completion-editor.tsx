@@ -85,6 +85,8 @@ export function CompletionEditor({
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
         client.invalidateQueries({ queryKey: ['stock-receipts'] }),
+        // Completing marks the scheduled order cut.
+        client.invalidateQueries({ queryKey: ['order-schedule'] }),
       ]);
       close();
     },

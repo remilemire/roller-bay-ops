@@ -647,17 +647,21 @@ td strong {
 .status-active,
 .status-submitted,
 .status-available,
-.status-completed {
+.status-completed,
+.status-allocated,
+.status-cut {
   color: var(--primary);
   background: var(--primary-soft);
 }
 .status-draft,
-.status-needs-replanning {
+.status-needs-replanning,
+.status-scheduled {
   color: var(--warning);
   background: var(--warning-soft);
 }
 .status-cancelled,
-.status-consumed {
+.status-consumed,
+.status-shipped {
   color: var(--muted);
 }
 .toolbar {

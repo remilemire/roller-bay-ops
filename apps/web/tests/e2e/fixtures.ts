@@ -19,6 +19,7 @@ import {
   receiptDraft,
   receipt,
   allocation,
+  order,
 } from '../fixtures';
 export { ids } from '../fixtures';
 const teammate = {
@@ -97,6 +98,8 @@ export async function mockApi(
     > | null,
     allocation: structuredClone(allocation),
     completionRequests: [] as unknown[],
+    orders: [structuredClone(order)],
+    orderRequests: [] as { method: string; body: unknown }[],
   };
   const paged = (items: unknown[], url: URL, total = items.length) => ({
     items,
@@ -164,6 +167,62 @@ export async function mockApi(
         measurementUnits: state.measurementUnits,
         colorTheme: state.colorTheme,
       });
+    }
+    if (path === '/order-schedule' && method === 'GET') {
+      const status = url.searchParams.get('status');
+      const search = url.searchParams.get('search') ?? '';
+      return send(
+        paged(
+          state.orders.filter(
+            (row) =>
+              row.orderNumber.includes(search) &&
+              (!status ||
+                (status === 'open'
+                  ? row.status !== 'shipped'
+                  : row.status === status)),
+          ),
+          url,
+        ),
+      );
+    }
+    if (path === '/order-schedule' && method === 'POST') {
+      const body = request.postDataJSON();
+      state.orderRequests.push({ method, body });
+      const created = {
+        ...order,
+        ...body,
+        id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        status: 'scheduled' as const,
+        allocatedAt: null,
+        revision: 1,
+      };
+      state.orders.push(created);
+      return send(created, 201);
+    }
+    if (path.startsWith('/order-schedule/')) {
+      const index = state.orders.findIndex((row) => path.endsWith(row.id));
+      const found = state.orders[index];
+      if (!found) return send({ message: 'Order not found.' }, 404);
+      if (method === 'GET') return send(found);
+      const body = request.postDataJSON();
+      state.orderRequests.push({ method, body });
+      if (method === 'DELETE') {
+        state.orders.splice(index, 1);
+        return send(null, 204);
+      }
+      const { expectedRevision, shipped, ...fields } = body;
+      state.orders[index] = {
+        ...found,
+        ...fields,
+        revision: expectedRevision + 1,
+        ...(shipped === undefined
+          ? {}
+          : {
+              shippedAt: shipped ? timestamp : null,
+              status: shipped ? ('shipped' as const) : ('allocated' as const),
+            }),
+      };
+      return send(state.orders[index]);
     }
     if (path === '/users' && method === 'GET')
       return state.role === 'user'
