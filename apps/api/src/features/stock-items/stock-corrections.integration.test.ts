@@ -4,9 +4,9 @@ import { test } from 'node:test';
 import { historySchema } from '@roller-bay/shared/audit';
 import { correctionResultSchema } from '@roller-bay/shared/corrections';
 import request from 'supertest';
-import { startCorrectionsApp } from './testing/corrections-app.js';
+import { startCorrectionsApp } from '../../testing/corrections-app.js';
 
-test('corrections integration', { timeout: 60_000 }, async (t) => {
+test('stock corrections integration', { timeout: 60_000 }, async (t) => {
   const {
     server,
     cookie,

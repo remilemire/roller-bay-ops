@@ -5,8 +5,8 @@ import { test } from 'node:test';
 import { historySchema } from '@roller-bay/shared/audit';
 import { correctionResultSchema } from '@roller-bay/shared/corrections';
 import { stockReceiptDetailSchema } from '@roller-bay/shared/stock-receipts';
-import { AuditRepository } from './audit.repository.js';
-import { startCorrectionsApp } from './testing/corrections-app.js';
+import { AuditRepository } from '../audit/audit.repository.js';
+import { startCorrectionsApp } from '../../testing/corrections-app.js';
 
 test('receipt corrections integration', { timeout: 60_000 }, async (t) => {
   const {

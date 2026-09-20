@@ -10,7 +10,7 @@ import { historySchema } from '@roller-bay/shared/audit';
 import { correctionResultSchema } from '@roller-bay/shared/corrections';
 import { stockItemSchema } from '@roller-bay/shared/stock-items';
 import request from 'supertest';
-import { startCorrectionsApp } from './testing/corrections-app.js';
+import { startCorrectionsApp } from '../../testing/corrections-app.js';
 
 test('completion corrections integration', { timeout: 60_000 }, async (t) => {
   const {

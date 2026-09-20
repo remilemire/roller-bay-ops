@@ -9,7 +9,7 @@ import { stockItemSchema } from '@roller-bay/shared/stock-items';
 import { stockReceiptDetailSchema } from '@roller-bay/shared/stock-receipts';
 import type { UserRole } from '@roller-bay/shared/users';
 import request from 'supertest';
-import { startSignedInApp } from '../../../testing/integration-app.js';
+import { startSignedInApp } from './integration-app.js';
 
 /**
  * The signed-in app, as an admin, with what every corrections suite builds
