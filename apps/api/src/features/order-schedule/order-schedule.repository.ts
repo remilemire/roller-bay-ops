@@ -88,26 +88,35 @@ export class OrderScheduleRepository {
     );
   }
 
-  /**
-   * `no key update` is enough for edits and milestone stamps, and unlike
-   * `update` it does not conflict with the key-share lock an allocation's
-   * foreign key already holds on the order. Deletes lock with `update`.
-   */
-  async findById(id: string, lock?: 'no key update' | 'update') {
-    const query = this.db
+  async findById(id: string) {
+    const [row] = await this.db
       .select()
       .from(scheduledOrders)
       .where(eq(scheduledOrders.id, id));
-    const [row] = await (lock ? query.for(lock) : query);
     return row;
   }
 
-  async findByOrderNumber(orderNumber: string, lock: 'no key update') {
+  /**
+   * Row locks for edits and milestone stamps are `no key update`: unlike
+   * `update`, it does not conflict with the key-share lock an allocation's
+   * foreign key already holds on its order, so two requests for one order
+   * wait on each other instead of deadlocking.
+   */
+  async findByIdForUpdate(id: string) {
+    const [row] = await this.db
+      .select()
+      .from(scheduledOrders)
+      .where(eq(scheduledOrders.id, id))
+      .for('no key update');
+    return row;
+  }
+
+  async findByOrderNumberForUpdate(orderNumber: string) {
     const [row] = await this.db
       .select()
       .from(scheduledOrders)
       .where(eq(scheduledOrders.orderNumber, orderNumber))
-      .for(lock);
+      .for('no key update');
     return row;
   }
 
@@ -155,7 +164,18 @@ export class OrderScheduleRepository {
     return row!;
   }
 
-  async delete(id: string) {
-    await this.db.delete(scheduledOrders).where(eq(scheduledOrders.id, id));
+  /**
+   * Checks the revision in the delete itself, which takes its own row lock;
+   * locking first with the weaker edit lock would mean upgrading it while an
+   * allocation may hold the order's key-share lock.
+   */
+  async delete(id: string, revision: number) {
+    const [row] = await this.db
+      .delete(scheduledOrders)
+      .where(
+        and(eq(scheduledOrders.id, id), eq(scheduledOrders.revision, revision)),
+      )
+      .returning();
+    return row;
   }
 }

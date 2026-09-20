@@ -107,7 +107,7 @@ export class OrderScheduleService {
     return orderScheduleOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const previous = requireRevision(
-          await repository.findById(id, 'no key update'),
+          await repository.findByIdForUpdate(id),
           input.expectedRevision,
         );
         const { shipped } = input;
@@ -137,14 +137,17 @@ export class OrderScheduleService {
   delete(id: string, revision: number, userId: string) {
     return orderScheduleOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
-        const previous = requireRevision(
-          await repository.findById(id, 'update'),
-          revision,
-        );
+        const previous = await repository.delete(id, revision);
+        if (!previous) {
+          if (await repository.findById(id))
+            throw new ConflictException(
+              'Order changed; refresh before saving.',
+            );
+          throw new NotFoundException('Order not found.');
+        }
         await this.audit.record(tx, userId, 'order.deleted', [
           change(previous, null),
         ]);
-        await repository.delete(id);
       }),
     );
   }
@@ -159,10 +162,7 @@ export class OrderScheduleService {
     at: Date,
   ): Promise<AuditChange> {
     const repository = new OrderScheduleRepository({ db: tx });
-    const order = await repository.findByOrderNumber(
-      orderNumber,
-      'no key update',
-    );
+    const order = await repository.findByOrderNumberForUpdate(orderNumber);
     if (!order) throw orderNotScheduled();
     if (order.allocatedAt) throw orderAlreadyAllocated();
     // The derived status would hide an allocation made after shipping.
@@ -195,10 +195,7 @@ export class OrderScheduleService {
     values: Parameters<OrderScheduleRepository['stamp']>[1],
   ): Promise<AuditChange> {
     const repository = new OrderScheduleRepository({ db: tx });
-    const order = await repository.findByOrderNumber(
-      orderNumber,
-      'no key update',
-    );
+    const order = await repository.findByOrderNumberForUpdate(orderNumber);
     // The foreign key keeps an allocation's order on the schedule.
     if (!order) throw orderNotScheduled();
     return change(order, await repository.stamp(order.id, values));
