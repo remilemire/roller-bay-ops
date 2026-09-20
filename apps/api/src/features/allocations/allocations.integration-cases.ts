@@ -946,17 +946,79 @@ export async function testAllocations(
           body.orderNumber,
         );
 
-        // Scheduling the number again restores the order, ready to allocate.
+        // Scheduling the number again restores the order, here with a new
+        // quantity: two blinds where the cancelled allocation planned one.
         const restored = await asAdmin(() =>
           schedule('post', '/api/order-schedule').send({
             orderNumber: body.orderNumber,
             shipDate: '2026-10-01',
-            quantity: 1,
+            quantity: 2,
           }),
         );
         assert.equal(restored.status, 201);
         assert.equal(restored.body.id, order.id);
-        await create(again);
+        assert.equal(restored.body.quantity, 2);
+        // The cancelled allocation is history; nothing re-checks it.
+        const cancelled = allocationDetailSchema.parse(
+          (await get(`${path}/${allocation.id}`).expect(200)).body,
+        );
+        assert.equal(cancelled.state, 'cancelled');
+        assert.equal(cancelled.requirements[0]!.quantity, 1);
+
+        // New work answers to the new quantity, on a direct create and when a
+        // draft is submitted; saving the draft is not checked.
+        const mismatch = [
+          { code: 'order_quantity_mismatch', path: ['orderNumber'] },
+        ];
+        const short = await post(path, again).expect(400);
+        assert.deepEqual(issue(short), mismatch);
+        assert.equal(
+          short.body.message,
+          'The order has 2 blinds but the allocation has 1.',
+        );
+        const planned = (
+          await post(`${path}/drafts`, { data: again }).expect(201)
+        ).body;
+        assert.deepEqual(
+          issue(
+            await post(`${path}/${planned.id}/submit`, {
+              expectedRevision: 1,
+            }).expect(400),
+          ),
+          mismatch,
+        );
+        // The refused submission left the draft a draft and the order free.
+        assert.equal(
+          (await get(`${path}/${planned.id}`).expect(200)).body.state,
+          'draft',
+        );
+        const two = {
+          ...again,
+          requirements: [{ ...again.requirements[0]!, quantity: 2 }],
+          plan: { cuts: [again.plan.cuts[0]!, again.plan.cuts[0]!] },
+        };
+        await request(server)
+          .put(`${path}/${planned.id}/draft`)
+          .set('Cookie', cookie)
+          .set('Origin', origin)
+          .send({ expectedRevision: 1, data: two })
+          .expect(200);
+        const confirmed = allocationDetailSchema.parse(
+          (
+            await post(`${path}/${planned.id}/submit`, {
+              expectedRevision: 2,
+            }).expect(200)
+          ).body,
+        );
+        assert.equal(confirmed.state, 'active');
+        assert.ok(
+          (
+            await pool.query(
+              `SELECT allocated_at FROM "${schema}".scheduled_orders WHERE id=$1`,
+              [order.id],
+            )
+          ).rows[0].allocated_at,
+        );
         await request(server)
           .delete(`${path}/${draft.id}/draft`)
           .set('Cookie', cookie)
