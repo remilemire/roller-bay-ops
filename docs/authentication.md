@@ -136,15 +136,14 @@ Neither module imports the other. The auth controller coordinates them; services
 
 `npm test` runs provider fixtures, configuration and email checks, and user persistence error tests. The OIDC tests use the real validation library with generated RSA-signed tokens; they reject invalid signatures, issuers, audiences, expiry, nonce, and state.
 
-Run the real-service auth suite against local services after applying pending migrations:
+Run the real-service auth suite against the local services:
 
 ```sh
-TEST_DATABASE_URL=postgresql://roller_bay:roller_bay_local@localhost:5434/roller_bay_ops \
-TEST_REDIS_URL=redis://localhost:6380 \
+npm run services:up
 npm run test:integration
 ```
 
-This suite creates a randomly named PostgreSQL schema and copies the migrated application table structures, including catalog foreign keys, into it. It removes that schema afterward. Tests require the application database to be migrated first and do not execute migration files. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, activation permissions, blocked sign-in and existing-session access for inactive users, reactivation, owner bootstrap, database owner uniqueness, role-management permissions, concurrent ownership transfer, service-level rollback after a simulated recipient-update failure, and lock timeout recovery, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
+The suite creates a randomly named database (`rb_test_<hex>`) on the PostgreSQL server, builds it by applying every migration in `apps/api/drizzle`, and drops it afterwards, so it sees exactly the constraint and index names production has and also proves the migrations apply to an empty database. It never reads or writes the application database; the server connection is used only to create and drop its own database, so the development server is a safe target. `TEST_DATABASE_URL` and `TEST_REDIS_URL` default to the compose services and no `.env` file is read. It creates and deletes only its own random Redis session/transaction keys. It covers browser binding, concurrent callback replay, session ID rotation, expiry after resaves, profile updates and conflicts, concurrent first login, role preservation, activation permissions, blocked sign-in and existing-session access for inactive users, reactivation, owner bootstrap, database owner uniqueness, role-management permissions, concurrent ownership transfer, service-level rollback after a simulated recipient-update failure, and lock timeout recovery, Origin checks, logout, Redis outage recovery, and local user deletion. It does not use real Microsoft credentials.
 
 The rate-limiting integration suite uses API instances sharing a random Redis key prefix. It verifies shared and concurrent budgets, login/callback limits, request-method coverage, retry headers, expiry, trusted-proxy and IPv6 behavior, client addresses reported by the frontend proxy, rejection of requests without its secret before any budget is spent, health/preflight exemptions, and outage recovery. Cleanup deletes only that suite's keys. The auth suite also loads rate limiting, with higher budgets to exercise its existing scenarios.
 

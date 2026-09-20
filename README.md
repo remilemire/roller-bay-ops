@@ -117,7 +117,7 @@ Development conventions and contribution instructions are maintained in [AGENTS.
 | `npm run typecheck`                         | Check application, contract, and migration configuration types |
 | `npm run lint`                              | Check TypeScript, Next.js, and Python conventions              |
 | `npm test`                                  | Run workspace tests, including the Python solver               |
-| `npm run test:integration`                  | Run database/Redis integration suites; requires test URLs      |
+| `npm run test:integration`                  | Run database/Redis integration suites against the services     |
 | `npm run format`                            | Format source and configuration                                |
 | `npm run format:check`                      | Check formatting without changing files                        |
 | `npm run services:up`                       | Start PostgreSQL and Redis and wait until healthy              |

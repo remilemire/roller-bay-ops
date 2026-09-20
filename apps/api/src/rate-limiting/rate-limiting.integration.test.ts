@@ -13,6 +13,7 @@ import {
 } from '@roller-bay/shared/frontend-proxy';
 import request from 'supertest';
 import { ErrorsModule } from '../common/errors/errors.module.js';
+import { testRedisUrl } from '../testing/test-services.js';
 import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
 import { FrontendProxyModule } from '../frontend-proxy/frontend-proxy.module.js';
 import { RedisService } from '../redis/redis.service.js';
@@ -39,7 +40,6 @@ test(
     timeout: 15000,
   },
   async (t) => {
-    assert.ok(process.env.TEST_REDIS_URL);
     const prefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
     const proxySecret = 'proxy-secret-that-is-at-least-32-characters';
     async function createApp(extra: Record<string, unknown> = {}) {
@@ -50,7 +50,7 @@ test(
             ignoreEnvFile: true,
             load: [
               () => ({
-                REDIS_URL: process.env.TEST_REDIS_URL,
+                REDIS_URL: testRedisUrl,
                 RATE_LIMIT_WINDOW_SECONDS: 60,
                 RATE_LIMIT_API_LIMIT: 6,
                 RATE_LIMIT_LOGIN_LIMIT: 2,

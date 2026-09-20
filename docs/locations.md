@@ -46,4 +46,4 @@ Deletion returns 204. Zones containing sections, sections containing locations, 
 
 Apply `0004_add_locations.sql` before using the endpoints or running integration tests. The endpoints require no additional migration. No zones, sections, or levels are seeded automatically.
 
-The [auth integration suite](authentication.md#tests) copies the migrated location tables into its disposable schema. It covers role and activation checks, Origin checks, CRUD, parent immutability, scoped uniqueness, concurrent duplicate creation, hierarchy names, sorting, pagination, literal search, and deletion protection. It never executes migration files.
+The [auth integration suite](authentication.md#tests) runs in a throwaway database built from the migrations. It covers role and activation checks, Origin checks, CRUD, parent immutability, scoped uniqueness, concurrent duplicate creation, hierarchy names, sorting, pagination, literal search, and deletion protection.

@@ -61,7 +61,7 @@ Audit storage exposes insertion and reading only, with no HTTP mutation endpoint
 
 ## Verification
 
-The normal API tests cover contracts, reconstructed measurements, snapshot curation and replay identity. PostgreSQL/Redis integration cases cover role enforcement, immutable history, quantities and IDs, legacy baselines, reservations, later activity, repeated cutting corrections, original retry preservation, concurrent writes and audit-failure rollback. They copy the migrated schema; they do not generate or apply migrations.
+The normal API tests cover contracts, reconstructed measurements, snapshot curation and replay identity. PostgreSQL/Redis integration cases cover role enforcement, immutable history, quantities and IDs, legacy baselines, reservations, later activity, repeated cutting corrections, original retry preservation, concurrent writes and audit-failure rollback. They run in a throwaway database built by applying the migrations.
 
 Frontend unit tests cover review-before-write, pinned forms, conflict preservation, history rendering and exact retries. Playwright covers desktop/tablet stock, receipt and completed cutting correction workflows and employee history access with intercepted API responses. These browser tests do not prove database behavior or real Microsoft sign-in.
 

@@ -8,7 +8,8 @@ import { testOrderSchedule } from '../order-schedule/order-schedule.integration-
 import { OrderScheduleModule } from '../order-schedule/order-schedule.module.js';
 import 'reflect-metadata';
 import { testUserRoles } from '../users/users.integration-cases.js';
-import { copyApplicationTables } from '../../database/testing/copy-application-tables.js';
+import { createTestDatabase } from '../../database/testing/test-database.js';
+import { testDatabaseUrl, testRedisUrl } from '../../testing/test-services.js';
 import { FabricCatalogModule } from '../fabric-catalog/fabric-catalog.module.js';
 import { testCatalog } from '../fabric-catalog/catalog.integration-cases.js';
 import { LocationsModule } from '../locations/locations.module.js';
@@ -53,16 +54,12 @@ test(
   'auth integration with real Redis and isolated PostgreSQL tables',
   { skip: !enabled, timeout: 90000 },
   async (t) => {
-    assert.ok(
-      process.env.TEST_DATABASE_URL,
-      'Set TEST_DATABASE_URL to a migrated local test database.',
-    );
-    assert.ok(process.env.TEST_REDIS_URL, 'Set TEST_REDIS_URL to local Redis.');
-    const schema = `auth_test_${randomUUID().replaceAll('-', '')}`;
+    const schema = 'public';
     const rateLimitPrefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
-    const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
-    const url = new URL(process.env.TEST_DATABASE_URL);
-    url.searchParams.set('options', `-csearch_path=${schema},public`);
+    const database = await createTestDatabase(testDatabaseUrl);
+    // Registered at once, so a failure while the app boots cannot leak it.
+    t.after(() => database.drop());
+    const pool = new Pool({ connectionString: database.url });
     const config = environmentSchema.parse({
       NODE_ENV: 'test',
       CUTTING_EDGE_TRIM_MM: 1,
@@ -71,8 +68,8 @@ test(
       CUTTING_DROP_ALLOWANCE_MM: 0,
       SOLVER_API_KEY: 'integration-solver-key-at-least-32-characters',
       SOLVER_URL: 'http://127.0.0.1:1',
-      DATABASE_URL: url.href,
-      REDIS_URL: process.env.TEST_REDIS_URL,
+      DATABASE_URL: database.url,
+      REDIS_URL: testRedisUrl,
       MICROSOFT_TENANT_ID: '11111111-1111-4111-8111-111111111111',
       MICROSOFT_CLIENT_ID: '22222222-2222-4222-8222-222222222222',
       MICROSOFT_CLIENT_SECRET: 'fixture',
@@ -192,7 +189,6 @@ test(
     }
 
     try {
-      await copyApplicationTables(pool, schema);
       // Keep one listener for the suite; Supertest must not close it between requests.
       await app.listen(0, '127.0.0.1');
 
@@ -764,8 +760,6 @@ test(
       }
       if (redis.client.isReady && keys.size) await redis.client.del([...keys]);
       await app.close();
-      // Only the randomly named schema created by this test is removed.
-      await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
       await pool.end();
     }
   },

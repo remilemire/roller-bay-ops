@@ -55,7 +55,7 @@ Submitted receipts have no editing or deletion endpoints. Admins can still corre
 
 Malformed bodies, query parameters, IDs, or missing/invalid idempotency keys return 400. Missing receipts or references return 404. Unauthenticated requests return 401; inactive users or untrusted write origins return 403. Conflicting key reuse returns 409. Storage failures return a generic 503 without exposing database errors. Receipts and stock roll back together when submission fails.
 
-The integration suite uses copies of the migrated tables and real Redis sessions. It verifies permissions, CORS preflight, limits, defaults, quantity expansion, live stock details, stable replays, concurrent submissions, conflicting keys, search/pagination, deletion protection, and rollback after a failure following stock insertion. Tests do not run migrations.
+The integration suite uses a throwaway database built from the migrations and real Redis sessions. It verifies permissions, CORS preflight, limits, defaults, quantity expansion, live stock details, stable replays, concurrent submissions, conflicting keys, search/pagination, deletion protection, and rollback after a failure following stock insertion. Tests do not run migrations.
 
 ## Shared typed drafts
 
