@@ -17,7 +17,7 @@ import type {
   AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
-import { scheduledOrders } from '../../order-schedule/order-schedule.table.js';
+import { workOrders } from '../../work-orders/work-orders.table.js';
 import { users } from '../../users/users.table.js';
 
 export const allocations = pgTable(
@@ -27,7 +27,7 @@ export const allocations = pgTable(
     isDraft: boolean('is_draft').default(true).notNull(),
     // Drafts may name no order yet; any order named must be scheduled.
     orderNumber: varchar('order_number', { length: 6 }).references(
-      () => scheduledOrders.orderNumber,
+      () => workOrders.orderNumber,
       { onDelete: 'restrict' },
     ),
     createdByUserId: uuid('created_by_user_id')

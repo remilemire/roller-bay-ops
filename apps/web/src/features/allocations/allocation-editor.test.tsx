@@ -65,16 +65,16 @@ vi.mock('@/components/ui/lookup', async () => {
     },
   };
 });
-vi.mock('@/features/order-schedule/order-schedule.api', async (original) => {
+vi.mock('@/features/work-orders/work-orders.api', async (original) => {
   const { queryOptions } = await import('@tanstack/react-query');
   const { order } = await import('../../../tests/fixtures');
   return {
     ...(await original<
-      typeof import('@/features/order-schedule/order-schedule.api')
+      typeof import('@/features/work-orders/work-orders.api')
     >()),
     orderByNumber: (orderNumber: string) =>
       queryOptions({
-        queryKey: ['order-schedule', 'number', orderNumber],
+        queryKey: ['work-orders', 'number', orderNumber],
         queryFn: async () => ({
           ...order,
           orderNumber,

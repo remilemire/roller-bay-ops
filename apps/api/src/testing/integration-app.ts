@@ -23,7 +23,7 @@ import { SESSION_PREFIX } from '../features/auth/sessions/sessions.repository.js
 import { FabricCatalogModule } from '../features/fabric-catalog/fabric-catalog.module.js';
 import { HealthModule } from '../features/health/health.module.js';
 import { LocationsModule } from '../features/locations/locations.module.js';
-import { OrderScheduleModule } from '../features/order-schedule/order-schedule.module.js';
+import { WorkOrdersModule } from '../features/work-orders/work-orders.module.js';
 import { StockItemsModule } from '../features/stock-items/stock-items.module.js';
 import { StockReceiptsModule } from '../features/stock-receipts/stock-receipts.module.js';
 import type { MicrosoftProfileInput } from '../features/users/microsoft-profile.schema.js';
@@ -115,7 +115,7 @@ export async function startIntegrationApp(t: TestContext) {
       LocationsModule,
       StockItemsModule,
       StockReceiptsModule,
-      OrderScheduleModule,
+      WorkOrdersModule,
       AllocationsModule,
     ],
   })

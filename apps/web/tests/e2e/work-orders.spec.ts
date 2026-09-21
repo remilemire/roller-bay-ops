@@ -9,9 +9,9 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await page.goto('/');
   if (testInfo.project.name === 'tablet')
     await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('link', { name: 'Order schedule', exact: true }).click();
+  await page.getByRole('link', { name: 'Work orders', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Order schedule' }),
+    page.getByRole('heading', { name: 'Work orders' }),
   ).toBeVisible();
   // The schedule opens on the week of the fixed clock.
   await expect(
@@ -58,7 +58,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await page.getByRole('button', { name: 'Open', exact: true }).click();
 
   await existing.getByRole('link').click();
-  await expect(page).toHaveURL(new RegExp(`/order-schedule/${ids.order}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   await page.getByRole('button', { name: 'Edit' }).click();
   await dialog.getByRole('button', { name: 'Ship date' }).click();
@@ -79,12 +79,12 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
 
   await page.getByRole('button', { name: 'Delete' }).click();
   await dialog.getByRole('button', { name: 'Delete' }).click();
-  await expect(page).toHaveURL(/\/order-schedule$/);
+  await expect(page).toHaveURL(/\/work-orders$/);
   expect(state.orderRequests.at(-1)).toEqual({
     method: 'DELETE',
     body: { expectedRevision: 5 },
   });
-  await page.goto('/order-schedule?view=list');
+  await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -96,7 +96,7 @@ test('admins mark an order shipped from its row and it leaves the open list', as
   page,
 }) => {
   const state = await mockApi(page);
-  await page.goto('/order-schedule?view=list');
+  await page.goto('/work-orders?view=list');
   await page.getByRole('button', { name: 'Mark order 104877 shipped' }).click();
   await expect(page.getByRole('row', { name: /104877/ })).toHaveCount(0);
   expect(state.orderRequests).toEqual([
@@ -112,7 +112,7 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
 }) => {
   const state = await mockApi(page);
   await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
-  await page.goto('/order-schedule');
+  await page.goto('/work-orders');
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
@@ -165,12 +165,12 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
 
   // A click that does not drag still opens the order.
   await day('Thu, Oct 1, 2026').getByRole('link', { name: '104801' }).click();
-  await expect(page).toHaveURL(new RegExp(`/order-schedule/${ids.order}$`));
+  await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
 });
 test('admins add an order to a day of the month', async ({ page }) => {
   const state = await mockApi(page);
   await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
-  await page.goto('/order-schedule?view=month&month=2026-10');
+  await page.goto('/work-orders?view=month&month=2026-10');
   const dialog = page.getByRole('dialog');
   await page
     .getByRole('button', { name: 'Add order on Wed, Oct 21, 2026' })
@@ -201,7 +201,7 @@ test('admins add an order to a day of the month', async ({ page }) => {
 test('admins reschedule an order from its list row', async ({ page }) => {
   const state = await mockApi(page);
   await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
-  await page.goto('/order-schedule?view=list');
+  await page.goto('/work-orders?view=list');
   const dialog = page.getByRole('dialog');
   await page.getByRole('button', { name: 'Reschedule order 104877' }).click();
   // The calendar is already open on the order's month.
@@ -219,16 +219,16 @@ test('employees read the schedule and an order without admin actions', async ({
   page,
 }) => {
   await mockApi(page, { role: 'user' });
-  await page.goto('/order-schedule?view=list');
+  await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add order' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Mark order/ })).toHaveCount(0);
-  await page.goto(`/order-schedule/${ids.order}`);
+  await page.goto(`/work-orders/${ids.order}`);
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   for (const name of ['Edit', 'Mark shipped', 'Delete'])
     await expect(page.getByRole('button', { name })).toHaveCount(0);
   // The calendar views are read-only for them.
-  await page.goto('/order-schedule?view=week&week=2026-10-02');
+  await page.goto('/work-orders?view=week&week=2026-10-02');
   await expect(page.getByRole('link', { name: '104801' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Move order/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Add order/ })).toHaveCount(0);

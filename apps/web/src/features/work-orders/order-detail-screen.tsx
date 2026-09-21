@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,9 @@ import { OrderEditor } from './order-editor';
 import {
   deleteOrder,
   orderDetail,
-  orderScheduleKey,
+  workOrdersKey,
   updateOrder,
-} from './order-schedule.api';
+} from './work-orders.api';
 
 export function OrderDetailScreen({ id }: { id: string }) {
   const query = useQuery(orderDetail(id));
@@ -36,7 +36,7 @@ export function OrderDetailScreen({ id }: { id: string }) {
     </>
   );
 }
-function OrderRecord({ order }: { order: ScheduledOrder }) {
+function OrderRecord({ order }: { order: WorkOrder }) {
   const canManage = useCanManage();
   const client = useQueryClient();
   const router = useRouter();
@@ -48,15 +48,15 @@ function OrderRecord({ order }: { order: ScheduledOrder }) {
         expectedRevision: order.revision,
         shipped: !order.shippedAt,
       }),
-    onSuccess: () => client.invalidateQueries({ queryKey: orderScheduleKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: workOrdersKey }),
   });
   const remove = useMutation({
     mutationFn: () => deleteOrder(order.id, order.revision),
     // Leave before refreshing: refetching this record would only report 404.
     onSuccess: () => {
-      router.push('/order-schedule');
+      router.push('/work-orders');
       return client.invalidateQueries({
-        queryKey: [...orderScheduleKey, 'list'],
+        queryKey: [...workOrdersKey, 'list'],
       });
     },
   });
@@ -127,7 +127,7 @@ function OrderRecord({ order }: { order: ScheduledOrder }) {
           )}
         </div>
       </section>
-      <History type="order-schedule" id={order.id} />
+      <History type="work-orders" id={order.id} />
       {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
       <Dialog
         open={deleting}

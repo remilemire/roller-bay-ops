@@ -73,7 +73,7 @@ function AllocationRecord({
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
         // Cancelling returns the scheduled order to `scheduled`.
-        client.invalidateQueries({ queryKey: ['order-schedule'] }),
+        client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
     },
   });

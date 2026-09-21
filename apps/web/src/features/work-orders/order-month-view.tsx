@@ -15,7 +15,7 @@ import { calendarDateLabel, monthLabel, weekdayLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { cn } from '@/lib/utils';
 import { OrderCalendarNav } from './order-calendar-nav';
-import { orderRange } from './order-schedule.api';
+import { orderRange } from './work-orders.api';
 import {
   blindCount,
   orderCount,
@@ -114,7 +114,7 @@ export function OrderMonthView({
                       {dayOrders.slice(0, SHOWN).map((order) => (
                         <li key={order.id}>
                           <Link
-                            href={`/order-schedule/${order.id}`}
+                            href={`/work-orders/${order.id}`}
                             className={`month-order status-${order.status}`}
                             title={[blindCount(order.quantity), order.note]
                               .filter(Boolean)
@@ -129,7 +129,7 @@ export function OrderMonthView({
                     {dayOrders.length > SHOWN && (
                       <Link
                         className="text-link"
-                        href={`/order-schedule?view=week&week=${day}`}
+                        href={`/work-orders?view=week&week=${day}`}
                       >
                         +{dayOrders.length - SHOWN} more
                       </Link>

@@ -67,26 +67,25 @@ export function createFixtures(pool: Pool) {
     },
 
     /** Orders numbered `first` to `last`, each for one blind. */
-    createScheduledOrders: (first: number, last: number) =>
+    createWorkOrders: (first: number, last: number) =>
       pool.query(
-        `INSERT INTO scheduled_orders (order_number, ship_date, quantity)
+        `INSERT INTO work_orders (order_number, ship_date, quantity)
            SELECT n::text, '2026-10-01', 1 FROM generate_series($1::int, $2::int) n`,
         [first, last],
       ),
 
     setOrderQuantity: (orderNumber: string, quantity: number) =>
-      pool.query(
-        `UPDATE scheduled_orders SET quantity=$1 WHERE order_number=$2`,
-        [quantity, orderNumber],
-      ),
+      pool.query(`UPDATE work_orders SET quantity=$1 WHERE order_number=$2`, [
+        quantity,
+        orderNumber,
+      ]),
 
     /** The order's raw row: milestones are asserted as stored, not as presented. */
-    scheduledOrder: async (orderNumber: string) =>
+    workOrder: async (orderNumber: string) =>
       (
-        await pool.query(
-          `SELECT * FROM scheduled_orders WHERE order_number=$1`,
-          [orderNumber],
-        )
+        await pool.query(`SELECT * FROM work_orders WHERE order_number=$1`, [
+          orderNumber,
+        ])
       ).rows[0],
   };
 }

@@ -1,14 +1,12 @@
 import {
-  scheduledOrderSchema,
-  type ScheduledOrder,
-} from '@roller-bay/shared/order-schedule';
-import type { ScheduledOrderRecord } from './order-schedule.repository.js';
+  workOrderSchema,
+  type WorkOrder,
+} from '@roller-bay/shared/work-orders';
+import type { WorkOrderRecord } from './work-orders.repository.js';
 
 // The status is the furthest milestone reached; it is never stored.
-export function presentScheduledOrder(
-  row: ScheduledOrderRecord,
-): ScheduledOrder {
-  return scheduledOrderSchema.parse({
+export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
+  return workOrderSchema.parse({
     ...row,
     status: row.shippedAt
       ? 'shipped'

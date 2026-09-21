@@ -1,4 +1,4 @@
-import { OrderDetailScreen } from '@/features/order-schedule/order-detail-screen';
+import { OrderDetailScreen } from '@/features/work-orders/order-detail-screen';
 export default async function Page({
   params,
 }: {

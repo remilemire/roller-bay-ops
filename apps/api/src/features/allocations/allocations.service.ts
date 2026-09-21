@@ -35,7 +35,7 @@ import {
   completeAllocationSchema,
   type CompleteAllocationRequest,
 } from '@roller-bay/shared/allocations';
-import { OrderScheduleService } from '../order-schedule/order-schedule.service.js';
+import { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
@@ -70,7 +70,7 @@ export class AllocationsService {
     private readonly repository: AllocationsRepository,
     private readonly stockItems: StockItemsService,
     private readonly cuttingRules: CuttingRulesService,
-    private readonly orders: OrderScheduleService,
+    private readonly orders: WorkOrdersService,
   ) {}
 
   create(input: CreateAllocation, userId: string, key: string) {

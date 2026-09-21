@@ -53,7 +53,7 @@ export const orderAlreadyScheduled = (cause?: unknown) =>
     { cause },
   );
 
-export async function orderScheduleOperation<T>(
+export async function workOrdersOperation<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   try {
@@ -70,7 +70,7 @@ export async function orderScheduleOperation<T>(
         if (
           cause.code === '23505' &&
           'constraint' in cause &&
-          cause.constraint === 'scheduled_orders_order_number_unique'
+          cause.constraint === 'work_orders_order_number_unique'
         )
           throw orderAlreadyScheduled(error);
         // The contracts reject these first; the checks are the backstop.
@@ -88,7 +88,7 @@ export async function orderScheduleOperation<T>(
       cause = 'cause' in cause ? cause.cause : undefined;
     }
     throw new ServiceUnavailableException(
-      'Order schedule storage is unavailable.',
+      'Work order storage is unavailable.',
       { cause: error },
     );
   }

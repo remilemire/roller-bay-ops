@@ -9,8 +9,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-export const scheduledOrders = pgTable(
-  'scheduled_orders',
+export const workOrders = pgTable(
+  'work_orders',
   {
     id: uuid('id').defaultRandom().primaryKey(),
     orderNumber: varchar('order_number', { length: 6 }).notNull().unique(),
@@ -38,25 +38,25 @@ export const scheduledOrders = pgTable(
   },
   (table) => [
     check(
-      'scheduled_orders_order_number_format',
+      'work_orders_order_number_format',
       sql`${table.orderNumber} ~ '^[0-9]{6}$'`,
     ),
     // Orders ship Monday to Friday (ISO weekdays 1-5).
     check(
-      'scheduled_orders_ship_date_weekday',
+      'work_orders_ship_date_weekday',
       sql`EXTRACT(ISODOW FROM ${table.shipDate}) < 6`,
     ),
-    check('scheduled_orders_quantity_positive', sql`${table.quantity} > 0`),
-    check('scheduled_orders_revision_positive', sql`${table.revision} > 0`),
+    check('work_orders_quantity_positive', sql`${table.quantity} > 0`),
+    check('work_orders_revision_positive', sql`${table.revision} > 0`),
     // Only an order without a live allocation can be deleted.
     check(
-      'scheduled_orders_deleted_unallocated',
+      'work_orders_deleted_unallocated',
       sql`${table.deletedAt} IS NULL OR ${table.allocatedAt} IS NULL`,
     ),
     // allocated_at and cut_at mirror the order's one live allocation, which is
     // confirmed before it is completed.
     check(
-      'scheduled_orders_cut_requires_allocated',
+      'work_orders_cut_requires_allocated',
       sql`${table.cutAt} IS NULL OR ${table.allocatedAt} IS NOT NULL`,
     ),
   ],

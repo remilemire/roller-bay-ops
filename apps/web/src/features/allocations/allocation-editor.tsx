@@ -26,9 +26,9 @@ import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import {
   lookupSchedulableOrders,
   orderByNumber,
-  orderScheduleKey,
-} from '@/features/order-schedule/order-schedule.api';
-import { blindCount } from '@/features/order-schedule/order-totals';
+  workOrdersKey,
+} from '@/features/work-orders/work-orders.api';
+import { blindCount } from '@/features/work-orders/order-totals';
 import { stockKey } from '@/features/stock-items/stock-items.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -158,7 +158,7 @@ export function AllocationEditor({
       client.invalidateQueries({ queryKey: allocationKey }),
       client.invalidateQueries({ queryKey: stockKey }),
       // Confirming or moving an allocation changes its order's status.
-      client.invalidateQueries({ queryKey: orderScheduleKey }),
+      client.invalidateQueries({ queryKey: workOrdersKey }),
     ]);
   const save = useMutation({
     mutationFn: async (value: AllocationForm) => {
@@ -336,7 +336,7 @@ export function AllocationEditor({
                     setAttempted(false);
                   }}
                   selectedLabel={values.orderNumber}
-                  queryKey={[...orderScheduleKey, 'schedulable']}
+                  queryKey={[...workOrdersKey, 'schedulable']}
                   load={lookupSchedulableOrders}
                   error={errors.orderNumber?.message ?? quantityError}
                 />

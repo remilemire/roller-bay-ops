@@ -107,7 +107,7 @@ export async function startCorrectionsApp(t: TestContext) {
       expectedRevision: e.revision,
     }));
   // Each allocation needs its own scheduled order, for the one blind it plans.
-  await fixtures.createScheduledOrders(300001, 300100);
+  await fixtures.createWorkOrders(300001, 300100);
   let orderNumber = 300000;
   const plan = (stockId: string) => {
     const requirementId = randomUUID();

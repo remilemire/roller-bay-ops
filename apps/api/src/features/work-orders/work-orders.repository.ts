@@ -12,22 +12,22 @@ import {
   sql,
 } from 'drizzle-orm';
 import type {
-  CreateScheduledOrder,
-  ScheduledOrderQuery,
-} from '@roller-bay/shared/order-schedule';
+  CreateWorkOrder,
+  WorkOrderQuery,
+} from '@roller-bay/shared/work-orders';
 import {
   DatabaseService,
   type DatabaseTransaction,
 } from '../../database/database.service.js';
-import { scheduledOrders } from './order-schedule.table.js';
+import { workOrders } from './work-orders.table.js';
 
-type OrderScheduleDatabase = Pick<
+type WorkOrdersDatabase = Pick<
   DatabaseService['db'],
   'select' | 'insert' | 'update' | 'delete' | 'transaction'
 >;
-export type ScheduledOrderRecord = typeof scheduledOrders.$inferSelect;
+export type WorkOrderRecord = typeof workOrders.$inferSelect;
 
-const { allocatedAt, cutAt, shippedAt } = scheduledOrders;
+const { allocatedAt, cutAt, shippedAt } = workOrders;
 const statusFilters = {
   open: isNull(shippedAt),
   scheduled: and(isNull(allocatedAt), isNull(cutAt), isNull(shippedAt)),
@@ -37,62 +37,55 @@ const statusFilters = {
 };
 
 // Deleted orders are kept for their number and history; reads leave them out.
-const present = isNull(scheduledOrders.deletedAt);
+const present = isNull(workOrders.deletedAt);
 
 @Injectable()
-export class OrderScheduleRepository {
-  private readonly db: OrderScheduleDatabase;
-  constructor(
-    @Inject(DatabaseService) connection: { db: OrderScheduleDatabase },
-  ) {
+export class WorkOrdersRepository {
+  private readonly db: WorkOrdersDatabase;
+  constructor(@Inject(DatabaseService) connection: { db: WorkOrdersDatabase }) {
     this.db = connection.db;
   }
 
   withTransaction<T>(
     operation: (
-      repository: OrderScheduleRepository,
+      repository: WorkOrdersRepository,
       tx: DatabaseTransaction,
     ) => Promise<T>,
   ): Promise<T> {
     return this.db.transaction(async (tx) => {
       // Allocation work may hold an order's row lock while it plans stock.
       await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
-      return operation(new OrderScheduleRepository({ db: tx }), tx);
+      return operation(new WorkOrdersRepository({ db: tx }), tx);
     });
   }
 
-  list(query: ScheduledOrderQuery) {
+  list(query: WorkOrderQuery) {
     const where = and(
       present,
       query.search
         ? ilike(
-            scheduledOrders.orderNumber,
+            workOrders.orderNumber,
             `%${query.search.replace(/[\\%_]/g, '\\$&')}%`,
           )
         : undefined,
       query.status ? statusFilters[query.status] : undefined,
       query.shipDateFrom
-        ? gte(scheduledOrders.shipDate, query.shipDateFrom)
+        ? gte(workOrders.shipDate, query.shipDateFrom)
         : undefined,
-      query.shipDateTo
-        ? lte(scheduledOrders.shipDate, query.shipDateTo)
-        : undefined,
+      query.shipDateTo ? lte(workOrders.shipDate, query.shipDateTo) : undefined,
     );
     return this.db.transaction(
       async (tx) => {
         const items = await tx
           .select()
-          .from(scheduledOrders)
+          .from(workOrders)
           .where(where)
-          .orderBy(
-            asc(scheduledOrders.shipDate),
-            asc(scheduledOrders.orderNumber),
-          )
+          .orderBy(asc(workOrders.shipDate), asc(workOrders.orderNumber))
           .limit(query.pageSize)
           .offset((query.page - 1) * query.pageSize);
         const [result] = await tx
           .select({ total: count() })
-          .from(scheduledOrders)
+          .from(workOrders)
           .where(where);
         return { items, total: result!.total };
       },
@@ -103,8 +96,8 @@ export class OrderScheduleRepository {
   async findById(id: string) {
     const [row] = await this.db
       .select()
-      .from(scheduledOrders)
-      .where(and(eq(scheduledOrders.id, id), present));
+      .from(workOrders)
+      .where(and(eq(workOrders.id, id), present));
     return row;
   }
 
@@ -117,8 +110,8 @@ export class OrderScheduleRepository {
   async findByIdForUpdate(id: string) {
     const [row] = await this.db
       .select()
-      .from(scheduledOrders)
-      .where(and(eq(scheduledOrders.id, id), present))
+      .from(workOrders)
+      .where(and(eq(workOrders.id, id), present))
       .for('no key update');
     return row;
   }
@@ -126,16 +119,16 @@ export class OrderScheduleRepository {
   async findByOrderNumber(orderNumber: string) {
     const [row] = await this.db
       .select()
-      .from(scheduledOrders)
-      .where(and(eq(scheduledOrders.orderNumber, orderNumber), present));
+      .from(workOrders)
+      .where(and(eq(workOrders.orderNumber, orderNumber), present));
     return row;
   }
 
   async findByOrderNumberForUpdate(orderNumber: string) {
     const [row] = await this.db
       .select()
-      .from(scheduledOrders)
-      .where(and(eq(scheduledOrders.orderNumber, orderNumber), present))
+      .from(workOrders)
+      .where(and(eq(workOrders.orderNumber, orderNumber), present))
       .for('no key update');
     return row;
   }
@@ -145,21 +138,21 @@ export class OrderScheduleRepository {
    * Returns nothing when the number belongs to an order still on the schedule.
    * A restored row is recognisable by its revision, which a new row starts at 1.
    */
-  async create(values: CreateScheduledOrder) {
+  async create(values: CreateWorkOrder) {
     const [row] = await this.db
-      .insert(scheduledOrders)
+      .insert(workOrders)
       .values(values)
       .onConflictDoUpdate({
-        target: scheduledOrders.orderNumber,
+        target: workOrders.orderNumber,
         set: {
           ...values,
           scheduledAt: new Date(),
           shippedAt: null,
           deletedAt: null,
-          revision: sql`${scheduledOrders.revision} + 1`,
+          revision: sql`${workOrders.revision} + 1`,
           updatedAt: new Date(),
         },
-        setWhere: isNotNull(scheduledOrders.deletedAt),
+        setWhere: isNotNull(workOrders.deletedAt),
       })
       .returning();
     return row;
@@ -168,17 +161,17 @@ export class OrderScheduleRepository {
   async update(
     id: string,
     values: Partial<
-      Pick<ScheduledOrderRecord, 'shipDate' | 'quantity' | 'note' | 'shippedAt'>
+      Pick<WorkOrderRecord, 'shipDate' | 'quantity' | 'note' | 'shippedAt'>
     >,
   ) {
     const [row] = await this.db
-      .update(scheduledOrders)
+      .update(workOrders)
       .set({
         ...values,
-        revision: sql`${scheduledOrders.revision} + 1`,
+        revision: sql`${workOrders.revision} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(scheduledOrders.id, id))
+      .where(eq(workOrders.id, id))
       .returning();
     return row!;
   }
@@ -191,12 +184,12 @@ export class OrderScheduleRepository {
    */
   async stamp(
     id: string,
-    values: Partial<Pick<ScheduledOrderRecord, 'allocatedAt' | 'cutAt'>>,
+    values: Partial<Pick<WorkOrderRecord, 'allocatedAt' | 'cutAt'>>,
   ) {
     const [row] = await this.db
-      .update(scheduledOrders)
+      .update(workOrders)
       .set({ ...values, updatedAt: new Date() })
-      .where(eq(scheduledOrders.id, id))
+      .where(eq(workOrders.id, id))
       .returning();
     return row!;
   }
@@ -204,12 +197,12 @@ export class OrderScheduleRepository {
   /** The service locks the row and checks it may go; see findByIdForUpdate. */
   async delete(id: string) {
     await this.db
-      .update(scheduledOrders)
+      .update(workOrders)
       .set({
         deletedAt: new Date(),
-        revision: sql`${scheduledOrders.revision} + 1`,
+        revision: sql`${workOrders.revision} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(scheduledOrders.id, id));
+      .where(eq(workOrders.id, id));
   }
 }

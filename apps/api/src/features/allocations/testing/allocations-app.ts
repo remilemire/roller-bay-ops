@@ -110,8 +110,8 @@ export async function startAllocationsApp(t: TestContext) {
   });
   // Allocations must name a scheduled order and match its quantity; every
   // allocation here plans one blind.
-  await fixtures.createScheduledOrders(100001, 100400);
-  await fixtures.createScheduledOrders(999998, 999999);
+  await fixtures.createWorkOrders(100001, 100400);
+  await fixtures.createWorkOrders(999998, 999999);
   return {
     ...harness,
     server,

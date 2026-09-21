@@ -7,12 +7,12 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
 import { OrderDetailScreen } from './order-detail-screen';
-import { OrderScheduleScreen } from './order-schedule-screen';
+import { WorkOrdersScreen } from './work-orders-screen';
 import {
   createOrder,
   deleteOrder,
@@ -21,7 +21,7 @@ import {
   orderList,
   orderRange,
   updateOrder,
-} from './order-schedule.api';
+} from './work-orders.api';
 
 const state = vi.hoisted(() => ({
   canManage: true,
@@ -31,7 +31,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(state.search),
-  usePathname: () => '/order-schedule',
+  usePathname: () => '/work-orders',
   useRouter: () => ({ replace: state.replace, push: state.push }),
 }));
 vi.mock('@/features/auth/auth-boundary', () => ({
@@ -42,8 +42,8 @@ vi.mock('@/lib/calendar-dates', async (original) => ({
   ...(await original<typeof import('@/lib/calendar-dates')>()),
   today: () => '2026-09-28',
 }));
-vi.mock('./order-schedule.api', async (original) => ({
-  ...(await original<typeof import('./order-schedule.api')>()),
+vi.mock('./work-orders.api', async (original) => ({
+  ...(await original<typeof import('./work-orders.api')>()),
   orderList: vi.fn(),
   orderDetail: vi.fn(),
   orderRange: vi.fn(),
@@ -59,7 +59,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation((filters = {}) =>
       queryOptions({
-        queryKey: ['order-schedule', 'list', filters],
+        queryKey: ['work-orders', 'list', filters],
         queryFn: async () => ({
           items: [order],
           total: 1,
@@ -72,7 +72,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation((id) =>
       queryOptions({
-        queryKey: ['order-schedule', id],
+        queryKey: ['work-orders', id],
         queryFn: async () => order,
       }),
     );
@@ -81,7 +81,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation((from, to) =>
       queryOptions({
-        queryKey: ['order-schedule', 'range', from, to],
+        queryKey: ['work-orders', 'range', from, to],
         queryFn: async () =>
           (
             [
@@ -99,7 +99,7 @@ beforeEach(() => {
                 orderNumber: `10483${n}`,
                 shipDate: '2026-10-13',
               })),
-            ] as ScheduledOrder[]
+            ] as WorkOrder[]
           ).filter((row) => row.shipDate >= from && row.shipDate <= to),
       }),
     );
@@ -133,7 +133,7 @@ it('offers the allocation editor only orders that can still be allocated', async
     new AbortController().signal,
   );
   const url = new URL(String(fetched.mock.calls[0]![0]), 'http://localhost');
-  expect(url.pathname).toMatch(/\/order-schedule$/);
+  expect(url.pathname).toMatch(/\/work-orders$/);
   expect(url.searchParams.get('status')).toBe('scheduled');
   // The API caps the search at an order number's six characters.
   expect(url.searchParams.get('search')).toBe('104801');
@@ -148,7 +148,7 @@ it('offers the allocation editor only orders that can still be allocated', async
 
 it('opens the list on unshipped orders and keeps the filter in the URL', async () => {
   state.search = 'view=list&status=bogus';
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   const row = (await screen.findByText('104801')).closest('tr')!;
   expect(row).toHaveTextContent('Fri, Oct 2, 2026');
@@ -157,7 +157,7 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
   expect(within(row).getByRole('cell', { name: '14' })).toBeInTheDocument();
   expect(within(row).getByRole('link')).toHaveAttribute(
     'href',
-    `/order-schedule/${order.id}`,
+    `/work-orders/${order.id}`,
   );
   expect(orderList).toHaveBeenLastCalledWith({
     search: '',
@@ -166,19 +166,19 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
   });
   await user.click(screen.getByRole('button', { name: 'Shipped' }));
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/order-schedule?view=list&status=shipped',
+    '/work-orders?view=list&status=shipped',
     { scroll: false },
   );
   // The default tab needs no parameter.
   await user.click(screen.getByRole('button', { name: 'Open' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=list', {
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
     scroll: false,
   });
 });
 
 it('asks the API for every order on the All orders tab', async () => {
   state.search = 'view=list&status=all&search=1048&page=2';
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   await screen.findByText('104801');
   expect(orderList).toHaveBeenLastCalledWith({
     search: '1048',
@@ -190,7 +190,7 @@ it('asks the API for every order on the All orders tab', async () => {
 it('hides schedule writes from employees who cannot manage', async () => {
   state.canManage = false;
   state.search = 'view=list';
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   await screen.findByText('104801');
   expect(screen.queryByRole('button', { name: 'Add order' })).toBeNull();
   expect(screen.queryByRole('button', { name: /Mark order/ })).toBeNull();
@@ -203,7 +203,7 @@ it('marks an order shipped from its row with the revision the row shows', async 
   vi.mocked(updateOrder).mockRejectedValueOnce(
     new ApiError(409, 'Order changed; refresh before saving.'),
   );
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   const button = await screen.findByRole('button', {
     name: 'Mark order 104801 shipped',
@@ -235,7 +235,7 @@ it('adds an order and shows rejected fields beside them', async () => {
     ]),
   );
   vi.mocked(createOrder).mockResolvedValueOnce(order);
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Add order' }));
   const dialog = within(screen.getByRole('dialog'));
@@ -325,7 +325,7 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
     within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }),
   );
   await waitFor(() => expect(deleteOrder).toHaveBeenCalledWith(order.id, 3));
-  expect(state.push).toHaveBeenCalledWith('/order-schedule');
+  expect(state.push).toHaveBeenCalledWith('/work-orders');
 });
 
 it('keeps a refused delete in its dialog', async () => {
@@ -357,7 +357,7 @@ it('shows employees the order without its admin actions', async () => {
 it('reschedules an order from its row with the calendar already open', async () => {
   state.search = 'view=list';
   vi.mocked(updateOrder).mockResolvedValue(order);
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   await user.click(
     await screen.findByRole('button', { name: 'Reschedule order 104801' }),
@@ -381,7 +381,7 @@ it('reschedules an order from its row with the calendar already open', async () 
 
 it('groups the working week by day with totals and adds an order to a day', async () => {
   vi.mocked(createOrder).mockResolvedValue(order);
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   // Today is Monday 28 September, so this is the week on show.
   expect(
@@ -430,12 +430,12 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   await user.click(screen.getByRole('button', { name: 'Next week' }));
   // The default view needs no parameter of its own.
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/order-schedule?week=2026-10-05',
+    '/work-orders?week=2026-10-05',
     { scroll: false },
   );
 
   await user.click(screen.getByRole('button', { name: 'List' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=list', {
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
     scroll: false,
   });
 });
@@ -443,7 +443,7 @@ it('groups the working week by day with totals and adds an order to a day', asyn
 it('shows any day of a week as that week, and employees a read-only board', async () => {
   state.canManage = false;
   state.search = 'view=week&week=2026-10-14';
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   expect(
     await screen.findByRole('heading', { name: 'Oct 12 – Oct 16, 2026' }),
   ).toBeInTheDocument();
@@ -457,14 +457,14 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
     ),
   ).toBeInTheDocument();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Today' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=week', {
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=week', {
     scroll: false,
   });
 });
 
 it('lays the month out Monday to Friday and adds an order to a day', async () => {
   state.search = 'view=month&month=2026-10';
-  show(<OrderScheduleScreen />);
+  show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   expect(
     await screen.findByRole('heading', { name: 'October 2026' }),
@@ -488,7 +488,7 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   expect(busy.getByText('6 orders · 84 blinds')).toBeInTheDocument();
   expect(busy.getByRole('link', { name: '+2 more' })).toHaveAttribute(
     'href',
-    '/order-schedule?view=week&week=2026-10-13',
+    '/work-orders?view=week&week=2026-10-13',
   );
   expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
@@ -505,12 +505,12 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
     within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }),
   );
   await user.click(screen.getByRole('button', { name: 'Today' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/order-schedule?view=month', {
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=month', {
     scroll: false,
   });
   await user.click(screen.getByRole('button', { name: 'Previous month' }));
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/order-schedule?view=month&month=2026-09',
+    '/work-orders?view=month&month=2026-09',
     { scroll: false },
   );
 });

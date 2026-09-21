@@ -94,7 +94,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
       // The refused allocation claimed nothing.
       assert.equal(
-        (await fixtures.scheduledOrder(counted.orderNumber)).allocated_at,
+        (await fixtures.workOrder(counted.orderNumber)).allocated_at,
         null,
       );
       await setQuantity(1);
@@ -137,11 +137,11 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       }).expect(200);
       await create(again);
 
-      const order = await fixtures.scheduledOrder(first.orderNumber);
+      const order = await fixtures.workOrder(first.orderNumber);
       await fixtures.setUserRole(userId, 'admin');
       try {
         await request(server)
-          .delete(`/api/order-schedule/${order.id}`)
+          .delete(`/api/work-orders/${order.id}`)
           .set('Cookie', cookie)
           .set('Origin', origin)
           .send({ expectedRevision: order.revision })
@@ -150,7 +150,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         // other fields still change.
         const edit = (body: object) =>
           request(server)
-            .patch(`/api/order-schedule/${order.id}`)
+            .patch(`/api/work-orders/${order.id}`)
             .set('Cookie', cookie)
             .set('Origin', origin)
             .send({ expectedRevision: order.revision, ...body });
@@ -174,7 +174,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
           data: { orderNumber: body.orderNumber },
         }).expect(201)
       ).body;
-      const order = await fixtures.scheduledOrder(body.orderNumber);
+      const order = await fixtures.workOrder(body.orderNumber);
       const asAdmin = async <T>(work: () => Promise<T>) => {
         await fixtures.setUserRole(userId, 'admin');
         try {
@@ -191,7 +191,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       };
       const remove = () =>
         asAdmin(() =>
-          schedule('delete', `/api/order-schedule/${order.id}`).send({
+          schedule('delete', `/api/work-orders/${order.id}`).send({
             // Milestone stamps leave the order's revision alone.
             expectedRevision: 1,
           }),
@@ -247,7 +247,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       // Scheduling the number again restores the order, here with a new
       // quantity: two blinds where the cancelled allocation planned one.
       const restored = await asAdmin(() =>
-        schedule('post', '/api/order-schedule').send({
+        schedule('post', '/api/work-orders').send({
           orderNumber: body.orderNumber,
           shipDate: '2026-10-01',
           quantity: 2,
@@ -309,7 +309,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         ).body,
       );
       assert.equal(confirmed.state, 'active');
-      assert.ok((await fixtures.scheduledOrder(body.orderNumber)).allocated_at);
+      assert.ok((await fixtures.workOrder(body.orderNumber)).allocated_at);
       await request(server)
         .delete(`${path}/${draft.id}/draft`)
         .set('Cookie', cookie)
@@ -321,7 +321,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'confirming, moving, cancelling, and completing an allocation stamp its scheduled order',
     async () => {
-      const order = fixtures.scheduledOrder;
+      const order = fixtures.workOrder;
       const allocationRow = async (id: string) =>
         (
           await pool.query(
@@ -369,7 +369,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
 
       const shipped = input(stockId).orderNumber;
       await pool.query(
-        `UPDATE scheduled_orders SET shipped_at=now() WHERE order_number=$1`,
+        `UPDATE work_orders SET shipped_at=now() WHERE order_number=$1`,
         [shipped],
       );
       const late = await post(path, {
@@ -408,14 +408,14 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       assert.deepEqual(row.cut_at, stamps.completed_at);
       assert.equal(row.revision, 1);
       assert.equal(
-        (await get(`/api/order-schedule/${row.id}`).expect(200)).body.status,
+        (await get(`/api/work-orders/${row.id}`).expect(200)).body.status,
         'cut',
       );
 
       // Each allocation event carries the order's change, so the order's
       // own history explains its milestones.
       const history = historySchema.parse(
-        (await get(`/api/order-schedule/${row.id}/history`).expect(200)).body,
+        (await get(`/api/work-orders/${row.id}/history`).expect(200)).body,
       );
       assert.deepEqual(history.items.map((event) => event.action).sort(), [
         'allocation.cancelled',
@@ -428,7 +428,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       )!;
       assert.deepEqual(
         completedEvent.changes.map((c) => c.recordType).slice(0, 2),
-        ['allocations', 'order-schedule'],
+        ['allocations', 'work-orders'],
       );
     },
   );

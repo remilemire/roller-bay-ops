@@ -9,8 +9,8 @@ import {
   orderNumberSchema,
   orderQuantitySchema,
   shipDateSchema,
-  type ScheduledOrder,
-} from '@roller-bay/shared/order-schedule';
+  type WorkOrder,
+} from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
@@ -18,11 +18,7 @@ import { DateField } from '@/components/ui/date-field';
 import { TextField } from '@/components/ui/field';
 import { issuePath } from '@/lib/errors';
 import { showFieldIssues } from '@/lib/field-issues';
-import {
-  createOrder,
-  orderScheduleKey,
-  updateOrder,
-} from './order-schedule.api';
+import { createOrder, workOrdersKey, updateOrder } from './work-orders.api';
 
 const formSchema = z.object({
   orderNumber: orderNumberSchema,
@@ -46,7 +42,7 @@ export function OrderEditor({
   shipDate = '',
   close,
 }: {
-  order?: ScheduledOrder;
+  order?: WorkOrder;
   /** The day a new order was added from, in the week and month views. */
   shipDate?: string;
   close: () => void;
@@ -80,7 +76,7 @@ export function OrderEditor({
         : createOrder(data),
     onError: (error) => showFieldIssues(form, error, fieldName),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: orderScheduleKey });
+      await client.invalidateQueries({ queryKey: workOrdersKey });
       close();
     },
   });

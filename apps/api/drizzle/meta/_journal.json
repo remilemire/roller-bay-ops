@@ -176,6 +176,13 @@
       "when": 1789939099247,
       "tag": "0024_remove_draft_audit_events",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789955266873,
+      "tag": "0025_rename_order_schedule_to_work_orders",
+      "breakpoints": true
     }
   ]
 }

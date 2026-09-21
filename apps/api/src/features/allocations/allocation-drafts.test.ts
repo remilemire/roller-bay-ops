@@ -2,7 +2,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { ConfigService } from '@nestjs/config';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import { AllocationsService } from './allocations.service.js';
-import type { OrderScheduleService } from '../order-schedule/order-schedule.service.js';
+import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -175,7 +175,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
         CUTTING_DROP_ALLOWANCE_MM: 0,
       }),
     ),
-    orders as unknown as OrderScheduleService,
+    orders as unknown as WorkOrdersService,
   );
   await assert.rejects(
     service.submitDraft(draft.id, 1, randomUUID()),

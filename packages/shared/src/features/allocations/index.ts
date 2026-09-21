@@ -5,7 +5,7 @@ import {
   legacyStockCuttingOutcomeSchema,
   recordedStockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
-import { orderNumberSchema } from '../order-schedule/index.js';
+import { orderNumberSchema } from '../work-orders/index.js';
 
 export const allocationStateSchema = z.enum([
   'draft',

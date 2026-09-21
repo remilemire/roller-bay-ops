@@ -6,44 +6,44 @@ import {
 } from '@nestjs/common';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import type {
-  CreateScheduledOrder,
-  ScheduledOrderList,
-  ScheduledOrderQuery,
-  UpdateScheduledOrder,
-} from '@roller-bay/shared/order-schedule';
+  CreateWorkOrder,
+  WorkOrderList,
+  WorkOrderQuery,
+  UpdateWorkOrder,
+} from '@roller-bay/shared/work-orders';
 import type { DatabaseTransaction } from '../../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import {
   orderAlreadyAllocated,
   orderAlreadyScheduled,
   orderNotScheduled,
-  orderScheduleOperation,
-} from './order-schedule.operation.js';
-import { presentScheduledOrder } from './order-schedule.presenter.js';
+  workOrdersOperation,
+} from './work-orders.operation.js';
+import { presentWorkOrder } from './work-orders.presenter.js';
 import {
-  OrderScheduleRepository,
-  type ScheduledOrderRecord,
-} from './order-schedule.repository.js';
+  WorkOrdersRepository,
+  type WorkOrderRecord,
+} from './work-orders.repository.js';
 
 function change(
-  before: ScheduledOrderRecord | null,
-  after: ScheduledOrderRecord | null,
+  before: WorkOrderRecord | null,
+  after: WorkOrderRecord | null,
 ): AuditChange {
   return {
-    recordType: 'order-schedule',
+    recordType: 'work-orders',
     recordId: (after ?? before)!.id,
     before: before && {
-      type: 'order-schedule',
-      value: presentScheduledOrder(before),
+      type: 'work-orders',
+      value: presentWorkOrder(before),
     },
     after: after && {
-      type: 'order-schedule',
-      value: presentScheduledOrder(after),
+      type: 'work-orders',
+      value: presentWorkOrder(after),
     },
   };
 }
 
-function requireQuantity(order: ScheduledOrderRecord, quantity: number) {
+function requireQuantity(order: WorkOrderRecord, quantity: number) {
   if (order.quantity !== quantity)
     throw new BadRequestException({
       message: `The order has ${order.quantity} blinds but the allocation has ${quantity}.`,
@@ -57,10 +57,7 @@ function requireQuantity(order: ScheduledOrderRecord, quantity: number) {
     });
 }
 
-function requireRevision(
-  row: ScheduledOrderRecord | undefined,
-  revision: number,
-) {
+function requireRevision(row: WorkOrderRecord | undefined, revision: number) {
   if (!row) throw new NotFoundException('Order not found.');
   if (row.revision !== revision)
     throw new ConflictException('Order changed; refresh before saving.');
@@ -68,17 +65,17 @@ function requireRevision(
 }
 
 @Injectable()
-export class OrderScheduleService {
+export class WorkOrdersService {
   constructor(
     private readonly audit: AuditService,
-    private readonly repository: OrderScheduleRepository,
+    private readonly repository: WorkOrdersRepository,
   ) {}
 
-  list(query: ScheduledOrderQuery): Promise<ScheduledOrderList> {
-    return orderScheduleOperation(async () => {
+  list(query: WorkOrderQuery): Promise<WorkOrderList> {
+    return workOrdersOperation(async () => {
       const { items, total } = await this.repository.list(query);
       return {
-        items: items.map(presentScheduledOrder),
+        items: items.map(presentWorkOrder),
         total,
         page: query.page,
         pageSize: query.pageSize,
@@ -87,15 +84,15 @@ export class OrderScheduleService {
   }
 
   findById(id: string) {
-    return orderScheduleOperation(async () => {
+    return workOrdersOperation(async () => {
       const row = await this.repository.findById(id);
       if (!row) throw new NotFoundException('Order not found.');
-      return presentScheduledOrder(row);
+      return presentWorkOrder(row);
     });
   }
 
-  create(input: CreateScheduledOrder, userId: string) {
-    return orderScheduleOperation(() =>
+  create(input: CreateWorkOrder, userId: string) {
+    return workOrdersOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const row = await repository.create(input);
         if (!row) throw orderAlreadyScheduled();
@@ -107,13 +104,13 @@ export class OrderScheduleService {
           row.revision > 1 ? 'order.restored' : 'order.scheduled',
           [change(null, row)],
         );
-        return presentScheduledOrder(row);
+        return presentWorkOrder(row);
       }),
     );
   }
 
-  update(id: string, input: UpdateScheduledOrder, userId: string) {
-    return orderScheduleOperation(() =>
+  update(id: string, input: UpdateWorkOrder, userId: string) {
+    return workOrdersOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const previous = requireRevision(
           await repository.findByIdForUpdate(id),
@@ -156,13 +153,13 @@ export class OrderScheduleService {
               ? 'order.shipped'
               : 'order.unshipped';
         await this.audit.record(tx, userId, action, [change(previous, row)]);
-        return presentScheduledOrder(row);
+        return presentWorkOrder(row);
       }),
     );
   }
 
   delete(id: string, revision: number, userId: string) {
-    return orderScheduleOperation(() =>
+    return workOrdersOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         // Holding the row's lock keeps an allocation from confirming against
         // the order between this check and the delete.
@@ -188,7 +185,7 @@ export class OrderScheduleService {
 
   /** A draft may only name an order that is on the schedule. */
   async requireScheduled(tx: DatabaseTransaction, orderNumber: string) {
-    const repository = new OrderScheduleRepository({ db: tx });
+    const repository = new WorkOrdersRepository({ db: tx });
     if (!(await repository.findByOrderNumber(orderNumber)))
       throw orderNotScheduled();
   }
@@ -200,7 +197,7 @@ export class OrderScheduleService {
     quantity: number,
     at: Date,
   ): Promise<AuditChange> {
-    const repository = new OrderScheduleRepository({ db: tx });
+    const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
     if (!order) throw orderNotScheduled();
     if (order.allocatedAt) throw orderAlreadyAllocated();
@@ -226,7 +223,7 @@ export class OrderScheduleService {
     orderNumber: string,
     quantity: number,
   ) {
-    const repository = new OrderScheduleRepository({ db: tx });
+    const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
     if (!order) throw orderNotScheduled();
     requireQuantity(order, quantity);
@@ -244,9 +241,9 @@ export class OrderScheduleService {
   private async restamp(
     tx: DatabaseTransaction,
     orderNumber: string,
-    values: Parameters<OrderScheduleRepository['stamp']>[1],
+    values: Parameters<WorkOrdersRepository['stamp']>[1],
   ): Promise<AuditChange> {
-    const repository = new OrderScheduleRepository({ db: tx });
+    const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
     // The foreign key keeps an allocation's order on the schedule.
     if (!order) throw orderNotScheduled();

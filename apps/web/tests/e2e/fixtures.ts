@@ -192,7 +192,7 @@ export async function mockApi(
         colorTheme: state.colorTheme,
       });
     }
-    if (path === '/order-schedule' && method === 'GET') {
+    if (path === '/work-orders' && method === 'GET') {
       const status = url.searchParams.get('status');
       const search = url.searchParams.get('search') ?? '';
       const from = url.searchParams.get('shipDateFrom') ?? '0000';
@@ -213,7 +213,7 @@ export async function mockApi(
         ),
       );
     }
-    if (path === '/order-schedule' && method === 'POST') {
+    if (path === '/work-orders' && method === 'POST') {
       const body = request.postDataJSON();
       state.orderRequests.push({ method, body });
       const created = {
@@ -227,7 +227,7 @@ export async function mockApi(
       state.orders.push(created);
       return send(created, 201);
     }
-    if (path.startsWith('/order-schedule/')) {
+    if (path.startsWith('/work-orders/')) {
       const index = state.orders.findIndex((row) => path.endsWith(row.id));
       const found = state.orders[index];
       if (!found) return send({ message: 'Order not found.' }, 404);

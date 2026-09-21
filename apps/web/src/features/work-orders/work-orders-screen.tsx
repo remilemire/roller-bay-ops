@@ -16,7 +16,7 @@ const views = [
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
 ];
-export function OrderScheduleScreen() {
+export function WorkOrdersScreen() {
   const params = useListParams();
   const canManage = useCanManage();
   // The week and month views add an order to the day it was added from.
@@ -29,7 +29,7 @@ export function OrderScheduleScreen() {
     : undefined;
   return (
     <>
-      <PageHeading title="Order schedule">
+      <PageHeading title="Work orders">
         <div className="tabs" role="group" aria-label="View">
           {views.map((item) => (
             <button

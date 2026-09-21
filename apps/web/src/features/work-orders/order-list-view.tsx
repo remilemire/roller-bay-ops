@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
 import { useState } from 'react';
-import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -16,7 +16,7 @@ import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { OrderReschedule } from './order-reschedule';
-import { orderList, orderScheduleKey, updateOrder } from './order-schedule.api';
+import { orderList, workOrdersKey, updateOrder } from './work-orders.api';
 
 // The schedule opens on orders that still need work; `all` includes shipped.
 const tabs = [
@@ -29,7 +29,7 @@ const tabs = [
 ];
 export function OrderListView({ canManage }: { canManage: boolean }) {
   const params = useListParams();
-  const [rescheduling, setRescheduling] = useState<ScheduledOrder | null>(null);
+  const [rescheduling, setRescheduling] = useState<WorkOrder | null>(null);
   const status = tabs.some((tab) => tab.value === params.get('status'))
     ? params.get('status')
     : 'open';
@@ -42,13 +42,13 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
   );
   const client = useQueryClient();
   const ship = useMutation({
-    mutationFn: (order: ScheduledOrder) =>
+    mutationFn: (order: WorkOrder) =>
       updateOrder(order.id, {
         expectedRevision: order.revision,
         shipped: !order.shippedAt,
       }),
     // A refused request usually means the row is stale, so refresh either way.
-    onSettled: () => client.invalidateQueries({ queryKey: orderScheduleKey }),
+    onSettled: () => client.invalidateQueries({ queryKey: workOrdersKey }),
   });
   return (
     <>
@@ -104,7 +104,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                     <td>
                       <Link
                         className="cell-leading"
-                        href={`/order-schedule/${order.id}`}
+                        href={`/work-orders/${order.id}`}
                       >
                         <span className="cell-icon">
                           <CalendarDays size={17} />

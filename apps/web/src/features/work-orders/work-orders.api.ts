@@ -1,16 +1,16 @@
 import { queryOptions } from '@tanstack/react-query';
-import * as s from '@roller-bay/shared/order-schedule';
+import * as s from '@roller-bay/shared/work-orders';
 import { api, noContent, queryString } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { blindCount } from './order-totals';
-export const orderScheduleKey = ['order-schedule'] as const;
+export const workOrdersKey = ['work-orders'] as const;
 export const orderList = (filters: Record<string, unknown> = {}) =>
   queryOptions({
-    queryKey: [...orderScheduleKey, 'list', filters],
+    queryKey: [...workOrdersKey, 'list', filters],
     queryFn: ({ signal }) =>
       api(
-        `/order-schedule${queryString({ pageSize: 25, ...filters })}`,
-        s.scheduledOrderListSchema,
+        `/work-orders${queryString({ pageSize: 25, ...filters })}`,
+        s.workOrderListSchema,
         { signal },
       ),
   });
@@ -18,13 +18,13 @@ export const orderList = (filters: Record<string, unknown> = {}) =>
 // returns at most 100 a page, so this reads pages until it has them all.
 export const orderRange = (shipDateFrom: string, shipDateTo: string) =>
   queryOptions({
-    queryKey: [...orderScheduleKey, 'range', shipDateFrom, shipDateTo],
+    queryKey: [...workOrdersKey, 'range', shipDateFrom, shipDateTo],
     queryFn: async ({ signal }) => {
-      const orders: s.ScheduledOrder[] = [];
+      const orders: s.WorkOrder[] = [];
       for (let page = 1; ; page++) {
         const data = await api(
-          `/order-schedule${queryString({ shipDateFrom, shipDateTo, page, pageSize: 100 })}`,
-          s.scheduledOrderListSchema,
+          `/work-orders${queryString({ shipDateFrom, shipDateTo, page, pageSize: 100 })}`,
+          s.workOrderListSchema,
           { signal },
         );
         orders.push(...data.items);
@@ -34,18 +34,18 @@ export const orderRange = (shipDateFrom: string, shipDateTo: string) =>
   });
 export const orderDetail = (id: string) =>
   queryOptions({
-    queryKey: [...orderScheduleKey, id],
+    queryKey: [...workOrdersKey, id],
     queryFn: ({ signal }) =>
-      api(`/order-schedule/${id}`, s.scheduledOrderSchema, { signal }),
+      api(`/work-orders/${id}`, s.workOrderSchema, { signal }),
   });
 // The order an allocation names, for the quantity its blinds must add up to.
 export const orderByNumber = (orderNumber: string) =>
   queryOptions({
-    queryKey: [...orderScheduleKey, 'number', orderNumber],
+    queryKey: [...workOrdersKey, 'number', orderNumber],
     queryFn: async ({ signal }) => {
       const data = await api(
-        `/order-schedule${queryString({ search: orderNumber, pageSize: 1 })}`,
-        s.scheduledOrderListSchema,
+        `/work-orders${queryString({ search: orderNumber, pageSize: 1 })}`,
+        s.workOrderListSchema,
         { signal },
       );
       return (
@@ -54,17 +54,17 @@ export const orderByNumber = (orderNumber: string) =>
     },
   });
 export const createOrder = (body: unknown) =>
-  api('/order-schedule', s.scheduledOrderSchema, {
+  api('/work-orders', s.workOrderSchema, {
     method: 'POST',
-    body: s.createScheduledOrderSchema.parse(body),
+    body: s.createWorkOrderSchema.parse(body),
   });
 export const updateOrder = (id: string, body: unknown) =>
-  api(`/order-schedule/${id}`, s.scheduledOrderSchema, {
+  api(`/work-orders/${id}`, s.workOrderSchema, {
     method: 'PATCH',
-    body: s.updateScheduledOrderSchema.parse(body),
+    body: s.updateWorkOrderSchema.parse(body),
   });
 export const deleteOrder = (id: string, expectedRevision: number) =>
-  api(`/order-schedule/${id}`, noContent, {
+  api(`/work-orders/${id}`, noContent, {
     method: 'DELETE',
     body: { expectedRevision },
   });
@@ -76,8 +76,8 @@ export const lookupSchedulableOrders = async (
   signal: AbortSignal,
 ) => {
   const data = await api(
-    `/order-schedule${queryString({ search: search.slice(0, 6), page, pageSize: 25, status: 'scheduled' })}`,
-    s.scheduledOrderListSchema,
+    `/work-orders${queryString({ search: search.slice(0, 6), page, pageSize: 25, status: 'scheduled' })}`,
+    s.workOrderListSchema,
     { signal },
   );
   return {

@@ -13,27 +13,27 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
-  createScheduledOrderSchema,
-  deleteScheduledOrderSchema,
-  scheduledOrderQuerySchema,
-  updateScheduledOrderSchema,
-  type CreateScheduledOrder,
-  type DeleteScheduledOrder,
-  type ScheduledOrderQuery,
-  type UpdateScheduledOrder,
-} from '@roller-bay/shared/order-schedule';
+  createWorkOrderSchema,
+  deleteWorkOrderSchema,
+  workOrderQuerySchema,
+  updateWorkOrderSchema,
+  type CreateWorkOrder,
+  type DeleteWorkOrder,
+  type WorkOrderQuery,
+  type UpdateWorkOrder,
+} from '@roller-bay/shared/work-orders';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
-import { OrderScheduleService } from './order-schedule.service.js';
+import { WorkOrdersService } from './work-orders.service.js';
 
-@Controller('order-schedule')
-export class OrderScheduleController {
-  constructor(private readonly service: OrderScheduleService) {}
+@Controller('work-orders')
+export class WorkOrdersController {
+  constructor(private readonly service: WorkOrdersService) {}
 
   @Get()
   list(
-    @Query(new ZodValidationPipe(scheduledOrderQuerySchema))
-    query: ScheduledOrderQuery,
+    @Query(new ZodValidationPipe(workOrderQuerySchema))
+    query: WorkOrderQuery,
   ) {
     return this.service.list(query);
   }
@@ -46,8 +46,8 @@ export class OrderScheduleController {
   @Post()
   @Roles('admin')
   create(
-    @Body(new ZodValidationPipe(createScheduledOrderSchema))
-    input: CreateScheduledOrder,
+    @Body(new ZodValidationPipe(createWorkOrderSchema))
+    input: CreateWorkOrder,
     @Req() request: Request,
   ) {
     return this.service.create(input, request.currentUser!.id);
@@ -57,8 +57,8 @@ export class OrderScheduleController {
   @Roles('admin')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(updateScheduledOrderSchema))
-    input: UpdateScheduledOrder,
+    @Body(new ZodValidationPipe(updateWorkOrderSchema))
+    input: UpdateWorkOrder,
     @Req() request: Request,
   ) {
     return this.service.update(id, input, request.currentUser!.id);
@@ -69,8 +69,8 @@ export class OrderScheduleController {
   @HttpCode(204)
   delete(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(deleteScheduledOrderSchema))
-    input: DeleteScheduledOrder,
+    @Body(new ZodValidationPipe(deleteWorkOrderSchema))
+    input: DeleteWorkOrder,
     @Req() request: Request,
   ) {
     return this.service.delete(

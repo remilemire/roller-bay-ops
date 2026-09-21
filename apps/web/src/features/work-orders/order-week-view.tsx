@@ -16,7 +16,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Plus } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading, Status } from '@/components/ui/feedback';
 import {
@@ -32,11 +32,7 @@ import { useListParams } from '@/lib/use-list-params';
 import { cn } from '@/lib/utils';
 import { OrderCalendarNav } from './order-calendar-nav';
 import { blindCount, orderTotals, totalBlinds } from './order-totals';
-import {
-  orderRange,
-  orderScheduleKey,
-  updateOrder,
-} from './order-schedule.api';
+import { orderRange, workOrdersKey, updateOrder } from './work-orders.api';
 
 export function OrderWeekView({
   canManage,
@@ -60,18 +56,13 @@ export function OrderWeekView({
   const [moved, setMoved] = useState<{ id: string; shipDate: string } | null>(
     null,
   );
-  const [dragging, setDragging] = useState<ScheduledOrder | null>(null);
+  const [dragging, setDragging] = useState<WorkOrder | null>(null);
   const move = useMutation({
-    mutationFn: ({
-      order,
-      shipDate,
-    }: {
-      order: ScheduledOrder;
-      shipDate: string;
-    }) => updateOrder(order.id, { expectedRevision: order.revision, shipDate }),
+    mutationFn: ({ order, shipDate }: { order: WorkOrder; shipDate: string }) =>
+      updateOrder(order.id, { expectedRevision: order.revision, shipDate }),
     // A refused move puts the order back where the server has it.
     onSettled: async () => {
-      await client.invalidateQueries({ queryKey: orderScheduleKey });
+      await client.invalidateQueries({ queryKey: workOrdersKey });
       setMoved(null);
     },
   });
@@ -215,7 +206,7 @@ function WeekDay({
   onAdd,
 }: {
   day: string;
-  orders: ScheduledOrder[];
+  orders: WorkOrder[];
   canManage: boolean;
   busy: boolean;
   onAdd?: (shipDate: string) => void;
@@ -285,7 +276,7 @@ function DraggableOrder({
   canManage,
   busy,
 }: {
-  order: ScheduledOrder;
+  order: WorkOrder;
   canManage: boolean;
   busy: boolean;
 }) {
@@ -323,7 +314,7 @@ function OrderCard({
   hidden = false,
   overlay = false,
 }: {
-  order: ScheduledOrder;
+  order: WorkOrder;
   handle?: React.ReactNode;
   hidden?: boolean;
   overlay?: boolean;
@@ -342,7 +333,7 @@ function OrderCard({
           {overlay ? (
             <strong>{order.orderNumber}</strong>
           ) : (
-            <Link href={`/order-schedule/${order.id}`}>
+            <Link href={`/work-orders/${order.id}`}>
               <strong>{order.orderNumber}</strong>
             </Link>
           )}

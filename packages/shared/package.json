@@ -32,9 +32,9 @@
       "types": "./dist/features/allocations/index.d.ts",
       "default": "./dist/features/allocations/index.js"
     },
-    "./order-schedule": {
-      "types": "./dist/features/order-schedule/index.d.ts",
-      "default": "./dist/features/order-schedule/index.js"
+    "./work-orders": {
+      "types": "./dist/features/work-orders/index.d.ts",
+      "default": "./dist/features/work-orders/index.js"
     },
     "./errors": {
       "types": "./dist/errors/index.d.ts",

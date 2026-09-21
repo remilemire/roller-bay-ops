@@ -5,7 +5,7 @@ import {
   type StockReceiptDraftData,
 } from '@roller-bay/shared/stock-receipts';
 import { allocationDetailSchema } from '@roller-bay/shared/allocations';
-import { scheduledOrderSchema } from '@roller-bay/shared/order-schedule';
+import { workOrderSchema } from '@roller-bay/shared/work-orders';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 export const ids = {
   user: '11111111-1111-4111-8111-111111111111',
@@ -172,7 +172,7 @@ export const allocation = allocationDetailSchema.parse({
   correctedAt: null,
 });
 // Ships on a Friday; the allocation above names this order.
-export const order = scheduledOrderSchema.parse({
+export const order = workOrderSchema.parse({
   id: ids.order,
   orderNumber: '104801',
   shipDate: '2026-10-02',

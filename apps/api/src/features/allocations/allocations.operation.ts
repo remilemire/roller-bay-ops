@@ -8,7 +8,7 @@ import {
 import {
   orderAlreadyAllocated,
   orderNotScheduled,
-} from '../order-schedule/order-schedule.operation.js';
+} from '../work-orders/work-orders.operation.js';
 
 export async function allocationOperation<T>(
   operation: () => Promise<T>,
@@ -26,8 +26,7 @@ export async function allocationOperation<T>(
         // The foreign key is the race-free check that an order is scheduled.
         if (
           cause.code === '23503' &&
-          constraint ===
-            'allocations_order_number_scheduled_orders_order_number_fk'
+          constraint === 'allocations_order_number_work_orders_order_number_fk'
         )
           throw orderNotScheduled(error);
         if (

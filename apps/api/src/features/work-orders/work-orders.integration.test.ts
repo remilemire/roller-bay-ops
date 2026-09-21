@@ -7,15 +7,15 @@ import { startSignedInApp } from '../../testing/integration-app.js';
 import type { UserRole } from '@roller-bay/shared/users';
 import { historySchema } from '@roller-bay/shared/audit';
 import {
-  scheduledOrderListSchema,
-  scheduledOrderSchema,
-} from '@roller-bay/shared/order-schedule';
+  workOrderListSchema,
+  workOrderSchema,
+} from '@roller-bay/shared/work-orders';
 
-test('order schedule integration', { timeout: 60_000 }, async (t) => {
+test('work orders integration', { timeout: 60_000 }, async (t) => {
   const { app, pool, cookie, userId, origin, fixtures } =
     await startSignedInApp(t);
   const server = app.getHttpServer();
-  const path = '/api/order-schedule';
+  const path = '/api/work-orders';
   const get = (url: string) => request(server).get(url).set('Cookie', cookie);
   const send = (method: 'post' | 'patch' | 'delete', url: string) =>
     request(server)[method](url).set('Cookie', cookie).set('Origin', origin);
@@ -98,7 +98,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       ])
         await post(body).expect(400);
 
-      const created = scheduledOrderSchema.parse(
+      const created = workOrderSchema.parse(
         (
           await post({
             orderNumber: ' 200002 ',
@@ -150,13 +150,13 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       // The database holds the same rule for writes that bypass the API.
       for (const shipDate of ['2026-10-03', '2026-10-04'])
         await assert.rejects(
-          pool.query(`UPDATE scheduled_orders SET ship_date=$1 WHERE id=$2`, [
+          pool.query(`UPDATE work_orders SET ship_date=$1 WHERE id=$2`, [
             shipDate,
             created.id,
           ]),
-          { code: '23514', constraint: 'scheduled_orders_ship_date_weekday' },
+          { code: '23514', constraint: 'work_orders_ship_date_weekday' },
         );
-      const updated = scheduledOrderSchema.parse(
+      const updated = workOrderSchema.parse(
         (
           await patch(created.id, {
             expectedRevision: 1,
@@ -177,7 +177,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       );
       await remove(created.id, 1).expect(409);
 
-      const shipped = scheduledOrderSchema.parse(
+      const shipped = workOrderSchema.parse(
         (
           await patch(created.id, {
             expectedRevision: 2,
@@ -216,7 +216,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       ]);
       assert.ok(
         history.items.every((event) =>
-          event.changes.every((c) => c.recordType === 'order-schedule'),
+          event.changes.every((c) => c.recordType === 'work-orders'),
         ),
       );
 
@@ -230,7 +230,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
 
       // The order is kept, out of sight: allocations reference its number.
       assert.deepEqual(
-        scheduledOrderListSchema
+        workOrderListSchema
           .parse((await get(`${path}?search=200002`).expect(200)).body)
           .items.map((order) => order.orderNumber),
         [],
@@ -240,13 +240,13 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       );
       await remove(created.id, 6).expect(404);
       const kept = await pool.query(
-        `SELECT deleted_at FROM scheduled_orders WHERE id=$1`,
+        `SELECT deleted_at FROM work_orders WHERE id=$1`,
         [created.id],
       );
       assert.ok(kept.rows[0].deleted_at);
 
       // Scheduling the number again restores that order with the new details.
-      const restored = scheduledOrderSchema.parse(
+      const restored = workOrderSchema.parse(
         (
           await post({
             orderNumber: '200002',
@@ -281,7 +281,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'the schedule lists by ship date and filters by derived status and literal search',
     async () => {
-      await pool.query(`DELETE FROM scheduled_orders`);
+      await pool.query(`DELETE FROM work_orders`);
       const at = '2026-09-01T12:00:00Z';
       // [order number, ship date, allocated, cut, shipped]
       const rows: [string, string, boolean, boolean, boolean][] = [
@@ -293,7 +293,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       ];
       for (const [orderNumber, shipDate, allocated, cut, shipped] of rows)
         await pool.query(
-          `INSERT INTO scheduled_orders
+          `INSERT INTO work_orders
                (order_number, ship_date, quantity, allocated_at, cut_at, shipped_at)
              VALUES ($1, $2, 1, $3, $4, $5)`,
           [
@@ -305,7 +305,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
           ],
         );
       const numbers = async (query: string) =>
-        scheduledOrderListSchema
+        workOrderListSchema
           .parse((await get(`${path}?${query}`).expect(200)).body)
           .items.map((order) => order.orderNumber);
       assert.deepEqual(await numbers(''), [
@@ -334,7 +334,7 @@ test('order schedule integration', { timeout: 60_000 }, async (t) => {
       await get(`${path}?shipDateFrom=2026-02-30`).expect(400);
       assert.deepEqual(await numbers('search=0003'), ['210003']);
       assert.deepEqual(await numbers('search=%25'), []);
-      const page = scheduledOrderListSchema.parse(
+      const page = workOrderListSchema.parse(
         (await get(`${path}?page=2&pageSize=2`).expect(200)).body,
       );
       assert.deepEqual(

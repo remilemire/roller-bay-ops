@@ -193,7 +193,7 @@ test('allocation storage errors preserve domain responses and do not expose driv
   for (const [code, constraint, status, issue] of [
     [
       '23503',
-      'allocations_order_number_scheduled_orders_order_number_fk',
+      'allocations_order_number_work_orders_order_number_fk',
       404,
       'order_not_scheduled',
     ],

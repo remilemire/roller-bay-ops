@@ -1,7 +1,7 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ScheduledOrder } from '@roller-bay/shared/order-schedule';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog } from '@/components/ui/dialog';
@@ -9,7 +9,7 @@ import { ErrorNotice } from '@/components/ui/feedback';
 import { fieldIssues } from '@/lib/field-issues';
 import { issuePath } from '@/lib/errors';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
-import { orderScheduleKey, updateOrder } from './order-schedule.api';
+import { workOrdersKey, updateOrder } from './work-orders.api';
 
 const fieldName = (issue: ErrorIssue) =>
   issuePath(issue) === 'shipDate' ? ('shipDate' as const) : null;
@@ -19,7 +19,7 @@ export function OrderReschedule({
   order,
   close,
 }: {
-  order: ScheduledOrder;
+  order: WorkOrder;
   close: () => void;
 }) {
   // Pin the row this opened from; see OrderEditor.
@@ -30,7 +30,7 @@ export function OrderReschedule({
     mutationFn: () =>
       updateOrder(opened.id, { expectedRevision: opened.revision, shipDate }),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: orderScheduleKey });
+      await client.invalidateQueries({ queryKey: workOrdersKey });
       close();
     },
   });

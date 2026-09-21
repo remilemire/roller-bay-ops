@@ -35,7 +35,7 @@ const noteSchema = z
   .nullable()
   .transform((value) => value || null);
 
-export const createScheduledOrderSchema = z.strictObject({
+export const createWorkOrderSchema = z.strictObject({
   orderNumber: orderNumberSchema,
   shipDate: shipDateSchema,
   quantity: orderQuantitySchema,
@@ -43,7 +43,7 @@ export const createScheduledOrderSchema = z.strictObject({
 });
 // The order number is fixed once scheduled. `shipped` stamps or clears the
 // shipped milestone; the server owns the timestamp.
-export const updateScheduledOrderSchema = z
+export const updateWorkOrderSchema = z
   .strictObject({
     expectedRevision: revision,
     shipDate: shipDateSchema.optional(),
@@ -56,11 +56,11 @@ export const updateScheduledOrderSchema = z
       [shipDate, quantity, note, shipped].some((field) => field !== undefined),
     'Provide at least one field.',
   );
-export const deleteScheduledOrderSchema = z.strictObject({
+export const deleteWorkOrderSchema = z.strictObject({
   expectedRevision: revision,
 });
 
-export const scheduledOrderQuerySchema = z.strictObject({
+export const workOrderQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(6).optional(),
@@ -71,7 +71,7 @@ export const scheduledOrderQuerySchema = z.strictObject({
   shipDateTo: z.iso.date().optional(),
 });
 
-export const scheduledOrderSchema = z.object({
+export const workOrderSchema = z.object({
   id: z.uuid(),
   orderNumber: z.string(),
   shipDate: z.iso.date(),
@@ -85,17 +85,17 @@ export const scheduledOrderSchema = z.object({
   updatedAt: z.iso.datetime(),
   revision: z.number().int().positive(),
 });
-export const scheduledOrderListSchema = z.object({
+export const workOrderListSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  items: z.array(scheduledOrderSchema),
+  items: z.array(workOrderSchema),
 });
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
-export type CreateScheduledOrder = z.infer<typeof createScheduledOrderSchema>;
-export type UpdateScheduledOrder = z.infer<typeof updateScheduledOrderSchema>;
-export type DeleteScheduledOrder = z.infer<typeof deleteScheduledOrderSchema>;
-export type ScheduledOrderQuery = z.infer<typeof scheduledOrderQuerySchema>;
-export type ScheduledOrder = z.infer<typeof scheduledOrderSchema>;
-export type ScheduledOrderList = z.infer<typeof scheduledOrderListSchema>;
+export type CreateWorkOrder = z.infer<typeof createWorkOrderSchema>;
+export type UpdateWorkOrder = z.infer<typeof updateWorkOrderSchema>;
+export type DeleteWorkOrder = z.infer<typeof deleteWorkOrderSchema>;
+export type WorkOrderQuery = z.infer<typeof workOrderQuerySchema>;
+export type WorkOrder = z.infer<typeof workOrderSchema>;
+export type WorkOrderList = z.infer<typeof workOrderListSchema>;

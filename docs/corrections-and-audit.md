@@ -23,7 +23,7 @@ Existing rows start at stock revision 1 without invented history. Existing recei
 | GET    | `/api/stock-items/:id/history`                | Employee-readable stock history                                            |
 | GET    | `/api/stock-receipts/:id/history`             | Employee-readable receipt history                                          |
 | GET    | `/api/allocations/:id/history`                | Employee-readable allocation history                                       |
-| GET    | `/api/order-schedule/:id/history`             | Employee-readable scheduled order history                                  |
+| GET    | `/api/work-orders/:id/history`                | Employee-readable work order history                                       |
 
 The former stock PATCH and DELETE endpoints are removed. Stock creation remains `POST /api/stock-items`; it records an audit event atomically. History accepts `page` and `pageSize` (defaults 1 and 25, maximum size 100) and sorts newest first. A receipt's or allocation's history begins at its submission or confirmation, whose event has no `before`; draft saves and deletions are not recorded. Audit links do not cascade with operational records, so draft events recorded before this rule remain readable by ID.
 
