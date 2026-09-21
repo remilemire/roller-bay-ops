@@ -17,7 +17,10 @@ export const allocationCutItems = pgTable(
     allocationCutId: uuid('allocation_cut_id')
       .notNull()
       .references(() => allocationCuts.id, { onDelete: 'restrict' }),
-    // The blind being cut, which may since have been retired from its order.
+    // The blind being cut: a line of the allocation's work order. A cancelled
+    // plan or a draft may point at a line since retired (`retired_at`), which
+    // is off the order but kept, so the plan still shows what it was made for.
+    // A live or completed plan never does: its order's blinds are frozen.
     workOrderLineId: uuid('work_order_line_id')
       .notNull()
       .references(() => workOrderLines.id, { onDelete: 'restrict' }),
