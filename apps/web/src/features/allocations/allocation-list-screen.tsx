@@ -57,7 +57,7 @@ export function AllocationListScreen() {
       await Promise.all([
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
-        // Cancelling returns the scheduled order to `scheduled`.
+        // Cancelling returns the order to `new`.
         client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
     },
