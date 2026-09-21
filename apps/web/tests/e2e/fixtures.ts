@@ -210,7 +210,9 @@ export async function mockApi(
               (!status ||
                 (status === 'open'
                   ? row.status !== 'shipped'
-                  : row.status === status)),
+                  : status === 'unscheduled'
+                    ? !!row.allocatedAt && !row.shipDate && !row.shippedAt
+                    : row.status === status)),
           ),
           url,
         ),

@@ -106,7 +106,7 @@ test('admins mark an order shipped from its row and it leaves the open list', as
     page.getByRole('button', { name: 'Mark order 104801 not shipped' }),
   ).toBeVisible();
 });
-test('admins drag an order to another day of the week, by mouse and by keyboard', async ({
+test('admins drag an order between days and the to-schedule tray, by mouse and by keyboard', async ({
   page,
 }) => {
   const state = await mockApi(page);
@@ -139,7 +139,7 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
   await expect(page.getByText('Rescheduled.')).toBeAttached();
   // The handle moves an order a whole day per arrow key.
   await page
-    .getByRole('button', { name: 'Move order 104801 to another day' })
+    .getByRole('button', { name: 'Move order 104801 to a day' })
     .focus();
   // The drag announces each step. It starts listening for arrow keys a moment
   // after pickup, sooner than a person types but not than a test, so press
@@ -162,8 +162,42 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
     body: { expectedRevision: 4, shipDate: '2026-10-01' },
   });
 
+  // Dropping it on the tray takes it off the schedule; from there it goes
+  // onto a day again. A tray card is wider than a day, so the day under the
+  // pointer, not the one nearest the card's centre, takes the drop.
+  const tray = day('To schedule');
+  await expect(tray).toContainText('No allocated orders are waiting');
+  const drag = async (
+    source: ReturnType<typeof day>,
+    target: ReturnType<typeof day>,
+  ) => {
+    // One move at a time: the handle is disabled while the last one saves.
+    await expect(
+      page.getByRole('button', { name: 'Move order 104801 to a day' }),
+    ).toBeEnabled();
+    const start = (await source
+      .getByRole('link', { name: '104801' })
+      .boundingBox())!;
+    const end = (await target.boundingBox())!;
+    await page.mouse.move(start.x + 8, start.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, {
+      steps: 12,
+    });
+    await page.mouse.up();
+    await expect(target.getByRole('link', { name: '104801' })).toBeVisible();
+  };
+  await drag(day('Thu, Oct 1, 2026'), tray);
+  await expect(tray).toContainText('1 order · 14 blinds');
+  await expect(page.getByText('0 orders · 0 blinds').first()).toBeVisible();
+  await drag(tray, day('Mon, Sep 28, 2026'));
+  expect(state.orderRequests.slice(-2)).toEqual([
+    { method: 'PATCH', body: { expectedRevision: 5, shipDate: null } },
+    { method: 'PATCH', body: { expectedRevision: 6, shipDate: '2026-09-28' } },
+  ]);
+
   // A click that does not drag still opens the order.
-  await day('Thu, Oct 1, 2026').getByRole('link', { name: '104801' }).click();
+  await day('Mon, Sep 28, 2026').getByRole('link', { name: '104801' }).click();
   await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
 });
 test('admins reschedule an order from its list row', async ({ page }) => {

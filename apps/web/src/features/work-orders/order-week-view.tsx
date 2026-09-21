@@ -6,6 +6,8 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   useDraggable,
   useDroppable,
   useSensor,
@@ -30,8 +32,30 @@ import { calendarDateLabel, dayLabel, weekdayLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { cn } from '@/lib/utils';
 import { OrderCalendarNav } from './order-calendar-nav';
-import { blindCount, orderTotals, totalBlinds } from './order-totals';
-import { orderRange, workOrdersKey, updateOrder } from './work-orders.api';
+import {
+  blindCount,
+  orderCount,
+  orderTotals,
+  totalBlinds,
+} from './order-totals';
+import {
+  orderRange,
+  unscheduledOrders,
+  updateOrder,
+  workOrdersKey,
+} from './work-orders.api';
+
+// The pointer decides where a card lands: a tray card is wider than a day, so
+// its centre can sit over the neighbouring one. The keyboard has no pointer
+// and falls back to the nearest centre.
+const dropTarget: CollisionDetection = (args) => {
+  const under = pointerWithin(args);
+  return under.length ? under : closestCenter(args);
+};
+// The tray's droppable id; every other droppable is a day.
+const TRAY = 'unscheduled';
+const placeLabel = (id: unknown) =>
+  id === TRAY ? 'the orders to schedule' : calendarDateLabel(String(id));
 
 export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const id = useId();
@@ -44,26 +68,48 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const days = workWeek(monday);
   const friday = days[4]!;
   const query = useQuery(orderRange(monday, friday));
+  // Allocated orders with no date yet wait in a tray above the board.
+  const waiting = useQuery(unscheduledOrders());
   const client = useQueryClient();
-  // The day a dropped order is shown on until the refreshed week replaces it.
-  const [moved, setMoved] = useState<{ id: string; shipDate: string } | null>(
-    null,
-  );
+  // Where a dropped order is shown until the refreshed data replaces it; a
+  // null date is the tray.
+  const [moved, setMoved] = useState<{
+    id: string;
+    shipDate: string | null;
+  } | null>(null);
   const [dragging, setDragging] = useState<WorkOrder | null>(null);
   const move = useMutation({
-    mutationFn: ({ order, shipDate }: { order: WorkOrder; shipDate: string }) =>
-      updateOrder(order.id, { expectedRevision: order.revision, shipDate }),
+    mutationFn: ({
+      order,
+      shipDate,
+    }: {
+      order: WorkOrder;
+      shipDate: string | null;
+    }) => updateOrder(order.id, { expectedRevision: order.revision, shipDate }),
     // A refused move puts the order back where the server has it.
     onSettled: async () => {
       await client.invalidateQueries({ queryKey: workOrdersKey });
       setMoved(null);
     },
   });
-  const orders = (query.data ?? []).map((order) =>
-    order.id === moved?.id ? { ...order, shipDate: moved.shipDate } : order,
-  );
-  const find = (orderId: unknown) =>
-    orders.find((order) => order.id === orderId);
+  const place = (order: WorkOrder) =>
+    order.id === moved?.id ? { ...order, shipDate: moved.shipDate } : order;
+  // An order moved off this week, or out of the tray, still belongs to the
+  // list it was read from until the refresh.
+  // Keyed by id: between the two refreshes an order can be in both lists.
+  const all = [
+    ...new Map(
+      [...(waiting.data?.items ?? []), ...(query.data ?? [])].map((order) => [
+        order.id,
+        order,
+      ]),
+    ).values(),
+  ].map(place);
+  const orders = all.filter((order) => order.shipDate !== null);
+  const tray = all.filter((order) => order.shipDate === null);
+  const find = (orderId: unknown) => all.find((order) => order.id === orderId);
+  // The tray comes before Monday for the arrow keys.
+  const stops = [TRAY, ...days];
   // Step a whole day at a time: columns are far wider than an arrow-key nudge.
   const keyboardCoordinates: KeyboardCoordinateGetter = (
     event,
@@ -73,10 +119,13 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
     event.preventDefault();
     const { active, over, collisionRect, droppableRects } = context;
     if (!active || !collisionRect) return;
-    const from = days.indexOf(String(over?.id ?? find(active.id)?.shipDate));
-    const next = days[from + (event.code === 'ArrowRight' ? 1 : -1)];
+    const from = stops.indexOf(
+      String(over?.id ?? find(active.id)?.shipDate ?? TRAY),
+    );
+    const next = stops[from + (event.code === 'ArrowRight' ? 1 : -1)];
     const target = next && droppableRects.get(next);
     if (!target) return;
+    // The tray sits above the board, so a step may move down as well as across.
     return {
       x:
         currentCoordinates.x +
@@ -84,7 +133,12 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
         target.width / 2 -
         collisionRect.left -
         collisionRect.width / 2,
-      y: currentCoordinates.y,
+      y:
+        currentCoordinates.y +
+        target.top +
+        target.height / 2 -
+        collisionRect.top -
+        collisionRect.height / 2,
     };
   };
   const sensors = useSensors(
@@ -97,8 +151,8 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const finish = ({ active, over }: DragEndEvent) => {
     setDragging(null);
     const order = find(active.id);
-    if (!order || !over || over.id === order.shipDate) return;
-    const shipDate = String(over.id);
+    if (!order || !over || over.id === (order.shipDate ?? TRAY)) return;
+    const shipDate = over.id === TRAY ? null : String(over.id);
     setMoved({ id: order.id, shipDate });
     move.mutate({ order, shipDate });
   };
@@ -130,11 +184,11 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
         <DndContext
           id={id}
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={dropTarget}
           accessibility={{
             screenReaderInstructions: {
               draggable:
-                'Press Space to pick up this order, use Left and Right to choose a day, then Space to drop. Press Escape to cancel.',
+                'Press Space to pick up this order, use Left and Right to choose a day or the orders to schedule, then Space to drop. Press Escape to cancel.',
             },
             announcements: {
               // Picking up is at once followed by the day the order is over,
@@ -142,11 +196,11 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
               onDragStart: () => undefined,
               onDragOver: ({ active, over }) =>
                 over
-                  ? `Order ${find(active.id)?.orderNumber} over ${calendarDateLabel(String(over.id))}.`
+                  ? `Order ${find(active.id)?.orderNumber} over ${placeLabel(over.id)}.`
                   : undefined,
               onDragEnd: ({ active, over }) =>
                 over
-                  ? `Order ${find(active.id)?.orderNumber} dropped on ${calendarDateLabel(String(over.id))}.`
+                  ? `Order ${find(active.id)?.orderNumber} dropped on ${placeLabel(over.id)}.`
                   : undefined,
               onDragCancel: () => 'Rescheduling cancelled.',
             },
@@ -158,6 +212,13 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
           onDragCancel={() => setDragging(null)}
           onDragEnd={finish}
         >
+          <WeekTray
+            orders={tray}
+            total={waiting.data?.total ?? 0}
+            error={waiting.error}
+            canManage={canManage}
+            busy={busy}
+          />
           <div className="week-board">
             {days.map((day) => (
               <WeekDay
@@ -165,7 +226,7 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
                 day={day}
                 orders={orders
                   .filter((order) => order.shipDate === day)
-                  .sort((a, b) => a.orderNumber.localeCompare(b.orderNumber))}
+                  .sort(byNumber)}
                 canManage={canManage}
                 busy={busy}
               />
@@ -187,6 +248,60 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
         </DndContext>
       )}
     </>
+  );
+}
+
+const byNumber = (a: WorkOrder, b: WorkOrder) =>
+  a.orderNumber.localeCompare(b.orderNumber);
+
+/** Allocated orders waiting for a ship date: drag one onto a day to set it. */
+function WeekTray({
+  orders,
+  total,
+  error,
+  canManage,
+  busy,
+}: {
+  orders: WorkOrder[];
+  total: number;
+  error: unknown;
+  canManage: boolean;
+  busy: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: TRAY });
+  return (
+    <section
+      ref={setNodeRef}
+      className={cn('week-tray panel', isOver && 'is-over')}
+      aria-label="To schedule"
+    >
+      <header>
+        <strong>To schedule</strong>
+        <small>
+          {orderCount(orders.length)} · {blindCount(totalBlinds(orders))}
+        </small>
+      </header>
+      {error ? (
+        <ErrorNotice error={error} />
+      ) : orders.length ? (
+        <ul>
+          {[...orders].sort(byNumber).map((order) => (
+            <li key={order.id}>
+              <DraggableOrder order={order} canManage={canManage} busy={busy} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">
+          No allocated orders are waiting for a ship date.
+        </p>
+      )}
+      {total > orders.length && (
+        <Link href="/work-orders?view=list&status=unscheduled">
+          All {total} orders to schedule
+        </Link>
+      )}
+    </section>
   );
 }
 
@@ -271,7 +386,7 @@ function DraggableOrder({
               ref={setActivatorNodeRef}
               type="button"
               className="order-card-handle"
-              aria-label={`Move order ${order.orderNumber} to another day`}
+              aria-label={`Move order ${order.orderNumber} to a day`}
               {...attributes}
             >
               <GripVertical size={15} />

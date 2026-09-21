@@ -7,7 +7,7 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { WorkOrder } from '@roller-bay/shared/work-orders';
+import type { WorkOrder, WorkOrderList } from '@roller-bay/shared/work-orders';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
@@ -20,6 +20,7 @@ import {
   orderDetail,
   orderList,
   orderRange,
+  unscheduledOrders,
   updateOrder,
 } from './work-orders.api';
 
@@ -47,6 +48,7 @@ vi.mock('./work-orders.api', async (original) => ({
   orderList: vi.fn(),
   orderDetail: vi.fn(),
   orderRange: vi.fn(),
+  unscheduledOrders: vi.fn(),
   createOrder: vi.fn(),
   updateOrder: vi.fn(),
   deleteOrder: vi.fn(),
@@ -101,6 +103,30 @@ beforeEach(() => {
               })),
             ] as WorkOrder[]
           ).filter((row) => row.shipDate! >= from && row.shipDate! <= to),
+      }),
+    );
+  // One allocated order is still waiting for a ship date.
+  vi.mocked(unscheduledOrders)
+    .mockReset()
+    .mockImplementation(() =>
+      queryOptions({
+        queryKey: ['work-orders', 'unscheduled'],
+        queryFn: async (): Promise<WorkOrderList> => ({
+          items: [
+            {
+              ...order,
+              id: 'w',
+              orderNumber: '104850',
+              quantity: 5,
+              shipDate: null,
+              scheduledAt: null,
+              status: 'allocated',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 100,
+        }),
       }),
     );
   for (const write of [createOrder, updateOrder, deleteOrder])
@@ -167,6 +193,17 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
     '/work-orders?view=list&status=shipped',
     { scroll: false },
   );
+  // The two work queues: orders needing fabric, then orders needing a date.
+  for (const [name, status] of [
+    ['To allocate', 'new'],
+    ['To schedule', 'unscheduled'],
+  ]) {
+    await user.click(screen.getByRole('button', { name }));
+    expect(state.replace).toHaveBeenLastCalledWith(
+      `/work-orders?view=list&status=${status}`,
+      { scroll: false },
+    );
+  }
   // The default tab needs no parameter.
   await user.click(screen.getByRole('button', { name: 'Open' }));
   expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
@@ -408,6 +445,17 @@ it('groups the working week by day with totals', async () => {
     '104801',
     '104820',
   ]);
+  // Allocated orders with no date wait in a tray above the days, outside the
+  // week's totals, to be dragged onto one.
+  const tray = within(screen.getByRole('region', { name: 'To schedule' }));
+  expect(tray.getByText('1 order · 5 blinds')).toBeInTheDocument();
+  expect(tray.getByRole('link', { name: '104850' })).toHaveAttribute(
+    'href',
+    '/work-orders/w',
+  );
+  expect(
+    tray.getByRole('button', { name: 'Move order 104850 to a day' }),
+  ).toBeInTheDocument();
   // An order reaches a day by being scheduled, never by being added to it.
   const tuesday = screen.getByRole('region', { name: 'Tue, Sep 29, 2026' });
   expect(tuesday).toHaveTextContent(/No orders\s*0 orders\s*0 blinds$/);

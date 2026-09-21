@@ -67,6 +67,17 @@ export const deleteOrder = (id: string, expectedRevision: number) =>
     method: 'DELETE',
     body: { expectedRevision },
   });
+// The week board's tray: allocated orders still waiting for a ship date. One
+// page is the API's largest; the list's "To schedule" tab has the rest.
+export const unscheduledOrders = () =>
+  queryOptions({
+    queryKey: [...workOrdersKey, 'unscheduled'],
+    queryFn: () =>
+      api(
+        `/work-orders${queryString({ status: 'unscheduled', pageSize: 100 })}`,
+        s.workOrderListSchema,
+      ),
+  });
 // For the allocation editor: orders with no allocation yet. The option id is
 // the order number the allocation stores.
 export const lookupUnallocatedOrders = async (

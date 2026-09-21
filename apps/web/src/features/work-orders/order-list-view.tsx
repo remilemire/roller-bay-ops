@@ -21,8 +21,9 @@ import { orderList, workOrdersKey, updateOrder } from './work-orders.api';
 // The schedule opens on orders that still need work; `all` includes shipped.
 const tabs = [
   { value: 'open', label: 'Open' },
-  { value: 'new', label: 'New' },
-  { value: 'allocated', label: 'Allocated' },
+  // The two work queues: fabric to allocate, then a date to set.
+  { value: 'new', label: 'To allocate' },
+  { value: 'unscheduled', label: 'To schedule' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'cut', label: 'Cut' },
   { value: 'shipped', label: 'Shipped' },

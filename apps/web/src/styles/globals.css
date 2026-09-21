@@ -1186,6 +1186,46 @@ td strong {
   margin-left: 8px;
   font-size: 11px;
 }
+/* Allocated orders waiting for a date, above the days they are dragged to. */
+.week-tray {
+  margin-bottom: 10px;
+}
+.week-tray > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+.week-tray > header small {
+  color: var(--muted);
+}
+.week-tray ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Side by side, the rows' dividers would break into ragged segments. */
+.week-tray .order-card {
+  height: 100%;
+  border-bottom: 0;
+}
+.week-tray > p,
+.week-tray > a {
+  display: block;
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+.week-tray.is-over {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  background: var(--primary-soft);
+}
 .week-board {
   display: grid;
   /* All five days fit a portrait tablet; narrower screens scroll sideways. */
