@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import { Pool, type PoolClient } from 'pg';
 import { testDatabaseUrl } from '../testing/test-services.js';
 import {
@@ -24,24 +24,45 @@ async function apply(client: PoolClient, name: string) {
     .filter((part) => part.trim()))
     await client.query(statement);
 }
+/** A database migrated up to, but not including, the migration under test. */
+async function databaseBefore(t: TestContext, prefix: string) {
+  const database = await createTestDatabase(testDatabaseUrl, {
+    migrated: false,
+  });
+  const pool = new Pool({ connectionString: database.url, max: 1 });
+  const client = await pool.connect();
+  // In this order: the pool waits for its client, the drop for the pool.
+  t.after(async () => {
+    client.release();
+    await pool.end();
+    await database.drop();
+  });
+  const target = files.findIndex((name) => name.startsWith(prefix));
+  for (const name of files.slice(0, target)) await apply(client, name);
+  return {
+    client,
+    /** Applies the migration under test as Drizzle does, in a transaction. */
+    async migrate() {
+      await client.query('BEGIN');
+      try {
+        await apply(client, files[target]!);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    },
+    async migrateRest() {
+      for (const name of files.slice(target + 1)) await apply(client, name);
+    },
+  };
+}
 
 test(
   '0028 moves blinds from allocations to their work orders, or stops',
   { timeout: 60_000 },
   async (t) => {
-    const database = await createTestDatabase(testDatabaseUrl, {
-      migrated: false,
-    });
-    const pool = new Pool({ connectionString: database.url, max: 1 });
-    const client = await pool.connect();
-    // In this order: the pool waits for its client, the drop for the pool.
-    t.after(async () => {
-      client.release();
-      await pool.end();
-      await database.drop();
-    });
-    const target = files.findIndex((name) => name.startsWith('0028_'));
-    for (const name of files.slice(0, target)) await apply(client, name);
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0028_');
 
     // Rows as they were before 0028: an allocation named its order by number
     // and owned a copy of the blinds, each with its own drop allowance.
@@ -137,16 +158,6 @@ test(
     const older = await allocation('500002', 'draft', '2026-09-04');
     const newer = await allocation('500002', 'draft', '2026-09-05');
 
-    const migrate = async () => {
-      await client.query('BEGIN');
-      try {
-        await apply(client, files[target]!);
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      }
-    };
     /** A row the migration cannot place stops it, and removing the row lets it on. */
     const stops = async (message: RegExp, add: string, remove: string) => {
       await client.query(add);
@@ -189,7 +200,8 @@ test(
     );
 
     await migrate();
-    for (const name of files.slice(target + 1)) await apply(client, name);
+    // The later migrations accept what this one left, the rules check included.
+    await migrateRest();
 
     // Each allocation names its order by id, and the number is the order's.
     const allocations = await client.query(
@@ -274,5 +286,75 @@ test(
       code: '23514',
       constraint: 'allocations_confirmed_fields_required',
     });
+  },
+);
+
+test(
+  '0029 holds confirmed allocations to the cutting rules they record, or stops',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0029_');
+    const user = randomUUID();
+    await client.query(
+      `INSERT INTO users (id,name,email,microsoft_subject_id) VALUES ($1,'A','a@example.com','a')`,
+      [user],
+    );
+    const rules = {
+      edgeTrimMm: 1,
+      minimumRemnantWidthMm: 100,
+      minimumRemnantLengthMm: 100,
+      dropAllowanceMm: 0,
+    };
+    /** An allocation of an order of its own; a draft when it has no time. */
+    const allocation = async (
+      settings: object | null,
+      confirmedAt?: string,
+    ) => {
+      const [self, order] = [randomUUID(), randomUUID()];
+      await client.query(
+        `INSERT INTO work_orders (id, order_number) VALUES ($1, $2)`,
+        [order, String(600000 + Math.floor(Math.random() * 99999))],
+      );
+      await client.query(
+        `INSERT INTO allocations (id,is_draft,work_order_id,created_by_user_id,confirmed_at,settings)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+        [self, !confirmedAt, order, user, confirmedAt ?? null, settings],
+      );
+      return self;
+    };
+    // A draft's rules may be unfinished; zero is an allowance, not a gap.
+    await allocation(null);
+    const complete = await allocation(rules, '2026-09-01');
+    const { dropAllowanceMm, ...withoutAllowance } = rules;
+    const missing = await allocation(withoutAllowance, '2026-09-02');
+    const text = await allocation(
+      { ...rules, edgeTrimMm: String(rules.edgeTrimMm) },
+      '2026-09-03',
+    );
+
+    await assert.rejects(
+      migrate(),
+      /2 confirmed allocation\(s\) do not record all four cutting rules as numbers.*SELECT id, settings FROM allocations WHERE NOT is_draft/,
+    );
+    await client.query(`UPDATE allocations SET settings=$1 WHERE id=ANY($2)`, [
+      { ...rules, dropAllowanceMm },
+      [missing, text],
+    ]);
+    await migrate();
+    await migrateRest();
+
+    for (const settings of [
+      `settings - 'dropAllowanceMm'`,
+      `settings - 'edgeTrimMm'`,
+      `jsonb_set(settings, '{minimumRemnantWidthMm}', 'null')`,
+      `NULL`,
+    ])
+      await assert.rejects(
+        client.query(
+          `UPDATE allocations SET settings=${settings} WHERE id=$1`,
+          [complete],
+        ),
+        { code: '23514', constraint: 'allocations_confirmed_rules_recorded' },
+      );
   },
 );

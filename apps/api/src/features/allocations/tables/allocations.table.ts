@@ -63,6 +63,14 @@ export const allocations = pgTable(
       'allocations_confirmation_valid',
       sql`(${table.isDraft} AND ${table.confirmedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.submittedDraftRevision} IS NULL) OR (NOT ${table.isDraft} AND ${table.confirmedAt} IS NOT NULL)`,
     ),
+    // A confirmed plan records the rules it was cut with. One left out would
+    // be read back, and replanned with, as today's configuration, which no one
+    // could tell from the truth. A missing key is NULL, which a check lets
+    // through, hence IS NOT DISTINCT FROM.
+    check(
+      'allocations_confirmed_rules_recorded',
+      sql`${table.isDraft} OR (jsonb_typeof(${table.settings} -> 'edgeTrimMm') IS NOT DISTINCT FROM 'number' AND jsonb_typeof(${table.settings} -> 'minimumRemnantWidthMm') IS NOT DISTINCT FROM 'number' AND jsonb_typeof(${table.settings} -> 'minimumRemnantLengthMm') IS NOT DISTINCT FROM 'number' AND jsonb_typeof(${table.settings} -> 'dropAllowanceMm') IS NOT DISTINCT FROM 'number')`,
+    ),
     check(
       'allocations_submitted_revision_valid',
       sql`${table.submittedDraftRevision} IS NULL OR (${table.submittedDraftRevision} > 0 AND ${table.submittedDraftRevision} < ${table.revision})`,
