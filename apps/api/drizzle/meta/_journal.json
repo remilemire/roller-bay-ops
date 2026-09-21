@@ -183,6 +183,13 @@
       "when": 1789955266873,
       "tag": "0025_rename_order_schedule_to_work_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789955631203,
+      "tag": "0026_schedule_after_allocation",
+      "breakpoints": true
     }
   ]
 }

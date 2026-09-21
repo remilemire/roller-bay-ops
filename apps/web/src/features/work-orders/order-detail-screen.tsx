@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/feedback';
 import { calendarDateLabel, dateLabel } from '@/lib/format';
 import { OrderEditor } from './order-editor';
+import { OrderReschedule } from './order-reschedule';
 import {
   deleteOrder,
   orderDetail,
@@ -41,6 +42,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
   const client = useQueryClient();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const ship = useMutation({
     mutationFn: () =>
@@ -66,7 +68,11 @@ function OrderRecord({ order }: { order: WorkOrder }) {
       <PageHeading
         eyebrow="PRODUCTION ORDER"
         title={order.orderNumber}
-        description={`Ships ${calendarDateLabel(order.shipDate)}`}
+        description={
+          order.shipDate
+            ? `Ships ${calendarDateLabel(order.shipDate)}`
+            : 'No ship date'
+        }
       >
         <Status value={order.status} />
         {canManage && (
@@ -74,6 +80,12 @@ function OrderRecord({ order }: { order: WorkOrder }) {
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
+            {/* A date follows the allocation. */}
+            {order.allocatedAt && (
+              <Button variant="outline" onClick={() => setRescheduling(true)}>
+                {order.shipDate ? 'Reschedule' : 'Schedule'}
+              </Button>
+            )}
             <Button
               variant="outline"
               disabled={ship.isPending}
@@ -103,8 +115,9 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           <div className="details-grid">
             {[
               ['Blinds', String(order.quantity)],
-              ['Scheduled', milestone(order.scheduledAt)],
+              ['Created', milestone(order.createdAt)],
               ['Allocated', milestone(order.allocatedAt)],
+              ['Scheduled', milestone(order.scheduledAt)],
               ['Cut', milestone(order.cutAt)],
               ['Shipped', milestone(order.shippedAt)],
               ['Note', order.note ?? '—'],
@@ -129,6 +142,9 @@ function OrderRecord({ order }: { order: WorkOrder }) {
       </section>
       <History type="work-orders" id={order.id} />
       {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
+      {rescheduling && (
+        <OrderReschedule order={order} close={() => setRescheduling(false)} />
+      )}
       <Dialog
         open={deleting}
         onOpenChange={(open) => {

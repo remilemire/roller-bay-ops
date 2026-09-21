@@ -680,13 +680,14 @@ td strong {
 .status-available,
 .status-completed,
 .status-allocated,
+.status-scheduled,
 .status-cut {
   color: var(--primary);
   background: var(--primary-soft);
 }
 .status-draft,
 .status-needs-replanning,
-.status-scheduled {
+.status-new {
   color: var(--warning);
   background: var(--warning-soft);
 }
@@ -1254,17 +1255,6 @@ td strong {
   display: flex;
   flex: 1;
   flex-direction: column;
-}
-/* A full-width slot under the day's rows, dashed like an empty place. */
-.week-day-add {
-  justify-content: flex-start;
-  margin: 10px;
-  border: 1px dashed var(--border);
-}
-.week-day-add:hover:not(:disabled) {
-  background: var(--surface-soft);
-  color: var(--foreground);
-  filter: none;
 }
 .week-day-body > p {
   margin: auto;

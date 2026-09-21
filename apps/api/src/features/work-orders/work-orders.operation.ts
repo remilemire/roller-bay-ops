@@ -8,16 +8,15 @@ import {
 
 // Allocation errors about the order carry an issue on `orderNumber` so the
 // form can show them beside that field.
-export const orderNotScheduled = (cause?: unknown) =>
+export const orderNotFound = (cause?: unknown) =>
   new NotFoundException(
     {
-      message:
-        'This order is not on the schedule. Add it before allocating fabric.',
+      message: 'There is no work order with this number. Create it first.',
       issues: [
         {
-          code: 'order_not_scheduled',
+          code: 'order_not_found',
           path: ['orderNumber'],
-          message: 'Not on the order schedule.',
+          message: 'No such work order.',
         },
       ],
     },
@@ -38,15 +37,15 @@ export const orderAlreadyAllocated = (cause?: unknown) =>
     { cause },
   );
 
-export const orderAlreadyScheduled = (cause?: unknown) =>
+export const orderAlreadyExists = (cause?: unknown) =>
   new ConflictException(
     {
-      message: 'This order is already on the schedule.',
+      message: 'A work order with this number already exists.',
       issues: [
         {
-          code: 'order_already_scheduled',
+          code: 'order_already_exists',
           path: ['orderNumber'],
-          message: 'Already scheduled.',
+          message: 'Already exists.',
         },
       ],
     },
@@ -65,14 +64,14 @@ export async function workOrdersOperation<T>(
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {
       seen.add(cause);
       if ('code' in cause) {
-        // A number held by an order still on the schedule is answered without
+        // A number held by an order that still exists is answered without
         // an error, so this is only two requests adding it at once.
         if (
           cause.code === '23505' &&
           'constraint' in cause &&
           cause.constraint === 'work_orders_order_number_unique'
         )
-          throw orderAlreadyScheduled(error);
+          throw orderAlreadyExists(error);
         // The contracts reject these first; the checks are the backstop.
         if (cause.code === '23514')
           throw new BadRequestException(

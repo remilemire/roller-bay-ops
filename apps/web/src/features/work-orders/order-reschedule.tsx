@@ -14,7 +14,7 @@ import { workOrdersKey, updateOrder } from './work-orders.api';
 const fieldName = (issue: ErrorIssue) =>
   issuePath(issue) === 'shipDate' ? ('shipDate' as const) : null;
 
-/** Changes only the ship date, with the calendar already open. */
+/** Sets, moves or clears only the ship date, with the calendar already open. */
 export function OrderReschedule({
   order,
   close,
@@ -24,11 +24,14 @@ export function OrderReschedule({
 }) {
   // Pin the row this opened from; see OrderEditor.
   const [opened] = useState(order);
-  const [shipDate, setShipDate] = useState(opened.shipDate);
+  const [shipDate, setShipDate] = useState(opened.shipDate ?? '');
   const client = useQueryClient();
   const mutation = useMutation({
-    mutationFn: () =>
-      updateOrder(opened.id, { expectedRevision: opened.revision, shipDate }),
+    mutationFn: (next: string | null) =>
+      updateOrder(opened.id, {
+        expectedRevision: opened.revision,
+        shipDate: next,
+      }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: workOrdersKey });
       close();
@@ -40,12 +43,12 @@ export function OrderReschedule({
       onOpenChange={(open) => {
         if (!open && !mutation.isPending) close();
       }}
-      title={`Reschedule order ${opened.orderNumber}`}
+      title={`${opened.shipDate ? 'Reschedule' : 'Schedule'} order ${opened.orderNumber}`}
     >
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          mutation.mutate();
+          mutation.mutate(shipDate);
         }}
       >
         <DateField
@@ -74,11 +77,27 @@ export function OrderReschedule({
           >
             Cancel
           </Button>
+          {opened.shipDate && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => mutation.mutate(null)}
+              disabled={mutation.isPending}
+            >
+              Clear date
+            </Button>
+          )}
           <Button
             type="submit"
-            disabled={mutation.isPending || shipDate === opened.shipDate}
+            disabled={
+              mutation.isPending || !shipDate || shipDate === opened.shipDate
+            }
           >
-            {mutation.isPending ? 'Saving…' : 'Reschedule'}
+            {mutation.isPending
+              ? 'Saving…'
+              : opened.shipDate
+                ? 'Reschedule'
+                : 'Schedule'}
           </Button>
         </div>
       </form>

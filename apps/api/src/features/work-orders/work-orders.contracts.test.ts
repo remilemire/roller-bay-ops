@@ -6,15 +6,10 @@ import {
   updateWorkOrderSchema,
 } from '@roller-bay/shared/work-orders';
 
-test('scheduled order contracts require a six-digit number and a real calendar date', () => {
-  const input = {
-    orderNumber: ' 104801 ',
-    shipDate: '2026-10-02',
-    quantity: 12,
-  };
+test('work order contracts require a six-digit number, and a ship date is a real weekday set later', () => {
+  const input = { orderNumber: ' 104801 ', quantity: 12 };
   assert.deepEqual(createWorkOrderSchema.parse(input), {
     orderNumber: '104801',
-    shipDate: '2026-10-02',
     quantity: 12,
     note: null,
   });
@@ -23,41 +18,37 @@ test('scheduled order contracts require a six-digit number and a real calendar d
       createWorkOrderSchema.safeParse({ ...input, orderNumber }).success,
       false,
     );
-  for (const shipDate of ['2026-02-30', '2026-10-02T00:00:00Z', '10/02/2026'])
+  // An order is created without a ship date; it gets one once allocated.
+  for (const extra of [{ shipDate: '2026-10-02' }, { shippedAt: null }])
     assert.equal(
-      createWorkOrderSchema.safeParse({ ...input, shipDate }).success,
+      createWorkOrderSchema.safeParse({ ...input, ...extra }).success,
       false,
     );
-  // Orders ship Monday to Friday, on create and on edit.
+  const reschedule = (shipDate: unknown) =>
+    updateWorkOrderSchema.safeParse({ expectedRevision: 1, shipDate });
+  for (const shipDate of ['2026-02-30', '2026-10-02T00:00:00Z', '10/02/2026'])
+    assert.equal(reschedule(shipDate).success, false);
+  // Orders ship Monday to Friday.
   for (const [shipDate, weekday] of [
     ['2026-10-02', true],
     ['2026-10-03', false],
     ['2026-10-04', false],
     ['2026-10-05', true],
-  ] as const) {
-    assert.equal(
-      createWorkOrderSchema.safeParse({ ...input, shipDate }).success,
-      weekday,
-    );
-    assert.equal(
-      updateWorkOrderSchema.safeParse({ expectedRevision: 1, shipDate })
-        .success,
-      weekday,
-    );
-  }
+  ] as const)
+    assert.equal(reschedule(shipDate).success, weekday);
   assert.equal(
-    createWorkOrderSchema.safeParse({ ...input, shipDate: '2026-10-03' }).error!
-      .issues[0]!.message,
+    reschedule('2026-10-03').error!.issues[0]!.message,
     'Must be a weekday.',
   );
-  assert.equal(
-    createWorkOrderSchema.safeParse({ ...input, shippedAt: null }).success,
-    false,
-  );
+  // A null date takes the order off the schedule, and is a change on its own.
+  assert.deepEqual(reschedule(null).data, {
+    expectedRevision: 1,
+    shipDate: null,
+  });
 });
 
-test('scheduled orders state a whole, positive number of blinds', () => {
-  const input = { orderNumber: '104801', shipDate: '2026-10-02' };
+test('work orders state a whole, positive number of blinds', () => {
+  const input = { orderNumber: '104801' };
   assert.equal(createWorkOrderSchema.safeParse(input).success, false);
   for (const quantity of [0, -3, 1.5, '12', null, 1000001])
     assert.equal(
@@ -75,8 +66,8 @@ test('scheduled orders state a whole, positive number of blinds', () => {
   );
 });
 
-test('scheduled order notes are trimmed, bounded, and blank notes clear the note', () => {
-  const input = { orderNumber: '104801', shipDate: '2026-10-02', quantity: 12 };
+test('work order notes are trimmed, bounded, and blank notes clear the note', () => {
+  const input = { orderNumber: '104801', quantity: 12 };
   const note = (value: string | null) =>
     createWorkOrderSchema.parse({ ...input, note: value }).note;
   assert.equal(note('  Rush  '), 'Rush');
@@ -89,7 +80,7 @@ test('scheduled order notes are trimmed, bounded, and blank notes clear the note
   );
 });
 
-test('scheduled order updates require a revision and a change, and cannot rename the order', () => {
+test('work order updates require a revision and a change, and cannot rename the order', () => {
   assert.equal(
     updateWorkOrderSchema.safeParse({ expectedRevision: 1 }).success,
     false,
@@ -116,8 +107,16 @@ test('scheduled order updates require a revision and a change, and cannot rename
   );
 });
 
-test('scheduled order queries accept each status and the open filter', () => {
-  for (const status of ['open', 'scheduled', 'allocated', 'cut', 'shipped'])
+test('work order queries accept each status and the two queue filters', () => {
+  for (const status of [
+    'open',
+    'unscheduled',
+    'new',
+    'allocated',
+    'scheduled',
+    'cut',
+    'shipped',
+  ])
     assert.equal(workOrderQuerySchema.parse({ status }).status, status);
   assert.equal(
     workOrderQuerySchema.safeParse({ status: 'ready' }).success,

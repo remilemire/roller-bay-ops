@@ -14,10 +14,9 @@ import {
   type KeyboardCoordinateGetter,
 } from '@dnd-kit/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GripVertical, Plus } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
-import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading, Status } from '@/components/ui/feedback';
 import {
   addDays,
@@ -34,13 +33,7 @@ import { OrderCalendarNav } from './order-calendar-nav';
 import { blindCount, orderTotals, totalBlinds } from './order-totals';
 import { orderRange, workOrdersKey, updateOrder } from './work-orders.api';
 
-export function OrderWeekView({
-  canManage,
-  onAdd,
-}: {
-  canManage: boolean;
-  onAdd?: (shipDate: string) => void;
-}) {
+export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const id = useId();
   const params = useListParams();
   // On a weekend the working week ahead is the useful one.
@@ -175,7 +168,6 @@ export function OrderWeekView({
                   .sort((a, b) => a.orderNumber.localeCompare(b.orderNumber))}
                 canManage={canManage}
                 busy={busy}
-                onAdd={onAdd}
               />
             ))}
           </div>
@@ -203,13 +195,11 @@ function WeekDay({
   orders,
   canManage,
   busy,
-  onAdd,
 }: {
   day: string;
   orders: WorkOrder[];
   canManage: boolean;
   busy: boolean;
-  onAdd?: (shipDate: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: day });
   return (
@@ -239,22 +229,7 @@ function WeekDay({
             ))}
           </ul>
         )}
-        {/* Where the day's next order will go. The footer already says when
-            a day has none, so only a read-only board spells it out. */}
-        {onAdd ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="week-day-add"
-            aria-label={`Add order on ${calendarDateLabel(day)}`}
-            onClick={() => onAdd(day)}
-          >
-            <Plus size={15} />
-            Add order
-          </Button>
-        ) : (
-          !orders.length && <p className="muted">No orders</p>
-        )}
+        {!orders.length && <p className="muted">No orders</p>}
       </div>
       {/* The day's totals; the week's are above the board. */}
       <footer>

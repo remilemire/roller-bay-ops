@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
 // The six-digit production order number (0–9, leading zeros kept). Allocations
-// reference scheduled orders by this number.
+// reference work orders by this number.
 export const orderNumberSchema = z
   .string()
   .trim()
   .regex(/^\d{6}$/, 'Must be 6 digits.');
-// Furthest milestone reached; derived from the timestamps, never stored.
+// Furthest step reached; derived, never stored. Fabric is allocated before an
+// order is given a ship date, so `scheduled` follows `allocated`.
 export const orderStatusSchema = z.enum([
-  'scheduled',
+  'new',
   'allocated',
+  'scheduled',
   'cut',
   'shipped',
 ]);
@@ -35,18 +37,19 @@ const noteSchema = z
   .nullable()
   .transform((value) => value || null);
 
+// An order starts without a ship date; it gets one once fabric is allocated.
 export const createWorkOrderSchema = z.strictObject({
   orderNumber: orderNumberSchema,
-  shipDate: shipDateSchema,
   quantity: orderQuantitySchema,
   note: noteSchema.default(null),
 });
-// The order number is fixed once scheduled. `shipped` stamps or clears the
-// shipped milestone; the server owns the timestamp.
+// The order number is fixed once created. A null ship date takes the order
+// off the schedule. `shipped` stamps or clears the shipped milestone; the
+// server owns the timestamp.
 export const updateWorkOrderSchema = z
   .strictObject({
     expectedRevision: revision,
-    shipDate: shipDateSchema.optional(),
+    shipDate: shipDateSchema.nullable().optional(),
     quantity: orderQuantitySchema.optional(),
     note: noteSchema.optional(),
     shipped: z.boolean().optional(),
@@ -64,8 +67,11 @@ export const workOrderQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(6).optional(),
-  // `open` lists every order that has not shipped.
-  status: z.enum(['open', ...orderStatusSchema.options]).optional(),
+  // `open` lists every order that has not shipped; `unscheduled` lists the
+  // allocated orders still waiting for a ship date.
+  status: z
+    .enum(['open', 'unscheduled', ...orderStatusSchema.options])
+    .optional(),
   // Inclusive ship-date bounds, for the week and month views.
   shipDateFrom: z.iso.date().optional(),
   shipDateTo: z.iso.date().optional(),
@@ -74,11 +80,13 @@ export const workOrderQuerySchema = z.strictObject({
 export const workOrderSchema = z.object({
   id: z.uuid(),
   orderNumber: z.string(),
-  shipDate: z.iso.date(),
+  shipDate: z.iso.date().nullable(),
   quantity: z.number().int().positive(),
   note: z.string().nullable(),
   status: orderStatusSchema,
-  scheduledAt: z.iso.datetime(),
+  createdAt: z.iso.datetime(),
+  // When the ship date was set; null while the order has none.
+  scheduledAt: z.iso.datetime().nullable(),
   allocatedAt: z.iso.datetime().nullable(),
   cutAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),

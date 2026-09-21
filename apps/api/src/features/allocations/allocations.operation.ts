@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   orderAlreadyAllocated,
-  orderNotScheduled,
+  orderNotFound,
 } from '../work-orders/work-orders.operation.js';
 
 export async function allocationOperation<T>(
@@ -28,7 +28,7 @@ export async function allocationOperation<T>(
           cause.code === '23503' &&
           constraint === 'allocations_order_number_work_orders_order_number_fk'
         )
-          throw orderNotScheduled(error);
+          throw orderNotFound(error);
         if (
           cause.code === '23505' &&
           constraint === 'allocations_live_order_number_unique'

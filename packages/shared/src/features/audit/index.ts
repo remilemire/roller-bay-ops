@@ -16,7 +16,11 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
     value: stockReceiptRecordSchema,
   }),
   z.object({ type: z.literal('allocations'), value: allocationRecordSchema }),
-  z.object({ type: z.literal('work-orders'), value: workOrderSchema }),
+  z.object({
+    type: z.literal('work-orders'),
+    // Snapshots recorded before orders had a creation time lack it.
+    value: workOrderSchema.partial({ createdAt: true }),
+  }),
 ]);
 export const auditChangeSchema = z.object({
   recordType: auditRecordTypeSchema,

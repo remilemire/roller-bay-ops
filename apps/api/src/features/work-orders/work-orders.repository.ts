@@ -27,11 +27,20 @@ type WorkOrdersDatabase = Pick<
 >;
 export type WorkOrderRecord = typeof workOrders.$inferSelect;
 
-const { allocatedAt, cutAt, shippedAt } = workOrders;
+const { allocatedAt, cutAt, shipDate, shippedAt } = workOrders;
+// Each mirrors the presenter's derived status, except the two work queues.
 const statusFilters = {
   open: isNull(shippedAt),
-  scheduled: and(isNull(allocatedAt), isNull(cutAt), isNull(shippedAt)),
-  allocated: and(isNotNull(allocatedAt), isNull(cutAt), isNull(shippedAt)),
+  // Allocated, or already cut, and still waiting for a ship date.
+  unscheduled: and(isNotNull(allocatedAt), isNull(shipDate), isNull(shippedAt)),
+  new: and(isNull(allocatedAt), isNull(shippedAt)),
+  allocated: and(
+    isNotNull(allocatedAt),
+    isNull(shipDate),
+    isNull(cutAt),
+    isNull(shippedAt),
+  ),
+  scheduled: and(isNotNull(shipDate), isNull(cutAt), isNull(shippedAt)),
   cut: and(isNotNull(cutAt), isNull(shippedAt)),
   shipped: isNotNull(shippedAt),
 };
@@ -80,6 +89,7 @@ export class WorkOrdersRepository {
           .select()
           .from(workOrders)
           .where(where)
+          // Ascending order puts undated orders after the dated ones.
           .orderBy(asc(workOrders.shipDate), asc(workOrders.orderNumber))
           .limit(query.pageSize)
           .offset((query.page - 1) * query.pageSize);
@@ -144,9 +154,9 @@ export class WorkOrdersRepository {
       .values(values)
       .onConflictDoUpdate({
         target: workOrders.orderNumber,
+        // A deleted order had no allocation, so it has no ship date to clear.
         set: {
           ...values,
-          scheduledAt: new Date(),
           shippedAt: null,
           deletedAt: null,
           revision: sql`${workOrders.revision} + 1`,
@@ -161,7 +171,10 @@ export class WorkOrdersRepository {
   async update(
     id: string,
     values: Partial<
-      Pick<WorkOrderRecord, 'shipDate' | 'quantity' | 'note' | 'shippedAt'>
+      Pick<
+        WorkOrderRecord,
+        'shipDate' | 'scheduledAt' | 'quantity' | 'note' | 'shippedAt'
+      >
     >,
   ) {
     const [row] = await this.db

@@ -15,8 +15,8 @@ import type { DatabaseTransaction } from '../../database/database.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import {
   orderAlreadyAllocated,
-  orderAlreadyScheduled,
-  orderNotScheduled,
+  orderAlreadyExists,
+  orderNotFound,
   workOrdersOperation,
 } from './work-orders.operation.js';
 import { presentWorkOrder } from './work-orders.presenter.js';
@@ -95,13 +95,13 @@ export class WorkOrdersService {
     return workOrdersOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const row = await repository.create(input);
-        if (!row) throw orderAlreadyScheduled();
+        if (!row) throw orderAlreadyExists();
         // A deleted order's history ends with no record, so restoring it
         // starts from none as well.
         await this.audit.record(
           tx,
           userId,
-          row.revision > 1 ? 'order.restored' : 'order.scheduled',
+          row.revision > 1 ? 'order.restored' : 'order.created',
           [change(null, row)],
         );
         return presentWorkOrder(row);
@@ -133,9 +133,30 @@ export class WorkOrdersService {
               },
             ],
           });
+        // Fabric is allocated before a date is promised. The database holds
+        // the same rule; this answers with the field it concerns.
+        if (input.shipDate && !previous.allocatedAt)
+          throw new ConflictException({
+            message: 'Allocate fabric for this order before scheduling it.',
+            issues: [
+              {
+                code: 'order_not_allocated',
+                path: ['shipDate'],
+                message: 'Allocate fabric first.',
+              },
+            ],
+          });
         const { shipped } = input;
         const row = await repository.update(id, {
           shipDate: input.shipDate,
+          // Kept through a reschedule: it is when the order went on the
+          // schedule, not when its date last moved.
+          scheduledAt:
+            input.shipDate === undefined
+              ? undefined
+              : input.shipDate === null
+                ? null
+                : (previous.scheduledAt ?? new Date()),
           quantity: input.quantity,
           note: input.note,
           // Marking a shipped order shipped again keeps its original time.
@@ -147,11 +168,15 @@ export class WorkOrdersService {
                 : null,
         });
         const action =
-          shipped === undefined || shipped === !!previous.shippedAt
-            ? 'order.updated'
-            : shipped
+          shipped !== undefined && shipped !== !!previous.shippedAt
+            ? shipped
               ? 'order.shipped'
-              : 'order.unshipped';
+              : 'order.unshipped'
+            : !previous.shipDate && row.shipDate
+              ? 'order.scheduled'
+              : previous.shipDate && !row.shipDate
+                ? 'order.unscheduled'
+                : 'order.updated';
         await this.audit.record(tx, userId, action, [change(previous, row)]);
         return presentWorkOrder(row);
       }),
@@ -183,11 +208,11 @@ export class WorkOrdersService {
   // records the returned change on its own audit event. allocated_at and
   // cut_at mirror the live allocation's confirmed_at and completed_at.
 
-  /** A draft may only name an order that is on the schedule. */
-  async requireScheduled(tx: DatabaseTransaction, orderNumber: string) {
+  /** A draft may only name an order that exists. */
+  async requireOrder(tx: DatabaseTransaction, orderNumber: string) {
     const repository = new WorkOrdersRepository({ db: tx });
     if (!(await repository.findByOrderNumber(orderNumber)))
-      throw orderNotScheduled();
+      throw orderNotFound();
   }
 
   /** `quantity` is the total of the allocation's blinds. */
@@ -199,7 +224,7 @@ export class WorkOrdersService {
   ): Promise<AuditChange> {
     const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
-    if (!order) throw orderNotScheduled();
+    if (!order) throw orderNotFound();
     if (order.allocatedAt) throw orderAlreadyAllocated();
     // The derived status would hide an allocation made after shipping.
     if (order.shippedAt)
@@ -225,13 +250,30 @@ export class WorkOrdersService {
   ) {
     const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
-    if (!order) throw orderNotScheduled();
+    if (!order) throw orderNotFound();
     requireQuantity(order, quantity);
   }
 
-  /** The order's allocation was cancelled or moved to another order. */
+  /**
+   * The order's allocation was cancelled or moved to another order. Refused
+   * while the order has a ship date: a date needs an allocation, and clearing
+   * it here would change the schedule from a request that never named it.
+   */
   release(tx: DatabaseTransaction, orderNumber: string) {
-    return this.restamp(tx, orderNumber, { allocatedAt: null });
+    return this.restamp(tx, orderNumber, { allocatedAt: null }, (order) => {
+      if (order.shipDate)
+        throw new ConflictException({
+          message:
+            'This order has a ship date. Clear it before cancelling its allocation.',
+          issues: [
+            {
+              code: 'order_scheduled',
+              path: ['orderNumber'],
+              message: 'Has a ship date.',
+            },
+          ],
+        });
+    });
   }
 
   markCut(tx: DatabaseTransaction, orderNumber: string, at: Date) {
@@ -242,11 +284,13 @@ export class WorkOrdersService {
     tx: DatabaseTransaction,
     orderNumber: string,
     values: Parameters<WorkOrdersRepository['stamp']>[1],
+    allow?: (order: WorkOrderRecord) => void,
   ): Promise<AuditChange> {
     const repository = new WorkOrdersRepository({ db: tx });
     const order = await repository.findByOrderNumberForUpdate(orderNumber);
-    // The foreign key keeps an allocation's order on the schedule.
-    if (!order) throw orderNotScheduled();
+    // The foreign key keeps an allocation's order in existence.
+    if (!order) throw orderNotFound();
+    allow?.(order);
     return change(order, await repository.stamp(order.id, values));
   }
 }

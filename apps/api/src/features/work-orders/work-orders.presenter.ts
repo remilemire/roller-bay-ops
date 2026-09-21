@@ -4,7 +4,8 @@ import {
 } from '@roller-bay/shared/work-orders';
 import type { WorkOrderRecord } from './work-orders.repository.js';
 
-// The status is the furthest milestone reached; it is never stored.
+// The status is the furthest step reached; it is never stored. A ship date
+// can only follow an allocation, so `scheduled` outranks `allocated`.
 export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
   return workOrderSchema.parse({
     ...row,
@@ -12,10 +13,13 @@ export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
       ? 'shipped'
       : row.cutAt
         ? 'cut'
-        : row.allocatedAt
-          ? 'allocated'
-          : 'scheduled',
-    scheduledAt: row.scheduledAt.toISOString(),
+        : row.shipDate
+          ? 'scheduled'
+          : row.allocatedAt
+            ? 'allocated'
+            : 'new',
+    createdAt: row.createdAt.toISOString(),
+    scheduledAt: row.scheduledAt?.toISOString() ?? null,
     allocatedAt: row.allocatedAt?.toISOString() ?? null,
     cutAt: row.cutAt?.toISOString() ?? null,
     shippedAt: row.shippedAt?.toISOString() ?? null,

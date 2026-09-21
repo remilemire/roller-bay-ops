@@ -12,15 +12,16 @@ import { workOrdersOperation } from './work-orders.operation.js';
 import type { WorkOrderRecord } from './work-orders.repository.js';
 import { presentWorkOrder } from './work-orders.presenter.js';
 
-test('scheduled order status is the furthest milestone reached', () => {
+test('work order status is the furthest step reached', () => {
   const at = new Date('2026-09-19T12:00:00.000Z');
   const row: WorkOrderRecord = {
     id: randomUUID(),
     orderNumber: '104801',
-    shipDate: '2026-10-02',
+    shipDate: null,
     quantity: 12,
     note: null,
-    scheduledAt: at,
+    createdAt: at,
+    scheduledAt: null,
     allocatedAt: null,
     cutAt: null,
     shippedAt: null,
@@ -28,29 +29,28 @@ test('scheduled order status is the furthest milestone reached', () => {
     revision: 1,
     deletedAt: null,
   };
-  assert.equal(presentWorkOrder(row).status, 'scheduled');
-  assert.equal(
-    presentWorkOrder({ ...row, allocatedAt: at }).status,
-    'allocated',
-  );
-  assert.equal(
-    presentWorkOrder({ ...row, allocatedAt: at, cutAt: at }).status,
-    'cut',
-  );
-  // Shipping is not gated on cutting, and outranks every other milestone.
+  const allocated = { ...row, allocatedAt: at };
+  const scheduled = { ...allocated, shipDate: '2026-10-02', scheduledAt: at };
+  assert.equal(presentWorkOrder(row).status, 'new');
+  assert.equal(presentWorkOrder(allocated).status, 'allocated');
+  assert.equal(presentWorkOrder(scheduled).status, 'scheduled');
+  // Cutting needs no ship date, and outranks one.
+  assert.equal(presentWorkOrder({ ...allocated, cutAt: at }).status, 'cut');
+  assert.equal(presentWorkOrder({ ...scheduled, cutAt: at }).status, 'cut');
+  // Shipping is not gated on the earlier steps, and outranks them all.
   assert.equal(presentWorkOrder({ ...row, shippedAt: at }).status, 'shipped');
   assert.equal(
-    presentWorkOrder({ ...row, allocatedAt: at, cutAt: at, shippedAt: at })
-      .status,
+    presentWorkOrder({ ...scheduled, cutAt: at, shippedAt: at }).status,
     'shipped',
   );
-  assert.deepEqual(presentWorkOrder({ ...row, allocatedAt: at }), {
+  assert.deepEqual(presentWorkOrder(scheduled), {
     id: row.id,
     orderNumber: '104801',
     shipDate: '2026-10-02',
     quantity: 12,
     note: null,
-    status: 'allocated',
+    status: 'scheduled',
+    createdAt: at.toISOString(),
     scheduledAt: at.toISOString(),
     allocatedAt: at.toISOString(),
     cutAt: null,

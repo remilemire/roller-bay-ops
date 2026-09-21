@@ -171,14 +171,15 @@ export const allocation = allocationDetailSchema.parse({
   completion: null,
   correctedAt: null,
 });
-// Ships on a Friday; the allocation above names this order.
+// Allocated by the allocation above, then scheduled to ship on a Friday.
 export const order = workOrderSchema.parse({
   id: ids.order,
   orderNumber: '104801',
   shipDate: '2026-10-02',
   quantity: 14,
   note: 'Rush',
-  status: 'allocated',
+  status: 'scheduled',
+  createdAt: timestamp,
   scheduledAt: timestamp,
   allocatedAt: timestamp,
   cutAt: null,

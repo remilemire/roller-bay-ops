@@ -21,8 +21,9 @@ import { orderList, workOrdersKey, updateOrder } from './work-orders.api';
 // The schedule opens on orders that still need work; `all` includes shipped.
 const tabs = [
   { value: 'open', label: 'Open' },
-  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'new', label: 'New' },
   { value: 'allocated', label: 'Allocated' },
+  { value: 'scheduled', label: 'Scheduled' },
   { value: 'cut', label: 'Cut' },
   { value: 'shipped', label: 'Shipped' },
   { value: 'all', label: 'All orders' },
@@ -112,7 +113,9 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                         <strong>{order.orderNumber}</strong>
                       </Link>
                     </td>
-                    <td>{calendarDateLabel(order.shipDate)}</td>
+                    <td>
+                      {order.shipDate ? calendarDateLabel(order.shipDate) : '—'}
+                    </td>
                     <td>{order.quantity}</td>
                     <td>
                       <Status value={order.status} />
@@ -121,14 +124,17 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                     {canManage && (
                       <td>
                         <div className="inline-actions">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Reschedule order ${order.orderNumber}`}
-                            onClick={() => setRescheduling(order)}
-                          >
-                            Reschedule
-                          </Button>
+                          {/* A date follows the allocation. */}
+                          {order.allocatedAt && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`${order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
+                              onClick={() => setRescheduling(order)}
+                            >
+                              {order.shipDate ? 'Reschedule' : 'Schedule'}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

@@ -14,16 +14,18 @@ export const workOrders = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     orderNumber: varchar('order_number', { length: 6 }).notNull().unique(),
-    // A calendar date; shipping has no time of day or timezone.
-    shipDate: date('ship_date', { mode: 'string' }).notNull(),
+    // A calendar date; shipping has no time of day or timezone. An order has
+    // none until fabric is allocated and someone schedules it.
+    shipDate: date('ship_date', { mode: 'string' }),
     // Blinds on the order; its allocation's blinds add up to this.
     quantity: integer('quantity').notNull(),
     note: varchar('note', { length: 1000 }),
-    // Milestones. The status is derived from the furthest one reached.
-    // scheduled_at doubles as the creation time.
-    scheduledAt: timestamp('scheduled_at', { withTimezone: true })
+    createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
+    // Milestones. The status is derived from the furthest one reached.
+    // scheduled_at is when the ship date was set, and goes when it does.
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
     allocatedAt: timestamp('allocated_at', { withTimezone: true }),
     cutAt: timestamp('cut_at', { withTimezone: true }),
     shippedAt: timestamp('shipped_at', { withTimezone: true }),
@@ -33,7 +35,7 @@ export const workOrders = pgTable(
       .notNull(),
     revision: integer('revision').default(1).notNull(),
     // A deleted order is kept: allocations reference its number, which stays
-    // unique, so scheduling that number again restores this row.
+    // unique, so creating that number again restores this row.
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
@@ -45,6 +47,15 @@ export const workOrders = pgTable(
     check(
       'work_orders_ship_date_weekday',
       sql`EXTRACT(ISODOW FROM ${table.shipDate}) < 6`,
+    ),
+    // Fabric is allocated, to see what is on hand, before a date is promised.
+    check(
+      'work_orders_ship_date_requires_allocation',
+      sql`${table.shipDate} IS NULL OR ${table.allocatedAt} IS NOT NULL`,
+    ),
+    check(
+      'work_orders_scheduled_at_matches_ship_date',
+      sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,
     ),
     check('work_orders_quantity_positive', sql`${table.quantity} > 0`),
     check('work_orders_revision_positive', sql`${table.revision} > 0`),

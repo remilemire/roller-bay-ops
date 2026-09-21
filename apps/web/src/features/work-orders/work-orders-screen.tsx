@@ -19,14 +19,10 @@ const views = [
 export function WorkOrdersScreen() {
   const params = useListParams();
   const canManage = useCanManage();
-  // The week and month views add an order to the day it was added from.
-  const [adding, setAdding] = useState<{ shipDate: string } | null>(null);
+  const [adding, setAdding] = useState(false);
   const view = views.some((item) => item.value === params.get('view'))
     ? params.get('view')
     : 'week';
-  const add = canManage
-    ? (shipDate: string) => setAdding({ shipDate })
-    : undefined;
   return (
     <>
       <PageHeading title="Work orders">
@@ -44,8 +40,8 @@ export function WorkOrdersScreen() {
             </button>
           ))}
         </div>
-        {add && (
-          <Button onClick={() => add('')}>
+        {canManage && (
+          <Button onClick={() => setAdding(true)}>
             <Plus size={17} />
             Add order
           </Button>
@@ -54,13 +50,11 @@ export function WorkOrdersScreen() {
       {view === 'list' ? (
         <OrderListView canManage={canManage} />
       ) : view === 'month' ? (
-        <OrderMonthView onAdd={add} />
+        <OrderMonthView />
       ) : (
-        <OrderWeekView canManage={canManage} onAdd={add} />
+        <OrderWeekView canManage={canManage} />
       )}
-      {adding && (
-        <OrderEditor shipDate={adding.shipDate} close={() => setAdding(null)} />
-      )}
+      {adding && <OrderEditor close={() => setAdding(false)} />}
     </>
   );
 }

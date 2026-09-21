@@ -100,16 +100,18 @@ export async function mockApi(
     completionRequests: [] as unknown[],
     orders: [
       structuredClone(order),
-      // Not allocated yet, so the allocation editor offers it.
+      // Not allocated yet, so the allocation editor offers it and it has no
+      // ship date.
       {
         ...structuredClone(order),
         id: 'ffffffff-ffff-4fff-8fff-fffffffffff0',
         orderNumber: '104877',
-        shipDate: '2026-10-05',
+        shipDate: null,
+        scheduledAt: null,
         // The allocation flow plans one blind for this order.
         quantity: 1,
         note: null,
-        status: 'scheduled' as const,
+        status: 'new' as const,
         allocatedAt: null,
       },
     ],
@@ -195,15 +197,16 @@ export async function mockApi(
     if (path === '/work-orders' && method === 'GET') {
       const status = url.searchParams.get('status');
       const search = url.searchParams.get('search') ?? '';
-      const from = url.searchParams.get('shipDateFrom') ?? '0000';
-      const to = url.searchParams.get('shipDateTo') ?? '9999';
+      const from = url.searchParams.get('shipDateFrom');
+      const to = url.searchParams.get('shipDateTo');
       return send(
         paged(
           state.orders.filter(
             (row) =>
               row.orderNumber.includes(search) &&
-              row.shipDate >= from &&
-              row.shipDate <= to &&
+              // A date range leaves out the orders that have no date.
+              (!from || (row.shipDate !== null && row.shipDate >= from)) &&
+              (!to || (row.shipDate !== null && row.shipDate <= to)) &&
               (!status ||
                 (status === 'open'
                   ? row.status !== 'shipped'
@@ -220,7 +223,9 @@ export async function mockApi(
         ...order,
         ...body,
         id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-        status: 'scheduled' as const,
+        status: 'new' as const,
+        shipDate: null,
+        scheduledAt: null,
         allocatedAt: null,
         revision: 1,
       };
@@ -239,16 +244,25 @@ export async function mockApi(
         return send(null, 204);
       }
       const { expectedRevision, shipped, ...fields } = body;
-      state.orders[index] = {
+      const next = {
         ...found,
         ...fields,
         revision: expectedRevision + 1,
         ...(shipped === undefined
           ? {}
-          : {
-              shippedAt: shipped ? timestamp : null,
-              status: shipped ? ('shipped' as const) : ('allocated' as const),
-            }),
+          : { shippedAt: shipped ? timestamp : null }),
+      };
+      // Derived as the API derives it; these orders are never cut.
+      state.orders[index] = {
+        ...next,
+        scheduledAt: next.shipDate ? timestamp : null,
+        status: next.shippedAt
+          ? ('shipped' as const)
+          : next.shipDate
+            ? ('scheduled' as const)
+            : next.allocatedAt
+              ? ('allocated' as const)
+              : ('new' as const),
       };
       return send(state.orders[index]);
     }

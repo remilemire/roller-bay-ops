@@ -1,7 +1,6 @@
 'use client';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
 import { ErrorNotice, Loading } from '@/components/ui/feedback';
 import {
   addMonths,
@@ -25,11 +24,7 @@ import {
 
 // A day lists this many orders; the rest are a link to its week.
 const SHOWN = 4;
-export function OrderMonthView({
-  onAdd,
-}: {
-  onAdd?: (shipDate: string) => void;
-}) {
+export function OrderMonthView() {
   const params = useListParams();
   const thisMonth = monthOf(nextWeekday(today()));
   const month = isMonth(params.get('month')) ? params.get('month') : thisMonth;
@@ -46,7 +41,8 @@ export function OrderMonthView({
         summary={
           query.data
             ? orderTotals(
-                orders.filter((order) => monthOf(order.shipDate) === month),
+                // The range is by ship date, so every order here has one.
+                orders.filter((order) => monthOf(order.shipDate!) === month),
               )
             : 'Loading…'
         }
@@ -98,16 +94,6 @@ export function OrderMonthView({
                           {orderCount(dayOrders.length)} ·{' '}
                           {blindCount(totalBlinds(dayOrders))}
                         </small>
-                      )}
-                      {onAdd && (
-                        <button
-                          type="button"
-                          className="button button-ghost button-icon"
-                          aria-label={`Add order on ${calendarDateLabel(day)}`}
-                          onClick={() => onAdd(day)}
-                        >
-                          <Plus size={14} />
-                        </button>
                       )}
                     </header>
                     <ul>

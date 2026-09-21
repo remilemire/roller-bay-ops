@@ -123,7 +123,7 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
-        await this.requireScheduled(tx, data.orderNumber);
+        await this.requireOrder(tx, data.orderNumber);
         await repository.replacePlan(header.id, configured);
         // Drafts stay out of history, which begins at confirmation.
         return this.detail(repository, tx, header);
@@ -138,7 +138,7 @@ export class AllocationsService {
           await repository.findById(id, true),
           revision,
         );
-        await this.requireScheduled(tx, data.orderNumber);
+        await this.requireOrder(tx, data.orderNumber);
         const configured = this.configure(data, {
           settings: previous.settings,
           requirements: await repository.requirements(id),
@@ -210,12 +210,12 @@ export class AllocationsService {
   }
 
   // The foreign key admits a deleted order's number, which is kept; a draft
-  // may only name an order that is on the schedule.
-  private async requireScheduled(
+  // may only name an order that exists.
+  private async requireOrder(
     tx: DatabaseTransaction,
     orderNumber: string | null,
   ) {
-    if (orderNumber) await this.orders.requireScheduled(tx, orderNumber);
+    if (orderNumber) await this.orders.requireOrder(tx, orderNumber);
   }
 
   private async confirmPlan(

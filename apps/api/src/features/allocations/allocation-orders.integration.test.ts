@@ -24,12 +24,12 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
     create,
   } = await startAllocationsApp(t);
   await t.test(
-    'allocations name a scheduled order, and an order has one live allocation',
+    'allocations name an existing order, and an order has one live allocation',
     async () => {
       const unscheduled = { ...input(await seed()), orderNumber: '888888' };
       const issue = (body: { issues?: { code: string; path: unknown }[] }) =>
         body.issues?.map(({ code, path }) => ({ code, path }));
-      const missing = [{ code: 'order_not_scheduled', path: ['orderNumber'] }];
+      const missing = [{ code: 'order_not_found', path: ['orderNumber'] }];
       assert.deepEqual(
         issue((await post(path, unscheduled).expect(404)).body),
         missing,
@@ -165,7 +165,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
     },
   );
   await t.test(
-    'an order can be deleted once its allocation is cancelled, and is then off the schedule',
+    'an order can be deleted once its allocation is cancelled, and then no longer exists for new work',
     async () => {
       const body = input(await seed());
       const allocation = await create(body);
@@ -209,8 +209,8 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       // Neither the cancelled allocation nor the draft holds the order now.
       assert.equal((await remove()).status, 204);
 
-      // A deleted order is not on the schedule for new work or drafts.
-      const missing = [{ code: 'order_not_scheduled', path: ['orderNumber'] }];
+      // A deleted order does not exist for new work or drafts.
+      const missing = [{ code: 'order_not_found', path: ['orderNumber'] }];
       const issue = (reply: {
         body: { issues?: { code: string; path: unknown }[] };
       }) => reply.body.issues?.map(({ code, path }) => ({ code, path }));
@@ -244,12 +244,11 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         body.orderNumber,
       );
 
-      // Scheduling the number again restores the order, here with a new
+      // Creating the number again restores the order, here with a new
       // quantity: two blinds where the cancelled allocation planned one.
       const restored = await asAdmin(() =>
         schedule('post', '/api/work-orders').send({
           orderNumber: body.orderNumber,
-          shipDate: '2026-10-01',
           quantity: 2,
         }),
       );
@@ -319,7 +318,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
     },
   );
   await t.test(
-    'confirming, moving, cancelling, and completing an allocation stamp its scheduled order',
+    'confirming, moving, cancelling, and completing an allocation stamp its order',
     async () => {
       const order = fixtures.workOrder;
       const allocationRow = async (id: string) =>
@@ -378,15 +377,64 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       }).expect(409);
       assert.equal(late.body.issues[0].code, 'order_shipped');
 
-      // Cancelling returns the order to scheduled, free to allocate again.
-      await post(`${path}/${moved.id}/cancel`, {
+      // An order with a ship date keeps its allocation: cancelling is refused
+      // rather than quietly taking the order off the schedule, and so is
+      // moving the allocation to another order.
+      const schedule = (shipDate: string | null) =>
+        fixtures
+          .setUserRole(userId, 'admin')
+          .then(async () => {
+            const row = await order(target);
+            await request(server)
+              .patch(`/api/work-orders/${row.id}`)
+              .set('Cookie', cookie)
+              .set('Origin', origin)
+              .send({ expectedRevision: row.revision, shipDate })
+              .expect(200);
+          })
+          .finally(() => fixtures.setUserRole(userId, 'user'));
+      await schedule('2026-10-09');
+      const refused = await post(`${path}/${moved.id}/cancel`, {
         expectedRevision: moved.revision,
+      }).expect(409);
+      assert.deepEqual(
+        refused.body.issues.map((issue: { code: string }) => issue.code),
+        ['order_scheduled'],
+      );
+      await put(moved.id, {
+        ...body,
+        orderNumber: input(stockId).orderNumber,
+        expectedRevision: moved.revision,
+      }).expect(409);
+      const shipDate = async () =>
+        (await get(`/api/work-orders/${(await order(target)).id}`).expect(200))
+          .body.shipDate;
+      assert.ok((await order(target)).allocated_at);
+      assert.equal(await shipDate(), '2026-10-09');
+      // Re-planning in place needs no release, so it keeps the date.
+      const replanned = allocationDetailSchema.parse(
+        (
+          await put(moved.id, {
+            ...body,
+            orderNumber: target,
+            expectedRevision: moved.revision,
+          }).expect(200)
+        ).body,
+      );
+      assert.equal(await shipDate(), '2026-10-09');
+      await schedule(null);
+
+      // Cancelling returns the order to new, free to allocate again.
+      await post(`${path}/${replanned.id}/cancel`, {
+        expectedRevision: replanned.revision,
       }).expect(200);
       assert.equal((await order(target)).allocated_at, null);
-      await post(`${path}/${moved.id}/cancel`, {
-        expectedRevision: moved.revision,
+      await post(`${path}/${replanned.id}/cancel`, {
+        expectedRevision: replanned.revision,
       }).expect(200);
       const again = await create({ ...input(stockId), orderNumber: target });
+      // The two schedule edits above are what raised the order's revision.
+      const { revision } = await order(target);
 
       const completion = {
         expectedRevision: again.revision,
@@ -406,7 +454,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       row = await order(target);
       assert.deepEqual(row.allocated_at, stamps.confirmed_at);
       assert.deepEqual(row.cut_at, stamps.completed_at);
-      assert.equal(row.revision, 1);
+      assert.equal(row.revision, revision);
       assert.equal(
         (await get(`/api/work-orders/${row.id}`).expect(200)).body.status,
         'cut',
@@ -422,6 +470,8 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         'allocation.completed',
         'allocation.confirmed',
         'allocation.replaced',
+        'order.scheduled',
+        'order.unscheduled',
       ]);
       const completedEvent = history.items.find(
         (event) => event.action === 'allocation.completed',

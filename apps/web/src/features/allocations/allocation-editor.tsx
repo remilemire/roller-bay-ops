@@ -24,7 +24,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import {
-  lookupSchedulableOrders,
+  lookupUnallocatedOrders,
   orderByNumber,
   workOrdersKey,
 } from '@/features/work-orders/work-orders.api';
@@ -324,7 +324,7 @@ export function AllocationEditor({
           <div className="stack">
             <section className="panel">
               <div className="panel-body">
-                {/* An allocation names an order from the schedule, so the
+                {/* An allocation names an existing work order, so the
                     number is picked rather than typed. */}
                 <Lookup
                   label="Order number"
@@ -336,8 +336,8 @@ export function AllocationEditor({
                     setAttempted(false);
                   }}
                   selectedLabel={values.orderNumber}
-                  queryKey={[...workOrdersKey, 'schedulable']}
-                  load={lookupSchedulableOrders}
+                  queryKey={[...workOrdersKey, 'unallocated']}
+                  load={lookupUnallocatedOrders}
                   error={errors.orderNumber?.message ?? quantityError}
                 />
                 {quantityError ? null : order ? (
@@ -347,7 +347,7 @@ export function AllocationEditor({
                   </p>
                 ) : (
                   <p className="order-count">
-                    Lists scheduled orders that have no allocation yet.
+                    Lists work orders that have no allocation yet.
                   </p>
                 )}
               </div>

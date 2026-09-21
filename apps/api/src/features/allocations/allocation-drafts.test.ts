@@ -157,7 +157,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       writes++;
     },
   };
-  // An incomplete draft must not claim its scheduled order either.
+  // An incomplete draft must not claim its order either.
   const orders = {
     allocate: async () => {
       writes++;

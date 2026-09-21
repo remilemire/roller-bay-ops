@@ -8,13 +8,11 @@ import type { ErrorIssue } from '@roller-bay/shared/errors';
 import {
   orderNumberSchema,
   orderQuantitySchema,
-  shipDateSchema,
   type WorkOrder,
 } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
-import { DateField } from '@/components/ui/date-field';
 import { TextField } from '@/components/ui/field';
 import { issuePath } from '@/lib/errors';
 import { showFieldIssues } from '@/lib/field-issues';
@@ -22,7 +20,6 @@ import { createOrder, workOrdersKey, updateOrder } from './work-orders.api';
 
 const formSchema = z.object({
   orderNumber: orderNumberSchema,
-  shipDate: z.string().min(1, 'Choose a ship date.').pipe(shipDateSchema),
   // Typed as text; a blank is a missing quantity, never zero.
   quantity: z
     .string()
@@ -33,18 +30,16 @@ const formSchema = z.object({
 });
 type OrderFields = z.input<typeof formSchema>;
 type OrderForm = z.output<typeof formSchema>;
-const FIELDS = ['orderNumber', 'shipDate', 'quantity', 'note'] as const;
+const FIELDS = ['orderNumber', 'quantity', 'note'] as const;
 const fieldName = (issue: ErrorIssue) =>
   FIELDS.find((field) => field === issuePath(issue)) ?? null;
 
+/** An order's own details. Its ship date is set once fabric is allocated. */
 export function OrderEditor({
   order,
-  shipDate = '',
   close,
 }: {
   order?: WorkOrder;
-  /** The day a new order was added from, in the week and month views. */
-  shipDate?: string;
   close: () => void;
 }) {
   // Pin the record this form opened with: a background refetch must not swap
@@ -54,7 +49,6 @@ export function OrderEditor({
     resolver: zodResolver(formSchema),
     defaultValues: {
       orderNumber: opened?.orderNumber ?? '',
-      shipDate: opened?.shipDate ?? shipDate,
       quantity: opened ? String(opened.quantity) : '',
       note: opened?.note ?? '',
     },
@@ -69,7 +63,6 @@ export function OrderEditor({
       opened
         ? updateOrder(opened.id, {
             expectedRevision: opened.revision,
-            shipDate: data.shipDate,
             quantity: allocated ? undefined : data.quantity,
             note: data.note,
           })
@@ -95,7 +88,7 @@ export function OrderEditor({
       description={
         opened
           ? undefined
-          : 'The order number cannot be changed once the order is scheduled.'
+          : 'The order number cannot be changed later. A ship date follows once fabric is allocated.'
       }
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
@@ -112,13 +105,6 @@ export function OrderEditor({
               hint="6 digits"
             />
           )}
-          <DateField
-            label="Ship date"
-            value={values.shipDate}
-            onChange={(v) => set('shipDate', v)}
-            error={errors.shipDate?.message}
-            weekdaysOnly
-          />
           <TextField
             label="Blinds"
             value={values.quantity}

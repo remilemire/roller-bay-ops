@@ -219,7 +219,7 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(save).toBeEnabled();
 });
 
-it('picks the order number from the schedule and marks the form dirty', async () => {
+it('picks the order number from the work orders and marks the form dirty', async () => {
   const user = userEvent.setup();
   saveDraft.mockResolvedValue({ ...draft, revision: 2 });
   render(

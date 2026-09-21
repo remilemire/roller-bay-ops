@@ -16,7 +16,7 @@ import { WorkOrdersScreen } from './work-orders-screen';
 import {
   createOrder,
   deleteOrder,
-  lookupSchedulableOrders,
+  lookupUnallocatedOrders,
   orderDetail,
   orderList,
   orderRange,
@@ -86,7 +86,7 @@ beforeEach(() => {
           (
             [
               order,
-              { ...order, id: 'b', orderNumber: '104820', status: 'scheduled' },
+              { ...order, id: 'b', orderNumber: '104820', status: 'cut' },
               {
                 ...order,
                 id: 'c',
@@ -100,7 +100,7 @@ beforeEach(() => {
                 shipDate: '2026-10-13',
               })),
             ] as WorkOrder[]
-          ).filter((row) => row.shipDate >= from && row.shipDate <= to),
+          ).filter((row) => row.shipDate! >= from && row.shipDate! <= to),
       }),
     );
   for (const write of [createOrder, updateOrder, deleteOrder])
@@ -118,7 +118,7 @@ it('formats a ship date as its calendar day in every timezone', () => {
   expect(calendarDateLabel('2026-10-02')).toBe('Fri, Oct 2, 2026');
 });
 
-it('offers the allocation editor only orders that can still be allocated', async () => {
+it('offers the allocation editor only orders with no allocation yet', async () => {
   const fetched = vi.fn<(url: string) => Promise<Response>>(
     async () =>
       new Response(
@@ -127,22 +127,20 @@ it('offers the allocation editor only orders that can still be allocated', async
       ),
   );
   vi.stubGlobal('fetch', fetched);
-  const result = await lookupSchedulableOrders(
+  const result = await lookupUnallocatedOrders(
     '1048019',
     1,
     new AbortController().signal,
   );
   const url = new URL(String(fetched.mock.calls[0]![0]), 'http://localhost');
   expect(url.pathname).toMatch(/\/work-orders$/);
-  expect(url.searchParams.get('status')).toBe('scheduled');
+  expect(url.searchParams.get('status')).toBe('new');
   // The API caps the search at an order number's six characters.
   expect(url.searchParams.get('search')).toBe('104801');
   // The option id is the order number the allocation stores.
   expect(result).toEqual({
     total: 1,
-    items: [
-      { id: '104801', label: '104801 · 14 blinds · ships Fri, Oct 2, 2026' },
-    ],
+    items: [{ id: '104801', label: '104801 · 14 blinds' }],
   });
 });
 
@@ -152,7 +150,7 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
   const user = userEvent.setup();
   const row = (await screen.findByText('104801')).closest('tr')!;
   expect(row).toHaveTextContent('Fri, Oct 2, 2026');
-  expect(row).toHaveTextContent('allocated');
+  expect(row).toHaveTextContent('scheduled');
   expect(row).toHaveTextContent('Rush');
   expect(within(row).getByRole('cell', { name: '14' })).toBeInTheDocument();
   expect(within(row).getByRole('link')).toHaveAttribute(
@@ -226,13 +224,18 @@ it('marks an order shipped from its row with the revision the row shows', async 
 
 it('adds an order and shows rejected fields beside them', async () => {
   vi.mocked(createOrder).mockRejectedValueOnce(
-    new ApiError(409, 'This order is already on the schedule.', undefined, [
-      {
-        code: 'order_already_scheduled',
-        path: ['orderNumber'],
-        message: 'Already scheduled.',
-      },
-    ]),
+    new ApiError(
+      409,
+      'A work order with this number already exists.',
+      undefined,
+      [
+        {
+          code: 'order_already_exists',
+          path: ['orderNumber'],
+          message: 'Already exists.',
+        },
+      ],
+    ),
   );
   vi.mocked(createOrder).mockResolvedValueOnce(order);
   show(<WorkOrdersScreen />);
@@ -248,28 +251,18 @@ it('adds an order and shows rejected fields beside them', async () => {
   await user.type(blinds, '1x4');
   expect(blinds).toHaveValue('14');
 
-  // A missing date is caught before any request is made.
-  await user.click(dialog.getByRole('button', { name: 'Save order' }));
-  const date = dialog.getByRole('button', { name: 'Ship date' });
-  await waitFor(() =>
-    expect(date).toHaveAccessibleDescription('Choose a ship date.'),
-  );
-  expect(createOrder).not.toHaveBeenCalled();
-
-  // The calendar opens on the current month and offers weekdays only.
-  await user.click(date);
-  await user.click(dialog.getByRole('button', { name: 'Next month' }));
-  await user.click(dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
-  expect(date).toHaveTextContent('Fri, Oct 2, 2026');
+  // An order has no ship date until fabric is allocated for it.
+  expect(dialog.queryByRole('button', { name: 'Ship date' })).toBeNull();
   await user.type(dialog.getByLabelText('Note'), ' Rush ');
   await user.click(dialog.getByRole('button', { name: 'Save order' }));
   const notice = await dialog.findByRole('alert');
-  expect(notice).toHaveTextContent('This order is already on the schedule.');
-  expect(notice).not.toHaveTextContent('Already scheduled.');
-  expect(number).toHaveAccessibleDescription(/Already scheduled\./);
+  expect(notice).toHaveTextContent(
+    'A work order with this number already exists.',
+  );
+  expect(notice).not.toHaveTextContent('Already exists.');
+  expect(number).toHaveAccessibleDescription(/Already exists\./);
   expect(createOrder).toHaveBeenLastCalledWith({
     orderNumber: '104801',
-    shipDate: '2026-10-02',
     quantity: 14,
     note: 'Rush',
   });
@@ -294,20 +287,34 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
 
   await user.click(screen.getByRole('button', { name: 'Edit' }));
   const editor = within(screen.getByRole('dialog'));
-  // The order number is fixed once scheduled.
+  // The order number is fixed once created, and the date has its own dialog.
   expect(editor.queryByLabelText(/Order number/)).toBeNull();
+  expect(editor.queryByRole('button', { name: 'Ship date' })).toBeNull();
   // So is the quantity, while the order has an allocation.
   expect(editor.getByLabelText(/Blinds/)).toBeDisabled();
   expect(editor.getByLabelText(/Blinds/)).toHaveValue('14');
-  await user.click(editor.getByRole('button', { name: 'Ship date' }));
-  await user.click(editor.getByRole('button', { name: 'Fri, Oct 9, 2026' }));
   await user.clear(editor.getByLabelText('Note'));
   await user.click(editor.getByRole('button', { name: 'Save order' }));
   await waitFor(() =>
     expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
       expectedRevision: 3,
-      shipDate: '2026-10-09',
       note: '',
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  // An allocated order can be taken off the schedule without touching the rest.
+  await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+  await user.click(
+    within(screen.getByRole('dialog', { name: /Reschedule order/ })).getByRole(
+      'button',
+      { name: 'Clear date' },
+    ),
+  );
+  await waitFor(() =>
+    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
+      expectedRevision: 3,
+      shipDate: null,
     }),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -379,8 +386,7 @@ it('reschedules an order from its row with the calendar already open', async () 
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
-it('groups the working week by day with totals and adds an order to a day', async () => {
-  vi.mocked(createOrder).mockResolvedValue(order);
+it('groups the working week by day with totals', async () => {
   show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   // Today is Monday 28 September, so this is the week on show.
@@ -389,7 +395,7 @@ it('groups the working week by day with totals and adds an order to a day', asyn
   ).toBeInTheDocument();
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-02');
   expect(
-    await screen.findByText('3 orders · 42 blinds · 1 scheduled · 2 allocated'),
+    await screen.findByText('3 orders · 42 blinds · 2 scheduled · 1 cut'),
   ).toBeInTheDocument();
   const friday = within(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
@@ -402,30 +408,10 @@ it('groups the working week by day with totals and adds an order to a day', asyn
     '104801',
     '104820',
   ]);
-  // An empty day is its add button and a zero in the footer.
+  // An order reaches a day by being scheduled, never by being added to it.
   const tuesday = screen.getByRole('region', { name: 'Tue, Sep 29, 2026' });
-  expect(tuesday).toHaveTextContent(/Add order\s*0 orders\s*0 blinds$/);
-  expect(within(tuesday).queryByText('No orders')).toBeNull();
-
-  await user.click(
-    screen.getByRole('button', { name: 'Add order on Thu, Oct 1, 2026' }),
-  );
-  const dialog = within(screen.getByRole('dialog'));
-  // The day it was added from is already the ship date.
-  expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveTextContent(
-    'Thu, Oct 1, 2026',
-  );
-  await user.type(dialog.getByLabelText(/Order number/), '104900');
-  await user.type(dialog.getByLabelText(/Blinds/), '6');
-  await user.click(dialog.getByRole('button', { name: 'Save order' }));
-  await waitFor(() =>
-    expect(createOrder).toHaveBeenLastCalledWith({
-      orderNumber: '104900',
-      shipDate: '2026-10-01',
-      quantity: 6,
-      note: '',
-    }),
-  );
+  expect(tuesday).toHaveTextContent(/No orders\s*0 orders\s*0 blinds$/);
+  expect(screen.queryByRole('button', { name: /Add order on/ })).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Next week' }));
   // The default view needs no parameter of its own.
@@ -447,10 +433,9 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   expect(
     await screen.findByRole('heading', { name: 'Oct 12 – Oct 16, 2026' }),
   ).toBeInTheDocument();
-  await screen.findByText('6 orders · 84 blinds · 6 allocated');
+  await screen.findByText('6 orders · 84 blinds · 6 scheduled');
   expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
-  // With nothing to add, a read-only board says when a day is empty.
   expect(
     within(screen.getByRole('region', { name: 'Mon, Oct 12, 2026' })).getByText(
       'No orders',
@@ -462,7 +447,7 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   });
 });
 
-it('lays the month out Monday to Friday and adds an order to a day', async () => {
+it('lays the month out Monday to Friday', async () => {
   state.search = 'view=month&month=2026-10';
   show(<WorkOrdersScreen />);
   const user = userEvent.setup();
@@ -473,9 +458,7 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-30');
   // September's order shows in its edge day but is not an October order.
   expect(
-    await screen.findByText(
-      '8 orders · 112 blinds · 1 scheduled · 7 allocated',
-    ),
+    await screen.findByText('8 orders · 112 blinds · 7 scheduled · 1 cut'),
   ).toBeInTheDocument();
   expect(
     within(
@@ -493,17 +476,7 @@ it('lays the month out Monday to Friday and adds an order to a day', async () =>
   expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
   );
-  await user.click(
-    screen.getByRole('button', { name: 'Add order on Wed, Oct 21, 2026' }),
-  );
-  expect(
-    within(screen.getByRole('dialog')).getByRole('button', {
-      name: 'Ship date',
-    }),
-  ).toHaveTextContent('Wed, Oct 21, 2026');
-  await user.click(
-    within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }),
-  );
+  expect(screen.queryByRole('button', { name: /Add order on/ })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Today' }));
   expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=month', {
     scroll: false,

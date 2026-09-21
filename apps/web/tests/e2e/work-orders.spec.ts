@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ids, mockApi } from './fixtures';
-test('admins schedule, edit, ship, and delete an order from the schedule', async ({
+test('admins add, schedule, ship, and delete work orders', async ({
   page,
 }, testInfo) => {
   const state = await mockApi(page);
@@ -13,7 +13,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await expect(
     page.getByRole('heading', { name: 'Work orders' }),
   ).toBeVisible();
-  // The schedule opens on the week of the fixed clock.
+  // The page opens on the week of the fixed clock.
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
@@ -21,36 +21,29 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await expect(page).toHaveURL(/view=list/);
   const existing = page.getByRole('row', { name: /104801/ });
   await expect(existing).toContainText('Fri, Oct 2, 2026');
-  await expect(existing).toContainText('allocated');
+  await expect(existing).toContainText('scheduled');
 
   await page.getByRole('button', { name: 'Add order' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Order number').fill('104900');
   await dialog.getByLabel('Blinds').fill('8');
-  // Dates are picked from a weekday calendar rather than typed.
-  await dialog.getByRole('button', { name: 'Ship date' }).click();
-  await expect(
-    dialog.getByRole('button', { name: 'Sat, Oct 3, 2026' }),
-  ).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Next month' }).click();
-  await dialog.getByRole('button', { name: 'Fri, Oct 9, 2026' }).click();
+  // An order gets its ship date later, once fabric is allocated for it.
+  await expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveCount(
+    0,
+  );
   await dialog.getByLabel('Note').fill('Motorised');
   await dialog.getByRole('button', { name: 'Save order' }).click();
   await expect(dialog).toBeHidden();
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',
-      body: {
-        orderNumber: '104900',
-        shipDate: '2026-10-09',
-        quantity: 8,
-        note: 'Motorised',
-      },
+      body: { orderNumber: '104900', quantity: 8, note: 'Motorised' },
     },
   ]);
-  await expect(page.getByRole('row', { name: /104900/ })).toContainText(
-    'Fri, Oct 9, 2026',
-  );
+  const added = page.getByRole('row', { name: /104900/ });
+  await expect(added).toContainText('new');
+  // With no allocation it cannot be scheduled yet.
+  await expect(added.getByRole('button', { name: /chedule/ })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Shipped', exact: true }).click();
   await expect(page).toHaveURL(/status=shipped/);
@@ -60,10 +53,16 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   await existing.getByRole('link').click();
   await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await dialog.getByRole('button', { name: 'Ship date' }).click();
-  await dialog.getByRole('button', { name: 'Tue, Oct 6, 2026' }).click();
-  await dialog.getByRole('button', { name: 'Save order' }).click();
+  // Dates are picked from a weekday calendar, already open, rather than typed.
+  await page.getByRole('button', { name: 'Reschedule' }).click();
+  const reschedule = page.getByRole('dialog', { name: /Reschedule order/ });
+  await expect(
+    reschedule.getByRole('button', { name: 'Sat, Oct 3, 2026' }),
+  ).toHaveCount(0);
+  await reschedule.getByRole('button', { name: 'Tue, Oct 6, 2026' }).click();
+  await reschedule
+    .getByRole('button', { name: 'Reschedule', exact: true })
+    .click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
   await page.getByRole('button', { name: 'Mark shipped' }).click();
   await expect(
@@ -72,7 +71,7 @@ test('admins schedule, edit, ship, and delete an order from the schedule', async
   expect(state.orderRequests.slice(1)).toEqual([
     {
       method: 'PATCH',
-      body: { expectedRevision: 3, shipDate: '2026-10-06', note: 'Rush' },
+      body: { expectedRevision: 3, shipDate: '2026-10-06' },
     },
     { method: 'PATCH', body: { expectedRevision: 4, shipped: true } },
   ]);
@@ -97,14 +96,14 @@ test('admins mark an order shipped from its row and it leaves the open list', as
 }) => {
   const state = await mockApi(page);
   await page.goto('/work-orders?view=list');
-  await page.getByRole('button', { name: 'Mark order 104877 shipped' }).click();
-  await expect(page.getByRole('row', { name: /104877/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mark order 104801 shipped' }).click();
+  await expect(page.getByRole('row', { name: /104801/ })).toHaveCount(0);
   expect(state.orderRequests).toEqual([
     { method: 'PATCH', body: { expectedRevision: 3, shipped: true } },
   ]);
   await page.getByRole('button', { name: 'Shipped', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Mark order 104877 not shipped' }),
+    page.getByRole('button', { name: 'Mark order 104801 not shipped' }),
   ).toBeVisible();
 });
 test('admins drag an order to another day of the week, by mouse and by keyboard', async ({
@@ -117,7 +116,7 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
   await expect(
-    page.getByText('1 order · 14 blinds · 1 allocated'),
+    page.getByText('1 order · 14 blinds · 1 scheduled'),
   ).toBeVisible();
   const day = (name: string) => page.getByRole('region', { name });
   const card = day('Fri, Oct 2, 2026').getByRole('link', { name: '104801' });
@@ -167,57 +166,30 @@ test('admins drag an order to another day of the week, by mouse and by keyboard'
   await day('Thu, Oct 1, 2026').getByRole('link', { name: '104801' }).click();
   await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
 });
-test('admins add an order to a day of the month', async ({ page }) => {
-  const state = await mockApi(page);
-  await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
-  await page.goto('/work-orders?view=month&month=2026-10');
-  const dialog = page.getByRole('dialog');
-  await page
-    .getByRole('button', { name: 'Add order on Wed, Oct 21, 2026' })
-    .click();
-  await expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveText(
-    'Wed, Oct 21, 2026',
-  );
-  await dialog.getByLabel('Order number').fill('104950');
-  await dialog.getByLabel('Blinds').fill('20');
-  await dialog.getByRole('button', { name: 'Save order' }).click();
-  await expect(
-    page
-      .getByRole('gridcell', { name: 'Wed, Oct 21, 2026' })
-      .getByRole('link', { name: /104950/ }),
-  ).toBeVisible();
-  expect(state.orderRequests).toEqual([
-    {
-      method: 'POST',
-      body: {
-        orderNumber: '104950',
-        shipDate: '2026-10-21',
-        quantity: 20,
-        note: null,
-      },
-    },
-  ]);
-});
 test('admins reschedule an order from its list row', async ({ page }) => {
   const state = await mockApi(page);
   await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
   await page.goto('/work-orders?view=list');
   const dialog = page.getByRole('dialog');
-  await page.getByRole('button', { name: 'Reschedule order 104877' }).click();
+  await page.getByRole('button', { name: 'Reschedule order 104801' }).click();
   // The calendar is already open on the order's month.
   await dialog.getByRole('button', { name: 'Wed, Oct 7, 2026' }).click();
   await dialog.getByRole('button', { name: 'Reschedule', exact: true }).click();
-  await expect(page.getByRole('row', { name: /104877/ })).toContainText(
-    'Wed, Oct 7, 2026',
-  );
-  expect(state.orderRequests.at(-1)).toEqual({
-    method: 'PATCH',
-    body: { expectedRevision: 3, shipDate: '2026-10-07' },
-  });
+  const row = page.getByRole('row', { name: /104801/ });
+  await expect(row).toContainText('Wed, Oct 7, 2026');
+  // Clearing the date takes it off the schedule; it stays allocated.
+  await page.getByRole('button', { name: 'Reschedule order 104801' }).click();
+  await dialog.getByRole('button', { name: 'Clear date' }).click();
+  await expect(row).toContainText('allocated');
+  await expect(
+    page.getByRole('button', { name: 'Schedule order 104801' }),
+  ).toBeVisible();
+  expect(state.orderRequests).toEqual([
+    { method: 'PATCH', body: { expectedRevision: 3, shipDate: '2026-10-07' } },
+    { method: 'PATCH', body: { expectedRevision: 4, shipDate: null } },
+  ]);
 });
-test('employees read the schedule and an order without admin actions', async ({
-  page,
-}) => {
+test('employees read work orders without admin actions', async ({ page }) => {
   await mockApi(page, { role: 'user' });
   await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
@@ -225,7 +197,7 @@ test('employees read the schedule and an order without admin actions', async ({
   await expect(page.getByRole('button', { name: /Mark order/ })).toHaveCount(0);
   await page.goto(`/work-orders/${ids.order}`);
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
-  for (const name of ['Edit', 'Mark shipped', 'Delete'])
+  for (const name of ['Edit', 'Reschedule', 'Mark shipped', 'Delete'])
     await expect(page.getByRole('button', { name })).toHaveCount(0);
   // The calendar views are read-only for them.
   await page.goto('/work-orders?view=week&week=2026-10-02');

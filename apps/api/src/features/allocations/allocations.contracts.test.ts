@@ -54,7 +54,7 @@ test('allocation contracts normalize keys, require revisions, and reject client-
       createAllocationSchema.safeParse({ ...input, orderNumber }).success,
       false,
     );
-  // Drafts name a scheduled order or none. Stored drafts and their audit
+  // Drafts name an existing order or none. Stored drafts and their audit
   // snapshots may still hold the partial numbers older versions accepted.
   assert.equal(
     allocationDraftInputSchema.parse({ orderNumber: ' 104801 ' }).orderNumber,
@@ -195,7 +195,7 @@ test('allocation storage errors preserve domain responses and do not expose driv
       '23503',
       'allocations_order_number_work_orders_order_number_fk',
       404,
-      'order_not_scheduled',
+      'order_not_found',
     ],
     [
       '23505',

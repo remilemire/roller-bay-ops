@@ -69,8 +69,8 @@ export function createFixtures(pool: Pool) {
     /** Orders numbered `first` to `last`, each for one blind. */
     createWorkOrders: (first: number, last: number) =>
       pool.query(
-        `INSERT INTO work_orders (order_number, ship_date, quantity)
-           SELECT n::text, '2026-10-01', 1 FROM generate_series($1::int, $2::int) n`,
+        `INSERT INTO work_orders (order_number, quantity)
+           SELECT n::text, 1 FROM generate_series($1::int, $2::int) n`,
         [first, last],
       ),
 
