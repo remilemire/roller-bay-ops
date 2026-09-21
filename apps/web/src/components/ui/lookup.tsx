@@ -18,6 +18,7 @@ export function Lookup({
   queryKey,
   load,
   selectedLabel,
+  placeholder = 'Type to search…',
   error,
   create,
 }: {
@@ -31,6 +32,7 @@ export function Lookup({
     signal: AbortSignal,
   ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
   selectedLabel?: string;
+  placeholder?: string;
   error?: string;
   /**
    * For lists whose records can be made on the spot: a last option, labelled
@@ -43,6 +45,8 @@ export function Lookup({
       items: { id: string; label: string }[],
     ) => string | null;
     run: (term: string) => Promise<{ id: string; label: string }>;
+    /** What an empty list says while the text typed cannot be created yet. */
+    hint?: (term: string) => string | null;
   };
 }) {
   const id = useId();
@@ -151,7 +155,7 @@ export function Lookup({
           aria-activedescendant={
             open && items[active] ? `${id}-option-${active}` : undefined
           }
-          placeholder={selected || 'Type to search…'}
+          placeholder={selected || placeholder}
           value={open ? term : selected}
           onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}
@@ -247,7 +251,7 @@ export function Lookup({
           ))}
           {!items.length && result.data && !result.error && (
             <li className="combobox-empty" role="presentation">
-              No matches.
+              {(query && create?.hint?.(query)) || 'No matches.'}
             </li>
           )}
         </ul>

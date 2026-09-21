@@ -297,6 +297,20 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   const orderNumber = page.getByRole('combobox', { name: 'Order number' });
   await orderNumber.click();
   await expect(page.getByRole('option', { name: /^104877/ })).toBeVisible();
+  // The list says what a number needs before it can be created, and why an
+  // order that exists is not in it.
+  await orderNumber.fill('1049');
+  await expect(
+    page.getByText('Type all 6 digits to create a new order.'),
+  ).toBeVisible();
+  await orderNumber.fill('104801');
+  await page.getByRole('option', { name: 'Create order 104801' }).click();
+  await expect(
+    page.getByText(
+      'Order 104801 already exists. It is not listed because it has an allocation or has shipped.',
+    ),
+  ).toBeVisible();
+  state.orderRequests.length = 0;
   await orderNumber.fill('104950');
   expect(state.orderRequests).toEqual([]);
   await page.getByRole('option', { name: 'Create order 104950' }).click();

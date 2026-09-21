@@ -423,6 +423,7 @@ export function AllocationEditor({
                     selectedLabel={order?.orderNumber ?? initial?.orderNumber}
                     queryKey={[...workOrdersKey, 'unallocated']}
                     load={lookupUnallocatedOrders}
+                    placeholder="Search, or type a new 6-digit number"
                     error={errors.workOrderId?.message}
                     create={{
                       // Creating the order is its own request, made only
@@ -432,8 +433,27 @@ export function AllocationEditor({
                         !items.some((item) => item.label.startsWith(term))
                           ? `Create order ${term}`
                           : null,
+                      hint: (term) =>
+                        /^\d{1,5}$/.test(term)
+                          ? 'Type all 6 digits to create a new order.'
+                          : null,
                       run: async (term) => {
-                        const made = await createOrder({ orderNumber: term });
+                        const made = await createOrder({
+                          orderNumber: term,
+                        }).catch((error: unknown) => {
+                          if (
+                            !(error instanceof ApiError) ||
+                            !error.issues.some(
+                              (issue) => issue.code === 'order_already_exists',
+                            )
+                          )
+                            throw error;
+                          // The list leaves out orders that cannot be planned,
+                          // so the refusal says why this one is not in it.
+                          throw new Error(
+                            `Order ${term} already exists. It is not listed because it has an allocation or has shipped.`,
+                          );
+                        });
                         await client.invalidateQueries({
                           queryKey: workOrdersKey,
                         });

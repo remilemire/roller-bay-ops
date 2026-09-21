@@ -184,6 +184,8 @@ it('offers to create what was typed as an option of its own, and does nothing un
           /^[A-Z]\d-\d{3}$/.test(term) && !items.length
             ? `Create ${term}`
             : null,
+        hint: (term) =>
+          /^[A-Z]\d-\d{0,2}$/.test(term) ? 'Type the whole code.' : null,
         run,
       }}
     />,
@@ -192,7 +194,14 @@ it('offers to create what was typed as an option of its own, and does nothing un
   await user.type(box, 'C1');
   await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1));
   expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
-  await user.type(box, '-999');
+  // An empty list says what is still missing, where it has something to say.
+  await user.type(box, '-9');
+  expect(await screen.findByText('Type the whole code.')).toBeInTheDocument();
+  await user.clear(box);
+  await user.type(box, 'zz');
+  expect(await screen.findByText('No matches.')).toBeInTheDocument();
+  await user.clear(box);
+  await user.type(box, 'C1-999');
   const option = await screen.findByRole('option', { name: 'Create C1-999' });
   // Typing alone creates nothing.
   expect(run).not.toHaveBeenCalled();

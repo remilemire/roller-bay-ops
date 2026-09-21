@@ -224,6 +224,20 @@ export async function mockApi(
     if (path === '/work-orders' && method === 'POST') {
       const body = request.postDataJSON();
       state.orderRequests.push({ method, body });
+      if (state.orders.some((row) => row.orderNumber === body.orderNumber))
+        return send(
+          {
+            message: 'A work order with this number already exists.',
+            issues: [
+              {
+                code: 'order_already_exists',
+                path: ['orderNumber'],
+                message: 'Already exists.',
+              },
+            ],
+          },
+          409,
+        );
       const created = {
         ...order,
         ...body,
