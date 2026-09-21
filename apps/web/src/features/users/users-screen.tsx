@@ -1,6 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { User } from '@roller-bay/shared/users';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -84,6 +89,7 @@ function UserDirectory() {
   const query = useQuery({
     queryKey: [...usersKey, params.search, params.page],
     queryFn: ({ signal }) => listUsers(params.search, params.page, signal),
+    placeholderData: keepPreviousData,
   });
   const mutation = useMutation({
     // The refreshed list is authoritative; the responses are not displayed.
@@ -112,7 +118,6 @@ function UserDirectory() {
     <>
       <PageHeading title="Users" />
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search by name or email…"

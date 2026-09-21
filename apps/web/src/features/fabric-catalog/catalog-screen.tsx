@@ -111,7 +111,6 @@ export function CatalogScreen() {
         )}
       </PageHeading>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search manufacturers…"

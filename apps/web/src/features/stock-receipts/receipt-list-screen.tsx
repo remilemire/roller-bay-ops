@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Plus, PackagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,13 +18,15 @@ import { receiptList } from './stock-receipts.api';
 export function ReceiptListScreen() {
   const params = useListParams();
   const draft = params.get('state') === 'draft';
-  const query = useQuery(
-    receiptList({
+  const query = useQuery({
+    ...receiptList({
       search: params.search,
       page: params.page,
       state: draft ? 'draft' : 'submitted',
     }),
-  );
+    // Keep the rows on screen while a search typed or a page turned loads.
+    placeholderData: keepPreviousData,
+  });
   return (
     <>
       <PageHeading title="Stock receipts">
@@ -36,7 +38,6 @@ export function ReceiptListScreen() {
         </Button>
       </PageHeading>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search purchase-order number…"

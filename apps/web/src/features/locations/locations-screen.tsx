@@ -116,7 +116,6 @@ export function LocationsScreen() {
         )}
       </PageHeading>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search zones…"

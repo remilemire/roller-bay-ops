@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Layers3, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,15 +26,17 @@ export function StockScreen() {
   const voided = params.get('state') === 'voided';
   const consumed = params.get('state') === 'consumed';
   const remnant = params.get('kind') === 'remnant';
-  const query = useQuery(
-    stockList({
+  const query = useQuery({
+    ...stockList({
       search: params.search,
       page: params.page,
       isConsumed: consumed,
       isVoided: voided,
       isRemnant: remnant || undefined,
     }),
-  );
+    // Keep the rows on screen while a search typed or a page turned loads.
+    placeholderData: keepPreviousData,
+  });
   const canManage = useCanManage();
   const [adding, setAdding] = useState(false);
   return (
@@ -48,7 +50,6 @@ export function StockScreen() {
         )}
       </PageHeading>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search color code, material or ID…"

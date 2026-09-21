@@ -15,7 +15,12 @@ import {
   type DragEndEvent,
   type KeyboardCoordinateGetter,
 } from '@dnd-kit/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { GripVertical } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
@@ -74,7 +79,10 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
   // matches on the days, which stay whole so their totals still mean the day.
   const search = params.search;
   // Allocated orders with no date yet wait in a tray above the board.
-  const waiting = useQuery(unscheduledOrders(search));
+  const waiting = useQuery({
+    ...unscheduledOrders(search),
+    placeholderData: keepPreviousData,
+  });
   // Matches this page does not show: on another week, or not allocated yet.
   const found = useQuery({
     ...orderList({ search, pageSize: ELSEWHERE + 1 }),
@@ -185,7 +193,6 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
         onToday={() => params.set({ week: '' })}
       >
         <SearchForm
-          key={search}
           search={search}
           // The API caps the search at an order number's six characters.
           onSearch={(text) => params.set({ search: text.trim().slice(0, 6) })}

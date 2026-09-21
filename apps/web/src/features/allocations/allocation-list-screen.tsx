@@ -1,6 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Plus, Scissors } from 'lucide-react';
 import { useState } from 'react';
 import type { AllocationList } from '@roller-bay/shared/allocations';
@@ -38,13 +43,15 @@ export function AllocationListScreen() {
   const state = tabs.some((tab) => tab.value === params.get('state'))
     ? params.get('state')
     : 'active';
-  const query = useQuery(
-    allocationList({
+  const query = useQuery({
+    ...allocationList({
       search: params.search,
       page: params.page,
       state: state === 'all' ? '' : state,
     }),
-  );
+    // Keep the rows on screen while a search typed or a page turned loads.
+    placeholderData: keepPreviousData,
+  });
   // Pin the row the dialog opened on; the revision the employee saw is the one
   // the cancellation is checked against.
   const [cancelling, setCancelling] = useState<AllocationRow | null>(null);
@@ -77,7 +84,6 @@ export function AllocationListScreen() {
         </Button>
       </PageHeading>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         onSearch={(search) => params.set({ search })}
         placeholder="Search order number…"

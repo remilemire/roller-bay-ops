@@ -1,6 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
@@ -35,13 +40,15 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
   const status = tabs.some((tab) => tab.value === params.get('status'))
     ? params.get('status')
     : 'open';
-  const query = useQuery(
-    orderList({
+  const query = useQuery({
+    ...orderList({
       search: params.search,
       page: params.page,
       status: status === 'all' ? '' : status,
     }),
-  );
+    // Keep the rows on screen while a search typed or a page turned loads.
+    placeholderData: keepPreviousData,
+  });
   const client = useQueryClient();
   const ship = useMutation({
     mutationFn: (order: WorkOrder) =>
@@ -55,7 +62,6 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
   return (
     <>
       <SearchToolbar
-        key={params.search}
         search={params.search}
         // The API caps the search at an order number's six characters.
         onSearch={(search) => params.set({ search: search.trim().slice(0, 6) })}
