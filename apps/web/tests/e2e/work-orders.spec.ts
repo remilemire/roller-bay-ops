@@ -171,27 +171,37 @@ test('admins drag an order between days and the to-schedule tray, by mouse and b
   const drag = async (
     source: ReturnType<typeof day>,
     target: ReturnType<typeof day>,
+    place: string,
   ) => {
-    // One move at a time: the handle is disabled while the last one saves.
-    await expect(
-      page.getByRole('button', { name: 'Move order 104801 to a day' }),
-    ).toBeEnabled();
-    const start = (await source
-      .getByRole('link', { name: '104801' })
-      .boundingBox())!;
+    // One move at a time: a press is ignored while the last move is saving
+    // or its card is still settling, so press until the board announces the
+    // pickup, which it does by saying where the card is.
+    await expect(async () => {
+      await page.mouse.up();
+      const start = (await source
+        .getByRole('link', { name: '104801' })
+        .boundingBox())!;
+      await page.mouse.move(start.x + 8, start.y + 8);
+      await page.mouse.down();
+      await page.mouse.move(start.x + 20, start.y + 20, { steps: 4 });
+      await expect(announced).toHaveText(/^Order 104801 over /, {
+        timeout: 500,
+      });
+    }).toPass();
     const end = (await target.boundingBox())!;
-    await page.mouse.move(start.x + 8, start.y + 8);
-    await page.mouse.down();
     await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, {
       steps: 12,
     });
+    // Let go once the board has registered where the card is, as a person
+    // would: a release in the same instant as the arrival can come first.
+    await expect(announced).toHaveText(`Order 104801 over ${place}.`);
     await page.mouse.up();
     await expect(target.getByRole('link', { name: '104801' })).toBeVisible();
   };
-  await drag(day('Thu, Oct 1, 2026'), tray);
+  await drag(day('Thu, Oct 1, 2026'), tray, 'the orders to schedule');
   await expect(tray).toContainText('1 order · 14 blinds');
   await expect(page.getByText('0 orders · 0 blinds').first()).toBeVisible();
-  await drag(tray, day('Mon, Sep 28, 2026'));
+  await drag(tray, day('Mon, Sep 28, 2026'), 'Mon, Sep 28, 2026');
   expect(state.orderRequests.slice(-2)).toEqual([
     { method: 'PATCH', body: { expectedRevision: 5, shipDate: null } },
     { method: 'PATCH', body: { expectedRevision: 6, shipDate: '2026-09-28' } },
