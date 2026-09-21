@@ -22,11 +22,11 @@ import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
 import { OrderDetailScreen } from './order-detail-screen';
+import { OrderStart } from './order-start';
 import { WorkOrdersScreen } from './work-orders-screen';
 import {
   createOrder,
   deleteOrder,
-  lookupUnallocatedOrders,
   orderDetail,
   orderList,
   orderRange,
@@ -157,30 +157,51 @@ it('formats a ship date as its calendar day in every timezone', () => {
   expect(calendarDateLabel('2026-10-02')).toBe('Fri, Oct 2, 2026');
 });
 
-it('offers the allocation editor only orders with no allocation yet', async () => {
-  const fetched = vi.fn<(url: string) => Promise<Response>>(
-    async () =>
-      new Response(
-        JSON.stringify({ items: [order], total: 1, page: 1, pageSize: 25 }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
+it('says where an order is when its number is already taken', async () => {
+  const taken = new ApiError(
+    409,
+    'A work order with this number already exists.',
+    undefined,
+    [
+      {
+        code: 'order_already_exists',
+        path: ['orderNumber'],
+        message: 'Already exists.',
+      },
+    ],
   );
-  vi.stubGlobal('fetch', fetched);
-  const result = await lookupUnallocatedOrders(
-    '1048019',
-    1,
-    new AbortController().signal,
+  vi.mocked(createOrder).mockRejectedValue(taken);
+  const onCreated = vi.fn();
+  show(<OrderStart onCreated={onCreated} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText(/Order number/), '104801');
+  await user.click(screen.getByRole('button', { name: 'Create order' }));
+  // The refusal names no order, so the one it means is read by its number.
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Order 104801 already exists.',
   );
-  const url = new URL(String(fetched.mock.calls[0]![0]), 'http://localhost');
-  expect(url.pathname).toMatch(/\/work-orders$/);
-  expect(url.searchParams.get('status')).toBe('new');
-  // The API caps the search at an order number's six characters.
-  expect(url.searchParams.get('search')).toBe('104801');
-  // The option id is the order's id, which the allocation names.
-  expect(result).toEqual({
-    total: 1,
-    items: [{ id: order.id, label: '104801 · 14 blinds' }],
-  });
+  expect(orderList).toHaveBeenLastCalledWith({ search: '104801', pageSize: 1 });
+  expect(screen.getByRole('link', { name: 'Open the order' })).toHaveAttribute(
+    'href',
+    `/work-orders/${order.id}`,
+  );
+  // One that still needs fabric is a click from being planned.
+  vi.mocked(orderList).mockImplementation((filters = {}) =>
+    queryOptions({
+      queryKey: ['work-orders', 'list', filters],
+      queryFn: async (): Promise<WorkOrderList> => ({
+        items: [{ ...order, status: 'new', allocatedAt: null }],
+        total: 1,
+        page: 1,
+        pageSize: 1,
+      }),
+    }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Create order' }));
+  expect(
+    await screen.findByRole('link', { name: 'Allocate it' }),
+  ).toHaveAttribute('href', `/allocations/new?workOrder=${order.id}`);
+  expect(onCreated).not.toHaveBeenCalled();
 });
 
 it('opens the list on unshipped orders and keeps the filter in the URL', async () => {

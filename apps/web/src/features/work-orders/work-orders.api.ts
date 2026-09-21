@@ -1,7 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import * as s from '@roller-bay/shared/work-orders';
 import { api, noContent, queryString } from '@/lib/api';
-import { blindCount } from './order-totals';
 export const workOrdersKey = ['work-orders'] as const;
 export const orderList = (filters: Record<string, unknown> = {}) =>
   queryOptions({
@@ -69,23 +68,3 @@ export const unscheduledOrders = () =>
         s.workOrderListSchema,
       ),
   });
-// For the allocation editor: orders with no allocation yet. The option id is
-// the order's id, which the allocation names.
-export const lookupUnallocatedOrders = async (
-  search: string,
-  page: number,
-  signal: AbortSignal,
-) => {
-  const data = await api(
-    `/work-orders${queryString({ search: search.slice(0, 6), page, pageSize: 25, status: 'new' })}`,
-    s.workOrderListSchema,
-    { signal },
-  );
-  return {
-    total: data.total,
-    items: data.items.map((order) => ({
-      id: order.id,
-      label: `${order.orderNumber} · ${blindCount(order.quantity)}`,
-    })),
-  };
-};

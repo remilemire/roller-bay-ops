@@ -5,9 +5,7 @@ export default async function Page({
   searchParams: Promise<{ workOrder?: string | string[] }>;
 }) {
   const { workOrder } = await searchParams;
-  return (
-    <AllocationEditor
-      workOrderId={typeof workOrder === 'string' ? workOrder : undefined}
-    />
-  );
+  const workOrderId = typeof workOrder === 'string' ? workOrder : undefined;
+  // Keyed by the order: the form reads it once, when it mounts.
+  return <AllocationEditor key={workOrderId} workOrderId={workOrderId} />;
 }

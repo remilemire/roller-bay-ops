@@ -38,9 +38,6 @@ test('admins schedule, ship, and delete work orders', async ({
     page.getByRole('heading', { name: 'Allocate 104877' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('combobox', { name: 'Order number' }),
-  ).toHaveValue(/^104877/);
-  await expect(
     page.getByRole('button', { name: 'Add blind', exact: true }),
   ).toBeEnabled();
   // Opening an order to plan writes nothing.

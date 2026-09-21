@@ -69,6 +69,8 @@ function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
   };
 }
 
+// The mocked order that has no allocation yet.
+export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean } = {},
@@ -106,7 +108,7 @@ export async function mockApi(
       // ship date.
       {
         ...structuredClone(order),
-        id: 'ffffffff-ffff-4fff-8fff-fffffffffff0',
+        id: unallocatedOrderId,
         orderNumber: '104877',
         shipDate: null,
         scheduledAt: null,

@@ -1,11 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -24,19 +18,30 @@ import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
 import { ApiError } from '@/lib/api';
 
-const { replace, optimize, createDraft, saveDraft, submit, saveLines, orders } =
-  vi.hoisted(() => ({
-    replace: vi.fn(),
-    createDraft: vi.fn(),
-    optimize: vi.fn(),
-    saveDraft: vi.fn(),
-    submit: vi.fn(),
-    saveLines: vi.fn(),
-    // Whether the order the form names already has a live allocation.
-    orders: { allocated: false },
-  }));
+const {
+  replace,
+  optimize,
+  createDraft,
+  saveDraft,
+  submit,
+  saveLines,
+  createOrder,
+  routerReplace,
+  orders,
+} = vi.hoisted(() => ({
+  replace: vi.fn(),
+  createOrder: vi.fn(),
+  routerReplace: vi.fn(),
+  createDraft: vi.fn(),
+  optimize: vi.fn(),
+  saveDraft: vi.fn(),
+  submit: vi.fn(),
+  saveLines: vi.fn(),
+  // Whether the order the form names already has a live allocation.
+  orders: { allocated: false },
+}));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: routerReplace, push: vi.fn() }),
 }));
 vi.mock('@/features/auth/auth-boundary', async () => {
   const { defaultMeasurementUnits } = await import('@roller-bay/shared/users');
@@ -49,7 +54,7 @@ vi.mock('@/features/auth/auth-boundary', async () => {
   };
 });
 // A plain text box stands in for the searchable list: what is typed is the
-// picked option's id. The order number is one of these pickers.
+// picked option's id.
 vi.mock('@/components/ui/lookup', async () => {
   const { useId } = await import('react');
   return {
@@ -99,6 +104,7 @@ vi.mock('@/features/work-orders/work-orders.api', async (original) => {
         }),
       }),
     saveOrderLines: saveLines,
+    createOrder,
   };
 });
 vi.mock('./allocations.api', async (importOriginal) => ({
@@ -140,6 +146,8 @@ beforeEach(() => {
     saveDraft,
     submit,
     saveLines,
+    createOrder,
+    routerReplace,
   ])
     mock.mockReset();
 });
@@ -192,22 +200,14 @@ it('keeps the active plan revision and edited values when a background refresh b
   expect(quantity()).toHaveValue(2);
 });
 
-it('holds the plan until an order is chosen, then offers generating or hand-building one and reports planning in one place', async () => {
+it('offers generating a plan or hand-building one, and reports planning in one place', async () => {
   const user = userEvent.setup();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   let finish!: (result: AllocationOptimization) => void;
   optimize.mockReturnValue(
     new Promise<AllocationOptimization>((resolve) => (finish = resolve)),
   );
-  show(<AllocationEditor />);
-  // With no order there are no blinds to plan.
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'Choose the work order to plan.',
-  );
-  expect(screen.getByRole('button', { name: 'Add cut' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
-  await user.click(screen.getByLabelText('Order number'));
-  await user.paste(ids.order);
+  show(<AllocationEditor workOrderId={ids.order} />);
   await ready();
   // The order's blinds arrive with it, already saved.
   expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
@@ -275,43 +275,50 @@ it('holds the plan until an order is chosen, then offers generating or hand-buil
   expect(save).toBeEnabled();
 });
 
-it('opens on the order it was reached from, with nothing to save yet', async () => {
+it('starts a blank form with the order number alone, and creates the order only when asked', async () => {
+  const user = userEvent.setup();
+  createOrder.mockResolvedValue({
+    ...order,
+    id: 'made',
+    orderNumber: '104950',
+  });
   show(<AllocationEditor />);
   expect(
     screen.getByRole('heading', { name: 'New order' }),
   ).toBeInTheDocument();
-  cleanup();
+  // With no order there are no blinds to enter and nothing to plan.
+  expect(screen.queryByRole('button', { name: 'Add blind' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
+  const create = screen.getByRole('button', { name: 'Create order' });
+  await user.type(screen.getByLabelText(/Order number/), '10-49x5');
+  expect(screen.getByLabelText(/Order number/)).toHaveValue('10495');
+  expect(create).toBeDisabled();
+  await user.type(screen.getByLabelText(/Order number/), '0');
+  // Typing a number creates nothing.
+  expect(createOrder).not.toHaveBeenCalled();
+  await user.click(create);
+  expect(createOrder).toHaveBeenCalledWith({ orderNumber: '104950' });
+  // The screen then opens on the order, as it does from an Allocate link.
+  await waitFor(() =>
+    expect(routerReplace).toHaveBeenCalledWith(
+      '/allocations/new?workOrder=made',
+    ),
+  );
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+it('opens on the order it was reached from, with nothing to save yet', async () => {
   show(<AllocationEditor workOrderId={ids.order} />);
   expect(
     await screen.findByRole('heading', { name: 'Allocate 104801' }),
   ).toBeInTheDocument();
   await ready();
-  expect(screen.getByLabelText('Order number')).toHaveValue(ids.order);
+  // The order is settled; only its blinds and its plan are edited here.
+  expect(screen.queryByLabelText(/Order number/)).toBeNull();
   expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
   // Arriving with an order chosen is not a change to lose by leaving.
   expect(screen.getByText('Not saved yet')).toBeInTheDocument();
   expect(createDraft).not.toHaveBeenCalled();
-});
-
-it('moves a draft to another order, starting its plan afresh', async () => {
-  const user = userEvent.setup();
-  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
-  show(<AllocationEditor initial={draft} />);
-  await ready();
-  const other = crypto.randomUUID();
-  const picker = screen.getByLabelText('Order number');
-  await user.clear(picker);
-  await user.paste(other);
-  // Another order has other blinds, so the old cuts do not carry over.
-  expect(screen.queryByText('Cut 1')).not.toBeInTheDocument();
-  await ready();
-  await user.click(screen.getByRole('button', { name: 'Save draft' }));
-  await waitFor(() =>
-    expect(saveDraft).toHaveBeenCalledWith(draft.id, 1, {
-      workOrderId: other,
-      plan: { cuts: [] },
-    }),
-  );
 });
 
 it("saves the order's blinds on their own, an edited one under a new id, and holds the plan until then", async () => {
@@ -419,9 +426,7 @@ it('leaves the confirmed allocation, not the draft saved on the way, for the pag
     },
   });
   const queries = client();
-  show(<AllocationEditor />, queries);
-  await user.click(screen.getByLabelText('Order number'));
-  await user.paste(ids.order);
+  show(<AllocationEditor workOrderId={ids.order} />, queries);
   await ready();
   await user.click(screen.getByRole('button', { name: 'Generate plan' }));
   await screen.findByText('Valid cutting plan');
@@ -473,8 +478,8 @@ it('offers to reload a stale draft, but not for an order that is already allocat
   await user.click(confirm);
   await waitFor(() =>
     expect(
-      screen.getByRole('textbox', { name: /Order number/, hidden: true }),
-    ).toHaveAccessibleDescription('Already allocated.'),
+      screen.getByText('Order 104801: Already allocated.'),
+    ).toBeInTheDocument(),
   );
   expect(reload()).toBeNull();
 });

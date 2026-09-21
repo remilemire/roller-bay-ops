@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ids, mockApi } from './fixtures';
+import { ids, mockApi, unallocatedOrderId } from './fixtures';
 
 test('units chosen per field in Settings relabel forms and lists while requests stay in millimetres', async ({
   page,
@@ -35,9 +35,7 @@ test('units chosen per field in Settings relabel forms and lists while requests 
     }),
   ).toHaveValue('mm');
 
-  await page.goto('/allocations/new');
-  await page.getByRole('combobox', { name: 'Order number' }).click();
-  await page.getByRole('option', { name: /^104877/ }).click();
+  await page.goto(`/allocations/new?workOrder=${unallocatedOrderId}`);
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page

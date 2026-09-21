@@ -21,12 +21,10 @@ import {
 import { Save, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import type { WorkOrderLine } from '@roller-bay/shared/work-orders';
+import { OrderStart } from '@/features/work-orders/order-start';
 import {
-  createOrder,
-  lookupUnallocatedOrders,
   orderDetail,
   saveOrderLines,
   workOrdersKey,
@@ -175,9 +173,8 @@ export function AllocationEditor({
   const planDirty = planKey(values) !== planBaseline;
   // A live allocation's cuts were planned for these blinds.
   const frozen = !!active || !!order?.allocatedAt;
-  const blocked = !values.workOrderId
-    ? 'Choose the work order to plan.'
-    : blinds?.id !== values.workOrderId
+  const blocked =
+    blinds?.id !== values.workOrderId
       ? orderQuery.error
         ? 'The order could not be loaded.'
         : 'Loading the order…'
@@ -392,6 +389,25 @@ export function AllocationEditor({
     // so a reload reopens it.
     if (saved && !initial) router.replace(`/allocations/${saved.id}`);
   }
+  // A blank form has no order yet. Making one is its own request, and the
+  // screen then opens on it like on any order reached from elsewhere.
+  if (!values.workOrderId)
+    return (
+      <>
+        <PageHeading
+          eyebrow="FROM ORDER TO CUTTING PLAN"
+          title="New order"
+          description="Start with the order's number. Its blinds and its fabric follow."
+        />
+        <OrderStart
+          onCreated={(made) =>
+            router.replace(`/allocations/new?workOrder=${made.id}`)
+          }
+        />
+      </>
+    );
+  const orderNumber =
+    active?.orderNumber ?? order?.orderNumber ?? initial?.orderNumber;
   return (
     <>
       <PageHeading
@@ -402,103 +418,30 @@ export function AllocationEditor({
               ? `SHARED DRAFT · REVISION ${saved.revision}`
               : 'FROM ORDER TO CUTTING PLAN'
         }
-        title={
-          active
-            ? `Replan ${active.orderNumber}`
-            : saved
-              ? 'Allocation draft'
-              : values.workOrderId
-                ? `Allocate ${order?.orderNumber ?? 'order'}`
-                : 'New order'
-        }
-        description="Pick or create the work order, save its blinds, then generate a cutting plan or build one by hand."
+        title={`${active ? 'Replan' : 'Allocate'} ${orderNumber ?? 'order'}`}
+        description="Save the order's blinds, then generate a cutting plan or build one by hand."
       />
+      {orderQuery.error && (
+        <ErrorNotice
+          error={orderQuery.error}
+          retry={() => void orderQuery.refetch()}
+        />
+      )}
+      {/* An issue with the order itself, such as one already allocated. */}
+      {errors.workOrderId?.message && (
+        <p className="notice notice-error" role="alert">
+          Order {orderNumber}: {errors.workOrderId.message}
+        </p>
+      )}
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="stack">
-            {/* A replan stays with its order, so only a new plan picks one. */}
-            {!active && (
-              <section className="panel">
-                <div className="panel-body">
-                  <Lookup
-                    label="Order number"
-                    value={values.workOrderId}
-                    onChange={(v) => {
-                      form.setValue('workOrderId', v);
-                      form.clearErrors('workOrderId');
-                      // Another order has other blinds to plan.
-                      if (!v) {
-                        setBlinds(null);
-                        shown.current = null;
-                        form.setValue('requirements', []);
-                      }
-                      form.setValue('cuts', []);
-                      setPreview(null);
-                    }}
-                    selectedLabel={order?.orderNumber ?? initial?.orderNumber}
-                    queryKey={[...workOrdersKey, 'unallocated']}
-                    load={lookupUnallocatedOrders}
-                    placeholder="Search, or type a new 6-digit number"
-                    error={errors.workOrderId?.message}
-                    create={{
-                      // Creating the order is its own request, made only
-                      // when this option is chosen.
-                      label: (term, items) =>
-                        /^\d{6}$/.test(term) &&
-                        !items.some((item) => item.label.startsWith(term))
-                          ? `Create order ${term}`
-                          : null,
-                      hint: (term) =>
-                        /^\d{1,5}$/.test(term)
-                          ? 'Type all 6 digits to create a new order.'
-                          : null,
-                      run: async (term) => {
-                        const made = await createOrder({
-                          orderNumber: term,
-                        }).catch((error: unknown) => {
-                          if (
-                            !(error instanceof ApiError) ||
-                            !error.issues.some(
-                              (issue) => issue.code === 'order_already_exists',
-                            )
-                          )
-                            throw error;
-                          // The list leaves out orders that cannot be planned,
-                          // so the refusal says why this one is not in it.
-                          throw new Error(
-                            `Order ${term} already exists. It is not listed because it has an allocation or has shipped.`,
-                          );
-                        });
-                        await client.invalidateQueries({
-                          queryKey: workOrdersKey,
-                        });
-                        return { id: made.id, label: made.orderNumber };
-                      },
-                    }}
-                  />
-                  <p className="order-count">
-                    Lists work orders that have no allocation yet. Type a new
-                    six-digit number to create one.
-                  </p>
-                  {orderQuery.error && (
-                    <ErrorNotice
-                      error={orderQuery.error}
-                      retry={() => void orderQuery.refetch()}
-                    />
-                  )}
-                </div>
-              </section>
-            )}
             <RequirementsEditor
               form={form}
               units={units}
               onChange={() => setPreview(null)}
               frozen={
-                frozen
-                  ? 'Fixed while the order has an allocation.'
-                  : !values.workOrderId
-                    ? 'Choose the work order first.'
-                    : undefined
+                frozen ? 'Fixed while the order has an allocation.' : undefined
               }
               actions={
                 <Button
