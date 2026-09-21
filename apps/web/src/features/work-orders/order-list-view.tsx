@@ -83,9 +83,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
         ) : !query.data.items.length ? (
           <Empty title="No orders here">
-            {canManage
-              ? 'Add an order so fabric can be allocated to it.'
-              : 'An admin adds orders before fabric can be allocated.'}
+            Use New order to enter an order and allocate its fabric.
           </Empty>
         ) : (
           <div className="data-table-wrap">
@@ -97,7 +95,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                   <th>Blinds</th>
                   <th>Status</th>
                   <th>Note</th>
-                  {canManage && <th>Actions</th>}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,37 +120,51 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                       <Status value={order.status} />
                     </td>
                     <td>{order.note}</td>
-                    {canManage && (
-                      <td>
-                        <div className="inline-actions">
-                          {/* A date follows the allocation. */}
-                          {order.allocatedAt && (
+                    <td>
+                      <div className="inline-actions">
+                        {/* Planning fabric is open to everyone; the rest of
+                            an order's changes are an admin's. */}
+                        {order.status === 'new' && (
+                          <Button asChild variant="ghost" size="sm">
+                            <Link
+                              href={`/allocations/new?workOrder=${order.id}`}
+                              aria-label={`Allocate order ${order.orderNumber}`}
+                            >
+                              Allocate
+                            </Link>
+                          </Button>
+                        )}
+                        {canManage && (
+                          <>
+                            {/* A date follows the allocation. */}
+                            {order.allocatedAt && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`${order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
+                                onClick={() => setRescheduling(order)}
+                              >
+                                {order.shipDate ? 'Reschedule' : 'Schedule'}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
-                              aria-label={`${order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
-                              onClick={() => setRescheduling(order)}
+                              disabled={ship.isPending}
+                              // Every row has this button; name the order it acts on.
+                              aria-label={`Mark order ${order.orderNumber} ${order.shippedAt ? 'not shipped' : 'shipped'}`}
+                              onClick={() => ship.mutate(order)}
                             >
-                              {order.shipDate ? 'Reschedule' : 'Schedule'}
+                              {ship.isPending && ship.variables.id === order.id
+                                ? 'Saving…'
+                                : order.shippedAt
+                                  ? 'Mark not shipped'
+                                  : 'Mark shipped'}
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={ship.isPending}
-                            // Every row has this button; name the order it acts on.
-                            aria-label={`Mark order ${order.orderNumber} ${order.shippedAt ? 'not shipped' : 'shipped'}`}
-                            onClick={() => ship.mutate(order)}
-                          >
-                            {ship.isPending && ship.variables.id === order.id
-                              ? 'Saving…'
-                              : order.shippedAt
-                                ? 'Mark not shipped'
-                                : 'Mark shipped'}
-                          </Button>
-                        </div>
-                      </td>
-                    )}
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

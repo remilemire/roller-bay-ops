@@ -1,11 +1,10 @@
 'use client';
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { Button } from '@/components/ui/button';
 import { PageHeading } from '@/components/ui/feedback';
 import { useListParams } from '@/lib/use-list-params';
-import { OrderEditor } from './order-editor';
 import { OrderListView } from './order-list-view';
 import { OrderMonthView } from './order-month-view';
 import { OrderWeekView } from './order-week-view';
@@ -19,7 +18,6 @@ const views = [
 export function WorkOrdersScreen() {
   const params = useListParams();
   const canManage = useCanManage();
-  const [adding, setAdding] = useState(false);
   const view = views.some((item) => item.value === params.get('view'))
     ? params.get('view')
     : 'week';
@@ -40,12 +38,14 @@ export function WorkOrdersScreen() {
             </button>
           ))}
         </div>
-        {canManage && (
-          <Button onClick={() => setAdding(true)}>
+        {/* An order starts where its blinds are entered and its fabric
+            allocated; it reaches this schedule once that is done. */}
+        <Button asChild>
+          <Link href="/allocations/new">
             <Plus size={17} />
-            Add order
-          </Button>
-        )}
+            New order
+          </Link>
+        </Button>
       </PageHeading>
       {view === 'list' ? (
         <OrderListView canManage={canManage} />
@@ -54,7 +54,6 @@ export function WorkOrdersScreen() {
       ) : (
         <OrderWeekView canManage={canManage} />
       )}
-      {adding && <OrderEditor close={() => setAdding(false)} />}
     </>
   );
 }

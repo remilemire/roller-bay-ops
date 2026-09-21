@@ -75,6 +75,13 @@ function OrderRecord({ order }: { order: WorkOrder }) {
         }
       >
         <Status value={order.status} />
+        {order.status === 'new' && (
+          <Button asChild>
+            <Link href={`/allocations/new?workOrder=${order.id}`}>
+              Allocate
+            </Link>
+          </Button>
+        )}
         {canManage && (
           <>
             <Button variant="outline" onClick={() => setEditing(true)}>

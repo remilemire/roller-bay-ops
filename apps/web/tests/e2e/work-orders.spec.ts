@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ids, mockApi } from './fixtures';
-test('admins add, schedule, ship, and delete work orders', async ({
+test('admins schedule, ship, and delete work orders', async ({
   page,
 }, testInfo) => {
   const state = await mockApi(page);
@@ -23,28 +23,29 @@ test('admins add, schedule, ship, and delete work orders', async ({
   await expect(existing).toContainText('Fri, Oct 2, 2026');
   await expect(existing).toContainText('scheduled');
 
-  await page.getByRole('button', { name: 'Add order' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Order number').fill('104900');
-  // Its blinds are entered where its fabric is allocated, and its ship date
-  // follows that.
-  await expect(dialog.getByLabel('Blinds')).toHaveCount(0);
-  await expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveCount(
-    0,
-  );
-  await dialog.getByLabel('Note').fill('Motorised');
-  await dialog.getByRole('button', { name: 'Save order' }).click();
-  await expect(dialog).toBeHidden();
-  expect(state.orderRequests).toEqual([
-    {
-      method: 'POST',
-      body: { orderNumber: '104900', note: 'Motorised' },
-    },
-  ]);
-  const added = page.getByRole('row', { name: /104900/ });
-  await expect(added).toContainText('new');
-  // With no allocation it cannot be scheduled yet.
-  await expect(added.getByRole('button', { name: /chedule/ })).toHaveCount(0);
+  // An order that still needs fabric cannot be scheduled; its row opens the
+  // entry screen on it instead.
+  const unallocated = page.getByRole('row', { name: /104877/ });
+  await expect(unallocated).toContainText('new');
+  await expect(
+    unallocated.getByRole('button', { name: /chedule/ }),
+  ).toHaveCount(0);
+  await unallocated
+    .getByRole('link', { name: 'Allocate order 104877' })
+    .click();
+  await expect(page).toHaveURL(/\/allocations\/new\?workOrder=/);
+  await expect(
+    page.getByRole('heading', { name: 'Allocate 104877' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Order number' }),
+  ).toHaveValue(/^104877/);
+  await expect(
+    page.getByRole('button', { name: 'Add blind', exact: true }),
+  ).toBeEnabled();
+  // Opening an order to plan writes nothing.
+  expect(state.orderRequests).toEqual([]);
+  await page.goBack();
 
   await page.getByRole('button', { name: 'Shipped', exact: true }).click();
   await expect(page).toHaveURL(/status=shipped/);
@@ -69,7 +70,7 @@ test('admins add, schedule, ship, and delete work orders', async ({
   await expect(
     page.getByRole('button', { name: 'Mark not shipped' }),
   ).toBeVisible();
-  expect(state.orderRequests.slice(1)).toEqual([
+  expect(state.orderRequests).toEqual([
     {
       method: 'PATCH',
       body: { expectedRevision: 3, shipDate: '2026-10-06' },
@@ -78,7 +79,10 @@ test('admins add, schedule, ship, and delete work orders', async ({
   ]);
 
   await page.getByRole('button', { name: 'Delete' }).click();
-  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Delete' })
+    .click();
   await expect(page).toHaveURL(/\/work-orders$/);
   expect(state.orderRequests.at(-1)).toEqual({
     method: 'DELETE',
@@ -238,8 +242,17 @@ test('employees read work orders without admin actions', async ({ page }) => {
   await mockApi(page, { role: 'user' });
   await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add order' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Mark order/ })).toHaveCount(0);
+  // Entering an order and planning its fabric are open to them.
+  await expect(page.getByRole('link', { name: 'New order' })).toHaveAttribute(
+    'href',
+    '/allocations/new',
+  );
+  await expect(
+    page.getByRole('link', { name: 'Allocate order 104877' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Mark order|chedule order/ }),
+  ).toHaveCount(0);
   await page.goto(`/work-orders/${ids.order}`);
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   for (const name of ['Edit', 'Reschedule', 'Mark shipped', 'Delete'])
@@ -248,5 +261,4 @@ test('employees read work orders without admin actions', async ({ page }) => {
   await page.goto('/work-orders?view=week&week=2026-10-02');
   await expect(page.getByRole('link', { name: '104801' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Move order/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Add order/ })).toHaveCount(0);
 });

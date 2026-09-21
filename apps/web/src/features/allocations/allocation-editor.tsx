@@ -63,11 +63,14 @@ import {
   allocationKey,
 } from './allocations.api';
 export function AllocationEditor({
+  workOrderId,
   initial,
   active,
   close,
   onSubmitted,
 }: {
+  /** The order a blank form opens on, when it was reached from that order. */
+  workOrderId?: string;
   initial?: z.infer<typeof allocationDraftSchema>;
   active?: AllocationDetail;
   close?: () => void;
@@ -98,7 +101,14 @@ export function AllocationEditor({
   const form = useForm<AllocationForm>({
     resolver: zodResolver(allocationFormSchema),
     defaultValues: allocationToForm(
-      openedData ?? (recovery.success ? recovery.data : undefined),
+      // An order asked for by name comes before an earlier request to
+      // restore: saving then refuses until that request is dealt with.
+      openedData ??
+        (workOrderId
+          ? { workOrderId, plan: { cuts: [] } }
+          : recovery.success
+            ? recovery.data
+            : undefined),
       // The blinds it was read with, until the order itself is read below.
       // An order's blinds are complete, whatever the looser read shape allows.
       (active?.requirements ?? initial?.data.requirements ?? []).flatMap(
@@ -124,10 +134,11 @@ export function AllocationEditor({
   // The form edits two records, each saved by its own request: the order's
   // blinds, and the allocation's plan for them. Neither save touches the
   // other, so each has its own baseline to be dirty against.
-  const order = useQuery({
+  const orderQuery = useQuery({
     ...orderDetail(values.workOrderId),
     enabled: !!values.workOrderId,
-  }).data;
+  });
+  const order = orderQuery.data;
   // The order's blinds as last read or saved here, with the revision a save
   // of them must name. A background refetch never replaces them.
   const [blinds, setBlinds] = useState<{
@@ -167,7 +178,9 @@ export function AllocationEditor({
   const blocked = !values.workOrderId
     ? 'Choose the work order to plan.'
     : blinds?.id !== values.workOrderId
-      ? 'Loading the order…'
+      ? orderQuery.error
+        ? 'The order could not be loaded.'
+        : 'Loading the order…'
       : blindsDirty
         ? 'Save the blinds before planning fabric for them.'
         : null;
@@ -394,7 +407,9 @@ export function AllocationEditor({
             ? `Replan ${active.orderNumber}`
             : saved
               ? 'Allocation draft'
-              : 'New allocation'
+              : values.workOrderId
+                ? `Allocate ${order?.orderNumber ?? 'order'}`
+                : 'New order'
         }
         description="Pick or create the work order, save its blinds, then generate a cutting plan or build one by hand."
       />
@@ -465,6 +480,12 @@ export function AllocationEditor({
                     Lists work orders that have no allocation yet. Type a new
                     six-digit number to create one.
                   </p>
+                  {orderQuery.error && (
+                    <ErrorNotice
+                      error={orderQuery.error}
+                      retry={() => void orderQuery.refetch()}
+                    />
+                  )}
                 </div>
               </section>
             )}

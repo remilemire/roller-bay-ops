@@ -1,5 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  within,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   QueryClient,
@@ -234,9 +240,61 @@ it('hides schedule writes from employees who cannot manage', async () => {
   state.search = 'view=list';
   show(<WorkOrdersScreen />);
   await screen.findByText('104801');
-  expect(screen.queryByRole('button', { name: 'Add order' })).toBeNull();
   expect(screen.queryByRole('button', { name: /Mark order/ })).toBeNull();
-  expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /chedule order/ })).toBeNull();
+  // Entering an order and planning its fabric are open to everyone.
+  expect(screen.getByRole('link', { name: 'New order' })).toHaveAttribute(
+    'href',
+    '/allocations/new',
+  );
+});
+
+it('sends an order with no allocation to be planned, whoever is signed in', async () => {
+  state.canManage = false;
+  state.search = 'view=list';
+  const unallocated: WorkOrder = {
+    ...order,
+    id: 'n',
+    orderNumber: '104877',
+    status: 'new',
+    allocatedAt: null,
+    shipDate: null,
+    scheduledAt: null,
+  };
+  vi.mocked(orderList).mockImplementation((filters = {}) =>
+    queryOptions({
+      queryKey: ['work-orders', 'list', filters],
+      queryFn: async () => ({
+        items: [order, unallocated],
+        total: 2,
+        page: 1,
+        pageSize: 25,
+      }),
+    }),
+  );
+  vi.mocked(orderDetail).mockImplementation((id) =>
+    queryOptions({
+      queryKey: ['work-orders', id],
+      queryFn: async (): Promise<WorkOrderDetail> => ({
+        ...unallocated,
+        lines: [],
+      }),
+    }),
+  );
+  show(<WorkOrdersScreen />);
+  expect(
+    await screen.findByRole('link', { name: 'Allocate order 104877' }),
+  ).toHaveAttribute('href', '/allocations/new?workOrder=n');
+  // An allocated order has its plan already.
+  expect(
+    screen.queryByRole('link', { name: 'Allocate order 104801' }),
+  ).toBeNull();
+  cleanup();
+  show(<OrderDetailScreen id="n" />);
+  expect(await screen.findByRole('link', { name: 'Allocate' })).toHaveAttribute(
+    'href',
+    '/allocations/new?workOrder=n',
+  );
 });
 
 it('marks an order shipped from its row with the revision the row shows', async () => {
@@ -264,51 +322,6 @@ it('marks an order shipped from its row with the revision the row shows', async 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Order changed; refresh before saving.',
   );
-});
-
-it('adds an order and shows rejected fields beside them', async () => {
-  vi.mocked(createOrder).mockRejectedValueOnce(
-    new ApiError(
-      409,
-      'A work order with this number already exists.',
-      undefined,
-      [
-        {
-          code: 'order_already_exists',
-          path: ['orderNumber'],
-          message: 'Already exists.',
-        },
-      ],
-    ),
-  );
-  vi.mocked(createOrder).mockResolvedValueOnce(order);
-  show(<WorkOrdersScreen />);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: 'Add order' }));
-  const dialog = within(screen.getByRole('dialog'));
-  const number = dialog.getByLabelText(/Order number/);
-  await user.type(number, '10-48x01');
-  expect(number).toHaveValue('104801');
-  // Its blinds are entered where its fabric is allocated, and counted there.
-  expect(dialog.queryByLabelText(/Blinds/)).toBeNull();
-
-  // An order has no ship date until fabric is allocated for it.
-  expect(dialog.queryByRole('button', { name: 'Ship date' })).toBeNull();
-  await user.type(dialog.getByLabelText('Note'), ' Rush ');
-  await user.click(dialog.getByRole('button', { name: 'Save order' }));
-  const notice = await dialog.findByRole('alert');
-  expect(notice).toHaveTextContent(
-    'A work order with this number already exists.',
-  );
-  expect(notice).not.toHaveTextContent('Already exists.');
-  expect(number).toHaveAccessibleDescription(/Already exists\./);
-  expect(createOrder).toHaveBeenLastCalledWith({
-    orderNumber: '104801',
-    note: 'Rush',
-  });
-
-  await user.click(dialog.getByRole('button', { name: 'Save order' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
 it('edits, ships, and deletes an order with the revision it shows', async () => {

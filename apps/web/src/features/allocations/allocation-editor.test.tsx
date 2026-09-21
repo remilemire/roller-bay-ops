@@ -1,5 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -267,6 +273,24 @@ it('holds the plan until an order is chosen, then offers generating or hand-buil
   expect(screen.queryByLabelText(/Cut length/)).not.toBeInTheDocument();
   expect(screen.getByLabelText('Quantity in this cut')).toHaveValue(1);
   expect(save).toBeEnabled();
+});
+
+it('opens on the order it was reached from, with nothing to save yet', async () => {
+  show(<AllocationEditor />);
+  expect(
+    screen.getByRole('heading', { name: 'New order' }),
+  ).toBeInTheDocument();
+  cleanup();
+  show(<AllocationEditor workOrderId={ids.order} />);
+  expect(
+    await screen.findByRole('heading', { name: 'Allocate 104801' }),
+  ).toBeInTheDocument();
+  await ready();
+  expect(screen.getByLabelText('Order number')).toHaveValue(ids.order);
+  expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
+  // Arriving with an order chosen is not a change to lose by leaving.
+  expect(screen.getByText('Not saved yet')).toBeInTheDocument();
+  expect(createDraft).not.toHaveBeenCalled();
 });
 
 it('moves a draft to another order, starting its plan afresh', async () => {

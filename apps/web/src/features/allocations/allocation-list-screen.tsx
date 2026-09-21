@@ -72,7 +72,7 @@ export function AllocationListScreen() {
         <Button asChild>
           <Link href="/allocations/new">
             <Plus size={17} />
-            New allocation
+            New order
           </Link>
         </Button>
       </PageHeading>

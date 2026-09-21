@@ -66,7 +66,7 @@ export function DashboardScreen() {
         <Button asChild variant="outline">
           <Link href="/allocations/new">
             <Scissors size={17} />
-            New allocation
+            New order
           </Link>
         </Button>
         <Button asChild>
