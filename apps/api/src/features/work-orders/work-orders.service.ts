@@ -7,6 +7,7 @@ import {
 import type { AuditChange } from '@roller-bay/shared/audit';
 import type {
   CreateWorkOrder,
+  SaveWorkOrderLines,
   WorkOrderList,
   WorkOrderQuery,
   UpdateWorkOrder,
@@ -19,9 +20,13 @@ import {
   orderNotFound,
   workOrdersOperation,
 } from './work-orders.operation.js';
-import { presentWorkOrder } from './work-orders.presenter.js';
+import {
+  presentWorkOrder,
+  presentWorkOrderDetail,
+} from './work-orders.presenter.js';
 import {
   WorkOrdersRepository,
+  type WorkOrderLineRecord,
   type WorkOrderRecord,
 } from './work-orders.repository.js';
 
@@ -42,6 +47,33 @@ function change(
     },
   };
 }
+
+/** A change to the blinds records them on both sides of the order's change. */
+function linesChange(
+  before: WorkOrderRecord,
+  beforeLines: WorkOrderLineRecord[],
+  after: WorkOrderRecord,
+  afterLines: WorkOrderLineRecord[],
+): AuditChange {
+  return {
+    recordType: 'work-orders',
+    recordId: after.id,
+    before: {
+      type: 'work-orders',
+      value: presentWorkOrderDetail(before, beforeLines),
+    },
+    after: {
+      type: 'work-orders',
+      value: presentWorkOrderDetail(after, afterLines),
+    },
+  };
+}
+
+const lineIssue = (code: string, index: number, message: string) =>
+  new BadRequestException({
+    message: 'A saved blind cannot be changed; replace it with a new one.',
+    issues: [{ code, path: ['lines', index], message }],
+  });
 
 function requireQuantity(order: WorkOrderRecord, quantity: number) {
   if (order.quantity !== quantity)
@@ -87,8 +119,70 @@ export class WorkOrdersService {
     return workOrdersOperation(async () => {
       const row = await this.repository.findById(id);
       if (!row) throw new NotFoundException('Order not found.');
-      return presentWorkOrder(row);
+      return presentWorkOrderDetail(row, await this.repository.lines(id));
     });
+  }
+
+  /**
+   * Replaces the order's list of blinds. Rows are never changed or deleted,
+   * because a plan's cuts point at the blinds they were made for: a blind the
+   * list keeps must be as it was saved, one it drops is retired, and a
+   * changed blind arrives under a new id. Nothing outside the order is
+   * touched, so plans for a retired blind fail their own validation.
+   */
+  saveLines(id: string, input: SaveWorkOrderLines, userId: string) {
+    return workOrdersOperation(() =>
+      this.repository.withTransaction(async (repository, tx) => {
+        const previous = requireRevision(
+          await repository.findByIdForUpdate(id),
+          input.expectedRevision,
+        );
+        // The allocation's cuts were planned for these blinds.
+        if (previous.allocatedAt)
+          throw new ConflictException({
+            message:
+              'This order has an allocation. Cancel it before changing the blinds.',
+            issues: [
+              {
+                code: 'order_allocated',
+                path: ['lines'],
+                message: 'Fixed while the order has an allocation.',
+              },
+            ],
+          });
+        const stored = await repository.lines(id, true);
+        const before = stored.filter((line) => !line.retiredAt);
+        const known = new Map(stored.map((line) => [line.id, line]));
+        const added: Parameters<typeof repository.insertLines>[1] = [];
+        for (const [index, line] of input.lines.entries()) {
+          const position = index + 1;
+          const saved = known.get(line.id);
+          if (!saved) added.push({ ...line, position });
+          else if (saved.retiredAt)
+            throw lineIssue('line_retired', index, 'Removed earlier.');
+          else if (
+            saved.fabricColorId !== line.fabricColorId ||
+            Number(saved.widthMm) !== line.widthMm ||
+            Number(saved.lengthMm) !== line.lengthMm ||
+            saved.quantity !== line.quantity
+          )
+            throw lineIssue('line_immutable', index, 'Already saved.');
+          else if (saved.position !== position)
+            await repository.moveLine(saved.id, position);
+        }
+        const kept = new Set(input.lines.map((line) => line.id));
+        await repository.retireLines(
+          before.filter((line) => !kept.has(line.id)).map((line) => line.id),
+        );
+        await repository.insertLines(id, added);
+        const row = await repository.update(id, {});
+        const after = await repository.lines(id);
+        await this.audit.record(tx, userId, 'order.lines-saved', [
+          linesChange(previous, before, row, after),
+        ]);
+        return presentWorkOrderDetail(row, after);
+      }),
+    );
   }
 
   create(input: CreateWorkOrder, userId: string) {

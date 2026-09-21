@@ -52,6 +52,38 @@ export const orderAlreadyExists = (cause?: unknown) =>
     { cause },
   );
 
+// A save can only say that some blind names a colour that is not there; the
+// foreign key does not say which.
+export const lineColorNotFound = (cause?: unknown) =>
+  new NotFoundException(
+    {
+      message: 'A blind names a fabric color that does not exist.',
+      issues: [
+        {
+          code: 'fabric_color_not_found',
+          path: ['lines'],
+          message: 'Unknown fabric color.',
+        },
+      ],
+    },
+    { cause },
+  );
+// Blind ids are unique across orders, so a plan's reference is unambiguous.
+export const lineIdInUse = (cause?: unknown) =>
+  new BadRequestException(
+    {
+      message: 'A blind uses an ID that another order already holds.',
+      issues: [
+        {
+          code: 'line_id_in_use',
+          path: ['lines'],
+          message: 'ID already used.',
+        },
+      ],
+    },
+    { cause },
+  );
+
 export async function workOrdersOperation<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
@@ -72,6 +104,19 @@ export async function workOrdersOperation<T>(
           cause.constraint === 'work_orders_order_number_unique'
         )
           throw orderAlreadyExists(error);
+        if (
+          cause.code === '23505' &&
+          'constraint' in cause &&
+          cause.constraint === 'work_order_lines_pkey'
+        )
+          throw lineIdInUse(error);
+        if (
+          cause.code === '23503' &&
+          'constraint' in cause &&
+          cause.constraint ===
+            'work_order_lines_fabric_color_id_fabric_colors_id_fk'
+        )
+          throw lineColorNotFound(error);
         // The contracts reject these first; the checks are the backstop.
         if (cause.code === '23514')
           throw new BadRequestException(

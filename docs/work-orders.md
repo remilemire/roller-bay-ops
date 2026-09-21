@@ -20,6 +20,24 @@ The status is derived from the furthest step reached and is never stored:
 
 Cutting needs no ship date and outranks one, so an order cut before it is dated reports `cut`. Shipping is not gated on the earlier steps, and a shipped order reports `shipped` whatever else is set. The server owns every timestamp; marking a shipped order shipped again keeps the original time. A check constraint keeps `cut_at` from being set without `allocated_at`.
 
+## Blinds
+
+An order's blinds are rows of `work_order_lines`: a fabric color, finished width and drop in millimetres (thousandths kept), and a quantity. Every field is required, in the contract and as `NOT NULL` columns with positive checks, so a half-entered blind stays in the form rather than being saved.
+
+`PUT /api/work-orders/:id/lines` takes `{ expectedRevision, lines }`, the whole list in order, and returns the order with its blinds. **A saved blind never changes and is never deleted**, because a plan's cuts point at the blinds they were made for:
+
+| The list…                       | Result                                        |
+| ------------------------------- | --------------------------------------------- |
+| keeps an id, values unchanged   | Kept; only its position may change            |
+| keeps an id with changed values | 400 `line_immutable` on `lines.<index>`       |
+| adds an unknown id              | Inserted; ids are client-generated UUIDs      |
+| leaves out a saved id           | Retired (`retired_at`), and left out of reads |
+| brings back a retired id        | 400 `line_retired` on `lines.<index>`         |
+
+So a changed blind arrives under a new id, and a cancelled or completed allocation goes on showing the blinds it was planned for. Saving blinds writes only the order's rows: nothing outside the order is touched, and a plan that still points at a retired blind fails its own validation.
+
+An id identifies one blind across all orders (`line_id_in_use`, 400), and an unknown fabric color returns 404 (`fabric_color_not_found`); the foreign key cannot say which blind. The blinds are fixed while the order has a live allocation: the save returns 409 with an issue on `lines` (`order_allocated`). A save locks the order row, checks `expectedRevision`, and increments the order's revision, so two saves serialize and the second is refused as stale. It is recorded as `order.lines-saved`, the one event whose snapshots carry the blinds.
+
 ## Allocations
 
 `allocations.order_number` references `work_orders.order_number` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name an order that exists. An order with a live allocation cannot be deleted; see [Deleting and restoring](#deleting-and-restoring). Only admins create orders, so an order must be created before anyone can allocate fabric for it. An order has at most one live allocation.
@@ -50,6 +68,7 @@ Stamps do not increment the order's `revision`. They write columns no edit touch
 | GET    | `/api/work-orders/:id/history` | Signed in    |
 | POST   | `/api/work-orders`             | Admin, owner |
 | PATCH  | `/api/work-orders/:id`         | Admin, owner |
+| PUT    | `/api/work-orders/:id/lines`   | Signed in    |
 | DELETE | `/api/work-orders/:id`         | Admin, owner |
 
 Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
@@ -58,7 +77,7 @@ POST accepts `orderNumber`, `quantity`, and an optional `note`; an order is crea
 
 PATCH requires `expectedRevision` and at least one of `shipDate`, `quantity`, `note`, or `shipped`. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column, or null to take the order off the schedule, which changes nothing else. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`). The shared `shipDateSchema` supplies the field message, and the `work_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. Changing the quantity of an order that has an allocation returns 409 with an issue on `quantity` (`order_allocated`), because that allocation's blinds were checked against it; cancel or replace the allocation first. Sending the unchanged quantity is accepted. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
 
-Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity`, `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `shippedAt`, `updatedAt`, and `revision`.
+`GET /api/work-orders/:id` and the blinds save return the order with `lines`; lists and the other writes return it without. Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity`, `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `shippedAt`, `updatedAt`, and `revision`.
 
 ## Deleting and restoring
 
@@ -82,4 +101,4 @@ Creating, restoring, editing, scheduling, unscheduling, shipping, unshipping, an
 
 ## Tests
 
-`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, duplicate and concurrent creation, revision conflicts, scheduling only after allocation (through the API and against the check constraints), clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. The allocation cases cover missing and already-allocated orders, cancelling or moving refused while the order has a ship date, concurrent allocation of one order, shared draft numbers, stamps matching the allocation's timestamps, moving and cancelling, shipped orders, blocked deletion, and the attached history. Unit tests cover the contracts, status derivation, and driver-error mapping.
+`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, duplicate and concurrent creation, revision conflicts, scheduling only after allocation (through the API and against the check constraints), clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. The allocation cases cover missing and already-allocated orders, cancelling or moving refused while the order has a ship date, concurrent allocation of one order, shared draft numbers, stamps matching the allocation's timestamps, moving and cancelling, shipped orders, blocked deletion, and the attached history. `work-order-lines.integration.test.ts` covers keeping, adding, reordering and retiring blinds, immutability and retired ids, validation, unknown colors, ids held by another order, stale and racing saves, allocated and deleted orders, employee access, and the recorded history. Unit tests cover the contracts, status derivation, and driver-error mapping.

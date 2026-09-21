@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { stockSnapshotSchema } from '../stock-items/index.js';
 import { stockReceiptRecordSchema } from '../stock-receipts/index.js';
 import { allocationRecordSchema } from '../allocations/index.js';
-import { workOrderSchema } from '../work-orders/index.js';
+import { workOrderDetailSchema } from '../work-orders/index.js';
 export const auditRecordTypeSchema = z.enum([
   'stock-items',
   'stock-receipts',
@@ -18,8 +18,9 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('allocations'), value: allocationRecordSchema }),
   z.object({
     type: z.literal('work-orders'),
-    // Snapshots recorded before orders had a creation time lack it.
-    value: workOrderSchema.partial({ createdAt: true }),
+    // Snapshots recorded before orders had a creation time lack it, and only
+    // a change to the blinds records them.
+    value: workOrderDetailSchema.partial({ createdAt: true, lines: true }),
   }),
 ]);
 export const auditChangeSchema = z.object({

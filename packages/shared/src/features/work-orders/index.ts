@@ -63,6 +63,30 @@ export const deleteWorkOrderSchema = z.strictObject({
   expectedRevision: revision,
 });
 
+const id = z.uuid().transform((value) => value.toLowerCase());
+const dimension = z.number().positive().max(999999999.999).multipleOf(0.001);
+// A blind on the order: its fabric, finished width and drop, and how many.
+// Every field is required; a half-entered blind stays in the form.
+export const workOrderLineSchema = z.strictObject({
+  id,
+  fabricColorId: id,
+  widthMm: dimension,
+  lengthMm: dimension,
+  quantity: z.number().int().min(1).max(10000),
+});
+// The whole list, in order. A saved blind never changes: the list keeps it as
+// it is, drops it, or adds a new one, so a changed blind arrives under a new
+// id. Plans made for the old one go on saying what they were made for.
+export const saveWorkOrderLinesSchema = z
+  .strictObject({
+    expectedRevision: revision,
+    lines: z.array(workOrderLineSchema).max(1000),
+  })
+  .refine(
+    ({ lines }) => new Set(lines.map((line) => line.id)).size === lines.length,
+    { path: ['lines'], message: 'Blind IDs must be unique.' },
+  );
+
 export const workOrderQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -93,6 +117,9 @@ export const workOrderSchema = z.object({
   updatedAt: z.iso.datetime(),
   revision: z.number().int().positive(),
 });
+export const workOrderDetailSchema = workOrderSchema.extend({
+  lines: z.array(workOrderLineSchema),
+});
 export const workOrderListSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
@@ -106,4 +133,7 @@ export type UpdateWorkOrder = z.infer<typeof updateWorkOrderSchema>;
 export type DeleteWorkOrder = z.infer<typeof deleteWorkOrderSchema>;
 export type WorkOrderQuery = z.infer<typeof workOrderQuerySchema>;
 export type WorkOrder = z.infer<typeof workOrderSchema>;
+export type WorkOrderLine = z.infer<typeof workOrderLineSchema>;
+export type SaveWorkOrderLines = z.infer<typeof saveWorkOrderLinesSchema>;
+export type WorkOrderDetail = z.infer<typeof workOrderDetailSchema>;
 export type WorkOrderList = z.infer<typeof workOrderListSchema>;
