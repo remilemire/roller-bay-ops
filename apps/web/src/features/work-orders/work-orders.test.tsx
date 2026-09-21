@@ -508,6 +508,67 @@ it('groups the working week by day with totals', async () => {
   });
 });
 
+it('finds an order on the week board: marks it there, and says where its other matches are', async () => {
+  state.search = 'search=10482';
+  const nextWeek: WorkOrder = {
+    ...order,
+    id: 'x',
+    orderNumber: '104825',
+    shipDate: '2026-10-13',
+  };
+  const unallocated: WorkOrder = {
+    ...order,
+    id: 'y',
+    orderNumber: '104826',
+    status: 'new',
+    allocatedAt: null,
+    shipDate: null,
+    scheduledAt: null,
+  };
+  vi.mocked(orderList).mockImplementation((filters = {}) =>
+    queryOptions({
+      queryKey: ['work-orders', 'list', filters],
+      queryFn: async (): Promise<WorkOrderList> => ({
+        // The first is on this week already.
+        items: [
+          { ...order, id: 'b', orderNumber: '104820' },
+          nextWeek,
+          unallocated,
+        ],
+        total: 3,
+        page: 1,
+        pageSize: 6,
+      }),
+    }),
+  );
+  show(<WorkOrdersScreen />);
+  const card = async (number: string) =>
+    (await screen.findByRole('link', { name: number })).closest('.order-card');
+  // Every order stays where it is, so the days' totals still mean the day.
+  expect(await card('104820')).toHaveClass('is-match');
+  expect(await card('104801')).toHaveClass('is-dim');
+  // The tray, which can hold a hundred orders, is searched by the API.
+  expect(unscheduledOrders).toHaveBeenLastCalledWith('10482');
+  expect(
+    await screen.findByText('1 order marked on this page.'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('link', { name: '104825 · Tue, Oct 13, 2026' }),
+  ).toHaveAttribute('href', '/work-orders?week=2026-10-13&search=10482');
+  expect(
+    screen.getByRole('link', { name: '104826 · to allocate' }),
+  ).toHaveAttribute('href', '/allocations/new?workOrder=y');
+
+  const user = userEvent.setup();
+  const box = screen.getByRole('searchbox', { name: 'Find order number…' });
+  await user.clear(box);
+  await user.type(box, ' 1048011{Enter}');
+  // The API caps the search at an order number's six characters.
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?search=104801', {
+    scroll: false,
+  });
+});
+
 it('shows any day of a week as that week, and employees a read-only board', async () => {
   state.canManage = false;
   state.search = 'view=week&week=2026-10-14';

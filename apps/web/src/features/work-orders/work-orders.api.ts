@@ -57,14 +57,15 @@ export const deleteOrder = (id: string, expectedRevision: number) =>
     method: 'DELETE',
     body: { expectedRevision },
   });
-// The week board's tray: allocated orders still waiting for a ship date. One
-// page is the API's largest; the list's "To schedule" tab has the rest.
-export const unscheduledOrders = () =>
+// The week board's tray: allocated orders still waiting for a ship date,
+// narrowed by the board's search. One page is the API's largest; the list's
+// "To schedule" tab has the rest.
+export const unscheduledOrders = (search = '') =>
   queryOptions({
-    queryKey: [...workOrdersKey, 'unscheduled'],
+    queryKey: [...workOrdersKey, 'unscheduled', search],
     queryFn: () =>
       api(
-        `/work-orders${queryString({ status: 'unscheduled', pageSize: 100 })}`,
+        `/work-orders${queryString({ status: 'unscheduled', search, pageSize: 100 })}`,
         s.workOrderListSchema,
       ),
   });

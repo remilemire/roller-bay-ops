@@ -20,6 +20,7 @@ import { GripVertical } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { ErrorNotice, Loading, Status } from '@/components/ui/feedback';
+import { SearchForm } from '@/components/ui/search-toolbar';
 import {
   addDays,
   isDay,
@@ -39,6 +40,7 @@ import {
   totalBlinds,
 } from './order-totals';
 import {
+  orderList,
   orderRange,
   unscheduledOrders,
   updateOrder,
@@ -68,8 +70,16 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const days = workWeek(monday);
   const friday = days[4]!;
   const query = useQuery(orderRange(monday, friday));
+  // A search narrows the tray, which can hold a hundred orders, and marks its
+  // matches on the days, which stay whole so their totals still mean the day.
+  const search = params.search;
   // Allocated orders with no date yet wait in a tray above the board.
-  const waiting = useQuery(unscheduledOrders());
+  const waiting = useQuery(unscheduledOrders(search));
+  // Matches this page does not show: on another week, or not allocated yet.
+  const found = useQuery({
+    ...orderList({ search, pageSize: ELSEWHERE + 1 }),
+    enabled: !!search,
+  });
   const client = useQueryClient();
   // Where a dropped order is shown until the refreshed data replaces it; a
   // null date is the tray.
@@ -108,6 +118,12 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
   const orders = all.filter((order) => order.shipDate !== null);
   const tray = all.filter((order) => order.shipDate === null);
   const find = (orderId: unknown) => all.find((order) => order.id === orderId);
+  const mark = (order: WorkOrder) =>
+    !search ? undefined : order.orderNumber.includes(search) ? 'match' : 'dim';
+  const marked = all.filter((order) => mark(order) === 'match').length;
+  const elsewhere = (found.data?.items ?? []).filter(
+    (order) => !find(order.id),
+  );
   // The tray comes before Monday for the arrow keys.
   const stops = [TRAY, ...days];
   // Step a whole day at a time: columns are far wider than an arrow-key nudge.
@@ -167,7 +183,41 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
           params.set({ week: addDays(monday, direction * 7) })
         }
         onToday={() => params.set({ week: '' })}
-      />
+      >
+        <SearchForm
+          key={search}
+          search={search}
+          // The API caps the search at an order number's six characters.
+          onSearch={(text) => params.set({ search: text.trim().slice(0, 6) })}
+          placeholder="Find order number…"
+        />
+      </OrderCalendarNav>
+      {search && found.data && (
+        <p className="order-find" role="status">
+          <span>
+            {marked
+              ? `${orderCount(marked)} marked on this page.`
+              : `Nothing on this page matches ${search}.`}
+          </span>
+          {elsewhere.length > 0 && <span>Elsewhere:</span>}
+          {elsewhere.slice(0, ELSEWHERE).map((order) => {
+            const { href, label } = whereabouts(order, search);
+            return (
+              <Link key={order.id} className="text-link" href={href}>
+                {order.orderNumber} · {label}
+              </Link>
+            );
+          })}
+          {elsewhere.length > ELSEWHERE && (
+            <Link
+              className="text-link"
+              href={`/work-orders?view=list&status=all&search=${search}`}
+            >
+              All {found.data.total} matches
+            </Link>
+          )}
+        </p>
+      )}
       {move.error && <ErrorNotice error={move.error} />}
       <span className="sr-only" role="status">
         {move.isPending
@@ -214,6 +264,8 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
         >
           <WeekTray
             orders={tray}
+            search={search}
+            mark={mark}
             total={waiting.data?.total ?? 0}
             error={waiting.error}
             canManage={canManage}
@@ -227,6 +279,7 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
                 orders={orders
                   .filter((order) => order.shipDate === day)
                   .sort(byNumber)}
+                mark={mark}
                 canManage={canManage}
                 busy={busy}
               />
@@ -253,16 +306,36 @@ export function OrderWeekView({ canManage }: { canManage: boolean }) {
 
 const byNumber = (a: WorkOrder, b: WorkOrder) =>
   a.orderNumber.localeCompare(b.orderNumber);
+// How many matches from off the page are named before the list takes over.
+const ELSEWHERE = 5;
+type Mark = (order: WorkOrder) => 'match' | 'dim' | undefined;
+/** Where to go for a match this page does not show. */
+const whereabouts = (order: WorkOrder, search: string) =>
+  order.shipDate
+    ? {
+        label: calendarDateLabel(order.shipDate),
+        href: `/work-orders?week=${order.shipDate}&search=${search}`,
+      }
+    : order.status === 'new'
+      ? {
+          label: 'to allocate',
+          href: `/allocations/new?workOrder=${order.id}`,
+        }
+      : { label: order.status, href: `/work-orders/${order.id}` };
 
 /** Allocated orders waiting for a ship date: drag one onto a day to set it. */
 function WeekTray({
   orders,
+  search,
+  mark,
   total,
   error,
   canManage,
   busy,
 }: {
   orders: WorkOrder[];
+  search: string;
+  mark: Mark;
   total: number;
   error: unknown;
   canManage: boolean;
@@ -287,17 +360,26 @@ function WeekTray({
         <ul>
           {[...orders].sort(byNumber).map((order) => (
             <li key={order.id}>
-              <DraggableOrder order={order} canManage={canManage} busy={busy} />
+              <DraggableOrder
+                order={order}
+                mark={mark(order)}
+                canManage={canManage}
+                busy={busy}
+              />
             </li>
           ))}
         </ul>
       ) : (
         <p className="muted">
-          No allocated orders are waiting for a ship date.
+          {search
+            ? `No order waiting for a ship date matches ${search}.`
+            : 'No allocated orders are waiting for a ship date.'}
         </p>
       )}
       {total > orders.length && (
-        <Link href="/work-orders?view=list&status=unscheduled">
+        <Link
+          href={`/work-orders?view=list&status=unscheduled${search && `&search=${search}`}`}
+        >
           All {total} orders to schedule
         </Link>
       )}
@@ -308,11 +390,13 @@ function WeekTray({
 function WeekDay({
   day,
   orders,
+  mark,
   canManage,
   busy,
 }: {
   day: string;
   orders: WorkOrder[];
+  mark: Mark;
   canManage: boolean;
   busy: boolean;
 }) {
@@ -337,6 +421,7 @@ function WeekDay({
               <li key={order.id}>
                 <DraggableOrder
                   order={order}
+                  mark={mark(order)}
                   canManage={canManage}
                   busy={busy}
                 />
@@ -363,10 +448,12 @@ function WeekDay({
 
 function DraggableOrder({
   order,
+  mark,
   canManage,
   busy,
 }: {
   order: WorkOrder;
+  mark: ReturnType<Mark>;
   canManage: boolean;
   busy: boolean;
 }) {
@@ -378,6 +465,7 @@ function DraggableOrder({
     <div ref={setNodeRef} {...(canManage ? listeners : {})}>
       <OrderCard
         order={order}
+        mark={mark}
         hidden={isDragging}
         handle={
           // The handle stays mounted while a move saves, so it keeps focus.
@@ -400,11 +488,13 @@ function DraggableOrder({
 
 function OrderCard({
   order,
+  mark,
   handle,
   hidden = false,
   overlay = false,
 }: {
   order: WorkOrder;
+  mark?: ReturnType<Mark>;
   handle?: React.ReactNode;
   hidden?: boolean;
   overlay?: boolean;
@@ -413,6 +503,7 @@ function OrderCard({
     <div
       className={cn(
         'order-card',
+        mark && `is-${mark}`,
         hidden && 'is-dragging',
         overlay && 'is-overlay',
       )}

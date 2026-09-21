@@ -12,12 +12,14 @@ export function OrderCalendarNav({
   summary,
   onStep,
   onToday,
+  children,
 }: {
   period: 'week' | 'month';
   label: string;
   summary: string;
   onStep: (direction: -1 | 1) => void;
   onToday: () => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="toolbar">
@@ -50,6 +52,7 @@ export function OrderCalendarNav({
           <p className="muted">{summary}</p>
         </div>
       </div>
+      {children}
     </div>
   );
 }

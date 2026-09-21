@@ -235,6 +235,29 @@ test('admins reschedule an order from its list row', async ({ page }) => {
     { method: 'PATCH', body: { expectedRevision: 4, shipDate: null } },
   ]);
 });
+test('an order is found from the week board, whether or not it is on it', async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.goto('/work-orders?week=2026-10-12');
+  const find = page.getByRole('searchbox', { name: 'Find order number…' });
+  await find.fill('1048');
+  await find.press('Enter');
+  await expect(page).toHaveURL(/search=1048/);
+  await expect(
+    page.getByText('Nothing on this page matches 1048.'),
+  ).toBeVisible();
+  // One match still needs fabric; the other ships in another week.
+  await expect(
+    page.getByRole('link', { name: '104877 · to allocate' }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: '104801 · Fri, Oct 2, 2026' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
+  ).toBeVisible();
+  await expect(page.getByText('1 order marked on this page.')).toBeVisible();
+  await expect(page.locator('.order-card.is-match')).toContainText('104801');
+});
 test('employees read work orders without admin actions', async ({ page }) => {
   await mockApi(page, { role: 'user' });
   await page.goto('/work-orders?view=list');

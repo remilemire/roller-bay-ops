@@ -1186,6 +1186,15 @@ td strong {
   margin-left: 8px;
   font-size: 11px;
 }
+/* What a search of the board found, and where its other matches are. */
+.order-find {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: -8px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
 /* Allocated orders waiting for a date, above the days they are dragged to. */
 .week-tray {
   margin-bottom: 10px;
@@ -1340,6 +1349,14 @@ td strong {
 }
 .order-card:hover {
   background: var(--surface-soft);
+}
+/* A search leaves every order in place and lifts its matches out of them. */
+.order-card.is-match {
+  background: var(--primary-soft);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.order-card.is-dim {
+  opacity: 0.4;
 }
 .order-card.is-dragging {
   opacity: 0.35;
