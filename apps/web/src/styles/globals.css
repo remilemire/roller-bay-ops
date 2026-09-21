@@ -568,9 +568,14 @@ textarea {
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 22px;
 }
+/* A panel that spans both columns. */
+.section-wide {
+  grid-column: 1 / -1;
+}
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Six figures: two rows of three, or three of two on a narrow screen. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin: 23px 0;
 }

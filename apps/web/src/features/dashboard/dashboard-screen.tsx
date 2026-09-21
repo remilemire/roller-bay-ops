@@ -2,6 +2,9 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
+  CalendarClock,
+  CalendarDays,
+  ClipboardList,
   Layers3,
   PackagePlus,
   Scissors,
@@ -12,6 +15,8 @@ import {
 import { stockList } from '@/features/stock-items/stock-items.api';
 import { receiptList } from '@/features/stock-receipts/stock-receipts.api';
 import { allocationList } from '@/features/allocations/allocations.api';
+import { orderTotals } from '@/features/work-orders/order-totals';
+import { orderList, orderRange } from '@/features/work-orders/work-orders.api';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,
@@ -21,7 +26,10 @@ import {
   Status,
   TextLink,
 } from '@/components/ui/feedback';
-import { count, dateLabel } from '@/lib/format';
+import { addDays, mondayOf, nextWeekday, today } from '@/lib/calendar-dates';
+import { calendarDateLabel, count, dateLabel } from '@/lib/format';
+// The week's orders listed here before the schedule takes over.
+const WEEK_ROWS = 8;
 export function DashboardScreen() {
   const stock = useQuery(stockList({ pageSize: 1 }));
   const active = useQuery(allocationList({ state: 'active', pageSize: 5 }));
@@ -30,13 +38,33 @@ export function DashboardScreen() {
     allocationList({ state: 'draft', pageSize: 1 }),
   );
   const receipts = useQuery(receiptList({ pageSize: 4 }));
+  // The two order queues: fabric to allocate, then a ship date to set.
+  const toAllocate = useQuery(orderList({ status: 'new', pageSize: 1 }));
+  const toSchedule = useQuery(
+    orderList({ status: 'unscheduled', pageSize: 1 }),
+  );
+  // As on the schedule, a weekend looks at the working week ahead.
+  const monday = mondayOf(nextWeekday(today()));
+  const week = useQuery(orderRange(monday, addDays(monday, 4)));
+  const shipping = [...(week.data ?? [])].sort(
+    (a, b) =>
+      a.shipDate!.localeCompare(b.shipDate!) ||
+      a.orderNumber.localeCompare(b.orderNumber),
+  );
   const stats = [
     {
-      label: 'Stock items on hand',
-      value: stock.data?.total,
-      Icon: Layers3,
-      error: stock.error,
-      href: '/stock-items',
+      label: 'Orders to allocate',
+      value: toAllocate.data?.total,
+      Icon: ClipboardList,
+      error: toAllocate.error,
+      href: '/work-orders?view=list&status=new',
+    },
+    {
+      label: 'Orders to schedule',
+      value: toSchedule.data?.total,
+      Icon: CalendarClock,
+      error: toSchedule.error,
+      href: '/work-orders?view=list&status=unscheduled',
     },
     {
       label: 'Active allocations',
@@ -44,6 +72,13 @@ export function DashboardScreen() {
       Icon: Scissors,
       error: active.error,
       href: '/allocations?state=active',
+    },
+    {
+      label: 'Stock items on hand',
+      value: stock.data?.total,
+      Icon: Layers3,
+      error: stock.error,
+      href: '/stock-items',
     },
     {
       label: 'Receipt drafts',
@@ -95,6 +130,68 @@ export function DashboardScreen() {
         ))}
       </div>
       <div className="section-grid">
+        <section className="panel section-wide">
+          <div className="panel-heading">
+            <div>
+              <h2>Shipping this week</h2>
+              {week.data && <p>{orderTotals(week.data)}</p>}
+            </div>
+            <TextLink href="/work-orders">Open schedule</TextLink>
+          </div>
+          {week.isPending ? (
+            <Loading label="Loading work orders…" />
+          ) : week.error ? (
+            <ErrorNotice error={week.error} retry={() => void week.refetch()} />
+          ) : !shipping.length ? (
+            <Empty title="No orders ship this week">
+              An allocated order is given its ship date on the schedule.
+            </Empty>
+          ) : (
+            <div className="data-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Ship date</th>
+                    <th>Blinds</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shipping.slice(0, WEEK_ROWS).map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <Link
+                          className="cell-leading"
+                          href={`/work-orders/${item.id}`}
+                        >
+                          <span className="cell-icon">
+                            <CalendarDays size={16} />
+                          </span>
+                          <strong>{item.orderNumber}</strong>
+                        </Link>
+                      </td>
+                      <td>{calendarDateLabel(item.shipDate!)}</td>
+                      <td>{item.quantity}</td>
+                      <td>
+                        <Status value={item.status} />
+                      </td>
+                      <td>{item.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {shipping.length > WEEK_ROWS && (
+            <p className="order-count" style={{ padding: '12px 22px' }}>
+              <TextLink href="/work-orders">
+                All {shipping.length} orders this week
+              </TextLink>
+            </p>
+          )}
+        </section>
         <section className="panel">
           <div className="panel-heading">
             <h2>Active allocations</h2>

@@ -258,6 +258,32 @@ test('an order is found from the week board, whether or not it is on it', async 
   await expect(page.getByText('1 order marked on this page.')).toBeVisible();
   await expect(page.locator('.order-card.is-match')).toContainText('104801');
 });
+test('the overview counts the order queues and lists the orders shipping this week', async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.clock.setFixedTime(new Date('2026-09-28T12:00:00-06:00'));
+  await page.goto('/');
+  const toAllocate = page.getByRole('link', { name: /Orders to allocate/ });
+  await expect(toAllocate).toContainText('1');
+  await expect(toAllocate).toHaveAttribute(
+    'href',
+    '/work-orders?view=list&status=new',
+  );
+  await expect(
+    page.getByRole('link', { name: /Orders to schedule/ }),
+  ).toContainText('0');
+  const week = page.locator('section', { hasText: 'Shipping this week' });
+  await expect(week.getByRole('row', { name: /104801/ })).toContainText(
+    'Fri, Oct 2, 2026',
+  );
+  // An order with no ship date is not the week's.
+  await expect(week.getByRole('row', { name: /104877/ })).toHaveCount(0);
+  await week.getByRole('link', { name: 'Open schedule' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Work orders' }),
+  ).toBeVisible();
+});
 test('employees read work orders without admin actions', async ({ page }) => {
   await mockApi(page, { role: 'user' });
   await page.goto('/work-orders?view=list');
