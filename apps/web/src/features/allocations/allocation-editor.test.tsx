@@ -18,17 +18,17 @@ import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
 import { ApiError } from '@/lib/api';
 
-const { replace, optimize, saveDraft, submit, saveLines, orders } = vi.hoisted(
-  () => ({
+const { replace, optimize, createDraft, saveDraft, submit, saveLines, orders } =
+  vi.hoisted(() => ({
     replace: vi.fn(),
+    createDraft: vi.fn(),
     optimize: vi.fn(),
     saveDraft: vi.fn(),
     submit: vi.fn(),
     saveLines: vi.fn(),
     // Whether the order the form names already has a live allocation.
     orders: { allocated: false },
-  }),
-);
+  }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
@@ -99,6 +99,7 @@ vi.mock('./allocations.api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./allocations.api')>()),
   replaceAllocation: replace,
   optimizeAllocation: optimize,
+  createAllocationDraft: createDraft,
   saveAllocationDraft: saveDraft,
   submitAllocation: submit,
 }));
@@ -126,7 +127,14 @@ const client = () =>
 
 beforeEach(() => {
   orders.allocated = false;
-  for (const mock of [replace, optimize, saveDraft, submit, saveLines])
+  for (const mock of [
+    replace,
+    optimize,
+    createDraft,
+    saveDraft,
+    submit,
+    saveLines,
+  ])
     mock.mockReset();
 });
 /** The plan is held back until the chosen order and its blinds are read. */
@@ -363,6 +371,51 @@ it('saves unsaved edits to the draft before confirming it', async () => {
     draft.id,
     1,
     expect.objectContaining({ workOrderId: ids.order }),
+  );
+});
+
+it('leaves the confirmed allocation, not the draft saved on the way, for the page it opens', async () => {
+  const user = userEvent.setup();
+  createDraft.mockResolvedValue(draft);
+  submit.mockResolvedValue({ ...allocation, revision: 2 });
+  optimize.mockResolvedValue({
+    status: 'feasible',
+    plan: allocation.plan,
+    stockItems: [stock],
+    summary: {
+      leftovers: [],
+      reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2743.2 }],
+      inputAreaMm2: '1.000000',
+      requiredAreaMm2: '1.000000',
+      reusableAreaMm2: '0.000000',
+      wasteAreaMm2: '0.000000',
+      cutCount: 1,
+      stockItemCount: 1,
+      newRollCount: 1,
+    },
+  });
+  const queries = client();
+  show(<AllocationEditor />, queries);
+  await user.click(screen.getByLabelText('Order number'));
+  await user.paste(ids.order);
+  await ready();
+  await user.click(screen.getByRole('button', { name: 'Generate plan' }));
+  await screen.findByText('Valid cutting plan');
+  // Confirming a plan that was never saved saves it as a draft first.
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Confirm allocation',
+    }),
+  );
+  await waitFor(() => expect(submit).toHaveBeenCalledWith(draft.id, 1));
+  // That page keeps an open draft against refetches, so it must not be
+  // handed the draft this cached a moment ago.
+  await waitFor(() =>
+    expect(queries.getQueryData([...allocationKey, draft.id])).toMatchObject({
+      state: 'active',
+      revision: 2,
+    }),
   );
 });
 

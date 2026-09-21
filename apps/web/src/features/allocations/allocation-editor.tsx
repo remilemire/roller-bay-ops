@@ -279,6 +279,10 @@ export function AllocationEditor({
     onError: (error) => showIssues(error),
     onSuccess: async (record) => {
       setPlanBaseline(planKey(form.getValues()));
+      // The save on the way here cached the draft. Without the confirmed
+      // record in its place, the page this navigates to would open on that
+      // draft and keep it, as it keeps any draft open against a refetch.
+      client.setQueryData([...allocationKey, record.id], record);
       await refresh();
       onSubmitted?.();
       router.replace(`/allocations/${record.id}`);
