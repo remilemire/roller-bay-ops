@@ -1326,6 +1326,8 @@ td strong {
 }
 /* Orders are rows of one list, divided like a table's, not separate tiles. */
 .order-card {
+  /* As tall as a status pill, the tallest thing on the title's first line. */
+  --order-card-line: 24px;
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -1363,6 +1365,14 @@ td strong {
   justify-content: space-between;
   gap: 4px 8px;
 }
+/* The title's first line is one fixed height, whether the status sits beside
+   the number (the tray) or wraps under it (a day), so the handle, which is
+   that height too, centres on the number in both. */
+.order-card-title > :first-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--order-card-line);
+}
 .order-card-title strong {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1373,9 +1383,10 @@ td strong {
 }
 .order-card-handle {
   display: inline-flex;
+  align-items: center;
+  height: var(--order-card-line);
   /* Room for the focus ring, which would otherwise crowd the order number. */
   margin-right: 4px;
-  padding: 2px 0;
   border-radius: 5px;
   color: var(--muted);
   cursor: grab;
