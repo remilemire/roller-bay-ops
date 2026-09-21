@@ -13,8 +13,9 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
     'completion records measurements, creates scraps once, and flags other allocations for replanning',
     async () => {
       const stockId = await seed(2000);
-      const first = await create(input(stockId, 1000));
-      const secondInput = input(stockId, 700);
+      const firstInput = await input(stockId, 1000);
+      const first = await create(firstInput);
+      const secondInput = await input(stockId, 700);
       const second = await create(secondInput);
       const key: string = randomUUID();
       const body = {
@@ -81,11 +82,11 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
         key,
       ).expect(409);
       await post(`${path}/${first.id}/complete`, body).expect(409);
-      await put(first.id, { ...input(stockId), expectedRevision: 2 }).expect(
-        409,
-      );
+      await put(first.id, {
+        plan: firstInput.plan,
+        expectedRevision: 2,
+      }).expect(409);
       const replacement = {
-        ...secondInput,
         plan: {
           cuts: [{ ...secondInput.plan.cuts[0]!, stockItemId: await seed() }],
         },
@@ -102,7 +103,7 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
     'completion rolls back all stock writes and scraps on invalid references, then allows retry',
     async () => {
       const stockId = await seed();
-      const allocation = await create(input(stockId));
+      const allocation = await create(await input(stockId));
       const body = {
         expectedRevision: 1,
         items: [
@@ -142,7 +143,7 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
     'completion enforces stock revisions, tube rules, outcome coverage and retained-remnant dimensions',
     async () => {
       const stockId = await seed();
-      const allocation = await create(input(stockId));
+      const allocation = await create(await input(stockId));
       const consumed = {
         stockItemId: stockId,
         outcome: 'consumed',
@@ -180,7 +181,7 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
       }).expect(200);
       assert.equal(complete.body.items[0].stockItem.remainingLengthMm, 0);
       const remnantId = await seed(1000, true);
-      const remnant = await create(input(remnantId, 400));
+      const remnant = await create(await input(remnantId, 400));
       assert.equal(remnant.items[0]!.reservedLengthMm, 1000);
       const result = await post(`${path}/${remnant.id}/complete`, {
         expectedRevision: 1,
@@ -204,7 +205,7 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
     'a failure after writing stock leaves the allocation active and retryable',
     async () => {
       const stockId = await seed();
-      const allocation = await create(input(stockId));
+      const allocation = await create(await input(stockId));
       const prototype = StockItemsRepository.prototype;
       const createFailure = t.mock.method(prototype, 'create', async () => {
         throw new Error('Injected failure');

@@ -30,7 +30,7 @@ import {
   createAllocationDraftSchema,
   updateAllocationDraftSchema,
   allocationDraftRevisionSchema,
-  type AllocationDraftData,
+  type AllocationDraftInput,
   optimizeAllocationSchema,
   replaceAllocationSchema,
   validateAllocationSchema,
@@ -55,7 +55,7 @@ export class AllocationsController {
   @Post('drafts')
   createDraft(
     @Body(new ZodValidationPipe(createAllocationDraftSchema))
-    input: { data: AllocationDraftData },
+    input: { data: AllocationDraftInput },
     @Headers('idempotency-key') key: string | undefined,
     @Req() request: Request,
   ) {
@@ -74,7 +74,7 @@ export class AllocationsController {
   updateDraft(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateAllocationDraftSchema))
-    input: { expectedRevision: number; data: AllocationDraftData },
+    input: { expectedRevision: number; data: AllocationDraftInput },
   ) {
     return this.service.updateDraft(id, input.expectedRevision, input.data);
   }

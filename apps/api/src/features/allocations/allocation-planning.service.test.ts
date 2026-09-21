@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { ConfigService } from '@nestjs/config';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import 'reflect-metadata';
@@ -40,6 +42,17 @@ function optimizeWith(failure: unknown) {
       throw failure;
     },
   } as unknown as CuttingPlanOptimizer;
+  // The blinds planned are the work order's saved lines.
+  const orders = {
+    lines: async () => ({
+      lines: context.requirements.map((item, index) => ({
+        ...item,
+        position: index + 1,
+        widthMm: String(item.widthMm),
+        lengthMm: String(item.lengthMm),
+      })),
+    }),
+  } as unknown as WorkOrdersService;
   return new AllocationPlanningService(
     repository,
     stockItems,
@@ -52,10 +65,8 @@ function optimizeWith(failure: unknown) {
         CUTTING_DROP_ALLOWANCE_MM: 0,
       }),
     ),
-  ).optimize({
-    requirements: context.requirements,
-    maxTimeSeconds: 5,
-  });
+    orders,
+  ).optimize({ workOrderId: randomUUID(), maxTimeSeconds: 5 });
 }
 
 function expectHttp<T extends HttpException>(

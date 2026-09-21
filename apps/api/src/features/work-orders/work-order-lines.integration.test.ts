@@ -40,14 +40,9 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
   });
   const issues = (body: { issues?: { code: string; path: unknown }[] }) =>
     body.issues?.map(({ code, path }) => ({ code, path }));
-  // The signed-in employee saves blinds; only creating the order takes an
-  // admin, so the fixture makes them.
   let next = 400000;
-  const order = async () => {
-    const orderNumber = String(++next);
-    await fixtures.createWorkOrders(next, next);
-    return detail((await fixtures.workOrder(orderNumber)).id);
-  };
+  const order = async () =>
+    detail((await fixtures.createWorkOrder(String(++next))).id);
 
   await t.test(
     'an employee saves an order of blinds, which keeps, adds, reorders and retires them',
@@ -71,9 +66,17 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
       );
       assert.deepEqual(saved.lines, [a, b]);
       assert.equal(saved.revision, 2);
+      // The order's blind count is the total of its blinds.
+      assert.equal(saved.quantity, 3);
       // The order's own fields are not the lines' to change.
       assert.deepEqual(
-        { ...saved, lines: [], revision: 1, updatedAt: created.updatedAt },
+        {
+          ...saved,
+          lines: [],
+          quantity: 0,
+          revision: 1,
+          updatedAt: created.updatedAt,
+        },
         created,
       );
 
@@ -82,6 +85,8 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
         (await save(created.id, 2, [c, a]).expect(200)).body,
       );
       assert.deepEqual(reordered.lines, [c, a]);
+      // A retired blind no longer counts.
+      assert.equal(reordered.quantity, 4);
       assert.deepEqual((await detail(created.id)).lines, [c, a]);
       const rows = await pool.query(
         `SELECT id, retired_at IS NOT NULL AS retired FROM work_order_lines WHERE work_order_id=$1`,

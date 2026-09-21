@@ -90,6 +90,7 @@ test('stock corrections integration', { timeout: 60_000 }, async (t) => {
       const r = await receipt(1),
         c = await receiptContext(r.id),
         s = r.items[0]!.stockItems[0]!;
+      const competing = await plan(s.id);
       const race = await Promise.all([
         post(`/stock-receipts/${r.id}/corrections`, {
           reason: 'Extra line',
@@ -97,7 +98,7 @@ test('stock corrections integration', { timeout: 60_000 }, async (t) => {
           operations: [{ action: 'remove', lineId: r.items[0]!.id }],
           stockVersions: versions(c),
         }),
-        post('/allocations', plan(s.id)),
+        post('/allocations', competing),
       ]);
       assert.equal(race.filter((r) => r.status === 409).length, 1);
       assert.equal(

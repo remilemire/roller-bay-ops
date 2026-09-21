@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,20 +6,29 @@ import {
   allocationDraftSchema,
   type AllocationOptimization,
 } from '@roller-bay/shared/allocations';
-import { allocation, stock, ids } from '../../../tests/fixtures';
+import {
+  allocation,
+  ids,
+  order,
+  orderLines,
+  stock,
+} from '../../../tests/fixtures';
 import { AllocationDetailScreen } from './allocation-detail-screen';
 import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
 import { ApiError } from '@/lib/api';
 
-const { replace, optimize, saveDraft, submit, scheduled } = vi.hoisted(() => ({
-  replace: vi.fn(),
-  optimize: vi.fn(),
-  saveDraft: vi.fn(),
-  submit: vi.fn(),
-  // The quantity of whichever order the form names; the fixture plans 1 blind.
-  scheduled: { quantity: 1 },
-}));
+const { replace, optimize, saveDraft, submit, saveLines, orders } = vi.hoisted(
+  () => ({
+    replace: vi.fn(),
+    optimize: vi.fn(),
+    saveDraft: vi.fn(),
+    submit: vi.fn(),
+    saveLines: vi.fn(),
+    // Whether the order the form names already has a live allocation.
+    orders: { allocated: false },
+  }),
+);
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
@@ -67,20 +76,23 @@ vi.mock('@/components/ui/lookup', async () => {
 });
 vi.mock('@/features/work-orders/work-orders.api', async (original) => {
   const { queryOptions } = await import('@tanstack/react-query');
-  const { order } = await import('../../../tests/fixtures');
+  const { order, orderLines } = await import('../../../tests/fixtures');
   return {
     ...(await original<
       typeof import('@/features/work-orders/work-orders.api')
     >()),
-    orderByNumber: (orderNumber: string) =>
+    // Any order id reads as the fixture order with the fixture's one blind.
+    orderDetail: (id: string) =>
       queryOptions({
-        queryKey: ['work-orders', 'number', orderNumber],
+        queryKey: ['work-orders', id],
         queryFn: async () => ({
           ...order,
-          orderNumber,
-          quantity: scheduled.quantity,
+          id,
+          allocatedAt: orders.allocated ? order.allocatedAt : null,
+          lines: orderLines,
         }),
       }),
+    saveOrderLines: saveLines,
   };
 });
 vi.mock('./allocations.api', async (importOriginal) => ({
@@ -93,6 +105,7 @@ vi.mock('./allocations.api', async (importOriginal) => ({
 const draft = allocationDraftSchema.parse({
   id: allocation.id,
   state: 'draft',
+  workOrderId: allocation.workOrderId,
   orderNumber: allocation.orderNumber,
   createdByUserId: allocation.createdByUserId,
   revision: 1,
@@ -102,7 +115,6 @@ const draft = allocationDraftSchema.parse({
   cancelledAt: null,
   needsReplanning: false,
   data: {
-    orderNumber: allocation.orderNumber,
     requirements: allocation.requirements,
     plan: allocation.plan,
   },
@@ -112,55 +124,80 @@ const client = () =>
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
 
+beforeEach(() => {
+  orders.allocated = false;
+  for (const mock of [replace, optimize, saveDraft, submit, saveLines])
+    mock.mockReset();
+});
+/** The plan is held back until the chosen order and its blinds are read. */
+const ready = async (name = 'Save draft') =>
+  waitFor(() => expect(screen.getByRole('button', { name })).toBeEnabled());
+const show = (ui: React.ReactNode, queries = client()) =>
+  render(<QueryClientProvider client={queries}>{ui}</QueryClientProvider>);
+
 it('keeps the active plan revision and edited values when a background refresh brings another revision', async () => {
   const user = userEvent.setup();
+  orders.allocated = true;
   const queries = client();
   queries.setQueryData([...allocationKey, allocation.id], allocation);
   replace.mockRejectedValue(new ApiError(409, 'Allocation changed'));
-  render(
-    <QueryClientProvider client={queries}>
-      <AllocationDetailScreen id={allocation.id} />
-    </QueryClientProvider>,
-  );
+  show(<AllocationDetailScreen id={allocation.id} />, queries);
   await user.click(screen.getByRole('button', { name: 'Edit plan' }));
   expect(
     screen.queryByLabelText(/Drop allowance|Edge trim|Minimum reusable/),
   ).not.toBeInTheDocument();
-  await user.clear(screen.getByLabelText('Order number'));
-  await user.type(screen.getByLabelText('Order number'), '104802');
+  // A replan stays with its order, whose blinds are fixed while allocated.
+  expect(screen.queryByLabelText('Order number')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Width (in)')).toBeDisabled();
+  await ready('Update reservations');
+  // Each change re-keys the cuts, so the field is found again every time.
+  const quantity = () => screen.getByLabelText('Quantity in this cut');
+  await user.clear(quantity());
+  await user.type(quantity(), '2');
   queries.setQueryData([...allocationKey, allocation.id], {
     ...allocation,
-    orderNumber: '104803',
     revision: 2,
   });
   await user.click(screen.getByRole('button', { name: 'Update reservations' }));
   await waitFor(() =>
-    expect(replace).toHaveBeenCalledWith(
-      allocation.id,
-      expect.objectContaining({
-        expectedRevision: 1,
-        orderNumber: '104802',
-      }),
-    ),
+    expect(replace).toHaveBeenCalledWith(allocation.id, {
+      expectedRevision: 1,
+      plan: {
+        cuts: [
+          {
+            stockItemId: ids.stock,
+            items: [{ requirementId: ids.requirement, quantity: 2 }],
+          },
+        ],
+      },
+    }),
   );
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Allocation changed',
   );
-  expect(screen.getByLabelText('Order number')).toHaveValue('104802');
+  expect(quantity()).toHaveValue(2);
 });
 
-it('offers generating or hand-building a plan and reports planning in one place above the actions', async () => {
+it('holds the plan until an order is chosen, then offers generating or hand-building one and reports planning in one place', async () => {
   const user = userEvent.setup();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   let finish!: (result: AllocationOptimization) => void;
   optimize.mockReturnValue(
     new Promise<AllocationOptimization>((resolve) => (finish = resolve)),
   );
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor />
-    </QueryClientProvider>,
+  show(<AllocationEditor />);
+  // With no order there are no blinds to plan.
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Choose the work order to plan.',
   );
+  expect(screen.getByRole('button', { name: 'Add cut' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  await user.click(screen.getByLabelText('Order number'));
+  await user.paste(ids.order);
+  await ready();
+  // The order's blinds arrive with it, already saved.
+  expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
+  expect(screen.getByRole('button', { name: 'Blinds saved' })).toBeDisabled();
   // An empty plan presents the two ways to start and nothing to validate.
   const start = screen.getByText('Build it by hand').closest('.plan-start')!;
   expect(start).toContainElement(
@@ -182,6 +219,11 @@ it('offers generating or hand-building a plan and reports planning in one place 
   await user.click(screen.getByRole('button', { name: 'Generate plan' }));
   expect(window.confirm).toHaveBeenCalledWith(
     'Replace the current cuts with a generated plan?',
+  );
+  // The API plans the order's saved blinds; the request names only the order.
+  expect(optimize).toHaveBeenCalledWith(
+    { workOrderId: ids.order },
+    expect.anything(),
   );
   const save = screen.getByRole('button', { name: 'Save draft' });
   const above = (element: HTMLElement) =>
@@ -219,65 +261,95 @@ it('offers generating or hand-building a plan and reports planning in one place 
   expect(save).toBeEnabled();
 });
 
-it('picks the order number from the work orders and marks the form dirty', async () => {
+it('moves a draft to another order, starting its plan afresh', async () => {
   const user = userEvent.setup();
   saveDraft.mockResolvedValue({ ...draft, revision: 2 });
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor initial={draft} />
-    </QueryClientProvider>,
-  );
-  const order = screen.getByLabelText('Order number');
-  expect(order).toHaveValue('104801');
-  await user.clear(order);
-  await user.type(order, '104802');
+  show(<AllocationEditor initial={draft} />);
+  await ready();
+  const other = crypto.randomUUID();
+  const picker = screen.getByLabelText('Order number');
+  await user.clear(picker);
+  await user.paste(other);
+  // Another order has other blinds, so the old cuts do not carry over.
+  expect(screen.queryByText('Cut 1')).not.toBeInTheDocument();
+  await ready();
   await user.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() =>
-    expect(saveDraft).toHaveBeenCalledWith(
-      draft.id,
-      1,
-      expect.objectContaining({ orderNumber: '104802' }),
-    ),
+    expect(saveDraft).toHaveBeenCalledWith(draft.id, 1, {
+      workOrderId: other,
+      plan: { cuts: [] },
+    }),
   );
 });
 
-it('shows submission problems beside their fields instead of listing them', async () => {
+it("saves the order's blinds on their own, an edited one under a new id, and holds the plan until then", async () => {
   const user = userEvent.setup();
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor
-        initial={{
-          ...draft,
-          data: {
-            ...draft.data,
-            requirements: [{ ...draft.data.requirements[0]!, widthMm: null }],
-          },
-        }}
-      />
-    </QueryClientProvider>,
-  );
-  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  show(<AllocationEditor initial={draft} />);
+  await ready();
   const width = screen.getByLabelText('Width (in)');
-  expect(width).toBeInvalid();
-  expect(width).toHaveAccessibleDescription('Required.');
-  const notice = screen.getByRole('alert');
-  expect(notice).toHaveTextContent('Some fields are missing or invalid.');
-  expect(notice).not.toHaveTextContent('width');
-  await user.type(width, '54');
+  await user.clear(width);
+  // A half-entered blind is not saved; the problem shows beside its field.
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Save the blinds before planning fabric for them.',
+  );
+  for (const name of ['Save draft', 'Confirm allocation', 'Add cut'])
+    expect(screen.getByRole('button', { name })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Save blinds' }));
+  await waitFor(() => expect(width).toBeInvalid());
+  expect(saveLines).not.toHaveBeenCalled();
+
+  await user.type(width, '60');
   expect(width).not.toBeInvalid();
+  saveLines.mockImplementation(
+    async (id: string, body: { lines: typeof orderLines }) => ({
+      ...order,
+      id,
+      allocatedAt: null,
+      revision: order.revision + 1,
+      lines: body.lines,
+    }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Save blinds' }));
+  await waitFor(() => expect(saveLines).toHaveBeenCalledTimes(1));
+  const [orderId, sent] = saveLines.mock.calls[0]!;
+  expect(orderId).toBe(ids.order);
+  expect(sent.expectedRevision).toBe(order.revision);
+  // A saved blind never changes, so the edited one goes under a new id.
+  expect(sent.lines).toEqual([
+    { ...orderLines[0], id: expect.any(String), widthMm: 1524 },
+  ]);
+  expect(sent.lines[0].id).not.toBe(ids.requirement);
+  // Nothing of the allocation was sent; its plan follows the blind to its new
+  // id, which is a change to the draft that is still to be saved.
+  expect(saveDraft).not.toHaveBeenCalled();
+  await ready();
+  expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
+  await user.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() =>
+    expect(saveDraft).toHaveBeenCalledWith(draft.id, 1, {
+      workOrderId: ids.order,
+      plan: {
+        cuts: [
+          {
+            stockItemId: ids.stock,
+            items: [{ requirementId: sent.lines[0].id, quantity: 1 }],
+          },
+        ],
+      },
+    }),
+  );
 });
 
 it('saves unsaved edits to the draft before confirming it', async () => {
   const user = userEvent.setup();
   saveDraft.mockResolvedValue({ ...draft, revision: 2 });
   submit.mockResolvedValue({ ...allocation, revision: 3 });
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor initial={draft} />
-    </QueryClientProvider>,
-  );
-  await user.clear(screen.getByLabelText('Order number'));
-  await user.type(screen.getByLabelText('Order number'), '104802');
+  show(<AllocationEditor initial={draft} />);
+  await ready();
+  // Each change re-keys the cuts, so the field is found again every time.
+  await user.clear(screen.getByLabelText('Quantity in this cut'));
+  await user.type(screen.getByLabelText('Quantity in this cut'), '2');
   await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
   expect(
     screen.getByText(/Your changes are saved to the draft first\./),
@@ -290,100 +362,8 @@ it('saves unsaved edits to the draft before confirming it', async () => {
   expect(saveDraft).toHaveBeenCalledWith(
     draft.id,
     1,
-    expect.objectContaining({ orderNumber: '104802' }),
+    expect.objectContaining({ workOrderId: ids.order }),
   );
-});
-
-it('calls a quantity mismatch an error only after trying to confirm', async () => {
-  const user = userEvent.setup();
-  scheduled.quantity = 3;
-  try {
-    render(
-      <QueryClientProvider client={client()}>
-        <AllocationEditor initial={draft} />
-      </QueryClientProvider>,
-    );
-    // While the blinds are being entered the counts are plain information.
-    const counts = await screen.findByText(
-      'The order has 3 blinds; 1 entered.',
-    );
-    expect(counts).toHaveAttribute('role', 'status');
-    const order = screen.getByLabelText(/^Order number/);
-    expect(order).not.toBeInvalid();
-    expect(order).not.toHaveAccessibleDescription();
-
-    await user.click(
-      screen.getByRole('button', { name: 'Confirm allocation' }),
-    );
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(submit).not.toHaveBeenCalled();
-    // The error takes the place of the information rather than repeating it.
-    expect(order).toBeInvalid();
-    expect(order).toHaveAccessibleDescription(
-      'The order has 3 blinds; 1 entered.',
-    );
-    expect(screen.queryByRole('status')).toBeNull();
-
-    // From then on it follows the correction, and clears once they match.
-    const quantity = screen.getByLabelText('Quantity');
-    await user.clear(quantity);
-    await user.type(quantity, '2');
-    expect(order).toHaveAccessibleDescription(
-      'The order has 3 blinds; 2 entered.',
-    );
-    await user.clear(quantity);
-    await user.type(quantity, '3');
-    expect(order).not.toBeInvalid();
-    expect(
-      screen.getByText('The order has 3 blinds; 3 entered.'),
-    ).toHaveAttribute('role', 'status');
-    await user.click(
-      screen.getByRole('button', { name: 'Confirm allocation' }),
-    );
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  } finally {
-    scheduled.quantity = 1;
-  }
-});
-
-it('checks the quantity before replacing an active plan, but not before saving a draft', async () => {
-  const user = userEvent.setup();
-  scheduled.quantity = 3;
-  saveDraft.mockResolvedValue({ ...draft, revision: 2 });
-  try {
-    const queries = client();
-    queries.setQueryData([...allocationKey, allocation.id], allocation);
-    const { unmount } = render(
-      <QueryClientProvider client={queries}>
-        <AllocationDetailScreen id={allocation.id} />
-      </QueryClientProvider>,
-    );
-    await user.click(screen.getByRole('button', { name: 'Edit plan' }));
-    await screen.findByText('The order has 3 blinds; 1 entered.');
-    await user.click(
-      screen.getByRole('button', { name: 'Update reservations' }),
-    );
-    expect(screen.getByLabelText(/^Order number/)).toHaveAccessibleDescription(
-      'The order has 3 blinds; 1 entered.',
-    );
-    expect(replace).not.toHaveBeenCalled();
-    unmount();
-
-    // A draft may be saved short of its order; only confirming is held back.
-    render(
-      <QueryClientProvider client={client()}>
-        <AllocationEditor initial={draft} />
-      </QueryClientProvider>,
-    );
-    await screen.findByText('The order has 3 blinds; 1 entered.');
-    await user.clear(screen.getByLabelText('Quantity'));
-    await user.type(screen.getByLabelText('Quantity'), '2');
-    await user.click(screen.getByRole('button', { name: 'Save draft' }));
-    await waitFor(() => expect(saveDraft).toHaveBeenCalled());
-    expect(screen.getByLabelText(/^Order number/)).not.toBeInvalid();
-  } finally {
-    scheduled.quantity = 1;
-  }
 });
 
 it('offers to reload a stale draft, but not for an order that is already allocated', async () => {
@@ -395,16 +375,13 @@ it('offers to reload a stale draft, but not for an order that is already allocat
     new ApiError(409, 'This order already has an allocation.', undefined, [
       {
         code: 'order_already_allocated',
-        path: ['orderNumber'],
+        path: ['workOrderId'],
         message: 'Already allocated.',
       },
     ]),
   );
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor initial={draft} />
-    </QueryClientProvider>,
-  );
+  show(<AllocationEditor initial={draft} />);
+  await ready('Confirm allocation');
   await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
   const confirm = within(screen.getByRole('dialog')).getByRole('button', {
     name: 'Confirm allocation',
@@ -415,7 +392,7 @@ it('offers to reload a stale draft, but not for an order that is already allocat
   await user.click(confirm);
   await waitFor(() => expect(reload()).toBeInTheDocument());
 
-  // Reloading the draft would not fix the order number.
+  // Reloading the draft would not fix the order it names.
   await user.click(confirm);
   await waitFor(() =>
     expect(
@@ -427,18 +404,18 @@ it('offers to reload a stale draft, but not for an order that is already allocat
 
 it('leaves a pending new-allocation request alone while editing an active plan', async () => {
   const user = userEvent.setup();
+  orders.allocated = true;
   const pending = JSON.stringify({
     key: crypto.randomUUID(),
-    payload: JSON.stringify({ orderNumber: '209999' }),
+    payload: JSON.stringify({ workOrderId: crypto.randomUUID() }),
   });
   sessionStorage.setItem('roller-bay:pending:allocation:user-1:new', pending);
   replace.mockRejectedValue(new ApiError(400, 'Validation failed'));
-  render(
-    <QueryClientProvider client={client()}>
-      <AllocationEditor active={allocation} />
-    </QueryClientProvider>,
-  );
-  expect(screen.getByLabelText('Order number')).toHaveValue('104801');
+  show(<AllocationEditor active={allocation} />);
+  expect(
+    screen.getByRole('heading', { name: 'Replan 104801' }),
+  ).toBeInTheDocument();
+  await ready('Update reservations');
   await user.click(screen.getByRole('button', { name: 'Update reservations' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Validation failed',

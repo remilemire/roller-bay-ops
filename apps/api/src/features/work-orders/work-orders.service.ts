@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -74,20 +75,6 @@ const lineIssue = (code: string, index: number, message: string) =>
     message: 'A saved blind cannot be changed; replace it with a new one.',
     issues: [{ code, path: ['lines', index], message }],
   });
-
-function requireQuantity(order: WorkOrderRecord, quantity: number) {
-  if (order.quantity !== quantity)
-    throw new BadRequestException({
-      message: `The order has ${order.quantity} blinds but the allocation has ${quantity}.`,
-      issues: [
-        {
-          code: 'order_quantity_mismatch',
-          path: ['orderNumber'],
-          message: `The order has ${order.quantity} blinds; ${quantity} entered.`,
-        },
-      ],
-    });
-}
 
 function requireRevision(row: WorkOrderRecord | undefined, revision: number) {
   if (!row) throw new NotFoundException('Order not found.');
@@ -185,11 +172,29 @@ export class WorkOrdersService {
     );
   }
 
-  create(input: CreateWorkOrder, userId: string) {
+  /**
+   * Employees create the orders they allocate fabric for. A note, and bringing
+   * back an order an admin deleted, stay with admins; both are refused rather
+   * than quietly dropped.
+   */
+  create(input: CreateWorkOrder, userId: string, isAdmin: boolean) {
+    if (input.note && !isAdmin)
+      throw new ForbiddenException('Only an admin can add a note to an order.');
     return workOrdersOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const row = await repository.create(input);
         if (!row) throw orderAlreadyExists();
+        if (row.revision > 1 && !isAdmin)
+          throw new ConflictException({
+            message: 'This order was deleted. An admin can restore it.',
+            issues: [
+              {
+                code: 'order_deleted',
+                path: ['orderNumber'],
+                message: 'Deleted; an admin can restore it.',
+              },
+            ],
+          });
         // A deleted order's history ends with no record, so restoring it
         // starts from none as well.
         await this.audit.record(
@@ -210,23 +215,6 @@ export class WorkOrdersService {
           await repository.findByIdForUpdate(id),
           input.expectedRevision,
         );
-        // The allocation's blinds were checked against this quantity.
-        if (
-          previous.allocatedAt &&
-          input.quantity !== undefined &&
-          input.quantity !== previous.quantity
-        )
-          throw new ConflictException({
-            message:
-              'This order has an allocation. Cancel or replace it before changing the quantity.',
-            issues: [
-              {
-                code: 'order_allocated',
-                path: ['quantity'],
-                message: 'Fixed while the order has an allocation.',
-              },
-            ],
-          });
         // Fabric is allocated before a date is promised. The database holds
         // the same rule; this answers with the field it concerns.
         if (input.shipDate && !previous.allocatedAt)
@@ -251,7 +239,6 @@ export class WorkOrdersService {
               : input.shipDate === null
                 ? null
                 : (previous.scheduledAt ?? new Date()),
-          quantity: input.quantity,
           note: input.note,
           // Marking a shipped order shipped again keeps its original time.
           shippedAt:
@@ -302,22 +289,27 @@ export class WorkOrdersService {
   // records the returned change on its own audit event. allocated_at and
   // cut_at mirror the live allocation's confirmed_at and completed_at.
 
-  /** A draft may only name an order that exists. */
-  async requireOrder(tx: DatabaseTransaction, orderNumber: string) {
+  /** The blinds a plan may assign; refuses an order that does not exist. */
+  async lines(tx: DatabaseTransaction, workOrderId: string) {
     const repository = new WorkOrdersRepository({ db: tx });
-    if (!(await repository.findByOrderNumber(orderNumber)))
-      throw orderNotFound();
+    const order = await repository.findById(workOrderId);
+    if (!order) throw orderNotFound();
+    return { order, lines: await repository.lines(workOrderId) };
   }
 
-  /** `quantity` is the total of the allocation's blinds. */
-  async allocate(
-    tx: DatabaseTransaction,
-    orderNumber: string,
-    quantity: number,
-    at: Date,
-  ): Promise<AuditChange> {
+  /** Blinds by id, retired or not: what a past plan's cuts were made for. */
+  linesById(tx: DatabaseTransaction, ids: string[]) {
+    return new WorkOrdersRepository({ db: tx }).linesById(ids);
+  }
+
+  /**
+   * Claims the order for a confirmed allocation and returns the blinds it
+   * must plan. Holding the order's row lock from here keeps a save of the
+   * blinds, which takes the same lock, from slipping in before confirmation.
+   */
+  async allocate(tx: DatabaseTransaction, workOrderId: string, at: Date) {
     const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findByOrderNumberForUpdate(orderNumber);
+    const order = await repository.findByIdForUpdate(workOrderId);
     if (!order) throw orderNotFound();
     if (order.allocatedAt) throw orderAlreadyAllocated();
     // The derived status would hide an allocation made after shipping.
@@ -327,34 +319,39 @@ export class WorkOrdersService {
         issues: [
           {
             code: 'order_shipped',
-            path: ['orderNumber'],
+            path: ['workOrderId'],
             message: 'Already shipped.',
           },
         ],
       });
-    requireQuantity(order, quantity);
-    return change(order, await repository.stamp(order.id, { allocatedAt: at }));
-  }
-
-  /** A replanned allocation must still add up to its order. */
-  async verifyQuantity(
-    tx: DatabaseTransaction,
-    orderNumber: string,
-    quantity: number,
-  ) {
-    const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findByOrderNumberForUpdate(orderNumber);
-    if (!order) throw orderNotFound();
-    requireQuantity(order, quantity);
+    const lines = await repository.lines(workOrderId);
+    if (!lines.length)
+      throw new BadRequestException({
+        message: 'This order has no blinds. Enter them before allocating.',
+        issues: [
+          {
+            code: 'order_has_no_lines',
+            path: ['workOrderId'],
+            message: 'No blinds entered.',
+          },
+        ],
+      });
+    return {
+      lines,
+      change: change(
+        order,
+        await repository.stamp(order.id, { allocatedAt: at }),
+      ),
+    };
   }
 
   /**
-   * The order's allocation was cancelled or moved to another order. Refused
-   * while the order has a ship date: a date needs an allocation, and clearing
-   * it here would change the schedule from a request that never named it.
+   * The order's allocation was cancelled. Refused while the order has a ship
+   * date: a date needs an allocation, and clearing it here would change the
+   * schedule from a request that never named it.
    */
-  release(tx: DatabaseTransaction, orderNumber: string) {
-    return this.restamp(tx, orderNumber, { allocatedAt: null }, (order) => {
+  release(tx: DatabaseTransaction, workOrderId: string) {
+    return this.restamp(tx, workOrderId, { allocatedAt: null }, (order) => {
       if (order.shipDate)
         throw new ConflictException({
           message:
@@ -362,7 +359,7 @@ export class WorkOrdersService {
           issues: [
             {
               code: 'order_scheduled',
-              path: ['orderNumber'],
+              path: ['workOrderId'],
               message: 'Has a ship date.',
             },
           ],
@@ -370,18 +367,18 @@ export class WorkOrdersService {
     });
   }
 
-  markCut(tx: DatabaseTransaction, orderNumber: string, at: Date) {
-    return this.restamp(tx, orderNumber, { cutAt: at });
+  markCut(tx: DatabaseTransaction, workOrderId: string, at: Date) {
+    return this.restamp(tx, workOrderId, { cutAt: at });
   }
 
   private async restamp(
     tx: DatabaseTransaction,
-    orderNumber: string,
+    workOrderId: string,
     values: Parameters<WorkOrdersRepository['stamp']>[1],
     allow?: (order: WorkOrderRecord) => void,
   ): Promise<AuditChange> {
     const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findByOrderNumberForUpdate(orderNumber);
+    const order = await repository.findByIdForUpdate(workOrderId);
     // The foreign key keeps an allocation's order in existence.
     if (!order) throw orderNotFound();
     allow?.(order);

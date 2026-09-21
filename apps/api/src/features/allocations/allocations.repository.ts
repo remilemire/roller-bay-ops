@@ -6,6 +6,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   ilike,
   inArray,
   isNull,
@@ -23,8 +24,8 @@ import {
   type DatabaseTransaction,
 } from '../../database/database.service.js';
 import { stockItems } from '../stock-items/stock-items.table.js';
+import { workOrders } from '../work-orders/work-orders.table.js';
 import { allocations } from './tables/allocations.table.js';
-import { allocationRequirements } from './tables/allocation-requirements.table.js';
 import { allocationItems } from './tables/allocation-items.table.js';
 import { allocationCuts } from './tables/allocation-cuts.table.js';
 import { allocationCutItems } from './tables/allocation-cut-items.table.js';
@@ -34,7 +35,14 @@ type AllocationDatabase = Pick<
   DatabaseService['db'],
   'select' | 'selectDistinct' | 'insert' | 'update' | 'delete' | 'transaction'
 >;
-export type AllocationRecord = typeof allocations.$inferSelect;
+// Reads carry the order's number, which lives on the work order alone.
+const columns = {
+  ...getTableColumns(allocations),
+  orderNumber: workOrders.orderNumber,
+};
+export type AllocationRecord = typeof allocations.$inferSelect & {
+  orderNumber: string;
+};
 // Only confirmed, unfinished orders reserve stock; draft selections are not claims.
 const active = () =>
   and(
@@ -78,16 +86,26 @@ export class AllocationsRepository {
   }
 
   async findById(id: string, lock = false) {
-    const query = this.db
-      .select()
+    // The header is locked on its own, then read with its order. Locking
+    // through the join would re-check the join after a wait: a draft that the
+    // other transaction moved to another order would no longer match the
+    // order it was first joined to, and would read as missing.
+    if (lock)
+      await this.db
+        .select({ id: allocations.id })
+        .from(allocations)
+        .where(eq(allocations.id, id))
+        .for('update');
+    const [row] = await this.db
+      .select(columns)
       .from(allocations)
+      .innerJoin(workOrders, eq(workOrders.id, allocations.workOrderId))
       .where(eq(allocations.id, id));
-    const [row] = await (lock ? query.for('update') : query);
     return row;
   }
   async findByKey(userId: string, key: string) {
-    const [row] = await this.db
-      .select()
+    const [found] = await this.db
+      .select({ id: allocations.id })
       .from(allocations)
       .where(
         and(
@@ -96,7 +114,7 @@ export class AllocationsRepository {
         ),
       )
       .for('update');
-    return row;
+    return found && this.findById(found.id);
   }
   async create(values: typeof allocations.$inferInsert) {
     const [row] = await this.db
@@ -105,8 +123,8 @@ export class AllocationsRepository {
       .onConflictDoNothing({
         target: [allocations.createdByUserId, allocations.idempotencyKey],
       })
-      .returning();
-    return row;
+      .returning({ id: allocations.id });
+    return row && this.findById(row.id);
   }
   async initializePlan(
     id: string,
@@ -114,7 +132,7 @@ export class AllocationsRepository {
     plannedSummary: CuttingPlanSummary,
     confirmedAt: Date,
   ) {
-    const [row] = await this.db
+    await this.db
       .update(allocations)
       .set({
         settings,
@@ -122,32 +140,37 @@ export class AllocationsRepository {
         confirmedAt,
         isDraft: false,
       })
-      .where(eq(allocations.id, id))
-      .returning();
-    return row!;
+      .where(eq(allocations.id, id));
+    return (await this.findById(id))!;
+  }
+  /** A new draft's rules, known once its order's blinds are read; still revision 1. */
+  async saveSettings(id: string, settings: AllocationDraftData['settings']) {
+    await this.db
+      .update(allocations)
+      .set({ settings })
+      .where(eq(allocations.id, id));
+    return (await this.findById(id))!;
   }
   async saveCompletionFlags(
     id: string,
     completion: NonNullable<AllocationRecord['completion']>,
   ) {
-    const [row] = await this.db
+    await this.db
       .update(allocations)
       .set({ completion })
-      .where(eq(allocations.id, id))
-      .returning();
-    return row!;
+      .where(eq(allocations.id, id));
+    return (await this.findById(id))!;
   }
   async update(id: string, values: Partial<typeof allocations.$inferInsert>) {
-    const [row] = await this.db
+    await this.db
       .update(allocations)
       .set({
         ...values,
         revision: sql`${allocations.revision} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(allocations.id, id))
-      .returning();
-    return row!;
+      .where(eq(allocations.id, id));
+    return (await this.findById(id))!;
   }
   items(id: string) {
     return this.db
@@ -156,14 +179,6 @@ export class AllocationsRepository {
       .where(eq(allocationItems.allocationId, id))
       .orderBy(asc(allocationItems.stockItemId));
   }
-  requirements(id: string) {
-    return this.db
-      .select()
-      .from(allocationRequirements)
-      .where(eq(allocationRequirements.allocationId, id))
-      .orderBy(asc(allocationRequirements.position));
-  }
-
   async plan(id: string) {
     const rows = await this.db
       .select({ cut: allocationCuts, stockItemId: allocationItems.stockItemId })
@@ -198,7 +213,8 @@ export class AllocationsRepository {
         lengthMm:
           cut.plannedLengthMm === null ? null : Number(cut.plannedLengthMm),
         items: (byCut.get(cut.id) ?? []).map((item) => ({
-          requirementId: item.allocationRequirementId,
+          // A plan calls the blinds it assigns its requirements.
+          requirementId: item.workOrderLineId,
           quantity: item.quantity,
         })),
       })),
@@ -223,9 +239,6 @@ export class AllocationsRepository {
     await this.db
       .delete(allocationItems)
       .where(eq(allocationItems.allocationId, id));
-    await this.db
-      .delete(allocationRequirements)
-      .where(eq(allocationRequirements.allocationId, id));
   }
 
   async delete(id: string) {
@@ -233,23 +246,16 @@ export class AllocationsRepository {
     await this.db.delete(allocations).where(eq(allocations.id, id));
   }
 
-  /** Replace the full child graph inside the caller's header-locked transaction. */
+  /**
+   * Replace the full child graph inside the caller's header-locked
+   * transaction. The blinds it assigns are the order's and are not written.
+   */
   async replacePlan(
     id: string,
-    input: AllocationDraftData,
+    input: Pick<AllocationDraftData, 'plan' | 'settings'>,
     summary?: CuttingPlanSummary,
   ) {
     await this.clearPlan(id);
-    const requirements = input.requirements.map((item, index) => ({
-      ...item,
-      allocationId: id,
-      position: index + 1,
-      widthMm: item.widthMm?.toFixed(3) ?? null,
-      lengthMm: item.lengthMm?.toFixed(3) ?? null,
-      lengthAllowanceMm: item.lengthAllowanceMm?.toFixed(3) ?? null,
-    }));
-    for (const batch of batches(requirements))
-      await this.db.insert(allocationRequirements).values(batch);
 
     // Unassigned cuts each get a placeholder; selected stock is shared across its cuts.
     const itemKeys = input.plan.cuts.map(
@@ -298,7 +304,7 @@ export class AllocationsRepository {
     const assignments = inputs.flatMap(({ cut, values }) =>
       cut.items.map((item, index) => ({
         allocationCutId: values.id,
-        allocationRequirementId: item.requirementId,
+        workOrderLineId: item.requirementId,
         position: index + 1,
         quantity: item.quantity,
       })),
@@ -348,9 +354,9 @@ export class AllocationsRepository {
           active(),
           sql`(${stockItems.voidedAt} IS NOT NULL OR ${stockItems.consumedAt} IS NOT NULL OR ${stockItems.remainingLengthMm} < ${total}
             OR EXISTS (SELECT 1 FROM allocation_cuts ac JOIN allocation_cut_items aci ON aci.allocation_cut_id = ac.id
-              JOIN allocation_requirements ar ON ar.id = aci.allocation_requirement_id
+              JOIN work_order_lines wl ON wl.id = aci.work_order_line_id
               WHERE ac.allocation_item_id = ${allocationItems.id}
-              GROUP BY ac.id, ac.edge_trim_mm HAVING sum(ar.width_mm * aci.quantity) + 2 * coalesce(ac.edge_trim_mm, 0) > ${stockItems.widthMm}))`,
+              GROUP BY ac.id, ac.edge_trim_mm HAVING sum(wl.width_mm * aci.quantity) + 2 * coalesce(ac.edge_trim_mm, 0) > ${stockItems.widthMm}))`,
           stockIds ? inArray(stockItems.id, stockIds) : undefined,
           allocationIds ? inArray(allocations.id, allocationIds) : undefined,
         ),
@@ -376,14 +382,15 @@ export class AllocationsRepository {
       state,
       query.search
         ? ilike(
-            allocations.orderNumber,
+            workOrders.orderNumber,
             `%${query.search.replace(/[\\%_]/g, '\\$&')}%`,
           )
         : undefined,
     );
     const items = await this.db
-      .select()
+      .select(columns)
       .from(allocations)
+      .innerJoin(workOrders, eq(workOrders.id, allocations.workOrderId))
       .where(where)
       .orderBy(
         desc(
@@ -398,6 +405,7 @@ export class AllocationsRepository {
     const [total] = await this.db
       .select({ total: count() })
       .from(allocations)
+      .innerJoin(workOrders, eq(workOrders.id, allocations.workOrderId))
       .where(where);
     return {
       items,

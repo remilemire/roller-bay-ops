@@ -13,8 +13,12 @@ import {
   type CompletionCorrection,
 } from '@roller-bay/shared/corrections';
 /**
- * Reservation-changing writes lock the allocation header, then its scheduled
+ * Reservation-changing writes lock the allocation header, then its work
  * order, then stock in a common order before checking availability.
+ *
+ * The blinds a plan assigns are the work order's. This service reads them
+ * through WorkOrdersService and writes nothing to the order but the two
+ * milestones that mirror its live allocation.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -57,9 +61,38 @@ import {
 } from './cutting-rules.service.js';
 import { toLengthUnits } from './cutting-plan/cutting-dimensions.js';
 
-// The total an order's quantity must equal.
-const blinds = (input: { requirements: readonly { quantity: number }[] }) =>
-  input.requirements.reduce((total, item) => total + item.quantity, 0);
+type Line = Awaited<ReturnType<WorkOrdersService['linesById']>>[number];
+type Plan = { cuts: { items: { requirementId: string }[] }[] };
+const requirementsOf = (lines: Line[]) =>
+  lines.map((line) => ({
+    id: line.id,
+    fabricColorId: line.fabricColorId,
+    widthMm: Number(line.widthMm),
+    lengthMm: Number(line.lengthMm),
+    quantity: line.quantity,
+  }));
+/** A plan may assign only blinds that are on its order now. */
+function requireOrderLines(lines: Line[], plan: Plan) {
+  const ids = new Set(lines.map((line) => line.id));
+  const issues = plan.cuts.flatMap((cut, i) =>
+    cut.items.flatMap((item, j) =>
+      ids.has(item.requirementId)
+        ? []
+        : [
+            {
+              code: 'line_not_on_order',
+              path: ['plan', 'cuts', i, 'items', j, 'requirementId'],
+              message: 'This blind is not on the order.',
+            },
+          ],
+    ),
+  );
+  if (issues.length)
+    throw new BadRequestException({
+      message: 'The plan assigns a blind that is not on the order.',
+      issues,
+    });
+}
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -78,7 +111,7 @@ export class AllocationsService {
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.create({
-          orderNumber: input.orderNumber,
+          workOrderId: input.workOrderId,
           createdByUserId: userId,
           idempotencyKey: key,
           requestHash,
@@ -95,7 +128,7 @@ export class AllocationsService {
           repository,
           tx,
           header,
-          this.configure(input),
+          input.plan,
           false,
           userId,
         );
@@ -105,12 +138,10 @@ export class AllocationsService {
 
   createDraft(data: AllocationDraftInput, userId: string, key: string) {
     const requestHash = hash({ mode: 'draft', data });
-    const configured = this.configure(data);
     return allocationOperation(() =>
       this.repository.withTransaction(async (repository, tx) => {
         const header = await repository.create({
-          orderNumber: data.orderNumber,
-          settings: configured.settings,
+          workOrderId: data.workOrderId,
           createdByUserId: userId,
           idempotencyKey: key,
           requestHash,
@@ -123,10 +154,14 @@ export class AllocationsService {
             );
           return this.detail(repository, tx, previous);
         }
-        await this.requireOrder(tx, data.orderNumber);
+        const configured = await this.configureDraft(tx, data);
         await repository.replacePlan(header.id, configured);
         // Drafts stay out of history, which begins at confirmation.
-        return this.detail(repository, tx, header);
+        return this.detail(
+          repository,
+          tx,
+          await repository.saveSettings(header.id, configured.settings),
+        );
       }),
     );
   }
@@ -138,14 +173,14 @@ export class AllocationsService {
           await repository.findById(id, true),
           revision,
         );
-        await this.requireOrder(tx, data.orderNumber);
-        const configured = this.configure(data, {
-          settings: previous.settings,
-          requirements: await repository.requirements(id),
-        });
+        const configured = await this.configureDraft(
+          tx,
+          data,
+          previous.settings,
+        );
         await repository.replacePlan(id, configured);
         const header = await repository.update(id, {
-          orderNumber: data.orderNumber,
+          workOrderId: data.workOrderId,
           settings: configured.settings,
         });
         return this.detail(repository, tx, header);
@@ -172,19 +207,12 @@ export class AllocationsService {
         if (!header.isDraft && header.submittedDraftRevision === revision)
           return this.detail(repository, tx, header);
         requireDraftRevision(header, revision);
-        const saved = await this.formData(repository, header);
+        // As the draft reads: assignments of blinds since taken off the order
+        // are gone, which leaves the plan incomplete or short.
+        const saved = await this.formData(repository, tx, header);
         const input = createAllocationSchema.safeParse({
-          orderNumber: saved.orderNumber,
-          requirements: saved.requirements.map(
-            ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
-              id,
-              fabricColorId,
-              widthMm,
-              lengthMm,
-              quantity,
-            }),
-          ),
-          // Stored cut lengths are re-derived from the submitted requirements.
+          workOrderId: header.workOrderId,
+          // Stored cut lengths are re-derived from the order's blinds.
           plan: {
             cuts: saved.plan.cuts.map(({ stockItemId, items }) => ({
               stockItemId,
@@ -201,7 +229,7 @@ export class AllocationsService {
           repository,
           tx,
           header,
-          this.configure(input.data, saved),
+          input.data.plan,
           true,
           userId,
         );
@@ -209,31 +237,38 @@ export class AllocationsService {
     );
   }
 
-  // The foreign key admits a deleted order's number, which is kept; a draft
-  // may only name an order that exists.
-  private async requireOrder(
+  /**
+   * A draft plans the blinds its order has now, read without the order's
+   * lock: it claims nothing, and confirmation reads them again under it.
+   */
+  private async configureDraft(
     tx: DatabaseTransaction,
-    orderNumber: string | null,
+    data: AllocationDraftInput,
+    settings?: AllocationRecord['settings'],
   ) {
-    if (orderNumber) await this.orders.requireOrder(tx, orderNumber);
+    const { lines } = await this.orders.lines(tx, data.workOrderId);
+    requireOrderLines(lines, data.plan);
+    return this.configure(lines, data.plan, settings);
   }
 
   private async confirmPlan(
     repository: AllocationsRepository,
     tx: DatabaseTransaction,
     header: AllocationRecord,
-    input: ConfiguredAllocationPlan,
+    plan: CreateAllocation['plan'],
     fromDraft: boolean,
     userId: string,
   ) {
     // The order's allocated_at mirrors this allocation's confirmed_at.
     const now = new Date();
-    const order = await this.orders.allocate(
+    const { lines, change: order } = await this.orders.allocate(
       tx,
-      header.orderNumber!,
-      blinds(input),
+      header.workOrderId,
       now,
     );
+    requireOrderLines(lines, plan);
+    // A submitted draft keeps the rules it was planned with.
+    const input = this.configure(lines, plan, header.settings);
     const summary = await this.validateForWrite(
       repository,
       tx,
@@ -277,29 +312,11 @@ export class AllocationsService {
           input.expectedRevision,
         );
         const before = await this.detail(repository, tx, header);
-        // Moving the allocation to another order moves the milestone with it.
-        if (input.orderNumber === header.orderNumber)
-          await this.orders.verifyQuantity(
-            tx,
-            input.orderNumber,
-            blinds(input),
-          );
-        const orders =
-          input.orderNumber === header.orderNumber
-            ? []
-            : [
-                await this.orders.release(tx, header.orderNumber!),
-                await this.orders.allocate(
-                  tx,
-                  input.orderNumber,
-                  blinds(input),
-                  header.confirmedAt!,
-                ),
-              ];
-        const configured = this.configure(input, {
-          settings: header.settings,
-          requirements: await repository.requirements(id),
-        });
+        // The order stays allocated throughout, so its blinds are fixed and
+        // it needs no lock, stamp or change of its own.
+        const { lines } = await this.orders.lines(tx, header.workOrderId);
+        requireOrderLines(lines, input.plan);
+        const configured = this.configure(lines, input.plan, header.settings);
         const current = await repository.items(id);
         const summary = await this.validateForWrite(
           repository,
@@ -310,7 +327,6 @@ export class AllocationsService {
         );
         await repository.replacePlan(id, configured, summary);
         const saved = await repository.update(id, {
-          orderNumber: input.orderNumber,
           settings: configured.settings,
           plannedSummary: summary,
         });
@@ -322,7 +338,6 @@ export class AllocationsService {
             before: { type: 'allocations', value: before },
             after: { type: 'allocations', value: result },
           },
-          ...orders,
         ]);
         return result;
       }),
@@ -336,7 +351,7 @@ export class AllocationsService {
         if (!header) throw new NotFoundException('Allocation not found.');
         if (header.cancelledAt) return this.detail(repository, tx, header);
         requireActiveRevision(header, revision);
-        const order = await this.orders.release(tx, header.orderNumber!);
+        const order = await this.orders.release(tx, header.workOrderId);
         const items = await repository.items(id);
         await this.stockItems.findForAllocation(tx, {
           stockIds: items.map((item) => item.stockItemId!),
@@ -408,7 +423,7 @@ export class AllocationsService {
           );
         // The order's cut_at mirrors this allocation's completed_at.
         const now = new Date();
-        const order = await this.orders.markCut(tx, header.orderNumber!, now);
+        const order = await this.orders.markCut(tx, header.workOrderId, now);
         await this.stockItems.findForAllocation(tx, {
           stockIds: ids,
           lock: true,
@@ -741,21 +756,13 @@ export class AllocationsService {
 
   // Cutting rules and cut lengths are server-derived on every write, so a
   // draft, submission, or edit never carries client-authored lengths.
-  private configure<
-    R extends { id: string; lengthMm: number | null },
-    C extends { items: { requirementId: string }[] },
-    X extends object,
-  >(
-    input: X & { requirements: R[]; plan: { cuts: C[] } },
+  private configure<C extends { items: { requirementId: string }[] }>(
+    lines: Line[],
+    plan: { cuts: C[] },
     saved?: Parameters<CuttingRulesService['apply']>[1],
   ) {
-    const { requirements, plan, ...rest } = input;
-    const rules = this.cuttingRules.apply(requirements, saved);
-    return {
-      ...rest,
-      ...rules,
-      plan: planCutLengths(rules.requirements, plan),
-    };
+    const rules = this.cuttingRules.apply(requirementsOf(lines), saved);
+    return { ...rules, plan: planCutLengths(rules.requirements, plan) };
   }
 
   private async validateForWrite(
@@ -819,25 +826,31 @@ export class AllocationsService {
     return result.summary;
   }
 
+  /**
+   * A draft reads with the blinds its order has now. An assignment of a
+   * blind since taken off the order is left out, so the draft opens, shows
+   * what is unplanned, and cannot be confirmed until that is planned again.
+   */
   private async formData(
     repository: AllocationsRepository,
+    tx: DatabaseTransaction,
     header: AllocationRecord,
   ) {
+    const { lines } = await this.orders.lines(tx, header.workOrderId);
+    const onOrder = new Set(lines.map((line) => line.id));
+    const plan = await repository.plan(header.id);
     return allocationDraftDataSchema.parse({
-      orderNumber: header.orderNumber,
-      requirements: (await repository.requirements(header.id)).map((item) => ({
-        id: item.id,
-        fabricColorId: item.fabricColorId,
-        quantity: item.quantity,
-        widthMm: item.widthMm === null ? null : Number(item.widthMm),
-        lengthMm: item.lengthMm === null ? null : Number(item.lengthMm),
-        lengthAllowanceMm:
-          item.lengthAllowanceMm === null
-            ? null
-            : Number(item.lengthAllowanceMm),
-      })),
+      requirements: this.cuttingRules.apply(
+        requirementsOf(lines),
+        header.settings,
+      ).requirements,
       settings: header.settings ?? {},
-      plan: await repository.plan(header.id),
+      plan: {
+        cuts: plan.cuts.map((cut) => ({
+          ...cut,
+          items: cut.items.filter((item) => onOrder.has(item.requirementId)),
+        })),
+      },
     });
   }
 
@@ -849,7 +862,7 @@ export class AllocationsService {
     if (header.isDraft)
       return allocationDraftSchema.parse({
         ...allocationSummary(header, false),
-        data: await this.formData(repository, header),
+        data: await this.formData(repository, tx, header),
       });
     const items = await repository.items(header.id);
     const stock = await this.stockItems.findForAllocation(tx, {
@@ -859,17 +872,22 @@ export class AllocationsService {
     const affected = await repository.affectedAllocations(undefined, [
       header.id,
     ]);
+    // A confirmed plan assigns every blind its order had, and they are fixed
+    // while it is live, so the blinds its cuts point at are the blinds it was
+    // made for, even after a cancelled order's blinds change.
+    const plan = await repository.plan(header.id);
+    const lines = await this.orders.linesById(tx, [
+      ...new Set(
+        plan.cuts.flatMap((cut) => cut.items.map((item) => item.requirementId)),
+      ),
+    ]);
     return allocationDetailSchema.parse({
       ...allocationSummary(header, affected.length > 0),
-      requirements: (await repository.requirements(header.id)).map((item) => ({
-        id: item.id,
-        fabricColorId: item.fabricColorId,
-        quantity: item.quantity,
-        widthMm: Number(item.widthMm),
-        lengthMm: Number(item.lengthMm),
-        lengthAllowanceMm: Number(item.lengthAllowanceMm),
-      })),
-      plan: await repository.plan(header.id),
+      requirements: this.cuttingRules.apply(
+        requirementsOf(lines),
+        header.settings,
+      ).requirements,
+      plan,
       settings: header.settings,
       plannedSummary: header.plannedSummary,
       completion: header.effectiveCompletion ?? header.completion,

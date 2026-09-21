@@ -5,7 +5,6 @@ import {
   legacyStockCuttingOutcomeSchema,
   recordedStockCuttingOutcomeSchema,
 } from '../stock-items/index.js';
-import { orderNumberSchema } from '../work-orders/index.js';
 
 export const allocationStateSchema = z.enum([
   'draft',
@@ -100,20 +99,16 @@ export const cuttingPlanSummarySchema = z.object({
   stockItemCount: z.number().int().nonnegative(),
   newRollCount: z.number().int().nonnegative(),
 });
-export const allocationRequirementInputSchema = cuttingRequirementSchema.omit({
-  lengthAllowanceMm: true,
-});
 // Stored plans retain the rules they were prepared with. Older snapshots lack
 // the global allowance; their per-requirement allowances remain authoritative.
 export const allocationSettingsSchema = cuttingSettingsSchema.extend({
   dropAllowanceMm: dimension.optional(),
 });
-const planningFields = {
-  requirements: z.array(allocationRequirementInputSchema).min(1).max(1000),
-};
 const revision = z.number().int().positive().max(2147483646);
+// The blinds being planned are the work order's saved lines, read by the
+// server; a request names the order and carries only the fabric plan.
 const previewFields = {
-  ...planningFields,
+  workOrderId: id,
   allocationId: id.optional(),
   expectedRevision: revision.optional(),
 };
@@ -137,22 +132,19 @@ export const validateAllocationSchema = z
     previewRevision,
     'Provide allocationId and expectedRevision together.',
   );
-// An allocation names a scheduled order by its six-digit production order
-// number; the API rejects numbers that are not on the order schedule.
-const allocationSubmission = z.strictObject({
-  orderNumber: orderNumberSchema,
-  ...planningFields,
-  plan: cuttingPlanInputSchema,
-});
-export const createAllocationSchema = allocationSubmission.refine(
-  (value) =>
+const withinAssignmentLimit = [
+  (value: { plan: { cuts: { items: unknown[] }[] } }) =>
     value.plan.cuts.reduce((total, cut) => total + cut.items.length, 0) <=
     10000,
   'An allocation may contain at most 10,000 cut assignments.',
-);
-export const replaceAllocationSchema = createAllocationSchema.safeExtend({
-  expectedRevision: revision,
-});
+] as const;
+export const createAllocationSchema = z
+  .strictObject({ workOrderId: id, plan: cuttingPlanInputSchema })
+  .refine(...withinAssignmentLimit);
+// A replanned allocation stays with its order: another order has other blinds.
+export const replaceAllocationSchema = z
+  .strictObject({ plan: cuttingPlanInputSchema, expectedRevision: revision })
+  .refine(...withinAssignmentLimit);
 export const cancelAllocationSchema = z.strictObject({
   expectedRevision: revision,
 });
@@ -199,6 +191,7 @@ export const allocationQuerySchema = z.strictObject({
 });
 export const allocationSummarySchema = z.object({
   id,
+  workOrderId: id,
   orderNumber: z.string(),
   createdByUserId: id,
   revision,
@@ -246,9 +239,8 @@ const draftPlan = <T extends z.ZodType>(cut: T) =>
   z.strictObject({ cuts: z.array(cut).max(10000).default([]) }).prefault({});
 export const allocationDraftDataSchema = z
   .strictObject({
-    // Read shape: audit snapshots of older drafts hold partial order numbers.
-    // New input goes through allocationDraftInputSchema.
-    orderNumber: draftField(z.string().trim().min(1).max(50)),
+    // Read shape. The blinds are the work order's, shown with the plan that
+    // assigns them; new input goes through allocationDraftInputSchema.
     requirements: z
       .array(
         z.strictObject({
@@ -282,15 +274,16 @@ export const allocationDraftDataSchema = z
 
 function validateDraftAssignments(
   value: {
-    requirements: { id: string }[];
+    requirements?: { id: string }[];
     plan: { cuts: { items: { requirementId: string }[] }[] };
   },
   ctx: z.RefinementCtx,
 ) {
-  // Draft dimensions may be unfinished, but assignment links must already
-  // resolve within this draft so replacement saves preserve a coherent graph.
-  const ids = new Set(value.requirements.map((item) => item.id));
-  if (ids.size !== value.requirements.length)
+  // A stored draft's assignments resolve within the blinds it is shown with.
+  // A write names none: the server checks them against the order's blinds.
+  const ids =
+    value.requirements && new Set(value.requirements.map((i) => i.id));
+  if (ids && ids.size !== value.requirements!.length)
     ctx.addIssue({
       code: 'custom',
       path: ['requirements'],
@@ -300,12 +293,14 @@ function validateDraftAssignments(
   value.plan.cuts.forEach((cut, i) => {
     const assigned = new Set<string>();
     cut.items.forEach((item, j) => {
-      if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
+      if (
+        (ids && !ids.has(item.requirementId)) ||
+        assigned.has(item.requirementId)
+      )
         ctx.addIssue({
           code: 'custom',
           path: ['plan', 'cuts', i, 'items', j, 'requirementId'],
-          message:
-            'Assignments must reference a unique requirement in this draft.',
+          message: 'Assignments must reference a unique blind of the order.',
         });
       assigned.add(item.requirementId);
       assignments++;
@@ -319,18 +314,10 @@ function validateDraftAssignments(
     });
 }
 
+// A draft is an unfinished fabric plan for an order's blinds.
 export const allocationDraftInputSchema = z
   .strictObject({
-    // A draft names a scheduled order or none; partial numbers are not saved.
-    orderNumber: draftField(orderNumberSchema),
-    requirements: z
-      .array(
-        allocationDraftDataSchema.shape.requirements
-          .unwrap()
-          .element.omit({ lengthAllowanceMm: true }),
-      )
-      .max(1000)
-      .default([]),
+    workOrderId: id,
     plan: draftPlan(z.strictObject(draftCutFields)),
   })
   .superRefine(validateDraftAssignments);
@@ -348,7 +335,8 @@ export const updateAllocationDraftSchema = allocationDraftRevisionSchema.extend(
 export const allocationDraftSummarySchema = z.object({
   id,
   state: z.literal('draft'),
-  orderNumber: z.string().nullable(),
+  workOrderId: id,
+  orderNumber: z.string(),
   createdByUserId: id,
   revision,
   createdAt: z.iso.datetime(),

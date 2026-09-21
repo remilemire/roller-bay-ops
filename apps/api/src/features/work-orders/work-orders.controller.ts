@@ -25,6 +25,7 @@ import {
   type WorkOrderQuery,
   type UpdateWorkOrder,
 } from '@roller-bay/shared/work-orders';
+import { hasAnyRole } from '../../common/authorization/roles.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { WorkOrdersService } from './work-orders.service.js';
@@ -46,14 +47,19 @@ export class WorkOrdersController {
     return this.service.findById(id);
   }
 
+  // Whoever allocates an order's fabric may create it; see the service.
   @Post()
-  @Roles('admin')
   create(
     @Body(new ZodValidationPipe(createWorkOrderSchema))
     input: CreateWorkOrder,
     @Req() request: Request,
   ) {
-    return this.service.create(input, request.currentUser!.id);
+    const user = request.currentUser!;
+    return this.service.create(
+      input,
+      user.id,
+      hasAnyRole(user.role, ['admin']),
+    );
   }
 
   @Patch(':id')

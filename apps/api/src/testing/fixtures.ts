@@ -66,26 +66,49 @@ export function createFixtures(pool: Pool) {
       return ids;
     },
 
-    /** Orders numbered `first` to `last`, each for one blind. */
-    createWorkOrders: (first: number, last: number) =>
-      pool.query(
-        `INSERT INTO work_orders (order_number, quantity)
-           SELECT n::text, 1 FROM generate_series($1::int, $2::int) n`,
-        [first, last],
-      ),
+    /** A work order and its blinds, as creating it and saving them leaves it. */
+    async createWorkOrder(
+      orderNumber: string,
+      lines: {
+        fabricColorId: string;
+        widthMm: number;
+        lengthMm: number;
+        quantity: number;
+      }[] = [],
+    ) {
+      const id = randomUUID();
+      await pool.query(
+        `INSERT INTO work_orders (id, order_number) VALUES ($1, $2)`,
+        [id, orderNumber],
+      );
+      const lineIds = lines.map(() => randomUUID());
+      for (const [index, line] of lines.entries())
+        await pool.query(
+          `INSERT INTO work_order_lines (id, work_order_id, position, fabric_color_id, width_mm, length_mm, quantity)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            lineIds[index],
+            id,
+            index + 1,
+            line.fabricColorId,
+            line.widthMm,
+            line.lengthMm,
+            line.quantity,
+          ],
+        );
+      return { id, orderNumber, lineIds };
+    },
 
-    setOrderQuantity: (orderNumber: string, quantity: number) =>
-      pool.query(`UPDATE work_orders SET quantity=$1 WHERE order_number=$2`, [
-        quantity,
-        orderNumber,
-      ]),
-
-    /** The order's raw row: milestones are asserted as stored, not as presented. */
-    workOrder: async (orderNumber: string) =>
+    /**
+     * The order's raw row, by id or number: milestones are asserted as stored,
+     * not as presented.
+     */
+    workOrder: async (idOrNumber: string) =>
       (
-        await pool.query(`SELECT * FROM work_orders WHERE order_number=$1`, [
-          orderNumber,
-        ])
+        await pool.query(
+          `SELECT * FROM work_orders WHERE id::text=$1 OR order_number=$1`,
+          [idOrNumber],
+        )
       ).rows[0],
   };
 }

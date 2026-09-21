@@ -60,10 +60,11 @@ test('new plans receive configured rules; edits retain their snapshot and never 
   assert.equal(first.requirements[0]!.lengthAllowanceMm, 254);
   config.set('CUTTING_EDGE_TRIM_MM', 50.8);
   config.set('CUTTING_DROP_ALLOWANCE_MM', 508);
-  assert.deepEqual(rules.apply([requirement], first), first);
+  // A plan keeps the rules it was saved with, for every blind it assigns.
+  assert.deepEqual(rules.apply([requirement], first.settings), first);
   const expanded = rules.apply(
     [requirement, { id: randomUUID(), lengthMm: 2000 }],
-    first,
+    first.settings,
   );
   assert.equal(expanded.requirements[1]!.lengthAllowanceMm, 254);
   assert.equal(
@@ -72,53 +73,36 @@ test('new plans receive configured rules; edits retain their snapshot and never 
   );
 });
 
-test('legacy snapshots keep individual allowances, including zero, while filling unfinished draft rules', () => {
+test('saved rules apply to every blind, with unfinished draft rules filled from configuration', () => {
   const rules = new CuttingRulesService(new ConfigService({ ...defaults }));
-  const requirements = [
-    { id: randomUUID() },
-    { id: randomUUID() },
-    { id: randomUUID() },
-  ];
-  const saved = {
-    settings: {
-      edgeTrimMm: 10,
-      minimumRemnantWidthMm: null,
-      minimumRemnantLengthMm: 20,
-    },
-    requirements: requirements.map((item, index) => ({
-      ...item,
-      lengthAllowanceMm: [0, '457.200', null][index]!,
-    })),
-  };
-  const result = rules.apply(requirements, saved);
+  const requirements = [{ id: randomUUID() }, { id: randomUUID() }];
+  const result = rules.apply(requirements, {
+    edgeTrimMm: 10,
+    minimumRemnantWidthMm: null,
+    minimumRemnantLengthMm: 20,
+    // Zero is an allowance, not a missing one.
+    dropAllowanceMm: 0,
+  });
   assert.deepEqual(
     result.requirements.map((item) => item.lengthAllowanceMm),
-    [0, 457.2, 254],
+    [0, 0],
   );
   assert.deepEqual(result.settings, {
     edgeTrimMm: 10,
     minimumRemnantWidthMm: 1524,
     minimumRemnantLengthMm: 20,
-    dropAllowanceMm: 254,
+    dropAllowanceMm: 0,
   });
 });
 
 test('write and preview contracts reject client cutting rules while response snapshots retain them', () => {
   const context = fixture();
-  const requirements = context.requirements.map(
-    ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
-      id,
-      fabricColorId,
-      widthMm,
-      lengthMm,
-      quantity,
-    }),
-  );
+  const workOrderId = randomUUID();
   const plan = {
     cuts: [
       {
         stockItemId: context.stockItems[0]!.id,
-        items: [{ requirementId: requirements[0]!.id, quantity: 2 }],
+        items: [{ requirementId: context.requirements[0]!.id, quantity: 2 }],
       },
     ],
   };
@@ -129,11 +113,9 @@ test('write and preview contracts reject client cutting rules while response sna
     allocationDraftInputSchema,
   ]) {
     const input =
-      schema === createAllocationSchema || schema === allocationDraftInputSchema
-        ? { orderNumber: '104801', requirements, plan }
-        : schema === validateAllocationSchema
-          ? { requirements, plan }
-          : { requirements };
+      schema === optimizeAllocationSchema
+        ? { workOrderId }
+        : { workOrderId, plan };
     assert.equal(schema.safeParse(input).success, true);
     assert.equal(
       schema.safeParse({ ...input, settings: context.settings }).success,

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import request from 'supertest';
 import {
   allocationDraftSchema,
-  allocationDraftDataSchema,
+  allocationDraftInputSchema,
   allocationRecordSchema,
 } from '@roller-bay/shared/allocations';
 import { historySchema } from '@roller-bay/shared/audit';
@@ -50,15 +50,13 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
     );
   const colleague = await fixtures.createUser('Draft colleague');
   await t.test(
-    'allocation drafts preserve ordered partial rows and unassigned cuts without reserving stock',
+    "allocation drafts show their order's blinds and keep unfinished cuts in order without reserving stock",
     async () => {
       const stockId = await seed(1000);
-      const complete = input(stockId);
+      const complete = await input(stockId);
+      // The unfinished part of a draft is its plan; the blinds are the order's.
       const partial = {
-        requirements: [
-          { id: randomUUID(), widthMm: 42 },
-          complete.requirements[0],
-        ],
+        workOrderId: complete.workOrderId,
         plan: {
           cuts: [
             {},
@@ -71,7 +69,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       const draft = await create(partial);
       assert.deepEqual(
         draft.data.requirements.map((item) => item.id),
-        partial.requirements.map((item) => item!.id),
+        [complete.plan.cuts[0]!.items[0]!.requirementId],
       );
       // Only the assigned cut has a derived length; the test allowance is zero.
       assert.deepEqual(
@@ -91,10 +89,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       assert.ok(
         savedItems.rows.every((row) => row.reserved_length_mm === null),
       );
-      const preview = {
-        requirements: complete.requirements,
-        plan: complete.plan,
-      };
+      const preview = complete;
       assert.equal(
         (await post(`${path}/validate`, preview).expect(200)).body.valid,
         true,
@@ -140,28 +135,39 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
     'allocation draft creation retries, references, revisions and deletion are checked',
     async () => {
       const key = randomUUID();
-      const draft = await create({}, key);
+      // A draft plans an order's blinds, so it names one from the start.
+      await post(`${path}/drafts`, { data: {} }).expect(400);
+      const { workOrderId } = await input(await seed());
+      const other = (await input(await seed())).workOrderId;
+      const draft = await create({ workOrderId }, key);
+      assert.equal(draft.workOrderId, workOrderId);
       assert.equal(
-        (await post(`${path}/drafts`, { data: {} }, key).expect(201)).body.id,
+        (
+          await post(`${path}/drafts`, { data: { workOrderId } }, key).expect(
+            201,
+          )
+        ).body.id,
         draft.id,
       );
       await post(
         `${path}/drafts`,
-        { data: { orderNumber: '999999' } },
+        { data: { workOrderId: other } },
         key,
       ).expect(409);
+      // Blinds are the order's and are not part of a draft.
+      await put(draft.id, 1, { workOrderId, requirements: [] }).expect(400);
       await put(draft.id, 1, {
-        requirements: [{ id: randomUUID(), fabricColorId: randomUUID() }],
-      }).expect(404);
-      await put(draft.id, 1, {
+        workOrderId,
         plan: { cuts: [{ stockItemId: randomUUID() }] },
       }).expect(404);
       await put(draft.id, 1, {
+        workOrderId,
         plan: { cuts: [{ items: [{ requirementId: randomUUID() }] }] },
       }).expect(400);
+      // A draft may move to another order, whose blinds it then plans.
       const updates = await Promise.all([
-        put(draft.id, 1, { orderNumber: '999998' }),
-        put(draft.id, 1, { orderNumber: '999999' }),
+        put(draft.id, 1, { workOrderId: other }),
+        put(draft.id, 1, { workOrderId: other }),
       ]);
       assert.deepEqual(updates.map((value) => value.status).sort(), [200, 409]);
       await remove(draft.id, 1).expect(409);
@@ -173,17 +179,17 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'shared allocation drafts submit once with stable allocation and requirement IDs',
     async () => {
-      const body = input(await seed(1000));
+      const body = await input(await seed(1000));
       const draft = allocationDraftSchema.parse(
-        await app
-          .get(AllocationsService)
-          .createDraft(
-            allocationDraftDataSchema.parse({ ...body, orderNumber: null }),
-            colleague,
-            randomUUID(),
-          ),
+        await app.get(AllocationsService).createDraft(
+          allocationDraftInputSchema.parse({
+            workOrderId: body.workOrderId,
+          }),
+          colleague,
+          randomUUID(),
+        ),
       );
-      // Drafts may leave the order unnamed; submission requires it.
+      // A draft may leave its plan unfinished; submission requires it.
       await post(`${path}/${draft.id}/submit`, {
         expectedRevision: 1,
       }).expect(400);
@@ -202,7 +208,10 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       assert.equal(saved.state, 'active');
       assert.equal(saved.id, draft.id);
       assert.equal(saved.createdByUserId, colleague);
-      assert.equal(saved.requirements[0]!.id, body.requirements[0]!.id);
+      assert.equal(
+        saved.requirements[0]!.id,
+        body.plan.cuts[0]!.items[0]!.requirementId,
+      );
       assert.equal(saved.items[0]!.reservedLengthMm, 1000);
       assert.equal(saved.revision, 3);
       assert.deepEqual(await history(draft.id), [
@@ -219,7 +228,10 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
     'competing draft submissions cannot over-reserve and failed submission remains editable',
     async () => {
       const stock = await seed(1000);
-      const drafts = [await create(input(stock)), await create(input(stock))];
+      const drafts = [
+        await create(await input(stock)),
+        await create(await input(stock)),
+      ];
       const responses = await Promise.all(
         drafts.map((draft) =>
           post(`${path}/${draft.id}/submit`, { expectedRevision: 1 }),
@@ -239,7 +251,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
         (await get(loser.id).expect(200)).body.needsReplanning,
         false,
       );
-      await put(loser.id, 1, input(await seed(1000))).expect(200);
+      await put(loser.id, 1, await input(await seed(1000))).expect(200);
       await post(`${path}/${loser.id}/submit`, {
         expectedRevision: 2,
       }).expect(200);
@@ -248,7 +260,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'failed plan persistence rolls back draft submission and permits retry',
     async (subtest) => {
-      const draft = await create(input(await seed(1000)));
+      const draft = await create(await input(await seed(1000)));
       const original = AllocationsRepository.prototype.replacePlan;
       const failure = subtest.mock.method(
         AllocationsRepository.prototype,
@@ -288,23 +300,18 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'database constraints enforce every required confirmed planning field and reject incomplete transitions',
     async () => {
-      const draft = await create(input(await seed(1000)));
+      const draft = await create(await input(await seed(1000)));
       await post(`${path}/${draft.id}/submit`, {
         expectedRevision: 1,
       }).expect(200);
       const client = await pool.connect();
+      // A blind is complete by its own columns; the plan's fields are
+      // nullable for drafts, so a trigger holds them for confirmed plans.
+      await assert.rejects(
+        pool.query(`UPDATE work_order_lines SET width_mm=NULL`),
+        { code: '23502' },
+      );
       const children = [
-        {
-          table: 'allocation_requirements',
-          fields: [
-            'fabric_color_id',
-            'width_mm',
-            'length_mm',
-            'length_allowance_mm',
-            'quantity',
-          ],
-          where: 'allocation_id=$1',
-        },
         {
           table: 'allocation_items',
           fields: ['stock_item_id', 'reserved_length_mm'],
@@ -335,9 +342,10 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
             });
           }
         }
+        // An unassigned cut is as far as a plan can be from confirmable.
         const partial = await create({
-          orderNumber: '999999',
-          requirements: [{ id: randomUUID() }],
+          workOrderId: (await input(await seed())).workOrderId,
+          plan: { cuts: [{}] },
         });
         await assert.rejects(
           pool.query(

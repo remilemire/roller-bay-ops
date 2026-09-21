@@ -25,6 +25,7 @@ vi.mock('./allocations.api', async (original) => ({
 }));
 const allocation: AllocationList['items'][number] = {
   id: ids.allocation,
+  workOrderId: ids.order,
   orderNumber: '104801',
   createdByUserId: ids.user,
   revision: 2,

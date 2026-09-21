@@ -12,14 +12,20 @@ import {
   lookupColors,
 } from '@/features/fabric-catalog/catalog.api';
 
+/** The work order's blinds. They are the order's record, saved by `actions`. */
 export function RequirementsEditor({
   form,
   units,
   onChange,
+  frozen,
+  actions,
 }: {
   form: UseFormReturn<AllocationForm>;
   units: MeasurementUnits;
   onChange: () => void;
+  /** Why the blinds cannot be edited now, if they cannot. */
+  frozen?: string;
+  actions?: React.ReactNode;
 }) {
   const requirements = useFieldArray({
     control: form.control,
@@ -44,27 +50,35 @@ export function RequirementsEditor({
     <section className="panel">
       <div className="panel-heading">
         <div>
-          <h2>Required blinds</h2>
+          <h2>Blinds</h2>
           <p>
-            Enter finished sizes. The configured drop allowance is added
-            automatically.
+            {frozen ??
+              "The order's blinds, in finished sizes. The configured drop allowance is added automatically."}
           </p>
         </div>
-        <Button
-          variant="outline"
-          type="button"
-          onClick={() => {
-            requirements.append(emptyRequirement());
-            onChange();
-          }}
-        >
-          <Plus size={16} />
-          Add blind
-        </Button>
+        <div className="inline-actions">
+          <Button
+            variant="outline"
+            type="button"
+            disabled={!!frozen}
+            onClick={() => {
+              requirements.append(emptyRequirement());
+              onChange();
+            }}
+          >
+            <Plus size={16} />
+            Add blind
+          </Button>
+          {actions}
+        </div>
       </div>
-      <div className="panel-body">
-        {!requirements.fields.length && (
-          <p className="muted">Add your first blind to start planning.</p>
+      <fieldset
+        className="panel-body"
+        disabled={!!frozen}
+        style={{ border: 0, margin: 0 }}
+      >
+        {!requirements.fields.length && !frozen && (
+          <p className="muted">Add the order&apos;s first blind.</p>
         )}
         {requirements.fields.map((row, index) => {
           // Field-array changes can render before the watched values catch up.
@@ -141,7 +155,7 @@ export function RequirementsEditor({
             </div>
           );
         })}
-      </div>
+      </fieldset>
     </section>
   );
 }

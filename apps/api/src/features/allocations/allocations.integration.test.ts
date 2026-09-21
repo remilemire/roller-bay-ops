@@ -18,6 +18,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
     path,
     cookie,
     origin,
+    fixtures,
     get,
     post,
     put,
@@ -30,7 +31,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
     'allocation routes require auth and origin checks, but normal users may operate the workflow',
     async () => {
       await request(server).get(path).expect(401);
-      const body = input(await seed());
+      const body = await input(await seed());
       await request(server)
         .post(path)
         .set('Cookie', cookie)
@@ -61,16 +62,16 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
     'previews use authoritative snapshots, exclude own reservations, and do not write',
     async () => {
       const stockId = await seed(1000);
-      const body = input(stockId);
+      const body = await input(stockId);
       const allocation = await create(body);
-      const { requirements, plan } = body;
+      const { workOrderId, plan } = body;
       const blocked = await post(`${path}/validate`, {
-        requirements,
+        workOrderId,
         plan,
       }).expect(200);
       assert.equal(blocked.body.valid, false);
       const valid = await post(`${path}/validate`, {
-        requirements,
+        workOrderId,
         plan,
         allocationId: allocation.id,
         expectedRevision: 1,
@@ -78,12 +79,12 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       assert.equal(valid.body.valid, true);
       assert.equal(valid.body.stockItems[0].locationLabel, '1');
       await post(`${path}/validate`, {
-        requirements,
+        workOrderId,
         plan,
         stockItems: [],
       }).expect(400);
       await post(`${path}/optimize`, {
-        requirements,
+        workOrderId,
         allocationId: allocation.id,
         expectedRevision: 1,
       }).expect(200);
@@ -94,7 +95,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         0,
       );
       await post(`${path}/optimize`, {
-        requirements,
+        workOrderId,
         allocationId: allocation.id,
         expectedRevision: 999,
       }).expect(409);
@@ -130,19 +131,19 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         config.set('CUTTING_MINIMUM_REMNANT_WIDTH_MM', 1524);
         config.set('CUTTING_MINIMUM_REMNANT_LENGTH_MM', 1524);
         config.set('CUTTING_DROP_ALLOWANCE_MM', 254);
-        const body = input(await seed());
-        const { requirements } = body;
+        const body = await input(await seed());
+        const { workOrderId } = body;
         // Cut length is derived from the drop and allowance, never supplied.
         await post(`${path}/validate`, {
-          requirements,
+          workOrderId,
           plan: { cuts: [{ ...body.plan.cuts[0], lengthMm: 1254 }] },
         }).expect(400);
         const preview = await post(`${path}/validate`, {
-          requirements,
+          workOrderId,
           plan: body.plan,
         }).expect(200);
         assert.equal(preview.body.valid, true);
-        await post(`${path}/optimize`, { requirements }).expect(200);
+        await post(`${path}/optimize`, { workOrderId }).expect(200);
         assert.equal(
           optimizedContexts.at(-1)!.requirements[0]!.lengthAllowanceMm,
           254,
@@ -164,7 +165,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
           minimumRemnantLengthMm: 1524,
           dropAllowanceMm: 254,
         });
-        const draftBody = input(body.plan.cuts[0]!.stockItemId);
+        const draftBody = await input(body.plan.cuts[0]!.stockItemId);
         const draftKey = randomUUID();
         const draft = (
           await post(`${path}/drafts`, { data: draftBody }, draftKey).expect(
@@ -187,7 +188,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
           [draft.id, draftBody],
         ] as const) {
           const result = await post(`${path}/validate`, {
-            requirements: data.requirements,
+            workOrderId: data.workOrderId,
             plan: data.plan,
             allocationId: id,
             expectedRevision: 1,
@@ -195,7 +196,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
           assert.equal(result.body.valid, true);
         }
         const current = await post(`${path}/validate`, {
-          requirements,
+          workOrderId,
           plan: body.plan,
         }).expect(200);
         assert.equal(current.body.valid, false);
@@ -213,10 +214,14 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         assert.deepEqual(submitted.settings, created.settings);
         assert.equal(submitted.requirements[0].lengthAllowanceMm, 254);
         const replaced = (
-          await put(created.id, { ...body, expectedRevision: 1 }).expect(200)
+          await put(created.id, {
+            plan: body.plan,
+            expectedRevision: 1,
+          }).expect(200)
         ).body;
         assert.deepEqual(replaced.settings, created.settings);
         assert.equal(replaced.items[0].reservedLengthMm, 1254);
+        // Rules and blinds are the server's and the order's, never the request's.
         for (const extra of [
           { ...body, settings: created.settings },
           { ...body, requirements: created.requirements },
@@ -234,7 +239,7 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'creation retries are durable and competing orders cannot over-reserve a roll',
     async () => {
-      const body = input(await seed());
+      const body = await input(await seed());
       const key: string = randomUUID();
       const replies = await Promise.all([
         post(path, body, key),
@@ -245,22 +250,33 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
         [201, 201],
       );
       assert.equal(replies[0]!.body.id, replies[1]!.body.id);
-      await post(path, { ...body, orderNumber: '999999' }, key).expect(409);
+      // The key is bound to its first request.
+      await post(
+        path,
+        { ...body, workOrderId: (await input(await seed())).workOrderId },
+        key,
+      ).expect(409);
       const stock = await seed(1500);
       const competing = await Promise.all([
-        post(path, input(stock)),
-        post(path, input(stock)),
+        post(path, await input(stock)),
+        post(path, await input(stock)),
       ]);
       assert.deepEqual(
         competing.map((reply) => reply.status).sort(),
         [201, 409],
       );
-      const missing = input(randomUUID());
+      const missing = await input(randomUUID());
       await post(path, missing).expect(404);
+      const { order_number } = await fixtures.workOrder(missing.workOrderId);
       const list = allocationListSchema.parse(
-        (await get(`${path}?search=${missing.orderNumber}`).expect(200)).body,
+        (await get(`${path}?search=${order_number}`).expect(200)).body,
       );
       assert.equal(list.total, 0);
+      // A refused allocation claims nothing.
+      assert.equal(
+        (await fixtures.workOrder(missing.workOrderId)).allocated_at,
+        null,
+      );
     },
   );
 
@@ -268,9 +284,14 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
     'replacement locks both released and selected stock, checks revisions, and cancellation releases reservations',
     async () => {
       const stockId = await seed(1000);
-      const body = input(stockId);
+      const body = await input(stockId);
       const allocation = await create(body);
-      const edited = { ...body, orderNumber: '999998', expectedRevision: 1 };
+      // A replan is the same order's blinds cut from other stock.
+      const replan = (stock: string, expectedRevision: number) => ({
+        plan: { cuts: [{ ...body.plan.cuts[0]!, stockItemId: stock }] },
+        expectedRevision,
+      });
+      const edited = replan(await seed(1000), 1);
       const replies = await Promise.all([
         put(allocation.id, edited),
         put(allocation.id, edited),
@@ -287,13 +308,15 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
       await post(`${path}/${allocation.id}/cancel`, {
         expectedRevision: 2,
       }).expect(200);
-      await put(allocation.id, { ...body, expectedRevision: 3 }).expect(409);
-      await create(input(stockId));
+      await put(allocation.id, replan(stockId, 3)).expect(409);
+      // An allocation stays with its order.
+      await put(allocation.id, { ...body, expectedRevision: 3 }).expect(400);
+      await create(await input(stockId));
       const list = allocationListSchema.parse(
         (
-          await get(`${path}?search=999998&state=cancelled&pageSize=1`).expect(
-            200,
-          )
+          await get(
+            `${path}?search=${allocation.orderNumber}&state=cancelled&pageSize=1`,
+          ).expect(200)
         ).body,
       );
       assert.equal(list.items[0]!.id, allocation.id);
@@ -304,12 +327,14 @@ test('allocations integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'failed replacement preserves the old plan and reservations',
     async () => {
-      const original = input(await seed(1000));
+      const original = await input(await seed(1000));
       const allocation = await create(original);
       const unavailable = await seed(1000);
-      await create(input(unavailable));
+      await create(await input(unavailable));
       await put(allocation.id, {
-        ...input(unavailable),
+        plan: {
+          cuts: [{ ...original.plan.cuts[0]!, stockItemId: unavailable }],
+        },
         expectedRevision: 1,
       }).expect(409);
       const unchanged = allocationDetailSchema.parse(

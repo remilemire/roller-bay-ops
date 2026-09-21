@@ -23,12 +23,14 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
+import type { WorkOrderLine } from '@roller-bay/shared/work-orders';
 import {
+  createOrder,
   lookupUnallocatedOrders,
-  orderByNumber,
+  orderDetail,
+  saveOrderLines,
   workOrdersKey,
 } from '@/features/work-orders/work-orders.api';
-import { blindCount } from '@/features/work-orders/order-totals';
 import { stockKey } from '@/features/stock-items/stock-items.api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -45,6 +47,8 @@ import {
   allocationFieldName,
   allocationToForm,
   allocationFromForm,
+  linesToRows,
+  rowsToLines,
   type AllocationForm,
 } from './allocation-form';
 import {
@@ -81,33 +85,28 @@ export function AllocationEditor({
   const recovery = allocationDraftInputSchema.safeParse(
     ownsPending ? pendingPayload(scope) : undefined,
   );
-  const activeData = active
-    ? allocationDraftInputSchema.parse({
-        orderNumber: active.orderNumber,
-        requirements: active.requirements.map(
-          ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
-            id,
-            fabricColorId,
-            widthMm,
-            lengthMm,
-            quantity,
-          }),
-        ),
-        // Stored cut lengths are derived; edits resubmit only the assignments.
-        plan: {
-          cuts: active.plan.cuts.map(({ stockItemId, items }) => ({
-            stockItemId,
-            items,
-          })),
-        },
-      })
-    : undefined;
+  // Stored cut lengths are derived; edits resubmit only the assignments.
+  const opened = active ?? initial;
+  const openedData = opened && {
+    workOrderId: opened.workOrderId,
+    plan: {
+      cuts: (active ? active.plan : initial!.data.plan).cuts.map(
+        ({ stockItemId, items }) => ({ stockItemId, items }),
+      ),
+    },
+  };
   const form = useForm<AllocationForm>({
     resolver: zodResolver(allocationFormSchema),
     defaultValues: allocationToForm(
-      initial?.data ??
-        activeData ??
-        (recovery.success ? recovery.data : undefined),
+      openedData ?? (recovery.success ? recovery.data : undefined),
+      // The blinds it was read with, until the order itself is read below.
+      // An order's blinds are complete, whatever the looser read shape allows.
+      (active?.requirements ?? initial?.data.requirements ?? []).flatMap(
+        ({ id, fabricColorId, widthMm, lengthMm, quantity }) =>
+          fabricColorId && widthMm && lengthMm && quantity
+            ? [{ id, fabricColorId, widthMm, lengthMm, quantity }]
+            : [],
+      ),
       units,
     ),
   });
@@ -122,31 +121,58 @@ export function AllocationEditor({
   const client = useQueryClient();
   const router = useRouter();
   useEffect(() => () => abort.current?.abort(), []);
-  // The API refuses an allocation whose blinds do not add up to its order's
-  // quantity. The form shows both counts as plain information while the
-  // blinds are being entered, and calls a difference an error only once the
-  // operator has tried to confirm; from then on it follows their corrections.
+  // The form edits two records, each saved by its own request: the order's
+  // blinds, and the allocation's plan for them. Neither save touches the
+  // other, so each has its own baseline to be dirty against.
   const order = useQuery({
-    ...orderByNumber(values.orderNumber),
-    enabled: /^\d{6}$/.test(values.orderNumber),
+    ...orderDetail(values.workOrderId),
+    enabled: !!values.workOrderId,
   }).data;
-  const entered = values.requirements.reduce(
-    (total, row) => total + (Number(row.quantity) || 0),
-    0,
+  // The order's blinds as last read or saved here, with the revision a save
+  // of them must name. A background refetch never replaces them.
+  const [blinds, setBlinds] = useState<{
+    id: string;
+    revision: number;
+    lines: WorkOrderLine[];
+  } | null>(null);
+  // A newly chosen order brings its blinds; the same order read again does not.
+  if (order && order.id !== blinds?.id)
+    setBlinds({ id: order.id, revision: order.revision, lines: order.lines });
+  const shown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!blinds || shown.current === blinds.id) return;
+    shown.current = blinds.id;
+    form.setValue('requirements', linesToRows(blinds.lines, units));
+  }, [blinds, form, units]);
+  const rowKey = (row: AllocationForm['requirements'][number]) =>
+    JSON.stringify([
+      row.id,
+      row.fabricColorId,
+      row.width,
+      row.length,
+      row.quantity,
+    ]);
+  const savedRows = linesToRows(blinds?.lines ?? [], units);
+  const blindsDirty =
+    !!blinds &&
+    values.requirements.map(rowKey).join() !== savedRows.map(rowKey).join();
+  const planKey = (value: AllocationForm) =>
+    JSON.stringify([value.workOrderId, value.cuts]);
+  const [planBaseline, setPlanBaseline] = useState(() =>
+    planKey(form.getValues()),
   );
-  const [attempted, setAttempted] = useState(false);
-  const quantityError =
-    attempted && order && order.quantity !== entered
-      ? `The order has ${blindCount(order.quantity)}; ${entered} entered.`
-      : undefined;
-  /** Whether a confirmation may go ahead; marks the attempt if it may not. */
-  function quantitiesMatch() {
-    if (!order || order.quantity === entered) return true;
-    setAttempted(true);
-    return false;
-  }
-  const { errors, isDirty } = form.formState;
-  useUnsavedChanges(isDirty);
+  const planDirty = planKey(values) !== planBaseline;
+  // A live allocation's cuts were planned for these blinds.
+  const frozen = !!active || !!order?.allocatedAt;
+  const blocked = !values.workOrderId
+    ? 'Choose the work order to plan.'
+    : blinds?.id !== values.workOrderId
+      ? 'Loading the order…'
+      : blindsDirty
+        ? 'Save the blinds before planning fabric for them.'
+        : null;
+  const { errors } = form.formState;
+  useUnsavedChanges(planDirty || blindsDirty);
   const fieldName = (issue: ErrorIssue) =>
     allocationFieldName(issuePath(issue), form.getValues());
   // Issues with a field of their own show beside it; the rest stay in the
@@ -160,12 +186,59 @@ export function AllocationEditor({
       // Confirming or moving an allocation changes its order's status.
       client.invalidateQueries({ queryKey: workOrdersKey }),
     ]);
+  const saveBlinds = useMutation({
+    mutationFn: async () => {
+      const rows = form.getValues('requirements');
+      const before = new Map(savedRows.map((row) => [row.id, rowKey(row)]));
+      // A saved blind never changes, so an edited one goes under a new id.
+      const renamed = new Map(
+        rows
+          .filter(
+            (row) => before.has(row.id) && before.get(row.id) !== rowKey(row),
+          )
+          .map((row) => [row.id, crypto.randomUUID()]),
+      );
+      const lines = rowsToLines(
+        rows.map((row) => ({ ...row, id: renamed.get(row.id) ?? row.id })),
+        units,
+      );
+      const result = await saveOrderLines(blinds!.id, {
+        expectedRevision: blinds!.revision,
+        lines,
+      });
+      return { result, renamed };
+    },
+    onError: (error) => showIssues(error),
+    onSuccess: async ({ result, renamed }) => {
+      setBlinds({
+        id: result.id,
+        revision: result.revision,
+        lines: result.lines,
+      });
+      form.setValue('requirements', linesToRows(result.lines, units));
+      // The plan's assignments follow an edited blind to its new id. They are
+      // the allocation's, so they are only changed here, not saved.
+      form.setValue(
+        'cuts',
+        form.getValues('cuts').map((cut) => ({
+          ...cut,
+          items: cut.items.map((item) => ({
+            ...item,
+            requirementId:
+              renamed.get(item.requirementId) ?? item.requirementId,
+          })),
+        })),
+      );
+      setPreview(null);
+      await client.invalidateQueries({ queryKey: workOrdersKey });
+    },
+  });
   const save = useMutation({
     mutationFn: async (value: AllocationForm) => {
-      const data = allocationFromForm(value, units);
+      const data = allocationFromForm(value);
       if (active)
         return replaceAllocation(active.id, {
-          ...data,
+          plan: data.plan,
           expectedRevision: active.revision,
         });
       return saved
@@ -184,10 +257,8 @@ export function AllocationEditor({
     },
     onSuccess: async (record) => {
       if (ownsPending) finishRequest(scope);
-      if (record.state === 'draft') {
-        setSaved(record);
-        form.reset(allocationToForm(record.data, units));
-      } else form.reset(form.getValues());
+      if (record.state === 'draft') setSaved(record);
+      setPlanBaseline(planKey(form.getValues()));
       client.setQueryData([...allocationKey, record.id], record);
       await refresh();
       if (active) close?.();
@@ -202,14 +273,12 @@ export function AllocationEditor({
       // Submission carries no payload: the API confirms the stored draft. So
       // unsaved input is saved to the same draft first, as its own revision.
       const draft =
-        saved && !form.formState.isDirty
-          ? saved
-          : await save.mutateAsync(form.getValues());
+        saved && !planDirty ? saved : await save.mutateAsync(form.getValues());
       return submitAllocation(draft.id, draft.revision);
     },
     onError: (error) => showIssues(error),
     onSuccess: async (record) => {
-      form.reset(form.getValues());
+      setPlanBaseline(planKey(form.getValues()));
       await refresh();
       onSubmitted?.();
       router.replace(`/allocations/${record.id}`);
@@ -225,10 +294,12 @@ export function AllocationEditor({
   });
   const planning = useMutation({
     mutationFn: async (mode: 'optimize' | 'validate') => {
-      const data = allocationFromForm(form.getValues(), units);
+      const data = allocationFromForm(form.getValues());
       const target = active ?? saved;
+      // The API plans the order's saved blinds, which is why unsaved ones
+      // hold the plan back.
       const context = {
-        requirements: data.requirements,
+        workOrderId: data.workOrderId,
         ...(target
           ? { allocationId: target.id, expectedRevision: target.revision }
           : {}),
@@ -244,7 +315,8 @@ export function AllocationEditor({
       showIssues('valid' in result && !result.valid ? result.issues : []);
       if ('status' in result && result.status === 'feasible') {
         const next = allocationToForm(
-          { ...allocationFromForm(form.getValues(), units), plan: result.plan },
+          { ...allocationFromForm(form.getValues()), plan: result.plan },
+          [],
           units,
         );
         // A generated plan only changes the form; it neither saves nor reserves stock.
@@ -258,7 +330,14 @@ export function AllocationEditor({
     onSuccess: (latest) => {
       if (latest.state === 'draft') {
         setSaved(latest);
-        form.reset(allocationToForm(latest.data, units));
+        const next = allocationToForm(
+          { workOrderId: latest.workOrderId, plan: latest.data.plan },
+          [],
+          units,
+        );
+        form.setValue('workOrderId', next.workOrderId);
+        form.setValue('cuts', next.cuts);
+        setPlanBaseline(planKey({ ...next, requirements: [] }));
       } else onSubmitted?.();
       save.reset();
       submit.reset();
@@ -275,15 +354,16 @@ export function AllocationEditor({
   );
   const busy =
     save.isPending ||
+    saveBlinds.isPending ||
     submit.isPending ||
     remove.isPending ||
     planning.isPending;
   function confirmSubmit() {
     try {
-      createAllocationSchema.parse(allocationFromForm(form.getValues(), units));
+      createAllocationSchema.parse(allocationFromForm(form.getValues()));
       setValidationError(null);
       form.clearErrors();
-      if (quantitiesMatch()) setConfirm('submit');
+      setConfirm('submit');
     } catch (error) {
       setValidationError(error);
       showIssues(error);
@@ -312,58 +392,108 @@ export function AllocationEditor({
               ? 'Allocation draft'
               : 'New allocation'
         }
-        description="Enter the required blinds, then generate a cutting plan or build one by hand."
+        description="Pick or create the work order, save its blinds, then generate a cutting plan or build one by hand."
       />
-      <form
-        onSubmit={form.handleSubmit((value) => {
-          // Saving an active plan confirms it again; saving a draft does not.
-          if (!active || quantitiesMatch()) save.mutate(value);
-        })}
-      >
+      <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
         <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
           <div className="stack">
-            <section className="panel">
-              <div className="panel-body">
-                {/* An allocation names an existing work order, so the
-                    number is picked rather than typed. */}
-                <Lookup
-                  label="Order number"
-                  value={values.orderNumber}
-                  onChange={(v) => {
-                    form.setValue('orderNumber', v, { shouldDirty: true });
-                    form.clearErrors('orderNumber');
-                    // Another order is a fresh start.
-                    setAttempted(false);
-                  }}
-                  selectedLabel={values.orderNumber}
-                  queryKey={[...workOrdersKey, 'unallocated']}
-                  load={lookupUnallocatedOrders}
-                  error={errors.orderNumber?.message ?? quantityError}
-                />
-                {quantityError ? null : order ? (
-                  <p className="order-count" role="status">
-                    The order has {blindCount(order.quantity)}; {entered}{' '}
-                    entered.
-                  </p>
-                ) : (
+            {/* A replan stays with its order, so only a new plan picks one. */}
+            {!active && (
+              <section className="panel">
+                <div className="panel-body">
+                  <Lookup
+                    label="Order number"
+                    value={values.workOrderId}
+                    onChange={(v) => {
+                      form.setValue('workOrderId', v);
+                      form.clearErrors('workOrderId');
+                      // Another order has other blinds to plan.
+                      if (!v) {
+                        setBlinds(null);
+                        shown.current = null;
+                        form.setValue('requirements', []);
+                      }
+                      form.setValue('cuts', []);
+                      setPreview(null);
+                    }}
+                    selectedLabel={order?.orderNumber ?? initial?.orderNumber}
+                    queryKey={[...workOrdersKey, 'unallocated']}
+                    load={lookupUnallocatedOrders}
+                    error={errors.workOrderId?.message}
+                    create={{
+                      // Creating the order is its own request, made only
+                      // when this option is chosen.
+                      label: (term, items) =>
+                        /^\d{6}$/.test(term) &&
+                        !items.some((item) => item.label.startsWith(term))
+                          ? `Create order ${term}`
+                          : null,
+                      run: async (term) => {
+                        const made = await createOrder({ orderNumber: term });
+                        await client.invalidateQueries({
+                          queryKey: workOrdersKey,
+                        });
+                        return { id: made.id, label: made.orderNumber };
+                      },
+                    }}
+                  />
                   <p className="order-count">
-                    Lists work orders that have no allocation yet.
+                    Lists work orders that have no allocation yet. Type a new
+                    six-digit number to create one.
                   </p>
-                )}
-              </div>
-            </section>
+                </div>
+              </section>
+            )}
             <RequirementsEditor
               form={form}
               units={units}
               onChange={() => setPreview(null)}
+              frozen={
+                frozen
+                  ? 'Fixed while the order has an allocation.'
+                  : !values.workOrderId
+                    ? 'Choose the work order first.'
+                    : undefined
+              }
+              actions={
+                <Button
+                  type="button"
+                  variant={blindsDirty ? 'default' : 'outline'}
+                  disabled={!blindsDirty || frozen}
+                  onClick={() => saveBlinds.mutate()}
+                >
+                  <Save size={16} />
+                  {saveBlinds.isPending
+                    ? 'Saving…'
+                    : blindsDirty
+                      ? 'Save blinds'
+                      : 'Blinds saved'}
+                </Button>
+              }
             />
-            <CutPlanEditor
-              form={form}
-              units={units}
-              onChange={() => setPreview(null)}
-              onGenerate={() => planning.mutate('optimize')}
-              onValidate={() => planning.mutate('validate')}
-            />
+            {saveBlinds.error && (
+              <ErrorNotice
+                error={saveBlinds.error}
+                inline={(issue) => fieldName(issue) !== null}
+              />
+            )}
+            {blocked && (
+              <p className="notice notice-info" role="status">
+                {blocked}
+              </p>
+            )}
+            <fieldset
+              disabled={!!blocked}
+              style={{ border: 0, padding: 0, margin: 0 }}
+            >
+              <CutPlanEditor
+                form={form}
+                units={units}
+                onChange={() => setPreview(null)}
+                onGenerate={() => planning.mutate('optimize')}
+                onValidate={() => planning.mutate('validate')}
+              />
+            </fieldset>
           </div>
         </fieldset>
         {/* One slot for planning feedback keeps the actions below from moving
@@ -407,7 +537,9 @@ export function AllocationEditor({
             variant="outline"
             disabled={busy}
             onClick={() => {
-              form.reset(allocationToForm(recovery.data, units));
+              const next = allocationToForm(recovery.data, [], units);
+              form.setValue('workOrderId', next.workOrderId);
+              form.setValue('cuts', next.cuts);
               save.reset();
             }}
           >
@@ -416,7 +548,7 @@ export function AllocationEditor({
         )}
         <div className="form-actions">
           <span className="draft-state">
-            {isDirty
+            {planDirty
               ? 'Unsaved changes'
               : saved
                 ? 'All changes saved'
@@ -430,7 +562,10 @@ export function AllocationEditor({
               variant="ghost"
               disabled={busy}
               onClick={() => {
-                if (!isDirty || window.confirm('Discard your unsaved changes?'))
+                if (
+                  !(planDirty || blindsDirty) ||
+                  window.confirm('Discard your unsaved changes?')
+                )
                   close();
               }}
             >
@@ -450,7 +585,7 @@ export function AllocationEditor({
           <Button
             type="submit"
             variant={active ? 'default' : 'outline'}
-            disabled={busy}
+            disabled={busy || !!blocked}
           >
             <Save size={16} />
             {save.isPending
@@ -460,7 +595,11 @@ export function AllocationEditor({
                 : 'Save draft'}
           </Button>
           {!active && (
-            <Button type="button" disabled={busy} onClick={confirmSubmit}>
+            <Button
+              type="button"
+              disabled={busy || !!blocked}
+              onClick={confirmSubmit}
+            >
               <Check size={16} />
               Confirm allocation
             </Button>
@@ -503,7 +642,7 @@ export function AllocationEditor({
         }
         description={
           confirm === 'submit'
-            ? `${isDirty || !saved ? 'Your changes are saved to the draft first. ' : ''}The complete plan is checked against current stock before reservations are created.`
+            ? `${planDirty || !saved ? 'Your changes are saved to the draft first. ' : ''}The complete plan is checked against current stock before reservations are created.`
             : 'This removes the shared draft for everyone.'
         }
       >

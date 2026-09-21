@@ -106,32 +106,27 @@ export async function startCorrectionsApp(t: TestContext) {
       stockItemId: e.stockItemId,
       expectedRevision: e.revision,
     }));
-  // Each allocation needs its own scheduled order, for the one blind it plans.
-  await fixtures.createWorkOrders(300001, 300100);
+  // Each allocation plans the one blind of a work order of its own.
   let orderNumber = 300000;
-  const plan = (stockId: string) => {
-    const requirementId = randomUUID();
+  const plan = async (stockId: string, quantity = 1) => {
+    const order = await fixtures.createWorkOrder(String(++orderNumber), [
+      { fabricColorId: color.id, widthMm: 500, lengthMm: 1000, quantity },
+    ]);
     return {
-      orderNumber: String(++orderNumber),
-      requirements: [
-        {
-          id: requirementId,
-          fabricColorId: color.id,
-          widthMm: 500,
-          lengthMm: 1000,
-          quantity: 1,
-        },
-      ],
+      workOrderId: order.id,
       plan: {
         cuts: [
-          { stockItemId: stockId, items: [{ requirementId, quantity: 1 }] },
+          {
+            stockItemId: stockId,
+            items: [{ requirementId: order.lineIds[0]!, quantity: 1 }],
+          },
         ],
       },
     };
   };
   const allocate = async (stockId: string) =>
     allocationDetailSchema.parse(
-      (await post('/allocations', plan(stockId)).expect(201)).body,
+      (await post('/allocations', await plan(stockId)).expect(201)).body,
     );
   const complete = async (allocation: Awaited<ReturnType<typeof allocate>>) => {
     const stock = allocation.items[0]!.stockItem;

@@ -4,11 +4,17 @@ import {
   allocationDraftInputSchema,
   type AllocationDraftInput,
 } from '@roller-bay/shared/allocations';
+import {
+  workOrderLineSchema,
+  type WorkOrderLine,
+} from '@roller-bay/shared/work-orders';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { nullableText, nullableNumber } from '@/lib/format';
 import { fieldInput, fieldValue } from '@/lib/measurements';
+// One form, two records: `requirements` are the work order's blinds, saved to
+// the order; `workOrderId` and `cuts` are the allocation's plan for them.
 export const allocationFormSchema = z.object({
-  orderNumber: z.string(),
+  workOrderId: z.string(),
   requirements: z.array(
     z.object({
       id: z.string(),
@@ -34,7 +40,13 @@ const FIELD_PATHS: [
   RegExp,
   (match: RegExpMatchArray, form: AllocationForm) => string | null,
 ][] = [
-  [/^orderNumber$/, () => 'orderNumber'],
+  [/^workOrderId$/, () => 'workOrderId'],
+  // A refused save of the blinds names the row, and sometimes its field.
+  [
+    /^lines\.(\d+)(?:\.(fabricColorId|widthMm|lengthMm|quantity))?$/,
+    ([, row, key]) =>
+      `requirements.${row}.${{ widthMm: 'width', lengthMm: 'length' }[key ?? ''] ?? key ?? 'quantity'}`,
+  ],
   [
     /^requirements\.(\d+)\.(fabricColorId|width|length|quantity)(Mm)?$/,
     ([, row, key]) => `requirements.${row}.${key}`,
@@ -91,20 +103,40 @@ export const emptyRequirement = () => ({
 });
 // Form strings are expressed in the given units; callers must convert back
 // with the same units so a saved value never drifts.
+export const linesToRows = (
+  lines: readonly WorkOrderLine[],
+  units: MeasurementUnits,
+): AllocationForm['requirements'] =>
+  lines.map((line) => ({
+    id: line.id,
+    fabricColorId: line.fabricColorId,
+    width: fieldInput(units, 'blindWidth', line.widthMm),
+    length: fieldInput(units, 'finishedDrop', line.lengthMm),
+    quantity: String(line.quantity),
+  }));
+const lineList = z.object({ lines: z.array(workOrderLineSchema) });
+/** The blinds as the order stores them; throws on a half-entered row. */
+export const rowsToLines = (
+  rows: AllocationForm['requirements'],
+  units: MeasurementUnits,
+): WorkOrderLine[] =>
+  lineList.parse({
+    lines: rows.map((row) => ({
+      id: row.id,
+      fabricColorId: nullableText(row.fabricColorId),
+      widthMm: fieldValue(units, 'blindWidth', row.width),
+      lengthMm: fieldValue(units, 'finishedDrop', row.length),
+      quantity: nullableNumber(row.quantity),
+    })),
+  }).lines;
 export function allocationToForm(
   data: AllocationDraftInput | undefined,
+  lines: readonly WorkOrderLine[],
   units: MeasurementUnits,
 ): AllocationForm {
   return {
-    orderNumber: data?.orderNumber ?? '',
-    requirements:
-      data?.requirements.map((i) => ({
-        id: i.id,
-        fabricColorId: i.fabricColorId ?? '',
-        width: fieldInput(units, 'blindWidth', i.widthMm),
-        length: fieldInput(units, 'finishedDrop', i.lengthMm),
-        quantity: String(i.quantity ?? ''),
-      })) ?? [],
+    workOrderId: data?.workOrderId ?? '',
+    requirements: linesToRows(lines, units),
     cuts:
       data?.plan.cuts.map((d) => ({
         stockItemId: d.stockItemId ?? '',
@@ -115,19 +147,10 @@ export function allocationToForm(
       })) ?? [],
   };
 }
-export function allocationFromForm(
-  form: AllocationForm,
-  units: MeasurementUnits,
-): AllocationDraftInput {
+/** The allocation's half of the form: the order it plans, and the plan. */
+export function allocationFromForm(form: AllocationForm): AllocationDraftInput {
   return allocationDraftInputSchema.parse({
-    orderNumber: nullableText(form.orderNumber),
-    requirements: form.requirements.map((r) => ({
-      id: r.id,
-      fabricColorId: nullableText(r.fabricColorId),
-      widthMm: fieldValue(units, 'blindWidth', r.width),
-      lengthMm: fieldValue(units, 'finishedDrop', r.length),
-      quantity: nullableNumber(r.quantity),
-    })),
+    workOrderId: form.workOrderId,
     plan: {
       cuts: form.cuts.map((d) => ({
         stockItemId: nullableText(d.stockItemId),

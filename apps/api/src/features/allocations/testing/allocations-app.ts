@@ -47,22 +47,22 @@ export async function startAllocationsApp(t: TestContext) {
   };
   // Sequential numbers keep order-number searches unambiguous.
   let orderNumber = 100000;
-  const input = (stockId: string, length = 1000): CreateAllocation => {
-    const requirementId = randomUUID();
+  /** A new order of one blind, and the plan that cuts it from the stock. */
+  const input = async (
+    stockId: string,
+    length = 1000,
+  ): Promise<CreateAllocation> => {
+    const order = await fixtures.createWorkOrder(String(++orderNumber), [
+      { fabricColorId: ids.color, widthMm: 500, lengthMm: length, quantity: 1 },
+    ]);
     return {
-      orderNumber: String(++orderNumber),
-      requirements: [
-        {
-          id: requirementId,
-          fabricColorId: ids.color,
-          widthMm: 500,
-          lengthMm: length,
-          quantity: 1,
-        },
-      ],
+      workOrderId: order.id,
       plan: {
         cuts: [
-          { stockItemId: stockId, items: [{ requirementId, quantity: 1 }] },
+          {
+            stockItemId: stockId,
+            items: [{ requirementId: order.lineIds[0]!, quantity: 1 }],
+          },
         ],
       },
     };
@@ -108,10 +108,6 @@ export async function startAllocationsApp(t: TestContext) {
     if (!validation.valid) throw new Error('Invalid fixture plan');
     return { status: 'feasible' as const, plan, summary: validation.summary };
   });
-  // Allocations must name a scheduled order and match its quantity; every
-  // allocation here plans one blind.
-  await fixtures.createWorkOrders(100001, 100400);
-  await fixtures.createWorkOrders(999998, 999999);
   return {
     ...harness,
     server,

@@ -26,12 +26,12 @@ export async function allocationOperation<T>(
         // The foreign key is the race-free check that an order is scheduled.
         if (
           cause.code === '23503' &&
-          constraint === 'allocations_order_number_work_orders_order_number_fk'
+          constraint === 'allocations_work_order_id_work_orders_id_fk'
         )
           throw orderNotFound(error);
         if (
           cause.code === '23505' &&
-          constraint === 'allocations_live_order_number_unique'
+          constraint === 'allocations_live_work_order_unique'
         )
           throw orderAlreadyAllocated(error);
         if (cause.code === '23503')

@@ -16,6 +16,7 @@ import {
   type ValidateAllocation,
 } from '@roller-bay/shared/allocations';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
+import { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { AllocationsRepository } from './allocations.repository.js';
 import { allocationOperation } from './allocations.operation.js';
 import { requirePlanningRevision } from './allocation.rules.js';
@@ -37,6 +38,7 @@ export class AllocationPlanningService {
     @Inject(CuttingPlanOptimizer)
     private readonly optimizer: CuttingPlanOptimizer | null,
     private readonly cuttingRules: CuttingRulesService,
+    private readonly orders: WorkOrdersService,
   ) {}
 
   async optimize(input: OptimizeAllocation, signal?: AbortSignal) {
@@ -116,18 +118,30 @@ export class AllocationPlanningService {
               input.expectedRevision,
             )
           : undefined;
+        // A confirmed allocation stays with its order; a draft being edited
+        // may be previewed against the order the form has moved it to.
+        if (
+          header &&
+          !header.isDraft &&
+          header.workOrderId !== input.workOrderId
+        )
+          throw new BadRequestException('An allocation stays with its order.');
+        // The order's saved blinds, not the form's: what would be confirmed.
+        const { lines } = await this.orders.lines(tx, input.workOrderId);
+        const requirements = lines.map((line) => ({
+          id: line.id,
+          fabricColorId: line.fabricColorId,
+          widthMm: Number(line.widthMm),
+          lengthMm: Number(line.lengthMm),
+          quantity: line.quantity,
+        }));
+        if (!requirements.length)
+          throw new BadRequestException(
+            'This order has no blinds. Enter them before planning.',
+          );
         const configured = this.cuttingRules.apply(
-          input.requirements,
-          header
-            ? {
-                settings: header.settings,
-                requirements: await repository.requirements(header.id),
-              }
-            : undefined,
-        );
-        await this.stockItems.requireColors(
-          input.requirements.map((item) => item.fabricColorId),
-          tx,
+          requirements,
+          header?.settings,
         );
         const stock = await this.stockItems.findForAllocation(
           tx,
@@ -135,9 +149,7 @@ export class AllocationPlanningService {
             ? { stockIds }
             : {
                 colorIds: [
-                  ...new Set(
-                    input.requirements.map((item) => item.fabricColorId),
-                  ),
+                  ...new Set(requirements.map((item) => item.fabricColorId)),
                 ],
               },
         );

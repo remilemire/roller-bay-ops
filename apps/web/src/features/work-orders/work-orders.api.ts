@@ -35,27 +35,18 @@ export const orderDetail = (id: string) =>
   queryOptions({
     queryKey: [...workOrdersKey, id],
     queryFn: ({ signal }) =>
-      api(`/work-orders/${id}`, s.workOrderSchema, { signal }),
-  });
-// The order an allocation names, for the quantity its blinds must add up to.
-export const orderByNumber = (orderNumber: string) =>
-  queryOptions({
-    queryKey: [...workOrdersKey, 'number', orderNumber],
-    queryFn: async ({ signal }) => {
-      const data = await api(
-        `/work-orders${queryString({ search: orderNumber, pageSize: 1 })}`,
-        s.workOrderListSchema,
-        { signal },
-      );
-      return (
-        data.items.find((order) => order.orderNumber === orderNumber) ?? null
-      );
-    },
+      api(`/work-orders/${id}`, s.workOrderDetailSchema, { signal }),
   });
 export const createOrder = (body: unknown) =>
   api('/work-orders', s.workOrderSchema, {
     method: 'POST',
     body: s.createWorkOrderSchema.parse(body),
+  });
+// The order's blinds, whole and in order; see saveWorkOrderLinesSchema.
+export const saveOrderLines = (id: string, body: unknown) =>
+  api(`/work-orders/${id}/lines`, s.workOrderDetailSchema, {
+    method: 'PUT',
+    body: s.saveWorkOrderLinesSchema.parse(body),
   });
 export const updateOrder = (id: string, body: unknown) =>
   api(`/work-orders/${id}`, s.workOrderSchema, {
@@ -79,7 +70,7 @@ export const unscheduledOrders = () =>
       ),
   });
 // For the allocation editor: orders with no allocation yet. The option id is
-// the order number the allocation stores.
+// the order's id, which the allocation names.
 export const lookupUnallocatedOrders = async (
   search: string,
   page: number,
@@ -93,7 +84,7 @@ export const lookupUnallocatedOrders = async (
   return {
     total: data.total,
     items: data.items.map((order) => ({
-      id: order.orderNumber,
+      id: order.id,
       label: `${order.orderNumber} · ${blindCount(order.quantity)}`,
     })),
   };

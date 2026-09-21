@@ -25,11 +25,11 @@ export const allocations = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     isDraft: boolean('is_draft').default(true).notNull(),
-    // Drafts may name no order yet; any order named must be scheduled.
-    orderNumber: varchar('order_number', { length: 6 }).references(
-      () => workOrders.orderNumber,
-      { onDelete: 'restrict' },
-    ),
+    // Drafts too: a plan assigns an order's blinds, so there is none to make
+    // without an order.
+    workOrderId: uuid('work_order_id')
+      .notNull()
+      .references(() => workOrders.id, { onDelete: 'restrict' }),
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -61,7 +61,7 @@ export const allocations = pgTable(
   (table) => [
     check(
       'allocations_confirmation_valid',
-      sql`(${table.isDraft} AND ${table.confirmedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.submittedDraftRevision} IS NULL) OR (NOT ${table.isDraft} AND ${table.confirmedAt} IS NOT NULL AND ${table.orderNumber} IS NOT NULL)`,
+      sql`(${table.isDraft} AND ${table.confirmedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.submittedDraftRevision} IS NULL) OR (NOT ${table.isDraft} AND ${table.confirmedAt} IS NOT NULL)`,
     ),
     check(
       'allocations_submitted_revision_valid',
@@ -73,11 +73,11 @@ export const allocations = pgTable(
       table.idempotencyKey,
     ),
     check('allocations_revision_positive', sql`${table.revision} > 0`),
-    index('allocations_order_number_idx').on(table.orderNumber),
+    index('allocations_work_order_id_idx').on(table.workOrderId),
     // An order has at most one live allocation: confirmed and not cancelled,
-    // including once completed. Drafts may share an order number.
-    uniqueIndex('allocations_live_order_number_unique')
-      .on(table.orderNumber)
+    // including once completed. Drafts may share an order.
+    uniqueIndex('allocations_live_work_order_unique')
+      .on(table.workOrderId)
       .where(sql`NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL`),
     index('allocations_created_by_user_id_idx').on(table.createdByUserId),
     // Non-draft allocations are active until completed or cancelled.

@@ -18,7 +18,6 @@ test('completion corrections integration', { timeout: 60_000 }, async (t) => {
     pool,
     cookie,
     origin,
-    fixtures,
     get,
     post,
     color,
@@ -271,10 +270,8 @@ test('completion corrections integration', { timeout: 60_000 }, async (t) => {
     async () => {
       const r = await receipt(2),
         [first, second] = r.items[0]!.stockItems;
-      const draft = plan(first!.id);
-      draft.requirements[0]!.quantity = 2;
-      // The order's quantity has to match the two blinds planned.
-      await fixtures.setOrderQuantity(draft.orderNumber, 2);
+      // Two of the order's one blind, cut from a roll each.
+      const draft = await plan(first!.id, 2);
       draft.plan.cuts.push({
         ...draft.plan.cuts[0]!,
         stockItemId: second!.id,

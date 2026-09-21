@@ -26,7 +26,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
     send('delete', `${path}/${id}`).send({ expectedRevision });
   const role = (value: UserRole) => fixtures.setUserRole(userId, value);
   await t.test(
-    'order reads require a session and every write requires admin or owner',
+    'order reads require a session; employees create orders, and the rest takes admin or owner',
     async () => {
       await role('user');
       await request(server).get(path).expect(401);
@@ -38,13 +38,15 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         .expect(401);
       await get(path).expect(200);
       await get(`${path}/${randomUUID()}/history`).expect(200);
-      await post({}).expect(403);
-      await patch(randomUUID(), {}).expect(403);
-      await remove(randomUUID(), 1).expect(403);
+      // Whoever allocates an order's fabric may create it, without a note;
+      // the note is refused rather than quietly dropped.
+      await post({}).expect(400);
+      await post({ orderNumber: '200001', note: 'Rush' }).expect(403);
+      const order = (await post({ orderNumber: '200001' }).expect(201)).body;
+      assert.equal(order.status, 'new');
+      await patch(order.id, { expectedRevision: 1, note: 'x' }).expect(403);
+      await remove(order.id, 1).expect(403);
       await role('owner');
-      const order = (
-        await post({ orderNumber: '200001', quantity: 12 }).expect(201)
-      ).body;
       for (const untrusted of [undefined, 'https://untrusted.example']) {
         const attempt = request(server)
           .patch(`${path}/${order.id}`)
@@ -67,16 +69,13 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       for (const query of ['page=0', 'pageSize=101', 'status=ready', 'x=1'])
         await get(`${path}?${query}`).expect(400);
       for (const body of [
-        { orderNumber: '20001', quantity: 12 },
-        { orderNumber: '200002' },
-        // An order is created without a ship date.
-        { orderNumber: '200002', quantity: 12, shipDate: '2026-10-02' },
-        { orderNumber: '200002', quantity: 12, shippedAt: null },
-        ...[0, -1, 1.5, '12', null, 1000001].map((quantity) => ({
-          orderNumber: '200002',
-          quantity,
-        })),
-        { orderNumber: '200002', quantity: 12, note: 'x'.repeat(1001) },
+        { orderNumber: '20001' },
+        // An order is created without a ship date, and its blind count is
+        // the total of its blinds, never a number of its own.
+        { orderNumber: '200002', shipDate: '2026-10-02' },
+        { orderNumber: '200002', quantity: 12 },
+        { orderNumber: '200002', shippedAt: null },
+        { orderNumber: '200002', note: 'x'.repeat(1001) },
       ])
         await post(body).expect(400);
 
@@ -84,14 +83,13 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         (
           await post({
             orderNumber: ' 200002 ',
-            quantity: 12,
             note: '  Rush  ',
           }).expect(201)
         ).body,
       );
       assert.equal(created.orderNumber, '200002');
       assert.equal(created.note, 'Rush');
-      assert.equal(created.quantity, 12);
+      assert.equal(created.quantity, 0);
       assert.equal(created.status, 'new');
       assert.equal(created.revision, 1);
       assert.deepEqual(
@@ -105,10 +103,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         [null, null, null, null, null],
       );
 
-      const duplicate = await post({
-        orderNumber: '200002',
-        quantity: 12,
-      }).expect(409);
+      const duplicate = await post({ orderNumber: '200002' }).expect(409);
       assert.deepEqual(duplicate.body.issues, [
         {
           code: 'order_already_exists',
@@ -117,7 +112,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         },
       ]);
       const concurrent = await Promise.all(
-        [1, 2].map(() => post({ orderNumber: '200003', quantity: 12 })),
+        [1, 2].map(() => post({ orderNumber: '200003' })),
       );
       assert.deepEqual(concurrent.map((r) => r.status).sort(), [201, 409]);
 
@@ -129,16 +124,14 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       await patch(created.id, { expectedRevision: 1 }).expect(400);
       const updated = workOrderSchema.parse(
         (
-          await patch(created.id, {
-            expectedRevision: 1,
-            quantity: 14,
-            note: ' ',
-          }).expect(200)
+          await patch(created.id, { expectedRevision: 1, note: ' ' }).expect(
+            200,
+          )
         ).body,
       );
-      // An order without an allocation can change its quantity.
-      assert.equal(updated.quantity, 14);
-      await patch(created.id, { expectedRevision: 2, quantity: 0 }).expect(400);
+      await patch(created.id, { expectedRevision: 2, quantity: 14 }).expect(
+        400,
+      );
       assert.equal(updated.note, null);
       assert.equal(updated.revision, 2);
       await patch(created.id, { expectedRevision: 1, note: 'stale' }).expect(
@@ -152,7 +145,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
     'an order is scheduled only once it is allocated, on a weekday, and can be taken off the schedule',
     async () => {
       const order = workOrderSchema.parse(
-        (await post({ orderNumber: '200010', quantity: 2 }).expect(201)).body,
+        (await post({ orderNumber: '200010' }).expect(201)).body,
       );
       const early = await patch(order.id, {
         expectedRevision: 1,
@@ -304,7 +297,6 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         (
           await post({
             orderNumber: '200020',
-            quantity: 12,
             note: 'Rush',
           }).expect(201)
         ).body,
@@ -336,10 +328,10 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
 
       // Creating the number again restores that order with the new details.
       const restored = workOrderSchema.parse(
-        (await post({ orderNumber: '200020', quantity: 3 }).expect(201)).body,
+        (await post({ orderNumber: '200020' }).expect(201)).body,
       );
       assert.equal(restored.id, created.id);
-      assert.deepEqual([restored.quantity, restored.note], [3, null]);
+      assert.equal(restored.note, null);
       assert.equal(restored.status, 'new');
       assert.equal(restored.revision, 3);
       assert.equal(restored.createdAt, created.createdAt);
@@ -349,7 +341,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       assert.equal(history.items[0]!.action, 'order.restored');
       assert.equal(history.items[0]!.changes[0]!.before, null);
       // Once restored it is an ordinary order again.
-      await post({ orderNumber: '200020', quantity: 3 }).expect(409);
+      await post({ orderNumber: '200020' }).expect(409);
     },
   );
 
@@ -372,8 +364,8 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       for (const [orderNumber, shipDate, allocated, cut, shipped] of rows)
         await pool.query(
           `INSERT INTO work_orders
-               (order_number, ship_date, scheduled_at, quantity, allocated_at, cut_at, shipped_at)
-             VALUES ($1, $2, $3, 1, $4, $5, $6)`,
+               (order_number, ship_date, scheduled_at, allocated_at, cut_at, shipped_at)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             orderNumber,
             shipDate,

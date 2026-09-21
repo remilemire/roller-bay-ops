@@ -26,8 +26,9 @@ test('admins add, schedule, ship, and delete work orders', async ({
   await page.getByRole('button', { name: 'Add order' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Order number').fill('104900');
-  await dialog.getByLabel('Blinds').fill('8');
-  // An order gets its ship date later, once fabric is allocated for it.
+  // Its blinds are entered where its fabric is allocated, and its ship date
+  // follows that.
+  await expect(dialog.getByLabel('Blinds')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Ship date' })).toHaveCount(
     0,
   );
@@ -37,7 +38,7 @@ test('admins add, schedule, ship, and delete work orders', async ({
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',
-      body: { orderNumber: '104900', quantity: 8, note: 'Motorised' },
+      body: { orderNumber: '104900', note: 'Motorised' },
     },
   ]);
   const added = page.getByRole('row', { name: /104900/ });

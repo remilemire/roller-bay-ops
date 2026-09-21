@@ -6,16 +6,16 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-// Allocation errors about the order carry an issue on `orderNumber` so the
-// form can show them beside that field.
+// Allocation errors about the order carry an issue on `workOrderId`, the
+// field that named it, so the form can show them beside its order picker.
 export const orderNotFound = (cause?: unknown) =>
   new NotFoundException(
     {
-      message: 'There is no work order with this number. Create it first.',
+      message: 'This work order does not exist. Create it first.',
       issues: [
         {
           code: 'order_not_found',
-          path: ['orderNumber'],
+          path: ['workOrderId'],
           message: 'No such work order.',
         },
       ],
@@ -29,7 +29,7 @@ export const orderAlreadyAllocated = (cause?: unknown) =>
       issues: [
         {
           code: 'order_already_allocated',
-          path: ['orderNumber'],
+          path: ['workOrderId'],
           message: 'Already allocated.',
         },
       ],

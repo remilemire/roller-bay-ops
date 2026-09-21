@@ -157,8 +157,7 @@ it('offers no sheet for drafts or finished allocations', () => {
     allocationDraftSchema.parse({
       ...allocation,
       state: 'draft',
-      orderNumber: null,
-      data: { orderNumber: null, plan: { cuts: [] } },
+      data: { plan: { cuts: [] } },
     }),
   );
   expect(screen.getByText(/Drafts have no cutting sheet/)).toBeInTheDocument();

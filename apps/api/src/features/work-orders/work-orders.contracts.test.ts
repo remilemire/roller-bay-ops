@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import {
   createWorkOrderSchema,
+  saveWorkOrderLinesSchema,
   workOrderQuerySchema,
   updateWorkOrderSchema,
 } from '@roller-bay/shared/work-orders';
 
 test('work order contracts require a six-digit number, and a ship date is a real weekday set later', () => {
-  const input = { orderNumber: ' 104801 ', quantity: 12 };
+  const input = { orderNumber: ' 104801 ' };
   assert.deepEqual(createWorkOrderSchema.parse(input), {
     orderNumber: '104801',
-    quantity: 12,
     note: null,
   });
   for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
@@ -47,27 +48,39 @@ test('work order contracts require a six-digit number, and a ship date is a real
   });
 });
 
-test('work orders state a whole, positive number of blinds', () => {
+test("an order's blind count is derived from its blinds, never entered", () => {
   const input = { orderNumber: '104801' };
-  assert.equal(createWorkOrderSchema.safeParse(input).success, false);
-  for (const quantity of [0, -3, 1.5, '12', null, 1000001])
-    assert.equal(
-      createWorkOrderSchema.safeParse({ ...input, quantity }).success,
-      false,
-    );
+  assert.equal(createWorkOrderSchema.safeParse(input).success, true);
   assert.equal(
-    createWorkOrderSchema.parse({ ...input, quantity: 1 }).quantity,
-    1,
+    createWorkOrderSchema.safeParse({ ...input, quantity: 12 }).success,
+    false,
   );
-  // On its own, a quantity is a change.
-  assert.deepEqual(
-    updateWorkOrderSchema.parse({ expectedRevision: 1, quantity: 14 }),
-    { expectedRevision: 1, quantity: 14 },
+  assert.equal(
+    updateWorkOrderSchema.safeParse({ expectedRevision: 1, quantity: 14 })
+      .success,
+    false,
   );
+  // Every field of a blind is required, and its ids are unique in the list.
+  const line = {
+    id: randomUUID(),
+    fabricColorId: randomUUID(),
+    widthMm: 1200.5,
+    lengthMm: 1800,
+    quantity: 2,
+  };
+  const save = (lines: unknown[]) =>
+    saveWorkOrderLinesSchema.safeParse({ expectedRevision: 1, lines }).success;
+  assert.equal(save([line]), true);
+  assert.equal(save([]), true);
+  assert.equal(save([line, line]), false);
+  for (const field of ['fabricColorId', 'widthMm', 'lengthMm', 'quantity'])
+    assert.equal(save([{ ...line, [field]: undefined }]), false);
+  for (const invalid of [{ widthMm: 0 }, { lengthMm: 1.0001 }, { quantity: 0 }])
+    assert.equal(save([{ ...line, ...invalid }]), false);
 });
 
 test('work order notes are trimmed, bounded, and blank notes clear the note', () => {
-  const input = { orderNumber: '104801', quantity: 12 };
+  const input = { orderNumber: '104801' };
   const note = (value: string | null) =>
     createWorkOrderSchema.parse({ ...input, note: value }).note;
   assert.equal(note('  Rush  '), 'Rush');

@@ -287,9 +287,23 @@ test('allocation optimization is a preview until the shared draft is confirmed',
 }, testInfo) => {
   const state = await mockApi(page);
   await page.goto('/allocations/new');
-  // The order number is picked from the work orders with no allocation yet.
-  await page.getByLabel('Order number', { exact: true }).click();
-  await page.getByRole('option', { name: '104877 · 1 blind' }).click();
+  // Until an order is chosen there are no blinds to enter or plan.
+  await expect(
+    page.getByRole('button', { name: 'Add blind', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText('Choose the work order to plan.')).toBeVisible();
+  // The order is picked from the work orders with no allocation yet, or
+  // made on the spot: an option of its own, and a request of its own.
+  const orderNumber = page.getByRole('combobox', { name: 'Order number' });
+  await orderNumber.click();
+  await expect(page.getByRole('option', { name: /^104877/ })).toBeVisible();
+  await orderNumber.fill('104950');
+  expect(state.orderRequests).toEqual([]);
+  await page.getByRole('option', { name: 'Create order 104950' }).click();
+  await expect(orderNumber).toHaveValue('104950');
+  expect(state.orderRequests).toEqual([
+    { method: 'POST', body: { orderNumber: '104950', note: null } },
+  ]);
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();
   await page
@@ -301,9 +315,26 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     page.getByLabel(/Drop allowance|Edge trim|Minimum reusable/),
   ).toHaveCount(0);
   await page.getByLabel('Quantity', { exact: true }).fill('1');
-  await page
-    .getByRole('button', { name: 'Generate plan', exact: true })
-    .click();
+  // The blinds are the order's, saved to it by their own request; the plan
+  // waits for them.
+  const generate = page.getByRole('button', {
+    name: 'Generate plan',
+    exact: true,
+  });
+  await expect(generate).toBeDisabled();
+  await page.getByRole('button', { name: 'Save blinds', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Blinds saved', exact: true }),
+  ).toBeVisible();
+  expect(state.orderRequests.at(-1)).toMatchObject({
+    method: 'PUT',
+    body: {
+      expectedRevision: 1,
+      lines: [{ widthMm: 1371.6, lengthMm: 2286, quantity: 1 }],
+    },
+  });
+  expect(state.allocationRequests).toEqual([]);
+  await generate.click();
   await expect(
     page.getByText('Valid cutting plan', { exact: true }),
   ).toBeVisible();
@@ -341,7 +372,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     .getByRole('button', { name: 'Confirm allocation', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: '104877', exact: true }),
+    page.getByRole('heading', { name: '104950', exact: true }),
   ).toBeVisible();
   expect(state.allocationRequests.at(-1)).toEqual({
     path: `/allocations/${ids.allocation}/submit`,

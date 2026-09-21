@@ -19,6 +19,7 @@ export function Lookup({
   load,
   selectedLabel,
   error,
+  create,
 }: {
   label: string;
   value: string;
@@ -31,6 +32,18 @@ export function Lookup({
   ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
   selectedLabel?: string;
   error?: string;
+  /**
+   * For lists whose records can be made on the spot: a last option, labelled
+   * from what was typed and the matches shown, that makes the record and
+   * selects it. It is an option the user picks, never a side effect of typing.
+   */
+  create?: {
+    label: (
+      term: string,
+      items: { id: string; label: string }[],
+    ) => string | null;
+    run: (term: string) => Promise<{ id: string; label: string }>;
+  };
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -49,15 +62,26 @@ export function Lookup({
     queryFn: ({ signal }) => load(search, 1, signal),
     placeholderData: keepPreviousData,
   });
-  const items = result.data?.items ?? [];
+  const found = result.data?.items ?? [];
   const total = result.data?.total ?? 0;
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string>();
   const selected = value
     ? (picked[value] ??
-      items.find((item) => item.id === value)?.label ??
+      found.find((item) => item.id === value)?.label ??
       selectedLabel ??
       `Selected · ${value.slice(0, 8).toUpperCase()}`)
     : '';
   const query = term.trim();
+  // Offered only for the results of the term as typed, not of an earlier one.
+  const createLabel =
+    create && query && query === search && result.data && !result.isFetching
+      ? create.label(query, found)
+      : null;
+  const CREATE = ':create';
+  const items = createLabel
+    ? [...found, { id: CREATE, label: createLabel }]
+    : found;
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
@@ -76,9 +100,25 @@ export function Lookup({
     setTerm('');
   }
   function pick(item: { id: string; label: string }) {
+    if (item.id === CREATE) return void make();
     setPicked((known) => ({ ...known, [item.id]: item.label }));
     onChange(item.id);
     close();
+  }
+  async function make() {
+    setCreating(true);
+    setCreateError(undefined);
+    try {
+      const made = await create!.run(query);
+      await result.refetch();
+      pick(made);
+    } catch (failure) {
+      setCreateError(
+        failure instanceof Error ? failure.message : 'Could not create it.',
+      );
+    } finally {
+      setCreating(false);
+    }
   }
   function clear() {
     onChange('');
@@ -194,7 +234,11 @@ export function Lookup({
               id={`${id}-option-${index}`}
               role="option"
               aria-selected={item.id === value}
-              className={cn(index === active && 'is-active')}
+              aria-disabled={item.id === CREATE && creating ? true : undefined}
+              className={cn(
+                index === active && 'is-active',
+                item.id === CREATE && 'combobox-create',
+              )}
               onMouseEnter={() => setActive(index)}
               onClick={() => pick(item)}
             >
@@ -208,6 +252,7 @@ export function Lookup({
           )}
         </ul>
       )}
+      {createError && <small role="alert">{createError}</small>}
       {result.error ? (
         <small role="alert">
           Could not load options.{' '}

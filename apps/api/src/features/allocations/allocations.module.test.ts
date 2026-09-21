@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -9,7 +10,6 @@ import { AllocationsModule } from './allocations.module.js';
 import { AllocationsController } from './allocations.controller.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
 import { SolverClient } from '../../solver/solver.client.js';
-import { fixture } from './optimizer/optimizer.fixtures.js';
 
 test('allocation module starts without solver credentials and only optimization reports unavailable', async () => {
   const module = await Test.createTestingModule({
@@ -29,11 +29,10 @@ test('allocation module starts without solver credentials and only optimization 
   try {
     assert.ok(module.get(AllocationsController));
     assert.equal(module.get(SolverClient), null);
-    const { requirements } = fixture();
     await assert.rejects(
       module
         .get(AllocationPlanningService)
-        .optimize({ requirements, maxTimeSeconds: 5 }),
+        .optimize({ workOrderId: randomUUID(), maxTimeSeconds: 5 }),
       ServiceUnavailableException,
     );
   } finally {

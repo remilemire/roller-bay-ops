@@ -8,7 +8,6 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
-  allocationDraftDataSchema,
   allocationDraftInputSchema,
   allocationIdempotencyKeySchema,
   completeAllocationSchema,
@@ -25,16 +24,7 @@ import { fixture } from './optimizer/optimizer.fixtures.js';
 function submission() {
   const context = fixture();
   return {
-    orderNumber: ' 104801 ',
-    requirements: context.requirements.map(
-      ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
-        id,
-        fabricColorId,
-        widthMm,
-        lengthMm,
-        quantity,
-      }),
-    ),
+    workOrderId: randomUUID().toUpperCase(),
     plan: {
       cuts: [
         {
@@ -46,64 +36,58 @@ function submission() {
   };
 }
 
-test('allocation contracts normalize keys, require revisions, and reject client-authoritative stock balances', () => {
+test('allocation contracts name a work order, carry only the plan, and require revisions', () => {
   const input = submission();
-  assert.equal(createAllocationSchema.parse(input).orderNumber, '104801');
-  for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
-    assert.equal(
-      createAllocationSchema.safeParse({ ...input, orderNumber }).success,
-      false,
-    );
-  // Drafts name an existing order or none. Stored drafts and their audit
-  // snapshots may still hold the partial numbers older versions accepted.
+  const { workOrderId, plan } = input;
   assert.equal(
-    allocationDraftInputSchema.parse({ orderNumber: ' 104801 ' }).orderNumber,
-    '104801',
+    createAllocationSchema.parse(input).workOrderId,
+    workOrderId.toLowerCase(),
   );
-  assert.equal(allocationDraftInputSchema.parse({}).orderNumber, null);
-  for (const orderNumber of ['1048', 'RB-1']) {
+  // The blinds are the order's: a request neither carries them nor names the
+  // order by its number.
+  for (const extra of [
+    { orderNumber: '104801' },
+    { requirements: fixture().requirements },
+    { stockItems: [] },
+  ])
     assert.equal(
-      allocationDraftInputSchema.safeParse({ orderNumber }).success,
+      createAllocationSchema.safeParse({ ...input, ...extra }).success,
       false,
     );
-    assert.equal(
-      allocationDraftDataSchema.parse({ orderNumber }).orderNumber,
-      orderNumber,
-    );
-  }
-  assert.equal(replaceAllocationSchema.safeParse(input).success, false);
+  assert.equal(createAllocationSchema.safeParse({ plan }).success, false);
+  // A draft is an unfinished plan for an order, so it names one too.
+  assert.deepEqual(allocationDraftInputSchema.parse({ workOrderId }), {
+    workOrderId: workOrderId.toLowerCase(),
+    plan: { cuts: [] },
+  });
+  assert.equal(allocationDraftInputSchema.safeParse({}).success, false);
+  assert.equal(
+    allocationDraftInputSchema.safeParse({ workOrderId, requirements: [] })
+      .success,
+    false,
+  );
+  // A replan stays with its order and needs the revision it replaces.
+  assert.equal(replaceAllocationSchema.safeParse({ plan }).success, false);
+  assert.equal(
+    replaceAllocationSchema.safeParse({ plan, expectedRevision: 1 }).success,
+    true,
+  );
   assert.equal(
     replaceAllocationSchema.safeParse({ ...input, expectedRevision: 1 })
       .success,
-    true,
-  );
-  assert.equal(
-    createAllocationSchema.safeParse({ ...input, stockItems: [] }).success,
     false,
   );
-  const { requirements } = input;
-  assert.equal(
-    optimizeAllocationSchema.safeParse({
-      requirements,
-      allocationId: randomUUID(),
-    }).success,
-    false,
-  );
-  assert.equal(
-    optimizeAllocationSchema.safeParse({
-      requirements,
-      expectedRevision: 1,
-    }).success,
-    false,
-  );
-  assert.equal(
-    optimizeAllocationSchema.safeParse({
-      requirements,
-      allocationId: randomUUID(),
-      expectedRevision: 1,
-    }).success,
-    true,
-  );
+  // A preview of an existing allocation names it and its revision together.
+  for (const [extra, valid] of [
+    [{}, true],
+    [{ allocationId: randomUUID() }, false],
+    [{ expectedRevision: 1 }, false],
+    [{ allocationId: randomUUID(), expectedRevision: 1 }, true],
+  ] as const)
+    assert.equal(
+      optimizeAllocationSchema.safeParse({ workOrderId, ...extra }).success,
+      valid,
+    );
   const key = randomUUID();
   assert.equal(allocationIdempotencyKeySchema.parse(key.toUpperCase()), key);
 });
@@ -193,13 +177,13 @@ test('allocation storage errors preserve domain responses and do not expose driv
   for (const [code, constraint, status, issue] of [
     [
       '23503',
-      'allocations_order_number_work_orders_order_number_fk',
+      'allocations_work_order_id_work_orders_id_fk',
       404,
       'order_not_found',
     ],
     [
       '23505',
-      'allocations_live_order_number_unique',
+      'allocations_live_work_order_unique',
       409,
       'order_already_allocated',
     ],
@@ -214,7 +198,7 @@ test('allocation storage errors preserve domain responses and do not expose driv
         assert.deepEqual((error.getResponse() as { issues: object[] }).issues, [
           {
             code: issue,
-            path: ['orderNumber'],
+            path: ['workOrderId'],
             message: (error.getResponse() as { issues: { message: string }[] })
               .issues[0]!.message,
           },
@@ -234,7 +218,8 @@ test('allocation storage errors preserve domain responses and do not expose driv
 test('allocation revisions reject stale and terminal-state writes', () => {
   const row: AllocationRecord = {
     id: randomUUID(),
-    orderNumber: 'A',
+    workOrderId: randomUUID(),
+    orderNumber: '104801',
     createdByUserId: randomUUID(),
     createdAt: new Date(),
     updatedAt: new Date(),

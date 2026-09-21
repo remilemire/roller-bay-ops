@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { stockSnapshotSchema } from '../stock-items/index.js';
 import { stockReceiptRecordSchema } from '../stock-receipts/index.js';
-import { allocationRecordSchema } from '../allocations/index.js';
+import {
+  allocationDetailSchema,
+  allocationDraftSchema,
+} from '../allocations/index.js';
 import { workOrderDetailSchema } from '../work-orders/index.js';
 export const auditRecordTypeSchema = z.enum([
   'stock-items',
@@ -15,7 +18,14 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
     type: z.literal('stock-receipts'),
     value: stockReceiptRecordSchema,
   }),
-  z.object({ type: z.literal('allocations'), value: allocationRecordSchema }),
+  z.object({
+    type: z.literal('allocations'),
+    // Snapshots recorded while allocations named their order by number only.
+    value: z.discriminatedUnion('state', [
+      allocationDetailSchema.partial({ workOrderId: true }),
+      allocationDraftSchema.partial({ workOrderId: true }),
+    ]),
+  }),
   z.object({
     type: z.literal('work-orders'),
     // Snapshots recorded before orders had a creation time lack it, and only

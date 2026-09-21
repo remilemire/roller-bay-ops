@@ -30,7 +30,8 @@ import { allocationSummary } from './allocations.presenter.js';
 
 const header = (): AllocationRecord => ({
   id: randomUUID(),
-  orderNumber: null,
+  workOrderId: randomUUID(),
+  orderNumber: '104801',
   createdByUserId: randomUUID(),
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -58,7 +59,6 @@ test('allocation drafts preserve missing values and reject invalid supplied fiel
     requirements: [{ id }],
     plan: { cuts: [{ items: [{ requirementId: id }] }, {}] },
   });
-  assert.equal(data.orderNumber, null);
   assert.equal(data.requirements[0]!.quantity, null);
   assert.equal(data.requirements[0]!.lengthAllowanceMm, null);
   assert.equal(data.settings.edgeTrimMm, null);
@@ -132,7 +132,7 @@ test('all reservation and shortage SQL excludes unconfirmed allocations', async 
 });
 
 test('incomplete allocation draft cannot reach reservation or confirmation writes', async () => {
-  const draft = { ...header(), orderNumber: '104801' };
+  const draft = header();
   let writes = 0;
   const repository = {
     withTransaction: async (
@@ -142,7 +142,6 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       ) => Promise<unknown>,
     ) => operation(repository, {}),
     findById: async () => draft,
-    requirements: async () => [],
     plan: async () => ({ cuts: [] }),
     replacePlan: async () => {
       writes++;
@@ -157,8 +156,9 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       writes++;
     },
   };
-  // An incomplete draft must not claim its order either.
+  // An incomplete draft reads its order's blinds, and must not claim it.
   const orders = {
+    lines: async () => ({ lines: [] }),
     allocate: async () => {
       writes++;
     },

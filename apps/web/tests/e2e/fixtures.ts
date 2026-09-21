@@ -6,6 +6,7 @@ import {
   type AllocationDraftInput,
 } from '@roller-bay/shared/allocations';
 import type { StockReceiptDraftData } from '@roller-bay/shared/stock-receipts';
+import type { WorkOrderLine } from '@roller-bay/shared/work-orders';
 import {
   defaultMeasurementUnits,
   type MeasurementUnits,
@@ -20,6 +21,7 @@ import {
   receipt,
   allocation,
   order,
+  orderLines,
 } from '../fixtures';
 export { ids } from '../fixtures';
 const teammate = {
@@ -30,8 +32,9 @@ const teammate = {
 };
 // Mirrors the server: rules come from configuration and each cut is as long
 // as its longest assigned drop plus that blind's allowance.
-function draftData(input: AllocationDraftInput) {
-  const requirements = input.requirements.map((item) => ({
+function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
+  // The blinds a plan assigns are its order's saved lines.
+  const requirements = lines.map((item) => ({
     ...item,
     lengthAllowanceMm: 254,
   }));
@@ -42,7 +45,6 @@ function draftData(input: AllocationDraftInput) {
     ]),
   );
   return {
-    ...input,
     settings: {
       edgeTrimMm: 25.4,
       minimumRemnantWidthMm: 1524,
@@ -99,7 +101,7 @@ export async function mockApi(
     allocation: structuredClone(allocation),
     completionRequests: [] as unknown[],
     orders: [
-      structuredClone(order),
+      { ...structuredClone(order), lines: structuredClone(orderLines) },
       // Not allocated yet, so the allocation editor offers it and it has no
       // ship date.
       {
@@ -113,6 +115,7 @@ export async function mockApi(
         note: null,
         status: 'new' as const,
         allocatedAt: null,
+        lines: [] as WorkOrderLine[],
       },
     ],
     orderRequests: [] as { method: string; body: unknown }[],
@@ -229,18 +232,30 @@ export async function mockApi(
         shipDate: null,
         scheduledAt: null,
         allocatedAt: null,
+        quantity: 0,
+        lines: [] as WorkOrderLine[],
         revision: 1,
       };
       state.orders.push(created);
       return send(created, 201);
     }
     if (path.startsWith('/work-orders/')) {
-      const index = state.orders.findIndex((row) => path.endsWith(row.id));
+      const index = state.orders.findIndex((row) => path.includes(row.id));
       const found = state.orders[index];
       if (!found) return send({ message: 'Order not found.' }, 404);
       if (method === 'GET') return send(found);
       const body = request.postDataJSON();
       state.orderRequests.push({ method, body });
+      if (path.endsWith('/lines')) {
+        const lines: WorkOrderLine[] = body.lines;
+        state.orders[index] = {
+          ...found,
+          lines,
+          quantity: lines.reduce((total, line) => total + line.quantity, 0),
+          revision: body.expectedRevision + 1,
+        };
+        return send(state.orders[index]);
+      }
       if (method === 'DELETE') {
         state.orders.splice(index, 1);
         return send(null, 204);
@@ -446,8 +461,10 @@ export async function mockApi(
       return send(state.allocationDraft ?? state.allocation);
     if (path.startsWith('/allocations') && method !== 'GET')
       state.allocationRequests.push({ path, body: request.postDataJSON() });
+    const orderOf = (workOrderId: string) =>
+      state.orders.find((row) => row.id === workOrderId)!;
     if (path === '/allocations/optimize') {
-      const requirement = request.postDataJSON().requirements[0];
+      const requirement = orderOf(request.postDataJSON().workOrderId).lines[0]!;
       return send(
         allocationOptimizationSchema.parse({
           status: 'feasible',
@@ -495,32 +512,38 @@ export async function mockApi(
       );
     }
     if (path === `/allocations/${ids.allocation}/draft` && method === 'PUT') {
-      const data = draftData(request.postDataJSON().data);
+      const input: AllocationDraftInput = request.postDataJSON().data;
+      const named = orderOf(input.workOrderId);
       state.allocationDraft = allocationDraftSchema.parse({
         ...state.allocationDraft,
-        orderNumber: data.orderNumber,
-        data,
+        workOrderId: named.id,
+        orderNumber: named.orderNumber,
+        data: draftData(input, named.lines),
         revision: (state.allocationDraft?.revision ?? 0) + 1,
       });
       return send(state.allocationDraft);
     }
     if (path === `/allocations/${ids.allocation}/submit`) {
-      const data = state.allocationDraft!.data;
+      const { data, workOrderId, orderNumber } = state.allocationDraft!;
       state.allocation = allocationDetailSchema.parse({
         ...allocation,
         ...data,
+        workOrderId,
+        orderNumber,
         revision: state.allocationDraft!.revision + 1,
       });
       state.allocationDraft = null;
       return send(state.allocation);
     }
     if (path === '/allocations/drafts') {
-      const data = draftData(request.postDataJSON().data);
+      const input: AllocationDraftInput = request.postDataJSON().data;
+      const named = orderOf(input.workOrderId);
       state.allocationDraft = allocationDraftSchema.parse({
         ...allocation,
         state: 'draft',
-        orderNumber: data.orderNumber,
-        data,
+        workOrderId: named.id,
+        orderNumber: named.orderNumber,
+        data: draftData(input, named.lines),
       });
       return send(state.allocationDraft, 201);
     }

@@ -7,7 +7,11 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { WorkOrder, WorkOrderList } from '@roller-bay/shared/work-orders';
+import type {
+  WorkOrder,
+  WorkOrderDetail,
+  WorkOrderList,
+} from '@roller-bay/shared/work-orders';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
@@ -75,7 +79,10 @@ beforeEach(() => {
     .mockImplementation((id) =>
       queryOptions({
         queryKey: ['work-orders', id],
-        queryFn: async () => order,
+        queryFn: async (): Promise<WorkOrderDetail> => ({
+          ...order,
+          lines: [],
+        }),
       }),
     );
   // Monday 104790, Friday 104801 and 104820, and one order outside October.
@@ -163,10 +170,10 @@ it('offers the allocation editor only orders with no allocation yet', async () =
   expect(url.searchParams.get('status')).toBe('new');
   // The API caps the search at an order number's six characters.
   expect(url.searchParams.get('search')).toBe('104801');
-  // The option id is the order number the allocation stores.
+  // The option id is the order's id, which the allocation names.
   expect(result).toEqual({
     total: 1,
-    items: [{ id: '104801', label: '104801 · 14 blinds' }],
+    items: [{ id: order.id, label: '104801 · 14 blinds' }],
   });
 });
 
@@ -282,11 +289,8 @@ it('adds an order and shows rejected fields beside them', async () => {
   const number = dialog.getByLabelText(/Order number/);
   await user.type(number, '10-48x01');
   expect(number).toHaveValue('104801');
-  // The quantity is required and takes digits only; a blank is never zero.
-  const blinds = dialog.getByLabelText(/Blinds/);
-  expect(blinds).toBeRequired();
-  await user.type(blinds, '1x4');
-  expect(blinds).toHaveValue('14');
+  // Its blinds are entered where its fabric is allocated, and counted there.
+  expect(dialog.queryByLabelText(/Blinds/)).toBeNull();
 
   // An order has no ship date until fabric is allocated for it.
   expect(dialog.queryByRole('button', { name: 'Ship date' })).toBeNull();
@@ -300,7 +304,6 @@ it('adds an order and shows rejected fields beside them', async () => {
   expect(number).toHaveAccessibleDescription(/Already exists\./);
   expect(createOrder).toHaveBeenLastCalledWith({
     orderNumber: '104801',
-    quantity: 14,
     note: 'Rush',
   });
 
@@ -327,9 +330,6 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
   // The order number is fixed once created, and the date has its own dialog.
   expect(editor.queryByLabelText(/Order number/)).toBeNull();
   expect(editor.queryByRole('button', { name: 'Ship date' })).toBeNull();
-  // So is the quantity, while the order has an allocation.
-  expect(editor.getByLabelText(/Blinds/)).toBeDisabled();
-  expect(editor.getByLabelText(/Blinds/)).toHaveValue('14');
   await user.clear(editor.getByLabelText('Note'));
   await user.click(editor.getByRole('button', { name: 'Save order' }));
   await waitFor(() =>

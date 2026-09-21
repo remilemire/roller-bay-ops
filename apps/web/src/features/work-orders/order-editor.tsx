@@ -7,7 +7,6 @@ import { z } from 'zod';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
 import {
   orderNumberSchema,
-  orderQuantitySchema,
   type WorkOrder,
 } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
@@ -20,21 +19,18 @@ import { createOrder, workOrdersKey, updateOrder } from './work-orders.api';
 
 const formSchema = z.object({
   orderNumber: orderNumberSchema,
-  // Typed as text; a blank is a missing quantity, never zero.
-  quantity: z
-    .string()
-    .min(1, 'Enter the number of blinds.')
-    .transform(Number)
-    .pipe(orderQuantitySchema),
   note: z.string().trim().max(1000),
 });
 type OrderFields = z.input<typeof formSchema>;
 type OrderForm = z.output<typeof formSchema>;
-const FIELDS = ['orderNumber', 'quantity', 'note'] as const;
+const FIELDS = ['orderNumber', 'note'] as const;
 const fieldName = (issue: ErrorIssue) =>
   FIELDS.find((field) => field === issuePath(issue)) ?? null;
 
-/** An order's own details. Its ship date is set once fabric is allocated. */
+/**
+ * An order's number and note. Its blinds are entered where its fabric is
+ * allocated, and its ship date is set once that is done.
+ */
 export function OrderEditor({
   order,
   close,
@@ -49,21 +45,16 @@ export function OrderEditor({
     resolver: zodResolver(formSchema),
     defaultValues: {
       orderNumber: opened?.orderNumber ?? '',
-      quantity: opened ? String(opened.quantity) : '',
       note: opened?.note ?? '',
     },
   });
   const values = useWatch({ control: form.control }) as OrderFields;
-  // The allocation's blinds were checked against the quantity, so it is fixed
-  // until that allocation is cancelled or replaced.
-  const allocated = !!opened?.allocatedAt;
   const client = useQueryClient();
   const mutation = useMutation({
     mutationFn: (data: OrderForm) =>
       opened
         ? updateOrder(opened.id, {
             expectedRevision: opened.revision,
-            quantity: allocated ? undefined : data.quantity,
             note: data.note,
           })
         : createOrder(data),
@@ -88,7 +79,7 @@ export function OrderEditor({
       description={
         opened
           ? undefined
-          : 'The order number cannot be changed later. A ship date follows once fabric is allocated.'
+          : 'The order number cannot be changed later. Its blinds are entered when allocating fabric, and a ship date follows.'
       }
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
@@ -105,21 +96,6 @@ export function OrderEditor({
               hint="6 digits"
             />
           )}
-          <TextField
-            label="Blinds"
-            value={values.quantity}
-            onChange={(v) => set('quantity', v.replace(/\D/g, ''))}
-            error={errors.quantity?.message}
-            required
-            disabled={allocated}
-            maxLength={7}
-            inputMode="numeric"
-            hint={
-              allocated
-                ? 'Fixed while the order has an allocation.'
-                : 'Total on the order'
-            }
-          />
           <TextField
             label="Note"
             value={values.note}

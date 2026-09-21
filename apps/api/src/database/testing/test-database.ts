@@ -5,7 +5,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
 
 // The same depth from src/, .test-dist/ and dist/.
-const migrationsFolder = fileURLToPath(
+export const migrationsFolder = fileURLToPath(
   new URL('../../../drizzle', import.meta.url),
 );
 
@@ -15,11 +15,17 @@ const migrationsFolder = fileURLToPath(
  * migrations qualify their objects with `public`, which rules out a schema
  * inside a shared database.
  *
+ * `migrated: false` leaves it empty, for the test that applies the migrations
+ * itself to check how they move existing rows.
+ *
  * Only a database this call named is ever dropped, so `adminUrl` may be the
  * development server: its own database is used for one CREATE and one DROP.
  * A run killed by a signal leaks its database; docs/testing.md has the cleanup.
  */
-export async function createTestDatabase(adminUrl: string) {
+export async function createTestDatabase(
+  adminUrl: string,
+  { migrated = true } = {},
+) {
   const name = `rb_test_${randomBytes(16).toString('hex')}`;
   const admin = async (statement: string) => {
     const pool = new Pool({ connectionString: adminUrl, max: 1 });
@@ -34,6 +40,7 @@ export async function createTestDatabase(adminUrl: string) {
   await admin(`CREATE DATABASE "${name}"`);
   const target = new URL(adminUrl);
   target.pathname = `/${name}`;
+  if (!migrated) return { url: target.href, drop };
   const pool = new Pool({ connectionString: target.href, max: 1 });
   try {
     await migrate(drizzle(pool), { migrationsFolder });

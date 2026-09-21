@@ -16,11 +16,13 @@ function Harness({
   load,
   onChange = () => {},
   after,
+  create,
 }: {
   initial?: string;
   load: (search: string) => Promise<{ items: typeof colors; total: number }>;
   onChange?: (value: string) => void;
   after?: React.ReactNode;
+  create?: React.ComponentProps<typeof Lookup>['create'];
 }) {
   const [value, setValue] = useState(initial);
   const [client] = useState(
@@ -37,6 +39,7 @@ function Harness({
         }}
         queryKey={['colors']}
         load={load}
+        create={create}
       />
       {after}
     </QueryClientProvider>
@@ -162,4 +165,44 @@ it('lets Escape close an open list inside a dialog before it closes the dialog',
   expect(onOpenChange).not.toHaveBeenCalled();
   await user.keyboard('{Escape}');
   expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it('offers to create what was typed as an option of its own, and does nothing until it is picked', async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  const run = vi
+    .fn<(term: string) => Promise<{ id: string; label: string }>>()
+    .mockRejectedValueOnce(new Error('A color with this code already exists.'))
+    .mockImplementation(async (term) => ({ id: 'new', label: term }));
+  render(
+    <Harness
+      load={filtering}
+      onChange={onChange}
+      create={{
+        // Only a whole code that matches nothing can be created.
+        label: (term, items) =>
+          /^[A-Z]\d-\d{3}$/.test(term) && !items.length
+            ? `Create ${term}`
+            : null,
+        run,
+      }}
+    />,
+  );
+  const box = screen.getByRole('combobox', { name: 'Fabric color' });
+  await user.type(box, 'C1');
+  await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1));
+  expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
+  await user.type(box, '-999');
+  const option = await screen.findByRole('option', { name: 'Create C1-999' });
+  // Typing alone creates nothing.
+  expect(run).not.toHaveBeenCalled();
+  await user.click(option);
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'A color with this code already exists.',
+  );
+  expect(onChange).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('option', { name: 'Create C1-999' }));
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith('new'));
+  expect(run).toHaveBeenLastCalledWith('C1-999');
+  expect(box).toHaveValue('C1-999');
 });
