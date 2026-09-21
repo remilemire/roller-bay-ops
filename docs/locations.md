@@ -28,7 +28,7 @@ Zone names are trimmed and limited to 1–120 characters. Section and level labe
 
 Admins reorder zones, sections, and levels by dragging their row handles. Sibling rows animate into place; the dragged branch retains its children. Handles also support Space to pick up/drop, Up/Down to move, and Escape to cancel. Reduced-motion preferences disable the transitions. Forms do not expose numeric ordering, and editing a label preserves its saved order.
 
-Zones and child lists support loading more siblings before dragging across page boundaries. Zone reordering is disabled during search. Rows stay within their current parent, and failed saves restore the server order and display an error.
+Zones and child lists support loading more siblings before dragging across page boundaries. The page passes its search to every branch, and reordering is disabled during search because a branch then lists only some of its siblings. Rows stay within their current parent, and failed saves restore the server order and display an error.
 
 `POST <base path>/:id/move` accepts `{ targetId, position: "before" | "after" }` and returns 204. It requires admin/owner access and the configured Origin. The server orders the complete sibling list, including unloaded rows, and normalizes its internal `sortOrder` values in one transaction. A short table write lock serializes moves with other moves and existing CRUD writes; readers remain unblocked. A missing source returns 404; a missing destination or destination in another parent returns 409. Repeating a placement leaves the row adjacent to the same target.
 

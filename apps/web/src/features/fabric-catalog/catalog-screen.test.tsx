@@ -6,9 +6,9 @@ import { CatalogScreen } from './catalog-screen';
 import { listCatalog, saveCatalog } from './catalog.api';
 import { ApiError } from '@/lib/api';
 
-const state = vi.hoisted(() => ({ canManage: true }));
+const state = vi.hoisted(() => ({ canManage: true, search: '' }));
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams({ search: state.search }),
   usePathname: () => '/fabric-catalog',
   useRouter: () => ({ replace: vi.fn() }),
 }));
@@ -50,6 +50,7 @@ const color = {
 };
 beforeEach(() => {
   state.canManage = true;
+  state.search = '';
   vi.mocked(listCatalog)
     .mockReset()
     .mockImplementation(async (kind, _search, page) => ({
@@ -175,4 +176,28 @@ it('allows employees to browse the hierarchy without management controls', async
   expect(
     screen.queryByRole('button', { name: /Add|Edit|Delete/ }),
   ).not.toBeInTheDocument();
+});
+it('searches every branch, opening a material found only by its colors', async () => {
+  state.search = 'ab-1';
+  showCatalog();
+  expect(await screen.findByText('AB-12')).toBeVisible();
+  for (const [kind, parentId] of [
+    ['manufacturers', ''],
+    ['materials', manufacturer.id],
+    ['colors', material.id],
+  ])
+    expect(listCatalog).toHaveBeenCalledWith(
+      kind,
+      'ab-1',
+      1,
+      expect.any(AbortSignal),
+      parentId,
+    );
+});
+it('leaves a material closed when the search found it by name', async () => {
+  state.search = 'black';
+  showCatalog();
+  expect(
+    await screen.findByRole('button', { name: 'Blackout material' }),
+  ).toHaveAttribute('aria-expanded', 'false');
 });

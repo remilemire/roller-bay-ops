@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   infiniteQueryOptions,
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQueryClient,
@@ -74,6 +75,8 @@ const treeQuery = (kind: CatalogKind, parentId: string, search: string) =>
       listCatalog(kind, search, pageParam, signal, parentId),
     getNextPageParam: (last) =>
       last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    // Keep the rows on screen while a typed search loads.
+    placeholderData: keepPreviousData,
   });
 export function CatalogScreen() {
   const params = useListParams();
@@ -94,6 +97,7 @@ export function CatalogScreen() {
   });
   const actions: TreeActions = {
     canManage,
+    search: params.search,
     edit: setEditing,
     remove: (kind, row) => {
       remove.reset();
@@ -113,7 +117,7 @@ export function CatalogScreen() {
       <SearchToolbar
         search={params.search}
         onSearch={(search) => params.set({ search })}
-        placeholder="Search manufacturers…"
+        placeholder="Search manufacturer, material or color…"
       />
       <section className="panel" aria-label="Catalog hierarchy">
         {query.isPending ? (
@@ -121,13 +125,7 @@ export function CatalogScreen() {
         ) : query.error ? (
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
         ) : !query.data.pages[0]!.total ? (
-          <Empty
-            title={
-              params.search
-                ? 'No matching manufacturers'
-                : 'No manufacturers yet'
-            }
-          >
+          <Empty title={params.search ? 'No matches' : 'No manufacturers yet'}>
             Add a manufacturer, then its materials and colors.
           </Empty>
         ) : (
@@ -179,6 +177,8 @@ export function CatalogScreen() {
 }
 type TreeActions = {
   canManage: boolean;
+  // Every branch lists only the rows the API matched to the search.
+  search: string;
   edit: (value: EditingCatalog) => void;
   remove: (kind: CatalogKind, row: CatalogRow) => void;
 };
@@ -211,7 +211,14 @@ function CatalogNode({
   const units = useMeasurementUnits();
   // Every open branch is a request on load and after each save. Materials
   // start closed so a full catalog stays well inside the API rate limit.
-  const [expanded, setExpanded] = useState(kind === 'manufacturers');
+  // A search opens a material that matched only through its colors.
+  const [toggled, setExpanded] = useState<boolean | null>(null);
+  const found = (name: string) =>
+    name.toLowerCase().includes(actions.search.toLowerCase());
+  const expanded =
+    toggled ??
+    (kind === 'manufacturers' ||
+      (!!actions.search && !found(row.name) && !found(row.manufacturer)));
   const childKind =
     kind === 'manufacturers'
       ? 'materials'
@@ -312,7 +319,7 @@ function CatalogChildren({
   parent: CatalogRow;
   actions: TreeActions;
 }) {
-  const query = useInfiniteQuery(treeQuery(kind, parent.id, ''));
+  const query = useInfiniteQuery(treeQuery(kind, parent.id, actions.search));
   if (query.isPending) return <Loading />;
   return (
     <>
@@ -328,7 +335,9 @@ function CatalogChildren({
       )}
       {query.data &&
         (query.data.pages[0]!.total === 0 ? (
-          <p className={styles.empty}>No {kind} yet.</p>
+          <p className={styles.empty}>
+            {actions.search ? `No matching ${kind}.` : `No ${kind} yet.`}
+          </p>
         ) : (
           <CatalogTree
             kind={kind}

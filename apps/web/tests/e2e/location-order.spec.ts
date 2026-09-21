@@ -213,7 +213,7 @@ test('hides numeric order fields and restricts reordering while searching', asyn
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.goto('/locations?search=Warehouse');
   await expect(handles(page).first()).toBeDisabled();
-  await expect(page.getByText('Clear search to reorder zones.')).toBeVisible();
+  await expect(page.getByText('Clear search to reorder.')).toBeVisible();
 });
 
 test('employees have no drag controls', async ({ page }) => {

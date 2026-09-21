@@ -50,7 +50,7 @@ All records include `id` and `createdAt` as an ISO timestamp. Material responses
 
 ## Browsing in the workspace
 
-The catalog page shows one tree: manufacturers, their materials, then each material's colors with thickness in the user's unit. Children load per branch through the `manufacturerId` and `materialId` list filters, 25 at a time with a load-more control. Manufacturers open by default; materials start closed so a large catalog does not request every color list on load and after each save. Search matches manufacturer names only.
+The catalog page shows one tree: manufacturers, their materials, then each material's colors with thickness in the user's unit. Children load per branch through the `manufacturerId` and `materialId` list filters, 25 at a time with a load-more control. Manufacturers open by default; materials start closed so a large catalog does not request every color list on load and after each save. The search is passed to every branch, so the tree shows the manufacturers, materials, and colors the API matched; a material found only through its colors opens by itself. Rows stay on screen while the next results load.
 
 Admins add a material or color from its parent row, which fixes the new record's parent. Editing a material or color can still move it to another parent. The catalog sorts by name or code, so unlike [locations](locations.md) there is no drag reordering.
 

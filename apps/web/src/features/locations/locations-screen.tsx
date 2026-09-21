@@ -19,6 +19,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQueryClient,
@@ -89,6 +90,8 @@ export function LocationsScreen() {
       listLocations('zones', params.search, pageParam, signal),
     getNextPageParam: (last) =>
       last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    // Keep the rows on screen while a typed search loads.
+    placeholderData: keepPreviousData,
   });
   const remove = useMutation({
     mutationFn: () => deleteLocation(deleting!.kind, deleting!.row.id),
@@ -99,6 +102,7 @@ export function LocationsScreen() {
   });
   const actions: TreeActions = {
     canManage,
+    search: params.search,
     edit: setEditing,
     remove: (kind, row) => {
       remove.reset();
@@ -118,7 +122,7 @@ export function LocationsScreen() {
       <SearchToolbar
         search={params.search}
         onSearch={(search) => params.set({ search })}
-        placeholder="Search zones…"
+        placeholder="Search zone, section or level…"
       />
       <section className="panel" aria-label="Location hierarchy">
         {query.isPending ? (
@@ -126,7 +130,7 @@ export function LocationsScreen() {
         ) : query.error ? (
           <ErrorNotice error={query.error} retry={() => void query.refetch()} />
         ) : !query.data.pages[0]!.total ? (
-          <Empty title={params.search ? 'No matching zones' : 'No zones yet'}>
+          <Empty title={params.search ? 'No matches' : 'No zones yet'}>
             Add a zone, then its sections and levels.
           </Empty>
         ) : (
@@ -138,7 +142,7 @@ export function LocationsScreen() {
           />
         )}
         {params.search && canManage && (
-          <p className={styles.empty}>Clear search to reorder zones.</p>
+          <p className={styles.empty}>Clear search to reorder.</p>
         )}
         {query.hasNextPage && (
           <Button
@@ -184,6 +188,8 @@ export function LocationsScreen() {
 }
 type TreeActions = {
   canManage: boolean;
+  // Every branch lists only the rows the API matched to the search.
+  search: string;
   edit: (value: EditingLocation) => void;
   remove: (kind: LocationKind, row: LocationRow) => void;
 };
@@ -458,12 +464,13 @@ function LocationChildren({
   actions: TreeActions;
 }) {
   const query = useInfiniteQuery({
-    queryKey: [...locationsKey, 'children', kind, parent.id],
+    queryKey: [...locationsKey, 'children', kind, parent.id, actions.search],
     initialPageParam: 1,
     queryFn: ({ signal, pageParam }) =>
-      listLocations(kind, '', pageParam, signal, parent.id),
+      listLocations(kind, actions.search, pageParam, signal, parent.id),
     getNextPageParam: (last) =>
       last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    placeholderData: keepPreviousData,
   });
   return (
     <>
@@ -483,13 +490,16 @@ function LocationChildren({
           )}
           {query.data &&
             (query.data.pages[0]!.total === 0 ? (
-              <p className={styles.empty}>No {kind} yet.</p>
+              <p className={styles.empty}>
+                {actions.search ? `No matching ${kind}.` : `No ${kind} yet.`}
+              </p>
             ) : (
               <LocationTree
                 kind={kind}
                 rows={query.data.pages.flatMap((page) => page.items)}
                 actions={actions}
-                reorderDisabled={query.isFetching}
+                // A search lists only some siblings, which cannot be ordered.
+                reorderDisabled={!!actions.search || query.isFetching}
               />
             ))}
           {query.hasNextPage && (

@@ -6,9 +6,9 @@ import { LocationsScreen } from './locations-screen';
 import { listLocations, saveLocation } from './locations.api';
 import { ApiError } from '@/lib/api';
 
-const state = vi.hoisted(() => ({ canManage: true }));
+const state = vi.hoisted(() => ({ canManage: true, search: '' }));
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams({ search: state.search }),
   usePathname: () => '/locations',
   useRouter: () => ({ replace: vi.fn() }),
 }));
@@ -43,6 +43,7 @@ const level = {
 };
 beforeEach(() => {
   state.canManage = true;
+  state.search = '';
   vi.mocked(listLocations)
     .mockReset()
     .mockImplementation(async (kind, _search, page) => ({
@@ -176,4 +177,22 @@ it('allows employees to browse the hierarchy without management controls', async
   expect(
     screen.queryByRole('button', { name: /Add|Edit|Delete/ }),
   ).not.toBeInTheDocument();
+});
+it('searches every branch and reorders none of them', async () => {
+  state.search = 'top';
+  showLocations();
+  await screen.findByText('Top');
+  for (const [kind, parentId] of [
+    ['sections', zone.id],
+    ['levels', section.id],
+  ])
+    expect(listLocations).toHaveBeenCalledWith(
+      kind,
+      'top',
+      1,
+      expect.any(AbortSignal),
+      parentId,
+    );
+  for (const handle of screen.getAllByRole('button', { name: /^Reorder / }))
+    expect(handle).toBeDisabled();
 });
