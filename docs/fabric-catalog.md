@@ -65,8 +65,6 @@ Admins add a material or color from its parent row, which fixes the new record's
 
 Deleting a manufacturer with materials, a material with colors, or a color referenced by stock items is blocked by foreign keys. There is no cascading deletion.
 
-## Setup and verification
-
-Apply the existing `0001_add_fabric_catalog.sql` migration with `npm run db:migrate` before using these endpoints against the application database. The endpoint implementation does not require another migration.
+## Verification
 
 `catalog.integration.test.ts`, part of `npm run test:integration` ([testing](testing.md)), exercises real session authorization and catalog CRUD in its own throwaway database. Coverage includes all three resources, user write denial and owner write access, immediate role changes, invalid inputs, duplicate codes, missing references, blocked deletions, hierarchy responses, search, and pagination.

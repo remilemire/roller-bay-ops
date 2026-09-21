@@ -143,8 +143,6 @@ Contract tests run in the normal backend suite. Database/HTTP cases are part of 
 
 ## Shared typed drafts
 
-Apply `0010_typed_drafts` before running the draft APIs.
-
 Drafts are new allocations with `is_draft = true` and null `confirmed_at`, sharing the same header and child tables as confirmed allocations. No separate draft table or JSON draft payload is used. Any active employee can resume a draft; the original creator remains recorded. Active allocation edits and cutting-completion forms do not have drafts.
 
 | Method | Path                           | Behavior                                                                   |

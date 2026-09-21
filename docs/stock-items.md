@@ -1,6 +1,6 @@
 # Stock items API
 
-`StockItemsModule` owns physical rolls and retained remnants. The database table is `fabric_stock_items`; each item's UUID is also its external identifier. The table was introduced in `0005_add_stock_items.sql`. Apply `0006_add_stock_receipts.sql` for the [stock-receipt line reference](stock-receipts.md) before running the updated API.
+`StockItemsModule` owns physical rolls and retained remnants. The database table is `fabric_stock_items`; each item's UUID is also its external identifier. The table was introduced in `0005_add_stock_items.sql`.
 
 ## Endpoints and permissions
 

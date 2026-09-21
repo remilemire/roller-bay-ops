@@ -82,7 +82,7 @@ A successful update returns 200 with the public user profile, including `isActiv
 
 Deactivated users are redirected to the login screen with an account-deactivated message when completing Microsoft sign-in, before an authenticated session is created. Signing in never changes their activation status. The global guard also checks activation on every protected request, so existing sessions lose access on their next request. Logout remains available. Reactivation permits sign-in again; an existing unexpired session can also resume because the activation check is live, rather than permanent session revocation.
 
-The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DEFAULT true`, preserving access for existing users. Apply pending migrations before running the updated backend.
+The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DEFAULT true`, preserving access for existing users.
 
 ## Roles and ownership
 

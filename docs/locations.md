@@ -44,6 +44,6 @@ Deletion returns 204. Zones containing sections, sections containing locations, 
 
 ## Setup and tests
 
-Apply `0004_add_locations.sql` before using the endpoints or running integration tests. The endpoints require no additional migration. No zones, sections, or levels are seeded automatically.
+No zones, sections, or levels are seeded automatically.
 
 `locations.integration.test.ts` runs in its own throwaway database ([testing](testing.md)). It covers role and activation checks, Origin checks, CRUD, parent immutability, scoped uniqueness, concurrent duplicate creation, hierarchy names, sorting, pagination, literal search, and deletion protection.

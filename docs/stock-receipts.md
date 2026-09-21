@@ -2,7 +2,7 @@
 
 Stock receipts record fabric that has arrived. The purchase-order number is a reference to supplier paperwork; it is not the receipt identity. Submission saves a receipt and creates each physical roll in one database transaction. Shared drafts allow employees to save incomplete receipts before submission; submitted receipts remain immutable.
 
-The typed-draft schema is introduced by `0010_typed_drafts`; apply it before running this version of the API.
+The typed-draft schema is introduced by `0010_typed_drafts`.
 
 ## Endpoints and permissions
 
