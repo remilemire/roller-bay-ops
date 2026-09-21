@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  getTableColumns,
+  ilike,
+  or,
+} from 'drizzle-orm';
 import type {
   CreateFabricMaterial,
   UpdateFabricMaterial,
@@ -8,15 +17,33 @@ import type {
 import { DatabaseService } from '../../../database/database.service.js';
 import { fabricMaterials } from './fabric-materials.table.js';
 import { manufacturers } from '../manufacturers/manufacturers.table.js';
+import { fabricColors } from '../colors/fabric-colors.table.js';
 import { catalogQuery, containsPattern } from '../catalog.persistence.js';
 
 @Injectable()
 export class FabricMaterialsRepository {
   constructor(private readonly database: DatabaseService) {}
   list(query: FabricMaterialQuery) {
+    const pattern = containsPattern(query.search ?? '');
     const where = and(
+      // Match the material, its manufacturer, or any of its colors, so the
+      // catalog tree can search every level at once.
       query.search
-        ? ilike(fabricMaterials.name, containsPattern(query.search))
+        ? or(
+            ilike(fabricMaterials.name, pattern),
+            ilike(manufacturers.name, pattern),
+            exists(
+              this.database.db
+                .select({ id: fabricColors.id })
+                .from(fabricColors)
+                .where(
+                  and(
+                    eq(fabricColors.materialId, fabricMaterials.id),
+                    ilike(fabricColors.code, pattern),
+                  ),
+                ),
+            ),
+          )
         : undefined,
       query.manufacturerId
         ? eq(fabricMaterials.manufacturerId, query.manufacturerId)

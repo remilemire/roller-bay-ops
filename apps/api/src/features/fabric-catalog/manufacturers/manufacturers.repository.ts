@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  getTableColumns,
+  ilike,
+  or,
+} from 'drizzle-orm';
 import type {
   CreateManufacturer,
   UpdateManufacturer,
@@ -7,16 +16,40 @@ import type {
 } from '@roller-bay/shared/fabric-catalog';
 import { DatabaseService } from '../../../database/database.service.js';
 import { manufacturers } from './manufacturers.table.js';
-
+import { fabricMaterials } from '../materials/fabric-materials.table.js';
+import { fabricColors } from '../colors/fabric-colors.table.js';
 import { catalogQuery, containsPattern } from '../catalog.persistence.js';
 
 @Injectable()
 export class ManufacturersRepository {
   constructor(private readonly database: DatabaseService) {}
   list(query: ManufacturerQuery) {
+    const pattern = containsPattern(query.search ?? '');
     const where = and(
+      // The catalog tree searches every level at once, so a manufacturer
+      // also matches through any of its materials or their colors.
       query.search
-        ? ilike(manufacturers.name, containsPattern(query.search))
+        ? or(
+            ilike(manufacturers.name, pattern),
+            exists(
+              this.database.db
+                .select({ id: fabricMaterials.id })
+                .from(fabricMaterials)
+                .leftJoin(
+                  fabricColors,
+                  eq(fabricColors.materialId, fabricMaterials.id),
+                )
+                .where(
+                  and(
+                    eq(fabricMaterials.manufacturerId, manufacturers.id),
+                    or(
+                      ilike(fabricMaterials.name, pattern),
+                      ilike(fabricColors.code, pattern),
+                    ),
+                  ),
+                ),
+            ),
+          )
         : undefined,
     );
     return catalogQuery(() =>

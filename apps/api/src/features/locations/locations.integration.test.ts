@@ -234,6 +234,14 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
         (await get(`${levels}?search=10`).expect(200)).body.total,
         1,
       );
+      // A parent matches through its descendants, a section also through
+      // its zone.
+      for (const path of [
+        `${zones}?search=10`,
+        `${sections}?search=10`,
+        `${sections}?search=primary`,
+      ])
+        assert.equal((await get(path).expect(200)).body.total, 1, path);
       for (const path of paths) {
         for (const search of ['%25', '_', '%5C'])
           assert.equal(

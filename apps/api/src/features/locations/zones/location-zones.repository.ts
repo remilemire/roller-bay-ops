@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  getTableColumns,
+  ilike,
+  or,
+} from 'drizzle-orm';
 import type {
   CreateLocationZone,
   UpdateLocationZone,
@@ -7,16 +16,40 @@ import type {
 } from '@roller-bay/shared/locations';
 import { DatabaseService } from '../../../database/database.service.js';
 import { locationZones } from './location-zones.table.js';
-
+import { locationSections } from '../sections/location-sections.table.js';
+import { locations } from '../levels/location-levels.table.js';
 import { locationsQuery, containsPattern } from '../locations.persistence.js';
 
 @Injectable()
 export class LocationZonesRepository {
   constructor(private readonly database: DatabaseService) {}
   list(query: LocationZoneQuery) {
+    const pattern = containsPattern(query.search ?? '');
     const where = and(
+      // The locations tree searches every level at once, so a zone also
+      // matches through any of its sections or their levels.
       query.search
-        ? ilike(locationZones.name, containsPattern(query.search))
+        ? or(
+            ilike(locationZones.name, pattern),
+            exists(
+              this.database.db
+                .select({ id: locationSections.id })
+                .from(locationSections)
+                .leftJoin(
+                  locations,
+                  eq(locations.sectionId, locationSections.id),
+                )
+                .where(
+                  and(
+                    eq(locationSections.zoneId, locationZones.id),
+                    or(
+                      ilike(locationSections.label, pattern),
+                      ilike(locations.label, pattern),
+                    ),
+                  ),
+                ),
+            ),
+          )
         : undefined,
     );
     return locationsQuery(() =>

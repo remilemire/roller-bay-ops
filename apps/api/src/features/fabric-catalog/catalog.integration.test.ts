@@ -226,6 +226,18 @@ test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
         (await read('manufacturers?search=acme').expect(200)).body.total,
         1,
       );
+      // A parent matches through its descendants, a material also through
+      // its manufacturer: "other" is one manufacturer's name and a color code
+      // under the other.
+      for (const [path, total] of [
+        ['manufacturers?search=ab-13', 1],
+        ['manufacturers?search=linen', 1],
+        ['manufacturers?search=other', 2],
+        ['materials?search=acme', 1],
+        ['materials?search=other', 1],
+        [`materials?manufacturerId=${second.id}&search=other`, 0],
+      ] as const)
+        assert.equal((await read(path).expect(200)).body.total, total, path);
       assert.equal(
         (await read('manufacturers?search=%25').expect(200)).body.total,
         0,
