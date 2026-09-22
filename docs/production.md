@@ -10,7 +10,7 @@ Production follows allocated → scheduled → cut → assembled → checked →
 
 A station session is a normal authenticated application account with restricted permissions. The server checks its current role and station assignments on every request. Station accounts can view the relevant production screens, read the active employee picker, record completions, and change their personal display settings. Cutting accounts can read instructions and locations and save/submit worksheets. They cannot manage employees, users, orders, allocations, stock, or office review. Other business endpoints deny station accounts even if the screen is bypassed.
 
-Employee selection records trusted attribution, like the old initials entry; it does not authenticate that individual. Every completion records both the credited employee and the authenticated account that entered it. Selection stays in memory, clears on reload, logout or station change, and expires after fifteen minutes without a selection or completion. Confirm the name before each completion on shared devices. Names and initials are copied into history, so renaming or deactivating someone does not rewrite previous work.
+Employee selection records trusted attribution, like the old initials entry; it does not authenticate that individual. Every completion records both the credited employee and the authenticated account that entered it. Selection stays in memory until changed, and clears on reload, logout or station change. Names and initials are copied into history, so renaming or deactivating someone does not rewrite previous work.
 
 ## Paperless cutting
 

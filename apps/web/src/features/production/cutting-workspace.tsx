@@ -36,7 +36,6 @@ function CuttingOrder({ orderId }: { orderId: string }) {
         body: { employeeId: employee.employeeId },
       }),
     onSuccess: async () => {
-      employee.touch();
       await client.invalidateQueries({ queryKey: productionKey });
     },
   });
@@ -53,17 +52,13 @@ function CuttingOrder({ orderId }: { orderId: string }) {
           <Link href="/stations?station=cutting">Back to cutting</Link>
         </Button>
       </PageHeading>
-      <section className="panel panel-body">
+      <section className="panel panel-body stack">
         <EmployeeSelection
           value={employee.employeeId}
           onChange={employee.selectEmployee}
         />
         {query.data ? (
-          <CutCompletion
-            sheet={query.data}
-            employeeId={employee.employeeId}
-            touch={employee.touch}
-          />
+          <CutCompletion sheet={query.data} employeeId={employee.employeeId} />
         ) : (
           <>
             <p>
@@ -87,11 +82,9 @@ function CuttingOrder({ orderId }: { orderId: string }) {
 function CutCompletion({
   sheet,
   employeeId,
-  touch,
 }: {
   sheet: Worksheet;
   employeeId: string;
-  touch: () => void;
 }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
@@ -110,7 +103,6 @@ function CutCompletion({
           orderNumber={sheet.orderNumber}
           employeeId={employeeId}
           done={!!completed}
-          onCompleted={touch}
         />
       )}
       <p className="muted">
@@ -171,7 +163,7 @@ function Worksheet({ initial }: { initial: Worksheet }) {
         onCheck={sheet.submittedAt ? undefined : setChecked}
       />
       {sheet.submittedAt ? (
-        <section className="panel panel-body">
+        <section className="panel panel-body stack">
           <h2>Submitted measurements</h2>
           <RecordValues value={sheet.results?.items} />
         </section>

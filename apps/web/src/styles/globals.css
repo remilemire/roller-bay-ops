@@ -2056,6 +2056,9 @@ td strong {
 .station-workspace {
   max-width: 1100px;
 }
+.station-workspace > .page-heading {
+  margin-bottom: 0;
+}
 .station-workspace button,
 .station-workspace select,
 .station-workspace input {

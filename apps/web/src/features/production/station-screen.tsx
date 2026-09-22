@@ -38,7 +38,7 @@ export function StationsScreen() {
       </>
     );
   return (
-    <>
+    <div className="stack station-workspace">
       <PageHeading title={`${stationLabels[station]} station`}>
         {canManage && (
           <Button asChild variant="outline">
@@ -60,7 +60,7 @@ export function StationsScreen() {
         ))}
       </nav>
       <StationQueue key={station} station={station} />
-    </>
+    </div>
   );
 }
 function StationQueue({ station }: { station: Station }) {
@@ -93,8 +93,8 @@ function StationQueue({ station }: { station: Station }) {
     shipping: 'shippedAt',
   } as const;
   return (
-    <div className="stack station-workspace">
-      <section className="panel panel-body">
+    <div className="stack">
+      <section className="panel panel-body stack">
         <EmployeeSelection
           value={employee.employeeId}
           onChange={employee.selectEmployee}
@@ -168,7 +168,6 @@ function StationQueue({ station }: { station: Station }) {
                       orderNumber={order.orderNumber}
                       employeeId={employee.employeeId}
                       done={!!order[stamp[station]]}
-                      onCompleted={employee.touch}
                     />
                   )}
                 </div>

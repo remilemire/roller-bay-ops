@@ -82,7 +82,6 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
           orderNumber={order.orderNumber}
           employeeId={employee.employeeId}
           done={!!order[stamp[station]]}
-          onCompleted={employee.touch}
         />
         {canManage && (
           <Button variant="outline" onClick={() => setCorrect(true)}>
