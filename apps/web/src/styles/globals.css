@@ -1287,18 +1287,18 @@ td strong {
   letter-spacing: 0.7px;
   text-transform: uppercase;
 }
-/* Every date has the pill's box so today's header is no taller. */
+/* Every date has the same box so today's header is no taller. */
 .week-day-date {
   margin-left: -8px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
 }
 .week-day[aria-current='date'] .week-day-date {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 .month-day > header .button-icon {
   width: 30px;
