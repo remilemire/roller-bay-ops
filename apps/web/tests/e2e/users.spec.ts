@@ -15,13 +15,20 @@ test('admins reach the user directory from navigation and confirm a role change'
   await expect(
     row.getByRole('button', { name: 'Transfer ownership' }),
   ).toHaveCount(0);
-  await row.getByRole('button', { name: 'Make admin' }).click();
+  await row.getByRole('button', { name: 'Change role' }).click();
   expect(state.userRequests).toEqual([]);
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Make admin' })
-    .click();
-  await expect(row.getByRole('button', { name: 'Remove admin' })).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  const role = dialog.getByRole('combobox', { name: 'Role' });
+  await role.selectOption('production');
+  await expect(
+    dialog.getByRole('group', { name: 'Allowed stations' }),
+  ).toBeVisible();
+  await role.selectOption('admin');
+  await expect(
+    dialog.getByRole('group', { name: 'Allowed stations' }),
+  ).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Save role' }).click();
+  await expect(row.getByText('admin', { exact: true })).toBeVisible();
   expect(state.userRequests).toEqual([{ role: 'admin', stations: [] }]);
   expect(
     await page.evaluate(

@@ -88,7 +88,7 @@ it('offers an admin no actions on the owner or themselves, and no transfer', asy
     [],
   );
   const row = within(await rowFor('Uma User'));
-  expect(row.getByRole('button', { name: 'Make admin' })).toBeInTheDocument();
+  expect(row.getByRole('button', { name: 'Change role' })).toBeInTheDocument();
   expect(row.getByRole('button', { name: 'Reactivate' })).toBeInTheDocument();
   expect(
     screen.queryByRole('button', { name: 'Transfer ownership' }),
@@ -103,18 +103,48 @@ it('changes a role only after confirmation and keeps the dialog open on failure'
   const user = userEvent.setup();
   await user.click(
     within(await rowFor('Uma User')).getByRole('button', {
-      name: 'Make admin',
+      name: 'Change role',
     }),
   );
   expect(setUserRole).not.toHaveBeenCalled();
   const dialog = within(screen.getByRole('dialog'));
-  await user.click(dialog.getByRole('button', { name: 'Make admin' }));
+  await user.selectOptions(
+    dialog.getByRole('combobox', { name: 'Role' }),
+    'admin',
+  );
+  await user.click(dialog.getByRole('button', { name: 'Save role' }));
   expect(await dialog.findByRole('alert')).toHaveTextContent(
     'User storage is unavailable.',
   );
-  await user.click(dialog.getByRole('button', { name: 'Make admin' }));
+  await user.click(dialog.getByRole('button', { name: 'Save role' }));
   expect(setUserRole).toHaveBeenLastCalledWith(member.id, 'admin', []);
   expect(listUsers).toHaveBeenCalledTimes(2);
+});
+
+it('shows station assignments only for the production role', async () => {
+  vi.mocked(setUserRole).mockResolvedValueOnce({
+    ...member,
+    role: 'production',
+    stations: ['cutting'],
+  });
+  showUsers();
+  const user = userEvent.setup();
+  await user.click(
+    within(await rowFor('Uma User')).getByRole('button', {
+      name: 'Change role',
+    }),
+  );
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.queryByRole('group', { name: 'Allowed stations' })).toBeNull();
+  await user.selectOptions(
+    dialog.getByRole('combobox', { name: 'Role' }),
+    'production',
+  );
+  await user.click(dialog.getByRole('checkbox', { name: 'cutting' }));
+  await user.click(dialog.getByRole('button', { name: 'Save role' }));
+  expect(setUserRole).toHaveBeenCalledWith(member.id, 'production', [
+    'cutting',
+  ]);
 });
 
 it('lets the owner transfer ownership to an active user and refreshes the session', async () => {

@@ -13,6 +13,8 @@ import {
 } from '@roller-bay/shared/users';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
+import { Select } from '@/components/ui/input';
 import {
   Empty,
   ErrorNotice,
@@ -33,11 +35,12 @@ import {
   transferOwnership,
   usersKey,
 } from './users.api';
+type AssignableRole = Exclude<User['role'], 'owner'>;
 type PendingAction =
   | {
       kind: 'role';
       target: User;
-      role: 'pending' | 'production' | 'staff' | 'admin';
+      role: AssignableRole;
       stations?: Station[];
     }
   | { kind: 'activation'; target: User; isActive: boolean }
@@ -63,33 +66,28 @@ const confirmation = (action: PendingAction) =>
               'They lose access on their next request. Their records and role are kept.',
             confirm: 'Deactivate',
           }
-      : action.role === 'production'
-        ? {
-            title: `Give ${action.target.name} production access?`,
-            description:
-              'This account can only use its assigned stations and personal settings.',
-            confirm: 'Save production access',
-          }
-        : action.role === 'admin'
-          ? {
-              title: `Make ${action.target.name} an admin?`,
-              description:
-                'Admins can change the catalog, locations, and stock, and manage users.',
-              confirm: 'Make admin',
-            }
-          : action.role === 'staff'
-            ? {
-                title: `Give ${action.target.name} staff access?`,
-                description:
-                  'They can use the standard receipt and allocation workflows.',
-                confirm: 'Save staff access',
-              }
-            : {
-                title: `Revoke workspace access from ${action.target.name}?`,
-                description:
-                  'They remain signed in but can only see that their access is pending.',
-                confirm: 'Set access pending',
-              };
+      : {
+          title: `Change role for ${action.target.name}`,
+          description: 'Role changes take effect on their next request.',
+          confirm: 'Save role',
+        };
+const roleOptions: { value: AssignableRole; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'production', label: 'Production' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: 'Admin' },
+];
+const roleDescriptions: Record<AssignableRole, string> = {
+  pending: 'Signed in, but waiting for an administrator to grant access.',
+  production: 'Limited to assigned production stations and personal settings.',
+  staff: 'Standard receipt, allocation, stock, and order workflows.',
+  admin: 'Staff access plus administration and user management.',
+};
+const editableRole = (user: User): AssignableRole => {
+  if (user.role === 'owner')
+    throw new Error('Ownership changes require an ownership transfer.');
+  return user.role;
+};
 export function UsersScreen() {
   const canManage = useCanManage();
   if (!canManage)
@@ -195,60 +193,13 @@ function UserDirectory() {
                               open({
                                 kind: 'role',
                                 target: row,
-                                role: 'production',
+                                role: editableRole(row),
                                 stations: row.stations ?? [],
                               })
                             }
                           >
-                            {row.role === 'production'
-                              ? 'Production access'
-                              : 'Make production'}
+                            Change role
                           </Button>
-                          {row.role !== 'staff' && row.role !== 'admin' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                open({
-                                  kind: 'role',
-                                  target: row,
-                                  role: 'staff',
-                                })
-                              }
-                            >
-                              Grant staff access
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              open({
-                                kind: 'role',
-                                target: row,
-                                role: row.role === 'admin' ? 'staff' : 'admin',
-                              })
-                            }
-                          >
-                            {row.role === 'admin'
-                              ? 'Remove admin'
-                              : 'Make admin'}
-                          </Button>
-                          {row.role !== 'pending' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                open({
-                                  kind: 'role',
-                                  target: row,
-                                  role: 'pending',
-                                })
-                              }
-                            >
-                              Revoke access
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -300,27 +251,56 @@ function UserDirectory() {
         title={copy?.title ?? ''}
         description={copy?.description}
       >
-        {action?.kind === 'role' && action.role === 'production' && (
-          <fieldset>
-            <legend>Allowed stations</legend>
-            {stationSchema.options.map((s) => (
-              <label key={s} style={{ display: 'block', padding: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={action.stations?.includes(s) ?? false}
-                  onChange={(e) =>
-                    setAction({
-                      ...action,
-                      stations: e.target.checked
-                        ? [...(action.stations ?? []), s]
-                        : (action.stations ?? []).filter((v) => v !== s),
-                    })
-                  }
-                />
-                {s}
-              </label>
-            ))}
-          </fieldset>
+        {action?.kind === 'role' && (
+          <div className="role-form">
+            <Field label="Role" htmlFor="user-role">
+              <Select
+                id="user-role"
+                value={action.role}
+                onChange={(event) =>
+                  setAction({
+                    ...action,
+                    role: event.target.value as AssignableRole,
+                  })
+                }
+              >
+                {roleOptions.map((role) => (
+                  <option value={role.value} key={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <p className="muted role-description">
+              {roleDescriptions[action.role]}
+            </p>
+            {action.role === 'production' && (
+              <fieldset className="role-stations">
+                <legend>Allowed stations</legend>
+                <div className="role-station-grid">
+                  {stationSchema.options.map((station) => (
+                    <label className="role-station-option" key={station}>
+                      <input
+                        type="checkbox"
+                        checked={action.stations?.includes(station) ?? false}
+                        onChange={(event) =>
+                          setAction({
+                            ...action,
+                            stations: event.target.checked
+                              ? [...(action.stations ?? []), station]
+                              : (action.stations ?? []).filter(
+                                  (value) => value !== station,
+                                ),
+                          })
+                        }
+                      />
+                      <span>{station}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+          </div>
         )}
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
