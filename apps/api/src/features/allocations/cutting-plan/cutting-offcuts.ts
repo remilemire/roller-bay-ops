@@ -31,6 +31,8 @@ export function cutOffcuts(
     { kind: 'left-edge', width: trim, length, quantity: 1 },
     {
       kind: 'right-edge',
+      // The right-edge offcut includes the required right trim, so only the
+      // left trim is subtracted separately here.
       width: stockWidth - trim - occupiedWidth,
       length,
       quantity: 1,
