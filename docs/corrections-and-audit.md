@@ -1,6 +1,6 @@
 # Corrections and audit history
 
-Corrections change effective operational records while preserving the original submission and each change in history. Only admins and the owner can correct or void records. Every active employee can view history. Corrections require a reason, an expected revision, and a UUID `Idempotency-Key`.
+Corrections change effective operational records while preserving the original submission and each change in history. Only admins and the owner can correct or void records. Regular user/admin/owner accounts can view general history; restricted station accounts cannot. Corrections require a reason, an expected revision, and a UUID `Idempotency-Key`.
 
 ## Schema and rollout
 
@@ -66,3 +66,7 @@ The normal API tests cover contracts, reconstructed measurements, snapshot curat
 Frontend unit tests cover review-before-write, pinned forms, conflict preservation, history rendering and exact retries. Playwright covers desktop/tablet stock, receipt and completed cutting correction workflows and employee history access with intercepted API responses. These browser tests do not prove database behavior or real Microsoft sign-in.
 
 Local rollout verification: all pre-existing columns and rows across 15 application tables matched their pre-migration fingerprints, including stored balances and relationship IDs. Legacy correction baselines remained null and no past audit events were invented. The migrated PostgreSQL/Redis suite passed 71 checks; its two solver-only suites were skipped by that command (the separate real solver integration run passed 17 checks). Updated fixtures account for retained voided stock and use a separate, unreferenced user for the authentication deletion test.
+
+## Production attribution and worksheets
+
+The [production workflow](production.md) records milestone completions and admin corrections independently from stock reconciliation. Each completion retains the credited employee ID, name and initials, completion time, entry time and authenticated account. Employee edits and worksheet start, submit, return, abandon and review operations have transactional audit events. Incomplete worksheet draft saves are not audit events. Milestone changes appear in order history; employee/worksheet audit records are stored, without separate history screens. Admin milestone corrections require a reason, expected order revision and UUID idempotency key. Worksheet operations use expected revisions and preserve original submissions; they do not use the general correction-key endpoint contract.

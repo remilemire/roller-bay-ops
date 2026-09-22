@@ -50,7 +50,7 @@ Microsoft returns to the configured callback; after validation, the API redirect
 
 This redirect behavior is scoped to browser login routes. Other API endpoints retain their HTTP/JSON errors, as do requests rejected by rate-limit or session middleware before a route runs.
 
-`GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt, measurementUnits }`, where `measurementUnits` maps each measurement field to the unit the user chose (defaults fill in anything unset). `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
+`GET /api/auth/me` returns `{ id, name, role, isActive, email, createdAt, measurementUnits, colorTheme, stations }`, where `measurementUnits` maps each measurement field to the unit the user chose (defaults fill in anything unset). `POST /api/auth/logout` deletes the app session and clears the cookie, returning 204. It does not sign out the user's Microsoft account globally. Browser calls to these and business endpoints need `credentials: 'include'`. Mutations also require the exact configured `Origin`; a manual HTTP client must provide that header. `/api/health` is public process liveness, even if Redis is unavailable.
 
 Session cookies are HttpOnly, host-only, and SameSite=Lax. Production adds Secure and uses the `__Host-roller_bay.sid` name. Deploy frontend and API on the same site with HTTPS; an unrelated frontend domain will not work with this cookie policy. In production the session middleware reads `X-Forwarded-Proto` itself, because the host terminates TLS and publishes no proxy addresses to trust; the header only decides whether the Secure cookie is emitted. Never trust forwarded headers for client identity.
 
@@ -86,19 +86,21 @@ The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DE
 
 ## Roles and ownership
 
+The `station` role is restricted to explicitly allowed station endpoints, its own session and personal preferences. General business endpoints default to denying station accounts. Station assignments are stored on the user and checked with the current role for each request. Employee attribution is a separate directory and never grants access. See [station setup](production.md).
+
 Roles form a hierarchy: `owner` inherits all `admin` permissions, and both inherit `user` access. Current database roles are checked on each protected request. User-management operations check the acting user again inside the database transaction, so an earlier guard result cannot authorize a stale role.
 
 | Endpoint                                | Allowed callers    | Behavior                                                      |
 | --------------------------------------- | ------------------ | ------------------------------------------------------------- |
 | `GET /api/users`                        | Admin or owner     | List users, paginated and searchable by name or email.        |
-| `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to user or admin.                      |
+| `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to station, user or admin.             |
 | `POST /api/users/transfer-ownership`    | Current owner only | Transfer ownership to `newOwnerId` from the JSON body.        |
 | `PATCH /api/users/me/measurement-units` | Any active user    | Set the caller's own unit for one or more measurement fields. |
 | `PATCH /api/users/me/color-theme`       | Any active user    | Set the caller's own color palette.                           |
 
 The list accepts `page`, `pageSize` (1–100, default 25), and `search`, which matches the name or email as a case-insensitive literal substring. Unknown query parameters receive 400. It returns `{ items, total, page, pageSize }` with public user records ordered by name, including inactive users, read from one snapshot so the page and total agree.
 
-Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body must contain only `role`; assigning `owner` through this endpoint is rejected with 400. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
+Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body also accepts `stations` (default `[]`); assigning `owner` through this endpoint is rejected with 400. A station account uses `{ "role": "station", "stations": ["cutting"] }`, with any unique subset of `cutting`, `assembly`, `checking`, `shipping`. Non-station roles clear assignments. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
 
 Measurement unit updates accept a partial object such as `{ "blindWidth": "mm" }` whose keys are measurement fields and whose values are `in`, `ft`, `yd`, `mm`, `cm`, or `m`. The body must not be empty and may not name other fields. Keys merge with earlier choices in a single statement, the target is always the signed-in user, and the response is the caller's public user record. Stored values that are no longer offered fall back to the default for that field. The `0011_add_user_measurement_units.sql` migration adds `measurement_units jsonb NOT NULL DEFAULT '{}'`, so existing users start with the defaults.
 
@@ -142,8 +144,8 @@ The rate-limiting integration suite uses API instances sharing a random Redis ke
 
 ## Current limits
 
-Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. An admin can deactivate the local user to deny access on the next protected request. Local user deletion and role updates also take effect on the next protected request. Protected endpoints enforce the user/admin/owner hierarchy.
+Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. An admin can deactivate the local user to deny access on the next protected request. Local user deletion and role updates also take effect on the next protected request. Protected endpoints enforce the user/admin/owner hierarchy and explicit station permissions.
 
 Keep the tenant and client registration stable: the stored Microsoft subject is scoped to them. Changing registrations requires an explicit identity transition. Redis session data is required for access; there is no memory fallback during an outage.
 
-Catalog reads allow all active signed-in roles; admins and the owner can write. The global guard checks role metadata after loading the current user. See [catalog API permissions](fabric-catalog.md).
+Catalog reads allow active user/admin/owner roles; admins and the owner can write. The global guard checks role metadata after loading the current user. See [catalog API permissions](fabric-catalog.md).

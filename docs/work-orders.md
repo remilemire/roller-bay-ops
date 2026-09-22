@@ -6,19 +6,19 @@ The slice lives in `apps/api/src/features/work-orders/`; its contracts are `@rol
 
 ## Steps and status
 
-The status is derived from the furthest step reached and is never stored:
+The status is derived from the furthest reached step and is never stored:
 
-| Status      | Reached when                                | Column                      |
-| ----------- | ------------------------------------------- | --------------------------- |
-| `new`       | The order is created                        | `created_at`                |
-| `allocated` | Its allocation is confirmed                 | `allocated_at`              |
-| `scheduled` | It is given a ship date                     | `ship_date`, `scheduled_at` |
-| `cut`       | Its allocation is completed                 | `cut_at`                    |
-| `shipped`   | `shipped: true` on PATCH; `false` clears it | `shipped_at`                |
+| Status      | Reached when                 | Column                      |
+| ----------- | ---------------------------- | --------------------------- |
+| `new`       | Order created                | `created_at`                |
+| `allocated` | Allocation confirmed         | `allocated_at`              |
+| `scheduled` | Ship date assigned           | `ship_date`, `scheduled_at` |
+| `cut`       | Cutting completion recorded  | `cut_at`                    |
+| `assembled` | Assembly completion recorded | `assembled_at`              |
+| `checked`   | Checking completion recorded | `checked_at`                |
+| `shipped`   | Shipping completion recorded | `shipped_at`                |
 
-**An order is scheduled only once it is allocated.** Setting a ship date on an order with no live allocation returns 409 with an issue on `shipDate` (`order_not_allocated`), and the `work_orders_ship_date_requires_allocation` check constraint holds the same rule for writes that bypass the API. `scheduled_at` is when the order went on the schedule: moving the date keeps it, clearing the date clears it, and a check constraint keeps the two in step.
-
-Cutting needs no ship date and outranks one, so an order cut before it is dated reports `cut`. Shipping is not gated on the earlier steps, and a shipped order reports `shipped` whatever else is set. The server owns every timestamp; marking a shipped order shipped again keeps the original time. A check constraint keeps `cut_at` from being set without `allocated_at`.
+Allocation is required before scheduling or recording production. Every later step can be skipped: an unscheduled order can be cut, assembled, checked or shipped. A later completion does not populate earlier timestamps. Setting a ship date stamps `scheduled_at` once; moving the date keeps it, and clearing the date clears it. Production timestamps and attribution are owned by the [station production workflow](production.md), independently of allocation inventory reconciliation. Admin corrections can amend or clear a milestone without affecting later steps. Legacy timestamps remain intact without fabricated employee attribution.
 
 ## Blinds
 
@@ -51,13 +51,13 @@ The allocation workflow stamps the order inside its own transaction through name
 | Confirmed (created or submitted) | `allocated_at` = the allocation's `confirmed_at` |
 | Replanned                        | Nothing: the allocation stays with its order     |
 | Cancelled                        | `allocated_at` cleared; the order is `new` again |
-| Completed                        | `cut_at` = the allocation's `completed_at`       |
+| Completed                        | Nothing: inventory reconciliation only           |
 
-**An allocation cannot be cancelled while its order has a ship date.** That would clear `allocated_at`, which a dated order must keep, so it returns 409 with an issue on `workOrderId` (`order_scheduled`) and changes nothing; clear the ship date first. Clearing it inside the cancel would change the schedule from a request that never named it. Replanning releases nothing and keeps the date.
+**An allocation cannot be cancelled while its order has a ship date, recorded production, or an active digital cutting worksheet.** A ship date returns 409 with an issue on `workOrderId` (`order_scheduled`); clear the date first. Recorded production must be corrected explicitly, and an unused worksheet must be abandoned before cancellation. Cancellation never clears these records implicitly. Replanning releases nothing and keeps the date.
 
-So `allocated_at` and `cut_at` always mirror the order's live allocation. Retried requests that replay an earlier result stamp nothing. Confirming an allocation for an order that already has one, or that has shipped, returns 409 with an issue on `workOrderId` (`order_already_allocated`, `order_shipped`); completed allocations still count, so a recut under the same order number is rejected.
+`allocated_at` follows allocation confirmation; production timestamps are independent. Replanning also refuses recorded production or an active cutting worksheet. Retried requests that replay an earlier result stamp nothing. Confirming an allocation for an order that already has one, or that has shipped, returns 409 with an issue on `workOrderId` (`order_already_allocated`, `order_shipped`); completed allocations still count, so a recut under the same order number is rejected.
 
-Stamps do not increment the order's `revision`. They write columns no edit touches and the row lock serialises them against edits, so allocating fabric never makes an admin's open edit stale. Rows are locked `FOR NO KEY UPDATE`: an allocation's foreign key already holds a key-share lock on its order, and two requests upgrading to `FOR UPDATE` would deadlock instead of letting the second wait and receive the 409. Allocation writes lock the allocation header, then the order, then stock.
+Allocation stamps do not increment the order's `revision`; production completions and corrections do. They write columns no edit touches and the row lock serialises them against edits, so allocating fabric never makes an admin's open edit stale. Rows are locked `FOR NO KEY UPDATE`: an allocation's foreign key already holds a key-share lock on its order, and two requests upgrading to `FOR UPDATE` would deadlock instead of letting the second wait and receive the 409. Allocation writes lock the allocation header, then the order, then stock.
 
 ## Endpoints
 
@@ -71,13 +71,13 @@ Stamps do not increment the order's `revision`. They write columns no edit touch
 | PUT    | `/api/work-orders/:id/lines`   | Signed in    |
 | DELETE | `/api/work-orders/:id`         | Admin, owner |
 
-Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
+Station accounts use the dedicated production endpoints and cannot access these general order routes. Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
 
 POST accepts `orderNumber` and an optional `note`; an order is created without a ship date or blinds. Employees create the orders they allocate fabric for, but a note stays with admins: a non-admin who sends one gets 403 rather than having it dropped. The order number is trimmed and must be exactly six digits; it is unique and cannot be changed afterwards, so a mistyped order is deleted and added again. Notes are trimmed and limited to 1,000 characters; a blank note is stored as null.
 
-PATCH requires `expectedRevision` and at least one of `shipDate`, `note`, or `shipped`. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column, or null to take the order off the schedule, which changes nothing else. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`). The shared `shipDateSchema` supplies the field message, and the `work_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
+PATCH requires `expectedRevision` and at least one of `shipDate` or `note`. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column, or null to take the order off the schedule, which changes nothing else. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`). The shared `shipDateSchema` supplies the field message, and the `work_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
 
-`GET /api/work-orders/:id` and the blinds save return the order with `lines`; lists and the other writes return it without. Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity` (the total of the order's current blinds, derived on every read and never stored, so zero until blinds are entered), `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `shippedAt`, `updatedAt`, and `revision`.
+`GET /api/work-orders/:id` and the blinds save return the order with `lines`; lists and the other writes return it without. Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity` (the total of the order's current blinds, derived on every read and never stored, so zero until blinds are entered), `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `assembledAt`, `checkedAt`, `shippedAt`, `updatedAt`, and `revision`.
 
 ## Deleting and restoring
 
@@ -89,7 +89,7 @@ POST with a deleted order's number restores that order instead of reporting a du
 
 ## Lists
 
-Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the five statuses, `open`, which lists every order that has not shipped, or `unscheduled`, the queue of allocated orders (cut or not) still waiting for a ship date. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. A ship-date bound leaves out orders with no date. Orders sort by ship date, undated last, then order number; page data and totals use the same database snapshot.
+Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the seven statuses, `open`, which lists every order that has not shipped, or `unscheduled`, the queue of allocated orders (cut or not) still waiting for a ship date. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. A ship-date bound leaves out orders with no date. Orders sort by ship date, undated last, then order number; page data and totals use the same database snapshot.
 
 ## Concurrency and errors
 
@@ -97,8 +97,8 @@ An edit locks the row, compares `expectedRevision`, and increments `revision`; a
 
 ## History
 
-Creating, restoring, editing, scheduling, unscheduling, shipping, unshipping, and deleting are recorded through the [audit service](corrections-and-audit.md) in the same transaction, as `order.created`, `order.restored`, `order.updated`, `order.scheduled` (a first ship date), `order.unscheduled` (the date cleared), `order.shipped`, `order.unshipped`, and `order.deleted`. Moving a date is `order.updated`. Snapshots use the public order record under the `work-orders` record type. Milestone stamps are not separate events: the order's before/after change is attached to the allocation's own `allocation.confirmed`, `allocation.replaced`, `allocation.cancelled`, or `allocation.completed` event, so both the allocation's and the order's history show it.
+Creating, restoring, editing, scheduling, unscheduling and deleting record transactional audit events. Allocation confirmation/cancellation attach the order's allocation-stamp change to their own event. Allocation inventory completion no longer changes the order. Production completion and correction record `order.<station>.completed` / `order.<station>.corrected` with both work-order and employee-attribution snapshots. Order history therefore shows the authenticated actor, credited employee, timestamp changes and correction reason. Older audit events remain readable with absent assembled/checked timestamps treated as null.
 
 ## Tests
 
-`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, duplicate and concurrent creation, revision conflicts, scheduling only after allocation (through the API and against the check constraints), clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. `migrations.integration.test.ts` applies migration 0028 over rows as they were, since every other suite starts from an empty database: it checks each guard stops the migration, where the blinds land, and that every cut still points at its blind. The allocation cases cover unknown, empty, deleted and already-allocated orders, plans that assign another order's blinds, that allocation requests never create or edit an order, a save of the blinds racing a confirmation, cancelling refused while the order has a ship date, a cancelled allocation keeping its blinds after the order's change, a draft losing a retired blind's assignment, concurrent allocation of one order, shared draft numbers, stamps matching the allocation's timestamps, moving and cancelling, shipped orders, blocked deletion, and the attached history. `work-order-lines.integration.test.ts` covers keeping, adding, reordering and retiring blinds, immutability and retired ids, validation, unknown colors, ids held by another order, stale and racing saves, allocated and deleted orders, employee access, and the recorded history. Unit tests cover the contracts, status derivation, and driver-error mapping.
+`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, duplicate and concurrent creation, revision conflicts, scheduling only after allocation (through the API and against the check constraints), clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. `migrations.integration.test.ts` applies migration 0028 over rows as they were, since every other suite starts from an empty database: it checks each guard stops the migration, where the blinds land, and that every cut still points at its blind. The allocation cases cover unknown, empty, deleted and already-allocated orders, plans that assign another order's blinds, that allocation requests never create or edit an order, a save of the blinds racing a confirmation, cancelling refused while the order has a ship date, a cancelled allocation keeping its blinds after the order's change, a draft losing a retired blind's assignment, concurrent allocation of one order, shared draft numbers, allocation confirmation stamps and production independent of inventory completion, moving and cancelling, shipped orders, blocked deletion, and the attached history. `work-order-lines.integration.test.ts` covers keeping, adding, reordering and retiring blinds, immutability and retired ids, validation, unknown colors, ids held by another order, stale and racing saves, allocated and deleted orders, employee access, and the recorded history. Unit tests cover the contracts, status derivation, and driver-error mapping.
