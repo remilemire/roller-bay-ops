@@ -2101,6 +2101,7 @@ td strong {
 .station-workspace.stack > .page-heading {
   margin-bottom: 0;
 }
+.station-workspace .button,
 .station-workspace button,
 .station-workspace select,
 .station-workspace input {
