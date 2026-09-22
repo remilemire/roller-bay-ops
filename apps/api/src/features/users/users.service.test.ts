@@ -19,7 +19,7 @@ test('Microsoft profile conflict retries in autocommit and preserves the existin
   const current: UserRecord = {
     ...profile,
     id: randomUUID(),
-    role: 'user',
+    role: 'staff',
     stations: [],
     isActive: true,
     createdAt: new Date(),

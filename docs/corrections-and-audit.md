@@ -1,6 +1,6 @@
 # Corrections and audit history
 
-Corrections change effective operational records while preserving the original submission and each change in history. Only admins and the owner can correct or void records. Regular user/admin/owner accounts can view general history; restricted station accounts cannot. Corrections require a reason, an expected revision, and a UUID `Idempotency-Key`.
+Corrections change effective operational records while preserving the original submission and each change in history. Only admins and the owner can correct or void records. Staff/admin/owner accounts can view general history; pending and production accounts cannot. Corrections require a reason, an expected revision, and a UUID `Idempotency-Key`.
 
 ## Schema and rollout
 

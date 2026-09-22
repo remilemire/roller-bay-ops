@@ -21,7 +21,7 @@ import {
 } from './production.api';
 export function CuttingWorkspace({ orderId }: { orderId: string }) {
   const user = useCurrentUser();
-  if (user.role === 'station' && !user.stations.includes('cutting'))
+  if (user.role === 'production' && !user.stations.includes('cutting'))
     return <p>This account is not assigned to cutting.</p>;
   return <CuttingOrder orderId={orderId} />;
 }

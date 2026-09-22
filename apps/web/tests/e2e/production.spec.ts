@@ -5,7 +5,7 @@ test('station login, whole-order attribution, and employee directory', async ({
   page,
 }) => {
   const state = await mockApi(page, {
-    role: 'station',
+    role: 'production',
     stations: ['assembly'],
   });
   state.orders[0]!.shipDate = null;
@@ -39,7 +39,10 @@ test('station login, whole-order attribution, and employee directory', async ({
 test('cutter saves a digital sheet, marks cut independently, and submits for office review', async ({
   page,
 }, testInfo) => {
-  const state = await mockApi(page, { role: 'station', stations: ['cutting'] });
+  const state = await mockApi(page, {
+    role: 'production',
+    stations: ['cutting'],
+  });
   await page.goto(`/stations/cutting/${ids.order}`);
   await page
     .getByLabel('Completed by', { exact: true })
@@ -92,7 +95,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await expect(
     page.getByRole('button', { name: 'Accept and reconcile inventory' }),
   ).toBeDisabled();
-  state.role = 'station';
+  state.role = 'production';
   await page.goto(`/stations/cutting/${ids.order}`);
   await page.getByLabel('Radial depth (mm)').fill('12');
   await page.getByRole('button', { name: 'Save progress' }).click();
@@ -183,7 +186,7 @@ test('completion rejection permits another employee and a lost response can be r
   page,
 }) => {
   const state = await mockApi(page, {
-    role: 'station',
+    role: 'production',
     stations: ['assembly'],
   });
   state.employees.push({
@@ -234,7 +237,10 @@ test('completion rejection permits another employee and a lost response can be r
 test('clean cutter follows office returns while background refresh preserves dirty measurements', async ({
   page,
 }) => {
-  const state = await mockApi(page, { role: 'station', stations: ['cutting'] });
+  const state = await mockApi(page, {
+    role: 'production',
+    stations: ['cutting'],
+  });
   state.worksheets.push(submittedSheet(state));
   await page.goto('/stations');
   await expect(

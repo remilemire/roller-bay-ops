@@ -42,7 +42,7 @@ test(
         .set('Origin', origin)
         .send(body);
     const role = async (
-      value: 'admin' | 'user' | 'station',
+      value: 'admin' | 'staff' | 'production',
       stations: string[] = [],
     ) => {
       await pool.query(
@@ -67,9 +67,9 @@ test(
     assert.equal(employee.initials, 'AR');
     const order = await create(await input(await seed()));
     await t.test(
-      'station account has narrow server permissions and live station assignments',
+      'production account has narrow server permissions and live station assignments',
       async () => {
-        await role('station', ['assembly']);
+        await role('production', ['assembly']);
         await get('/api/auth/me').expect(200);
         await get('/api/production/employees').expect(200);
         await get('/api/production/assembly/orders').expect(200);
@@ -100,9 +100,9 @@ test(
           .set('Cookie', cookie)
           .send({ employeeId: employee.id })
           .expect(403);
-        await role('station', []);
+        await role('production', []);
         await get('/api/production/assembly/orders').expect(403);
-        await role('station', ['assembly']);
+        await role('production', ['assembly']);
       },
     );
     await t.test(
@@ -240,7 +240,7 @@ test(
         const stock = await seed(10000);
         const first = await create(await input(stock, 1000));
         const second = await create(await input(stock, 1000));
-        await role('station', ['cutting']);
+        await role('production', ['cutting']);
         const begin = (id: string) =>
           post(`/api/production/cutting/orders/${id}/worksheet`, {
             employeeId: other.id,

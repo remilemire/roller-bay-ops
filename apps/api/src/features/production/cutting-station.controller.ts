@@ -33,7 +33,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
 import { requireStation } from './production-access.js';
 @Controller('production/cutting')
-@Roles('station')
+@Roles('production')
 export class CuttingStationController {
   constructor(
     private readonly service: CuttingWorksheetsService,

@@ -289,7 +289,7 @@ test('the overview counts the order queues and lists the orders shipping this we
   ).toBeVisible();
 });
 test('employees read work orders without admin actions', async ({ page }) => {
-  await mockApi(page, { role: 'user' });
+  await mockApi(page, { role: 'staff' });
   await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
   // Entering an order and planning its fabric are open to them.

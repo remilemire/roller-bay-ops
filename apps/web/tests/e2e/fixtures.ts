@@ -110,7 +110,7 @@ export async function mockApi(
     measurementUnits: { ...defaultMeasurementUnits } as MeasurementUnits,
     unitRequests: [] as unknown[],
     colorTheme: 'slate',
-    teammateRole: 'user',
+    teammateRole: 'staff',
     userRequests: [] as unknown[],
     receiptDraft: structuredClone(receiptDraft),
     receiptSubmitted: false,
@@ -518,7 +518,7 @@ export async function mockApi(
       return send(state.orders[index]);
     }
     if (path === '/users' && method === 'GET')
-      return state.role === 'user'
+      return state.role === 'staff'
         ? send({ message: 'Your role cannot perform this action.' }, 403)
         : send(
             paged(

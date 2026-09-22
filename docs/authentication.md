@@ -1,6 +1,6 @@
 # Authentication setup
 
-The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users are active and normally receive role `user`. The configured bootstrap email can become the initial owner when no owner exists; otherwise sign-in preserves role, activation status, and history. Administrators must keep Entra membership appropriate for employee access.
+The Nest API supports Microsoft work-account sign-in only. Users must belong to the configured tenant, have directory type `Member`, and have a work sign-in name in the configured domain. New users are active but receive role `pending`, so an administrator must grant workspace access. The configured bootstrap email can become the initial owner when no owner exists; otherwise sign-in preserves role, activation status, and history. Administrators must keep Entra membership appropriate for employee access.
 
 The backend and [frontend authentication boundary](frontend.md#authentication-and-api-requests) are implemented. The frontend starts Microsoft login, loads the current session, and clears cached private data on sign-out or session expiry. Live Microsoft authentication requires your app registration; the frontend browser suite uses intercepted API responses and does not exercise Microsoft itself.
 
@@ -76,7 +76,7 @@ The client address is the one reported by the authenticated frontend proxy (`x-r
 
 ## User activation
 
-Admins and the owner can call `PATCH /api/users/:id/activation` with `{ "isActive": false }` to deactivate an existing user, or `{ "isActive": true }` to reactivate them. The request requires a valid active admin session and the configured Origin header. Regular users cannot change activation. The owner cannot be deactivated, including by the owner themselves. The body accepts only a boolean `isActive`; the endpoint cannot change roles or profile fields.
+Admins and the owner can call `PATCH /api/users/:id/activation` with `{ "isActive": false }` to deactivate an existing user, or `{ "isActive": true }` to reactivate them. The request requires a valid active admin session and the configured Origin header. Other roles cannot change activation. The owner cannot be deactivated, including by the owner themselves. The body accepts only a boolean `isActive`; the endpoint cannot change roles or profile fields.
 
 A successful update returns 200 with the public user profile, including `isActive`. Repeating the current state also succeeds. Invalid input returns 400, missing users return 404, and unauthorized roles return 403.
 
@@ -86,27 +86,31 @@ The `0002_add_user_activation.sql` migration adds `is_active boolean NOT NULL DE
 
 ## Roles and ownership
 
-The `station` role is restricted to explicitly allowed station endpoints, its own session and personal preferences. General business endpoints default to denying station accounts. Station assignments are stored on the user and checked with the current role for each request. Employee attribution is a separate directory and never grants access. See [station setup](production.md).
+The `pending` role is the default for a newly created account. It can load its own session and sign out, but the frontend shows an access-pending screen and business endpoints deny it. An admin or the owner must grant `production`, `staff`, or `admin` access.
 
-Roles form a hierarchy: `owner` inherits all `admin` permissions, and both inherit `user` access. Current database roles are checked on each protected request. User-management operations check the acting user again inside the database transaction, so an earlier guard result cannot authorize a stale role.
+The `production` role is a separate restricted profile, not a lower staff tier. It can use explicitly allowed station endpoints and personal preferences; station assignments are stored on the user and checked with the current role for each request. Employee attribution is a separate directory and never grants access. See [station setup](production.md).
 
-| Endpoint                                | Allowed callers    | Behavior                                                      |
-| --------------------------------------- | ------------------ | ------------------------------------------------------------- |
-| `GET /api/users`                        | Admin or owner     | List users, paginated and searchable by name or email.        |
-| `PATCH /api/users/:id/role`             | Admin or owner     | Set a non-owner's role to station, user or admin.             |
-| `POST /api/users/transfer-ownership`    | Current owner only | Transfer ownership to `newOwnerId` from the JSON body.        |
-| `PATCH /api/users/me/measurement-units` | Any active user    | Set the caller's own unit for one or more measurement fields. |
-| `PATCH /api/users/me/color-theme`       | Any active user    | Set the caller's own color palette.                           |
+The staff hierarchy is `staff` → `admin` → `owner`: the owner inherits all admin permissions, and both inherit staff access. Staff, admins, and the owner may also use production workflows, but production accounts do not inherit the general workspace. Current database roles are checked on each protected request. User-management operations check the acting user again inside the database transaction, so an earlier guard result cannot authorize a stale role.
+
+Migration `0032_user_access_roles.sql` preserves existing access by mapping `station` to `production` and `user` to `staff`, retains admin and owner roles, and changes only the default for newly created accounts to `pending`.
+
+| Endpoint                                | Allowed callers               | Behavior                                                       |
+| --------------------------------------- | ----------------------------- | -------------------------------------------------------------- |
+| `GET /api/users`                        | Admin or owner                | List users, paginated and searchable by name or email.         |
+| `PATCH /api/users/:id/role`             | Admin or owner                | Set a non-owner's role to pending, production, staff or admin. |
+| `POST /api/users/transfer-ownership`    | Current owner only            | Transfer ownership to `newOwnerId` from the JSON body.         |
+| `PATCH /api/users/me/measurement-units` | Production or staff hierarchy | Set the caller's own unit for one or more measurement fields.  |
+| `PATCH /api/users/me/color-theme`       | Production or staff hierarchy | Set the caller's own color palette.                            |
 
 The list accepts `page`, `pageSize` (1–100, default 25), and `search`, which matches the name or email as a case-insensitive literal substring. Unknown query parameters receive 400. It returns `{ items, total, page, pageSize }` with public user records ordered by name, including inactive users, read from one snapshot so the page and total agree.
 
-Role updates accept `{ "role": "admin" }` or `{ "role": "user" }` and return 200 with the public user. The body also accepts `stations` (default `[]`); assigning `owner` through this endpoint is rejected with 400. A station account uses `{ "role": "station", "stations": ["cutting"] }`, with any unique subset of `cutting`, `assembly`, `checking`, `shipping`. Non-station roles clear assignments. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Ordinary users receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
+Role updates accept `pending`, `production`, `staff`, or `admin` and return 200 with the public user. The body also accepts `stations` (default `[]`); assigning `owner` through this endpoint is rejected with 400. A production account uses `{ "role": "production", "stations": ["cutting"] }`, with any unique subset of `cutting`, `assembly`, `checking`, `shipping`. Non-production roles clear assignments. Repeating the current role succeeds. Admins can change other admins and themselves, but this endpoint cannot target the owner. Role updates do not activate a disabled user. Non-administrators receive 403; malformed UUIDs or invalid bodies receive 400 and missing targets receive 404. All mutations require the configured Origin header.
 
 Measurement unit updates accept a partial object such as `{ "blindWidth": "mm" }` whose keys are measurement fields and whose values are `in`, `ft`, `yd`, `mm`, `cm`, or `m`. The body must not be empty and may not name other fields. Keys merge with earlier choices in a single statement, the target is always the signed-in user, and the response is the caller's public user record. Stored values that are no longer offered fall back to the default for that field. The `0011_add_user_measurement_units.sql` migration adds `measurement_units jsonb NOT NULL DEFAULT '{}'`, so existing users start with the defaults.
 
 Color theme updates accept exactly `{ "colorTheme": "slate" | "sage" | "ocean" | "sand" | "plum" }` and return the caller's public user record. The `0018_add_user_color_theme.sql` migration adds `color_theme varchar(20) NOT NULL DEFAULT 'slate'`, so existing users start on Slate. The column is text rather than an enum; a stored palette that is no longer offered resolves to Slate. Light/dark mode is not stored on the account.
 
-Ownership transfer accepts `{ "newOwnerId": "<user UUID>" }` and returns `{ previousOwner, newOwner }` with both public user records. The recipient must be an existing active user or admin. Transferring to yourself or an inactive user returns 409; a missing recipient returns 404. The previous owner becomes an admin. Both updates commit atomically, and failure rolls both back. Concurrent transfers by the same owner have only one winner; the other request receives 403 after its owner permission is rechecked.
+Ownership transfer accepts `{ "newOwnerId": "<user UUID>" }` and returns `{ previousOwner, newOwner }` with both public user records. The recipient must be an existing active staff member or admin; pending and production accounts must receive staff access first. Transferring to yourself, an inactive user, or a restricted profile returns 409; a missing recipient returns 404. The previous owner becomes an admin. Both updates commit atomically, and failure rolls both back. Concurrent transfers by the same owner have only one winner; the other request receives 403 after its owner permission is rechecked.
 
 The `users_single_owner_unique` partial unique index allows at most one `role = 'owner'` row, including for direct SQL writes. It allows zero owners before bootstrap. User-management transactions serialize writes to the users table while checking permissions and changing roles, so transfers and bootstrap cannot observe a temporary owner vacancy. Ordinary reads remain available. Waiting to acquire a lock is limited to five seconds; a timeout rolls back and returns 503.
 
@@ -116,7 +120,7 @@ The `users_single_owner_unique` partial unique index allows at most one `role = 
 
 Set `BOOTSTRAP_OWNER_EMAIL` in `apps/api/.env` to the intended owner's Microsoft profile email before they sign in. Matching uses the same trimmed, lowercase email from Graph `mail` that the application stores, not the Microsoft sign-in name. Normal tenant, membership, domain, and active-account checks still apply.
 
-If no owner exists, the matching active user's first successful sign-in after configuration grants ownership. Nonmatching users remain ordinary users. Concurrent matching sign-ins produce the same single owner. Bootstrap never activates an inactive user, links identities by email, replaces an existing owner, or takes ownership back after a transfer. You can clear the variable after setup; leaving it set has no effect while an owner exists. It is not an ownership recovery or transfer mechanism.
+If no owner exists, the matching active user's first successful sign-in after configuration grants ownership. Nonmatching new users remain pending. Concurrent matching sign-ins produce the same single owner. Bootstrap never activates an inactive user, links identities by email, replaces an existing owner, or takes ownership back after a transfer. You can clear the variable after setup; leaving it set has no effect while an owner exists. It is not an ownership recovery or transfer mechanism.
 
 The `0003_single_owner.sql` migration creates the database index. Existing multiple-owner data must be resolved explicitly before that migration can succeed.
 
@@ -144,8 +148,8 @@ The rate-limiting integration suite uses API instances sharing a random Redis ke
 
 ## Current limits
 
-Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. An admin can deactivate the local user to deny access on the next protected request. Local user deletion and role updates also take effect on the next protected request. Protected endpoints enforce the user/admin/owner hierarchy and explicit station permissions.
+Directory eligibility and profile data refresh at sign-in. Disabling an Entra account does not instantly revoke an existing local session: it can last until logout or its absolute expiry. An admin can deactivate the local user to deny access on the next protected request. Local user deletion and role updates also take effect on the next protected request. Protected endpoints enforce pending and production restrictions plus the staff/admin/owner hierarchy.
 
 Keep the tenant and client registration stable: the stored Microsoft subject is scoped to them. Changing registrations requires an explicit identity transition. Redis session data is required for access; there is no memory fallback during an outage.
 
-Catalog reads allow active user/admin/owner roles; admins and the owner can write. The global guard checks role metadata after loading the current user. See [catalog API permissions](fabric-catalog.md).
+Catalog reads allow active staff/admin/owner roles; admins and the owner can write. Pending and production accounts cannot use the general catalog API. The global guard checks role metadata after loading the current user. See [catalog API permissions](fabric-catalog.md).

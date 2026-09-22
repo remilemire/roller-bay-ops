@@ -28,7 +28,7 @@ export function StationsScreen() {
   const canManage = useCanManage();
   const params = useListParams();
   const allowed =
-    user.role === 'station' ? user.stations : stationSchema.options;
+    user.role === 'production' ? user.stations : stationSchema.options;
   const parsed = stationSchema.safeParse(params.get('station'));
   const station =
     parsed.success && allowed.includes(parsed.data) ? parsed.data : allowed[0];

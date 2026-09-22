@@ -2,7 +2,7 @@
 
 The catalog is organized as manufacturer → material → color. Each material belongs to one manufacturer, and each color belongs to one material. Physical stock, receiving, and allocation are separate features.
 
-All routes require a valid session. Every signed-in role can read. Admins and the owner can create, update, or delete; the owner inherits all admin permissions. Permissions use the current user role from PostgreSQL on every request. Writes also require the configured `WEB_ORIGIN` as the request's Origin header.
+All routes require staff access. Staff, admins, and the owner can read; admins and the owner can create, update, or delete. Pending and production accounts cannot use the general catalog API. Permissions use the current user role from PostgreSQL on every request. Writes also require the configured `WEB_ORIGIN` as the request's Origin header.
 
 ## Module structure
 

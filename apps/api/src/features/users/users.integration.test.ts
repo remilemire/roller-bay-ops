@@ -156,7 +156,7 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
       });
       const alternateCookie = (await signIn()).authenticated;
       alternateId = (await me(alternateCookie)).id;
-      for (const role of ['admin', 'user']) {
+      for (const role of ['admin', 'staff']) {
         await request(server)
           .patch(`/api/users/${recipientId}/role`)
           .set('Origin', origin)
@@ -198,16 +198,17 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
       await setRole(recipientId, 'admin', adminCookie).expect(200);
       assert.equal((await me(recipientCookie)).role, 'admin');
       assert.equal(
-        (await setRole(recipientId, 'user', adminCookie).expect(200)).body.role,
-        'user',
+        (await setRole(recipientId, 'staff', adminCookie).expect(200)).body
+          .role,
+        'staff',
       );
-      await setRole(recipientId, 'user', adminCookie).expect(200);
+      await setRole(recipientId, 'staff', adminCookie).expect(200);
       await setRole(alternateId, 'admin', ownerCookie).expect(200);
       // Administrators may demote themselves; the same session then loses its privileges.
-      await setRole(alternateId, 'user', alternateCookie).expect(200);
+      await setRole(alternateId, 'staff', alternateCookie).expect(200);
       await setRole(recipientId, 'admin', alternateCookie).expect(403);
       await setRole(recipientId, 'admin', ownerCookie).expect(200);
-      await setRole(recipientId, 'user', ownerCookie).expect(200);
+      await setRole(recipientId, 'staff', ownerCookie).expect(200);
       await activate(originalOwnerId, false).expect(403);
       await activate(originalOwnerId, false, ownerCookie).expect(403);
       await activate(recipientId, false, ownerCookie).expect(200);
@@ -415,6 +416,15 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
       }).expect(409);
       assert.equal(await ownerId(), originalOwnerId);
       await activate(recipientId, true).expect(200);
+      await setRole(recipientId, 'pending', ownerCookie).expect(200);
+      await post('transfer-ownership', ownerCookie, {
+        newOwnerId: recipientId,
+      }).expect(409);
+      await setRole(recipientId, 'production', ownerCookie).expect(200);
+      await post('transfer-ownership', ownerCookie, {
+        newOwnerId: recipientId,
+      }).expect(409);
+      await setRole(recipientId, 'staff', ownerCookie).expect(200);
       const originalSetRole = UsersRepository.prototype.setRole;
       let sawUncommittedDemotion = false;
       const failingUpdate = t.mock.method(
@@ -445,7 +455,7 @@ test('user roles integration', { timeout: 60_000 }, async (t) => {
       assert.equal(await ownerId(), originalOwnerId);
       assert.equal(
         (await app.get(UsersService).findById(recipientId))?.role,
-        'user',
+        'staff',
       );
       const transferred = ownershipTransferResultSchema.parse(
         (

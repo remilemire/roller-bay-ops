@@ -213,7 +213,7 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
         .set('Origin', origin)
         .send({ expectedRevision: 1 })
         .expect(204);
-      await fixtures.setUserRole(userId, 'user');
+      await fixtures.setUserRole(userId, 'staff');
       await save(gone.id, 2, [line()]).expect(404);
       await save(randomUUID(), 1, []).expect(404);
     },

@@ -78,7 +78,7 @@ test(
         const user = currentUserSchema.parse(me.body);
         userId = user.id;
         assert.equal(user.email, 'employee@example.com');
-        assert.equal(user.role, 'user');
+        assert.equal(user.role, 'pending');
         assert.equal(user.isActive, true);
         assert.equal(me.body.microsoftSubjectId, undefined);
         assert.equal(me.headers['cache-control'], 'no-store');
@@ -247,7 +247,7 @@ test(
     );
 
     await t.test(
-      'concurrent first sign-ins create exactly one default-role user',
+      'concurrent first sign-ins create exactly one pending account',
       async () => {
         const users = app.get(UsersService);
         const input = {
@@ -262,7 +262,7 @@ test(
         );
         assert.equal(new Set(results.map((user) => user.id)).size, 1);
         assert.equal(results[0]?.email, 'concurrent@example.com');
-        assert.equal(results[0]?.role, 'user');
+        assert.equal(results[0]?.role, 'pending');
       },
     );
 

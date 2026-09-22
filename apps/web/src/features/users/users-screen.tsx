@@ -37,7 +37,7 @@ type PendingAction =
   | {
       kind: 'role';
       target: User;
-      role: 'station' | 'user' | 'admin';
+      role: 'pending' | 'production' | 'staff' | 'admin';
       stations?: Station[];
     }
   | { kind: 'activation'; target: User; isActive: boolean }
@@ -63,12 +63,12 @@ const confirmation = (action: PendingAction) =>
               'They lose access on their next request. Their records and role are kept.',
             confirm: 'Deactivate',
           }
-      : action.role === 'station'
+      : action.role === 'production'
         ? {
-            title: `Restrict ${action.target.name} to stations?`,
+            title: `Give ${action.target.name} production access?`,
             description:
               'This account can only use its assigned stations and personal settings.',
-            confirm: 'Save station access',
+            confirm: 'Save production access',
           }
         : action.role === 'admin'
           ? {
@@ -77,11 +77,19 @@ const confirmation = (action: PendingAction) =>
                 'Admins can change the catalog, locations, and stock, and manage users.',
               confirm: 'Make admin',
             }
-          : {
-              title: `Remove admin access from ${action.target.name}?`,
-              description: 'They keep receipt and allocation workflows.',
-              confirm: 'Remove admin',
-            };
+          : action.role === 'staff'
+            ? {
+                title: `Give ${action.target.name} staff access?`,
+                description:
+                  'They can use the standard receipt and allocation workflows.',
+                confirm: 'Save staff access',
+              }
+            : {
+                title: `Revoke workspace access from ${action.target.name}?`,
+                description:
+                  'They remain signed in but can only see that their access is pending.',
+                confirm: 'Set access pending',
+              };
 export function UsersScreen() {
   const canManage = useCanManage();
   if (!canManage)
@@ -187,16 +195,16 @@ function UserDirectory() {
                               open({
                                 kind: 'role',
                                 target: row,
-                                role: 'station',
+                                role: 'production',
                                 stations: row.stations ?? [],
                               })
                             }
                           >
-                            {row.role === 'station'
-                              ? 'Station access'
-                              : 'Make station'}
+                            {row.role === 'production'
+                              ? 'Production access'
+                              : 'Make production'}
                           </Button>
-                          {row.role === 'station' && (
+                          {row.role !== 'staff' && row.role !== 'admin' && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -204,11 +212,11 @@ function UserDirectory() {
                                 open({
                                   kind: 'role',
                                   target: row,
-                                  role: 'user',
+                                  role: 'staff',
                                 })
                               }
                             >
-                              Make team member
+                              Grant staff access
                             </Button>
                           )}
                           <Button
@@ -218,7 +226,7 @@ function UserDirectory() {
                               open({
                                 kind: 'role',
                                 target: row,
-                                role: row.role === 'admin' ? 'user' : 'admin',
+                                role: row.role === 'admin' ? 'staff' : 'admin',
                               })
                             }
                           >
@@ -226,6 +234,21 @@ function UserDirectory() {
                               ? 'Remove admin'
                               : 'Make admin'}
                           </Button>
+                          {row.role !== 'pending' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                open({
+                                  kind: 'role',
+                                  target: row,
+                                  role: 'pending',
+                                })
+                              }
+                            >
+                              Revoke access
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -239,17 +262,19 @@ function UserDirectory() {
                           >
                             {row.isActive ? 'Deactivate' : 'Reactivate'}
                           </Button>
-                          {current.role === 'owner' && row.isActive && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                open({ kind: 'transfer', target: row })
-                              }
-                            >
-                              Transfer ownership
-                            </Button>
-                          )}
+                          {current.role === 'owner' &&
+                            row.isActive &&
+                            ['staff', 'admin'].includes(row.role) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  open({ kind: 'transfer', target: row })
+                                }
+                              >
+                                Transfer ownership
+                              </Button>
+                            )}
                         </div>
                       )}
                     </td>
@@ -275,7 +300,7 @@ function UserDirectory() {
         title={copy?.title ?? ''}
         description={copy?.description}
       >
-        {action?.kind === 'role' && action.role === 'station' && (
+        {action?.kind === 'role' && action.role === 'production' && (
           <fieldset>
             <legend>Allowed stations</legend>
             {stationSchema.options.map((s) => (

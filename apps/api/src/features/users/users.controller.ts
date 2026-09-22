@@ -41,7 +41,7 @@ export class UsersController {
 
   // Any active user may change their own preferences; the target is never a
   // path id.
-  @Roles('station')
+  @Roles('production')
   @Patch('me/measurement-units')
   setMeasurementUnits(
     @Req() request: Request,
@@ -51,7 +51,7 @@ export class UsersController {
     return this.users.setMeasurementUnits(request.currentUser!.id, input);
   }
 
-  @Roles('station')
+  @Roles('production')
   @Patch('me/color-theme')
   setColorTheme(
     @Req() request: Request,

@@ -42,14 +42,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const user = useCurrentUser();
   const canManage = useCanManage();
-  const stationOnly = user.role === 'station';
+  const productionOnly = user.role === 'production';
+  const accessPending = user.role === 'pending';
   const stationRoute =
     pathname === '/stations' ||
     pathname.startsWith('/stations/cutting/') ||
     pathname === '/settings';
   useEffect(() => {
-    if (stationOnly && !stationRoute) router.replace('/stations');
-  }, [stationOnly, stationRoute, router]);
+    if (productionOnly && !stationRoute) router.replace('/stations');
+  }, [productionOnly, stationRoute, router]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [pageTitle, setPageTitle] = useState<string | null>(null);
@@ -63,11 +64,36 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       router.replace('/login');
     },
   });
-  if (stationOnly && !stationRoute) return <p>Opening station…</p>;
+  if (accessPending)
+    return (
+      <main className="login-page">
+        <section className="login-panel glass">
+          <div className="brand-symbol">
+            <Layers3 size={27} />
+          </div>
+          <div className="eyebrow">ROLLER BAY · OPERATIONS</div>
+          <h1>Access pending</h1>
+          <p>
+            Your account is ready, but an administrator still needs to assign
+            your workspace access.
+          </p>
+          {logout.error && <ErrorNotice error={logout.error} />}
+          <Button
+            variant="outline"
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
+          >
+            <LogOut size={17} />
+            Sign out
+          </Button>
+        </section>
+      </main>
+    );
+  if (productionOnly && !stationRoute) return <p>Opening station…</p>;
   const nav = (
     <>
       <Link
-        href={stationOnly ? '/stations' : '/'}
+        href={productionOnly ? '/stations' : '/'}
         className="brand"
         onClick={() => setMobileOpen(false)}
       >
@@ -81,7 +107,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <nav aria-label="Main navigation">
         {navigation
           .filter((item) =>
-            stationOnly
+            productionOnly
               ? item.href === '/stations'
               : !item.manageOnly || canManage,
           )
@@ -130,7 +156,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>{user.name}</strong>
-            <small>{user.role === 'user' ? 'Team member' : user.role}</small>
+            <small>{user.role === 'staff' ? 'Staff' : user.role}</small>
           </span>
           <LogOut size={17} />
         </button>

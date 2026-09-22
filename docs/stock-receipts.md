@@ -12,7 +12,7 @@ The typed-draft schema is introduced by `0010_typed_drafts`.
 | GET    | `/api/stock-receipts`     | 200, paginated receipt summaries                               |
 | GET    | `/api/stock-receipts/:id` | 200, receipt with lines and current details of its stock items |
 
-All endpoints require an active signed-in user; user, admin, and owner roles can submit and read receipts. POST requires the configured Origin and an `Idempotency-Key` header containing a UUID. The server derives the submitting user from the authenticated request and sets the submission timestamp. Global rate limits apply. These permissions do not grant users access to admin stock maintenance endpoints.
+All endpoints require active staff access; staff, admin, and owner roles can submit and read receipts. POST requires the configured Origin and an `Idempotency-Key` header containing a UUID. The server derives the submitting user from the authenticated request and sets the submission timestamp. Global rate limits apply. These permissions do not grant staff access to admin stock maintenance endpoints.
 
 ## Submission
 
@@ -88,4 +88,4 @@ Unit tests cover draft contracts and conflict translation. Database/HTTP tests c
 
 ## Submitted corrections and history
 
-Admins can correct submitted receipt paperwork and selected eligible lines. Stock entered by mistake is voided, not deleted. All active employees can view history. See [corrections and audit](corrections-and-audit.md) for API bodies, preserved identities, eligibility checks, retries, and required schema rollout.
+Admins can correct submitted receipt paperwork and selected eligible lines. Stock entered by mistake is voided, not deleted. Staff accounts can view history. See [corrections and audit](corrections-and-audit.md) for API bodies, preserved identities, eligibility checks, retries, and required schema rollout.

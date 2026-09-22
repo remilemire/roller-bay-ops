@@ -41,7 +41,7 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'location reads require active sessions and every mutation requires admin or owner',
     async () => {
-      await role('user');
+      await role('staff');
       for (const path of paths) {
         await request(server).get(path).expect(401);
         await request(server).get(`${path}/${randomUUID()}`).expect(401);
@@ -278,7 +278,7 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
       );
       assert.equal(refreshed.zoneName, 'Primary updated');
       assert.equal(refreshed.sectionLabel, 'Contracts updated');
-      await role('user');
+      await role('staff');
       await get(`${levels}/${level.id}`).expect(200);
       await patch(`${levels}/${level.id}`, { label: 'Denied' }).expect(403);
       await role('admin');

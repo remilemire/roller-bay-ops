@@ -217,7 +217,7 @@ test('hides numeric order fields and restricts reordering while searching', asyn
 });
 
 test('employees have no drag controls', async ({ page }) => {
-  await locations(page, 'user');
+  await locations(page, 'staff');
   await expect(page.getByRole('button', { name: /^Reorder / })).toHaveCount(0);
 });
 

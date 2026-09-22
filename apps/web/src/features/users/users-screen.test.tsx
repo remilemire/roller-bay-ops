@@ -25,7 +25,7 @@ const person = (id: string, name: string, role: User['role']): User => ({
 });
 const owner = person('owner-1', 'Olive Owner', 'owner');
 const admin = person('admin-1', 'Ada Admin', 'admin');
-const member = person('user-1', 'Uma User', 'user');
+const member = person('user-1', 'Uma User', 'staff');
 const state = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -34,7 +34,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/features/auth/auth-boundary', () => ({
   useCurrentUser: () => state.current,
-  useCanManage: () => (state.current as User).role !== 'user',
+  useCanManage: () => (state.current as User).role !== 'staff',
 }));
 vi.mock('./users.api', async (original) => ({
   ...(await original<typeof import('./users.api')>()),

@@ -5,10 +5,10 @@ Production follows allocated → scheduled → cut → assembled → checked →
 ## Set up the stations
 
 1. In **Settings → Employees**, an admin adds each employee's full name and initials. Optional account links connect an employee to an existing application user; employees do not need their own login. Names and initials need not be unique: the permanent employee ID identifies the person. Deactivate departed employees instead of deleting them.
-2. Sign in on each iPad with an eligible Microsoft work account. In **Users**, an admin chooses **Make station** (or **Station access**) and assigns cutting, assembly, checking, shipping, or a combination. Assign each dedicated floor iPad only its own station; the server rejects completions for unassigned stations.
-3. The station account opens **Stations**, selects the employee who completed the work, finds the order, and records its completion. Single-station accounts have a fixed station heading and no switching control. Accounts with multiple stations use **Change station**, choose a destination, and explicitly confirm the switch before it takes effect. Switching clears the employee selection and order filters. **Queue**, **Completed today**, and **All allocated orders** support regular work and skipped steps. Searching also finds already processed orders. Lists refresh every ten seconds.
+2. Sign in on each iPad with an eligible Microsoft work account. New accounts start pending. In **Users**, an admin chooses **Make production** (or **Production access**) and assigns cutting, assembly, checking, shipping, or a combination. Assign each dedicated floor iPad only its own station; the server rejects completions for unassigned stations.
+3. The production account opens **Stations**, selects the employee who completed the work, finds the order, and records its completion. Single-station accounts have a fixed station heading and no switching control. Accounts with multiple stations use **Change station**, choose a destination, and explicitly confirm the switch before it takes effect. Switching clears the employee selection and order filters. **Queue**, **Completed today**, and **All allocated orders** support regular work and skipped steps. Searching also finds already processed orders. Lists refresh every ten seconds.
 
-A station session is a normal authenticated application account with restricted permissions. The server checks its current role and station assignments on every request. Station accounts can view the relevant production screens, read the active employee picker, record completions, and change their personal display settings. Cutting accounts can read instructions and locations and save/submit worksheets. They cannot manage employees, users, orders, allocations, stock, or office review. Other business endpoints deny station accounts even if the screen is bypassed.
+A production session is a normal authenticated application account with restricted permissions. The server checks its current role and station assignments on every request. Production accounts can view the relevant production screens, read the active employee picker, record completions, and change their personal display settings. Cutting accounts can read instructions and locations and save/submit worksheets. They cannot manage employees, users, orders, allocations, stock, or office review. Other business endpoints deny production accounts even if the screen is bypassed.
 
 Employee selection records trusted attribution, like the old initials entry; it does not authenticate that individual. Every completion records both the credited employee and the authenticated account that entered it. Selection stays in memory until changed, and clears on reload, logout or station change. Names and initials are copied into history, so renaming or deactivating someone does not rewrite previous work.
 
@@ -34,23 +34,23 @@ Migrations 0030 and 0031 preserve existing records and timestamps. Historical cu
 
 All paths below have the `/api` prefix. Mutations require the configured Origin. Shared contracts live in `@roller-bay/shared/production` and `@roller-bay/shared/employees`.
 
-| Route                                                | Purpose / access                                                                              |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `GET /production/employees`                          | Active employee picker; assigned station or regular application user                          |
-| `GET /production/:station/orders`                    | Station queue, completed-time range or all allocated orders; assigned station or regular user |
-| `GET /production/orders/:id/completions`             | Effective employee attribution; assigned station or regular user                              |
-| `POST /production/:station/orders/:id/complete`      | Whole-order completion with `employeeId`; UUID `Idempotency-Key`                              |
-| `POST /production/:station/orders/:id/corrections`   | Admin correction with employee/time (or both null), reason, revision and UUID key             |
-| `GET, POST /production/cutting/orders/:id/worksheet` | Read or begin a saved sheet; cutting access                                                   |
-| `GET /production/cutting/worksheets/:id`             | Read saved sheet; cutting access                                                              |
-| `PUT /production/cutting/worksheets/:id/draft`       | Save partial form and checkmarks with expected revision; cutting access                       |
-| `POST /production/cutting/worksheets/:id/submit`     | Submit measurements and optional current draft with expected revision; cutting access         |
-| `GET /production/cutting/worksheets`                 | Admin review queue                                                                            |
-| `POST /production/cutting/worksheets/:id/review`     | Admin inventory reconciliation; UUID key, expected revision, optional explicit resolution     |
-| `POST /production/cutting/worksheets/:id/return`     | Admin return for correction; revision and reason                                              |
-| `POST /production/cutting/worksheets/:id/abandon`    | Admin abandon unused sheet; revision and reason                                               |
-| `GET, POST /employees`                               | Admin employee directory and creation                                                         |
-| `PUT /employees/:id`                                 | Admin update/deactivate; expected revision                                                    |
+| Route                                                | Purpose / access                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /production/employees`                          | Active employee picker; assigned production account or staff                                      |
+| `GET /production/:station/orders`                    | Station queue, completed-time range or all allocated orders; assigned production account or staff |
+| `GET /production/orders/:id/completions`             | Effective employee attribution; assigned production account or staff                              |
+| `POST /production/:station/orders/:id/complete`      | Whole-order completion with `employeeId`; UUID `Idempotency-Key`                                  |
+| `POST /production/:station/orders/:id/corrections`   | Admin correction with employee/time (or both null), reason, revision and UUID key                 |
+| `GET, POST /production/cutting/orders/:id/worksheet` | Read or begin a saved sheet; cutting access                                                       |
+| `GET /production/cutting/worksheets/:id`             | Read saved sheet; cutting access                                                                  |
+| `PUT /production/cutting/worksheets/:id/draft`       | Save partial form and checkmarks with expected revision; cutting access                           |
+| `POST /production/cutting/worksheets/:id/submit`     | Submit measurements and optional current draft with expected revision; cutting access             |
+| `GET /production/cutting/worksheets`                 | Admin review queue                                                                                |
+| `POST /production/cutting/worksheets/:id/review`     | Admin inventory reconciliation; UUID key, expected revision, optional explicit resolution         |
+| `POST /production/cutting/worksheets/:id/return`     | Admin return for correction; revision and reason                                                  |
+| `POST /production/cutting/worksheets/:id/abandon`    | Admin abandon unused sheet; revision and reason                                                   |
+| `GET, POST /employees`                               | Admin employee directory and creation                                                             |
+| `PUT /employees/:id`                                 | Admin update/deactivate; expected revision                                                        |
 
 `production` owns the completion table, attribution, corrections and station read model. Its controller delegates to `ProductionService`; its injected repository returns records, and its presenter formats public responses. Work orders own the order and scheduling. Production updates the existing order timestamp projection through `WorkOrdersService` inside the completion transaction; no duplicate order type is introduced. The station-to-timestamp mapping lives in the work-order milestone definitions, not in a repository.
 
@@ -62,6 +62,6 @@ Repositories are injected. New production/worksheet methods receive the active t
 
 ## Validation
 
-`production.integration.test.ts` uses disposable PostgreSQL/Redis fixtures and covers default-deny station access, assignment checks, Origin checks, active employees, allocation prerequisites, late/skipped stages, timestamps, historical attribution, corrections, concurrent retries, sheet freezing, draft persistence, stock sequencing, double review, abandonment and explicit discrepancy resolution. The full API suite verifies existing routes and workflows too.
+`production.integration.test.ts` uses disposable PostgreSQL/Redis fixtures and covers restricted production access, assignment checks, Origin checks, active employees, allocation prerequisites, late/skipped stages, timestamps, historical attribution, corrections, concurrent retries, sheet freezing, draft persistence, stock sequencing, double review, abandonment and explicit discrepancy resolution. The full API suite verifies existing routes and workflows too.
 
 `production.spec.ts` exercises station navigation, unscheduled completion, directory maintenance and a digital cutting/review workflow on desktop and tablet. It verifies saved checkmarks and measurements survive reload and Cancel discards unsaved edits. Browser tests use intercepted API responses; they do not prove Microsoft sign-in or physical iPad behavior.

@@ -13,7 +13,7 @@ for (const station of stations) {
     page,
   }) => {
     const state = await mockApi(page, {
-      role: 'station',
+      role: 'production',
       stations: [station.value],
     });
     // An old or manually changed URL must not select an unassigned station.
@@ -53,7 +53,7 @@ test('changing stations requires confirmation and resets attribution and filters
   page,
 }, info) => {
   const state = await mockApi(page, {
-    role: 'station',
+    role: 'production',
     stations: ['shipping', 'assembly'],
   });
   await page.goto('/stations?station=shipping&view=all&search=104801');

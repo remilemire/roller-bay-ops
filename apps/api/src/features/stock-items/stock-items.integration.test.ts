@@ -54,7 +54,7 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
         .post(`${path}/${randomUUID()}/void`)
         .set('Origin', origin)
         .expect(401);
-      await role('user');
+      await role('staff');
       await get(path).expect(200);
       await post(path, {}).expect(403);
       await correct(randomUUID(), {}, 403);
@@ -432,7 +432,7 @@ test('stock items integration', { timeout: 60_000 }, async (t) => {
       await voidStock(roll.id, 409);
       await remove(`/api/fabric-catalog/colors/${color.id}`).expect(409);
       await remove(`/api/locations/${location.id}`).expect(409);
-      await role('user');
+      await role('staff');
       await get(`${path}/${roll.id}`).expect(200);
       await correct(roll.id, { consumedAt }, 403);
       await voidStock(roll.id, 403);

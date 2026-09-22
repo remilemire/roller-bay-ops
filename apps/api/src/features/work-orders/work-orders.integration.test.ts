@@ -28,7 +28,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'order reads require a session; employees create orders, and the rest takes admin or owner',
     async () => {
-      await role('user');
+      await role('staff');
       await request(server).get(path).expect(401);
       await request(server).get(`${path}/${randomUUID()}`).expect(401);
       await request(server)

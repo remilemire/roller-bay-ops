@@ -59,6 +59,60 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0032 preserves existing access while making new accounts pending',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate } = await databaseBefore(t, '0032_');
+    for (const [subject, role] of [
+      ['production-account', 'station'],
+      ['staff-account', 'user'],
+      ['admin-account', 'admin'],
+      ['owner-account', 'owner'],
+    ] as const)
+      await client.query(
+        `INSERT INTO users (name,email,microsoft_subject_id,role)
+           VALUES ($1,$2,$3,$4)`,
+        [subject, `${subject}@example.com`, subject, role],
+      );
+    await client.query(
+      `INSERT INTO users (name,email,microsoft_subject_id)
+         VALUES ('default-account','default@example.com','default-account')`,
+    );
+
+    await migrate();
+
+    const roles = await client.query(
+      `SELECT microsoft_subject_id, role::text FROM users ORDER BY microsoft_subject_id`,
+    );
+    assert.deepEqual(roles.rows, [
+      { microsoft_subject_id: 'admin-account', role: 'admin' },
+      { microsoft_subject_id: 'default-account', role: 'staff' },
+      { microsoft_subject_id: 'owner-account', role: 'owner' },
+      { microsoft_subject_id: 'production-account', role: 'production' },
+      { microsoft_subject_id: 'staff-account', role: 'staff' },
+    ]);
+    const pending = await client.query(
+      `INSERT INTO users (name,email,microsoft_subject_id)
+         VALUES ('Pending','pending@example.com','pending-account') RETURNING role::text`,
+    );
+    assert.equal(pending.rows[0].role, 'pending');
+    await assert.rejects(
+      client.query(
+        `INSERT INTO users (name,email,microsoft_subject_id,role)
+           VALUES ('Owner 2','owner2@example.com','owner-2','owner')`,
+      ),
+      (error: unknown) => {
+        assert.ok(
+          typeof error === 'object' && error !== null && 'code' in error,
+        );
+        assert.equal(error.code, '23505');
+        return true;
+      },
+    );
+  },
+);
+
+test(
   '0028 moves blinds from allocations to their work orders, or stops',
   { timeout: 60_000 },
   async (t) => {

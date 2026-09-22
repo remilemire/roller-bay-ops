@@ -49,7 +49,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
     try {
       return await work();
     } finally {
-      await fixtures.setUserRole(userId, 'user');
+      await fixtures.setUserRole(userId, 'staff');
     }
   };
   const orders = (method: 'delete' | 'patch' | 'post' | 'put', url: string) => {

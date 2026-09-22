@@ -141,6 +141,10 @@ export class UsersService {
           throw new ConflictException(
             'Activate the recipient before transferring ownership.',
           );
+        if (recipient.role !== 'staff' && recipient.role !== 'admin')
+          throw new ConflictException(
+            'Grant the recipient staff access before transferring ownership.',
+          );
         // Release the unique owner slot first; both role changes commit together.
         const previousOwner = await context.users.setRole(
           currentOwner.id,
@@ -159,7 +163,7 @@ export class UsersService {
   async setRole(
     actorId: string,
     id: string,
-    role: 'station' | 'user' | 'admin',
+    role: 'pending' | 'production' | 'staff' | 'admin',
     stations: Station[] = [],
   ) {
     try {
@@ -172,10 +176,10 @@ export class UsersService {
             'Change the owner through an ownership transfer.',
           );
         return this.toPublic(
-          await context.users.setStationRole(
+          await context.users.setRoleAndStations(
             id,
             role,
-            role === 'station' ? stations : [],
+            role === 'production' ? stations : [],
           ),
         );
       });

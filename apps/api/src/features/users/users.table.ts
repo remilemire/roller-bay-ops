@@ -23,7 +23,7 @@ export const users = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     name: varchar('name', { length: 120 }).notNull(),
-    role: userRoleEnum('role').default('user').notNull(),
+    role: userRoleEnum('role').default('pending').notNull(),
     stations: jsonb('stations').$type<Station[]>().notNull().default([]),
     isActive: boolean('is_active').default(true).notNull(),
     email: varchar('email', { length: 254 }).notNull(),

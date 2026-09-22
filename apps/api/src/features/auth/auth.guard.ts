@@ -60,10 +60,11 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (
-      (user.role === 'station' && !roles?.includes('station')) ||
-      (roles && !hasAnyRole(user.role, roles))
-    )
+    // Unannotated business endpoints are staff-only. Restricted profiles must
+    // be admitted explicitly so pending and production accounts cannot inherit
+    // general workspace access by accident.
+    const requiredRoles = roles ?? ['staff'];
+    if (!hasAnyRole(user.role, requiredRoles))
       throw new ForbiddenException('Your role cannot perform this action.');
     return true;
   }

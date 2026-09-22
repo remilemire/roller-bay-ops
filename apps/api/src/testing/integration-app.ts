@@ -230,5 +230,9 @@ export async function startSignedInApp(t: TestContext) {
     .get('/api/auth/me')
     .set('Cookie', cookie)
     .expect(200);
-  return { ...harness, cookie, userId: currentUserSchema.parse(me.body).id };
+  const userId = currentUserSchema.parse(me.body).id;
+  // Feature suites need an approved employee; authentication suites use the
+  // lower-level harness when they need to exercise the pending default.
+  await harness.fixtures.setUserRole(userId, 'staff');
+  return { ...harness, cookie, userId };
 }

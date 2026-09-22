@@ -50,7 +50,7 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
   await t.test(
     'stock-receipt permissions, required idempotency header, CORS, and input validation',
     async () => {
-      await role('user');
+      await role('staff');
       await request(server).get(path).expect(401);
       await request(server).get(`${path}/${randomUUID()}`).expect(401);
       await request(server)
@@ -177,7 +177,7 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
         radialDepthMm: 10,
       });
       await correct(stockId, { stockReceiptItemId: null }, 400);
-      await role('user');
+      await role('staff');
       const replay = await submit(
         { items: input.items, purchaseOrderNumber: '12345' },
         key.toUpperCase(),
@@ -278,7 +278,7 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
         }).expect(201);
         await get(path).expect(200);
       }
-      await role('user');
+      await role('staff');
       const page1 = (await get(`${path}?pageSize=1`).expect(200)).body;
       const page2 = (await get(`${path}?pageSize=1&page=2`).expect(200)).body;
       assert.equal(page1.total, page2.total);

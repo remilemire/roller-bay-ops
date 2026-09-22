@@ -120,7 +120,7 @@ test('receipt quantity corrections require an explicit roll choice and retain th
 test('employees see history but have no correction action', async ({
   page,
 }) => {
-  await mockApi(page, { role: 'user' });
+  await mockApi(page, { role: 'staff' });
   await page.route(`**/api/stock-items/${ids.stock}/history*`, (route) =>
     route.fulfill({
       json: {

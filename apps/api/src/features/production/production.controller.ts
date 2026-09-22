@@ -25,7 +25,7 @@ import { EmployeesService } from '../employees/employees.service.js';
 import { ProductionService } from './production.service.js';
 import { requireStation } from './production-access.js';
 @Controller('production')
-@Roles('station')
+@Roles('production')
 export class ProductionController {
   constructor(
     private readonly production: ProductionService,

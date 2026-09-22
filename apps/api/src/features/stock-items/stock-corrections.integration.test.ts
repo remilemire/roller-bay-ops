@@ -26,7 +26,7 @@ test('stock corrections integration', { timeout: 60_000 }, async (t) => {
     async () => {
       const r = await receipt(1),
         s = r.items[0]!.stockItems[0]!;
-      await role('user');
+      await role('staff');
       const history = historySchema.parse(
         (await get(`/stock-items/${s.id}/history`).expect(200)).body,
       );

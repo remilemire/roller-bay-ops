@@ -32,7 +32,7 @@ test('admins reach the user directory from navigation and confirm a role change'
 test('ordinary users have no Users link and no directory request', async ({
   page,
 }, testInfo) => {
-  await mockApi(page, { role: 'user' });
+  await mockApi(page, { role: 'staff' });
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await page.goto('/users');

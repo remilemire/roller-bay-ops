@@ -73,7 +73,7 @@ test('workspace renders real-contract data and persists accessible light/dark pr
 test('touch navigation and role visibility follow the current session', async ({
   page,
 }, testInfo) => {
-  await mockApi(page, { role: 'user' });
+  await mockApi(page, { role: 'staff' });
   await page.goto('/');
   await expect(
     page.getByRole('heading', { name: 'Overview', exact: true }),
@@ -90,6 +90,16 @@ test('touch navigation and role visibility follow the current session', async ({
   await page.getByRole('link', { name: /C1-000/ }).click();
   await expect(page.getByRole('heading', { name: 'C1-000' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit stock' })).toHaveCount(0);
+});
+test('a pending account sees only the approval state', async ({ page }) => {
+  await mockApi(page, { role: 'pending' });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Access pending' }),
+  ).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Fabric stock' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 });
 test('an unauthenticated visitor sees the Microsoft sign-in screen', async ({
   page,

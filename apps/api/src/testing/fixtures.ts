@@ -23,7 +23,7 @@ export function createFixtures(pool: Pool) {
     async createUser(name: string) {
       const id = randomUUID();
       await pool.query(
-        `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,$2,$3,$4,'user')`,
+        `INSERT INTO users (id,name,email,microsoft_subject_id,role) VALUES ($1,$2,$3,$4,'staff')`,
         [id, name, `${id}@example.com`, id],
       );
       return id;

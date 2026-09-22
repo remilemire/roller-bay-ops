@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const userRoles = ['station', 'user', 'admin', 'owner'] as const;
+export const userRoles = [
+  'pending',
+  'production',
+  'staff',
+  'admin',
+  'owner',
+] as const;
 
 export const stationSchema = z.enum([
   'cutting',

@@ -51,7 +51,7 @@ test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
           .send({})
           .expect(401);
       }
-      for (const value of ['user'] as const) {
+      for (const value of ['staff'] as const) {
         await role(value);
         for (const route of routes) {
           await read(route).expect(200);
@@ -246,7 +246,7 @@ test('fabric catalog integration', { timeout: 60_000 }, async (t) => {
       await read('colors?materialId=invalid').expect(400);
 
       // A role change takes effect on the existing session, without another login.
-      await role('user');
+      await role('staff');
       await patch(`colors/${color.id}`, { thicknessMm: 1 }).expect(403);
       await read(`colors/${color.id}`).expect(200);
       await role('admin');
