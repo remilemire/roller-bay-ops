@@ -9,7 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { Station } from '@roller-bay/shared/users';
-import { workOrders } from './work-orders.table.js';
+import { workOrders } from '../work-orders/work-orders.table.js';
 import { users } from '../users/users.table.js';
 import { employees } from '../employees/employees.table.js';
 export const productionCompletions = pgTable(
@@ -44,3 +44,9 @@ export const productionCompletions = pgTable(
     ),
   ],
 );
+
+export type CompletionRecord = typeof productionCompletions.$inferSelect;
+export type CompletionValues = Omit<
+  CompletionRecord,
+  'workOrderId' | 'station'
+>;

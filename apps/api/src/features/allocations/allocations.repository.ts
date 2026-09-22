@@ -72,7 +72,13 @@ export class AllocationsRepository {
       tx: DatabaseTransaction,
     ) => Promise<T>,
     readOnly = false,
+    transaction?: DatabaseTransaction,
   ): Promise<T> {
+    if (transaction)
+      return operation(
+        new AllocationsRepository({ db: transaction }),
+        transaction,
+      );
     return this.db.transaction(
       async (tx) => {
         await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
@@ -85,6 +91,20 @@ export class AllocationsRepository {
     );
   }
 
+  async liveForOrder(orderId: string) {
+    return (
+      await this.db
+        .select({ id: allocations.id })
+        .from(allocations)
+        .where(
+          and(
+            eq(allocations.workOrderId, orderId),
+            eq(allocations.isDraft, false),
+            isNull(allocations.cancelledAt),
+          ),
+        )
+    )[0];
+  }
   async findById(id: string, lock = false) {
     // The header is locked on its own, then read with its order. Locking
     // through the join would re-check the join after a wait: a draft that the

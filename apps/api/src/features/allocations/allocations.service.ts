@@ -1,4 +1,4 @@
-import { CuttingWorksheetsRepository } from './cutting-worksheets.repository.js';
+import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
 import { AuditService, canonicalJson } from '../audit/audit.service.js';
 import {
   stockChanges,
@@ -18,8 +18,8 @@ import {
  * order, then stock in a common order before checking availability.
  *
  * The blinds a plan assigns are the work order's. This service reads them
- * through WorkOrdersService and writes nothing to the order but the two
- * milestones that mirror its live allocation.
+ * through WorkOrdersService and maintains only the allocation timestamp.
+ * Production milestones are recorded independently.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -100,6 +100,7 @@ const hash = (value: unknown) =>
 @Injectable()
 export class AllocationsService {
   constructor(
+    private readonly worksheets: CuttingWorksheetsService,
     private readonly audit: AuditService,
     private readonly repository: AllocationsRepository,
     private readonly stockItems: StockItemsService,
@@ -313,10 +314,7 @@ export class AllocationsService {
           input.expectedRevision,
         );
         await this.orders.assertPlanningAllowed(tx, header.workOrderId);
-        if (await new CuttingWorksheetsRepository(tx).forAllocation(id))
-          throw new ConflictException(
-            'Cutting has begun; the working sheet cannot be replanned.',
-          );
+        await this.worksheets.assertPlanMutable(tx, id);
         const before = await this.detail(repository, tx, header);
         // The order lock above prevents a production completion during replanning.
         // Its blinds remain fixed; replanning does not change its milestones.
@@ -357,10 +355,7 @@ export class AllocationsService {
         if (!header) throw new NotFoundException('Allocation not found.');
         if (header.cancelledAt) return this.detail(repository, tx, header);
         requireActiveRevision(header, revision);
-        if (await new CuttingWorksheetsRepository(tx).forAllocation(id))
-          throw new ConflictException(
-            'Cutting has begun; resolve the working sheet before cancelling.',
-          );
+        await this.worksheets.assertPlanMutable(tx, id);
         const order = await this.orders.release(tx, header.workOrderId);
         const items = await repository.items(id);
         await this.stockItems.findForAllocation(tx, {
@@ -417,12 +412,7 @@ export class AllocationsService {
           );
         return this.detail(repository, tx, header);
       }
-      const sheets = new CuttingWorksheetsRepository(tx);
-      const sheet = await sheets.forAllocation(id);
-      if (sheet && sheet.id !== worksheetId)
-        throw new ConflictException(
-          'Review the saved cutting worksheet to reconcile this allocation.',
-        );
+      await this.worksheets.assertReconciliationAllowed(tx, id, worksheetId);
       const parsed = completeAllocationSchema.safeParse(request);
       if (!parsed.success)
         throw new ConflictException(
@@ -448,13 +438,7 @@ export class AllocationsService {
         lock: true,
       });
       if (!worksheetId)
-        for (const stockId of ids) {
-          const pending = await sheets.latestForStock(stockId);
-          if (pending && !pending.reviewedAt)
-            throw new ConflictException(
-              `Review pending cutting results for order ${pending.orderNumber} first.`,
-            );
-        }
+        await this.worksheets.assertStockReconciliationAllowed(tx, ids);
       const before = await this.detail(repository, tx, header);
       const effects = await this.stockItems.recordCuttingResults(
         input.items,
@@ -495,19 +479,47 @@ export class AllocationsService {
       return result;
     };
     return allocationOperation(() =>
-      transaction
-        ? operation(new AllocationsRepository({ db: transaction }), transaction)
-        : this.repository.withTransaction(operation),
+      this.repository.withTransaction(operation, false, transaction),
     );
   }
 
-  async worksheetSnapshot(tx: DatabaseTransaction, id: string) {
-    const repository = new AllocationsRepository({ db: tx });
-    const header = await repository.findById(id, true);
-    if (!header) throw new NotFoundException('Allocation not found.');
-    requireActiveRevision(header, header.revision);
-    return allocationDetailSchema.parse(
-      await this.detail(repository, tx, header),
+  lockForWorksheet(tx: DatabaseTransaction, id: string) {
+    return this.repository.withTransaction(
+      async (repository) => {
+        const row = await repository.findById(id, true);
+        if (!row) throw new NotFoundException('Allocation not found.');
+        return row;
+      },
+      false,
+      tx,
+    );
+  }
+
+  lockForCutting(tx: DatabaseTransaction, orderId: string) {
+    return this.repository.withTransaction(
+      async (repository) => {
+        const row = await repository.liveForOrder(orderId);
+        if (!row)
+          throw new ConflictException('Allocate this order before cutting.');
+        return this.lockForWorksheet(tx, row.id);
+      },
+      false,
+      tx,
+    );
+  }
+
+  worksheetSnapshot(tx: DatabaseTransaction, id: string) {
+    return this.repository.withTransaction(
+      async (repository) => {
+        const header = await repository.findById(id, true);
+        if (!header) throw new NotFoundException('Allocation not found.');
+        requireActiveRevision(header, header.revision);
+        return allocationDetailSchema.parse(
+          await this.detail(repository, tx, header),
+        );
+      },
+      false,
+      tx,
     );
   }
 

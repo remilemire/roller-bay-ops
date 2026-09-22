@@ -22,15 +22,13 @@ import { correctionKeySchema } from '@roller-bay/shared/corrections';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { EmployeesService } from '../employees/employees.service.js';
-import { WorkOrderProductionService } from '../work-orders/work-order-production.service.js';
-import { ProductionRepository } from './production.repository.js';
+import { ProductionService } from './production.service.js';
 import { requireStation } from './production-access.js';
 @Controller('production')
 @Roles('station')
 export class ProductionController {
   constructor(
-    private readonly repository: ProductionRepository,
-    private readonly orders: WorkOrderProductionService,
+    private readonly production: ProductionService,
     private readonly employees: EmployeesService,
   ) {}
   @Get('employees') employeesList(@Req() req: Request) {
@@ -42,7 +40,7 @@ export class ProductionController {
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!);
-    return this.orders.list(id);
+    return this.production.list(id);
   }
   @Get(':station/orders') list(
     @Param('station', new ZodValidationPipe(stationSchema)) station: Station,
@@ -50,7 +48,7 @@ export class ProductionController {
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!, station);
-    return this.repository.list(station, query);
+    return this.production.listOrders(station, query);
   }
   @Post(':station/orders/:id/complete') complete(
     @Param('station', new ZodValidationPipe(stationSchema)) station: Station,
@@ -61,7 +59,7 @@ export class ProductionController {
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!, station);
-    return this.orders.complete(
+    return this.production.complete(
       id,
       station,
       body.employeeId,
@@ -77,7 +75,7 @@ export class ProductionController {
     @Headers('idempotency-key') rawKey: string,
     @Req() req: Request,
   ) {
-    return this.orders.correct(
+    return this.production.correct(
       id,
       station,
       body,

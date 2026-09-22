@@ -1,46 +1,44 @@
+import { ConflictException, Injectable } from '@nestjs/common';
 import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  productionCompletionSchema,
+  type StationQuery,
   type MilestoneCorrection,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
-import { EmployeesRepository } from '../employees/employees.repository.js';
-import { AuditService } from '../audit/audit.service.js';
-import { WorkOrdersRepository } from './work-orders.repository.js';
+import { EmployeesService } from '../employees/employees.service.js';
+import { DatabaseService } from '../../database/database.service.js';
 import {
-  WorkOrderProductionRepository,
-  milestoneColumn,
-} from './work-order-production.repository.js';
-import { presentWorkOrder } from './work-orders.presenter.js';
-import { workOrdersOperation } from './work-orders.operation.js';
-export const presentCompletion = (
-  row: Awaited<
-    ReturnType<WorkOrderProductionRepository['completions']>
-  >[number],
-) =>
-  productionCompletionSchema.parse({
-    ...row,
-    completedAt: row.completedAt.toISOString(),
-    recordedAt: row.recordedAt.toISOString(),
-  });
+  presentCompletion,
+  presentStationOrders,
+} from './production.presenter.js';
+import { AuditService } from '../audit/audit.service.js';
+import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { ProductionRepository } from './production.repository.js';
+import { milestoneTimestampField } from '../work-orders/work-order-milestones.js';
+import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
+import { productionOperation } from './production.operation.js';
 @Injectable()
-export class WorkOrderProductionService {
+export class ProductionService {
   constructor(
-    private readonly repository: WorkOrdersRepository,
+    private readonly repository: ProductionRepository,
+    private readonly database: DatabaseService,
+    private readonly orders: WorkOrdersService,
+    private readonly employees: EmployeesService,
     private readonly audit: AuditService,
   ) {}
   list(id: string) {
-    return this.repository.withTransaction(async (repo, tx) => {
-      if (!(await repo.findById(id)))
-        throw new NotFoundException('Order not found.');
-      return (await new WorkOrderProductionRepository(tx).completions(id)).map(
-        presentCompletion,
-      );
-    });
+    return productionOperation(() =>
+      this.database.transaction(async (tx) => {
+        await this.orders.getForProduction(tx, id, false);
+        return (await this.repository.completions(tx, id)).map(
+          presentCompletion,
+        );
+      }, true),
+    );
+  }
+  async listOrders(station: Station, query: StationQuery) {
+    return productionOperation(async () =>
+      presentStationOrders(await this.repository.list(station, query)),
+    );
   }
   complete(
     id: string,
@@ -67,10 +65,9 @@ export class WorkOrderProductionService {
     actor: string,
     key: string,
   ) {
-    return workOrdersOperation(() =>
-      this.repository.withTransaction(async (repo, tx) => {
-        const order = await repo.findByIdForUpdate(id);
-        if (!order) throw new NotFoundException('Order not found.');
+    return productionOperation(() =>
+      this.database.transaction(async (tx) => {
+        const order = await this.orders.getForProduction(tx, id);
         const correction = 'reason' in input;
         const scope = `production.${station}.${correction ? 'correct' : 'complete'}`;
         const replay = await this.audit.replay(
@@ -90,32 +87,52 @@ export class WorkOrderProductionService {
           throw new ConflictException(
             'Order changed; refresh before correcting.',
           );
-        const production = new WorkOrderProductionRepository(tx);
-        const before = (await production.completions(id)).find(
+        const before = (await this.repository.completions(tx, id)).find(
           (r) => r.station === station,
         );
-        if (!correction && order[milestoneColumn[station]]) {
+        if (!correction && order[milestoneTimestampField[station]]) {
           if (!before || before.employeeId !== input.employeeId)
             throw new ConflictException(
               'Completion already recorded. An admin can correct its attribution.',
             );
-          // Distinct duplicate submissions never replace the first employee or timestamp.
-          return {
-            eventId: null,
-            recordId: id,
-            revision: order.revision,
-            affectedAllocationIds: [],
-            createdStockItemIds: [],
+          // A distinct confirmation leaves the milestone intact, but records its
+          // acknowledgement so that this key remains safe after later corrections.
+          const snapshot = {
+            type: 'production' as const,
+            value: presentCompletion(before),
           };
+          const eventId = await this.audit.record(
+            tx,
+            actor,
+            `order.${station}.completion-confirmed`,
+            [
+              {
+                recordType: 'production',
+                recordId: id,
+                before: snapshot,
+                after: snapshot,
+              },
+            ],
+          );
+          return this.audit.remember(
+            tx,
+            actor,
+            scope,
+            id,
+            key,
+            replay.requestHash,
+            {
+              eventId,
+              recordId: id,
+              revision: order.revision,
+              affectedAllocationIds: [],
+              createdStockItemIds: [],
+            },
+          );
         }
         const employee = input.employeeId
-          ? await new EmployeesRepository({ db: tx }).find(
-              input.employeeId,
-              true,
-            )
+          ? await this.employees.requireActive(tx, input.employeeId)
           : null;
-        if (input.employeeId && !employee?.isActive)
-          throw new ConflictException('Choose an active employee.');
         const now = new Date();
         const completedAt = correction
           ? input.completedAt
@@ -137,8 +154,13 @@ export class WorkOrderProductionService {
                 recordedByUserId: actor,
               }
             : null;
-        await production.save(id, station, next);
-        const after = await repo.findById(id);
+        await this.repository.save(tx, id, station, next);
+        const after = await this.orders.recordProductionMilestone(
+          tx,
+          id,
+          station,
+          completedAt,
+        );
         const eventId = await this.audit.record(
           tx,
           actor,

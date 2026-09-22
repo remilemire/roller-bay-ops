@@ -1,3 +1,4 @@
+import { AuditService } from '../audit/audit.service.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -360,10 +361,15 @@ test(
         await post(`/api/production/cutting/worksheets/${next.id}/review`, {
           expectedRevision: submittedNext.revision,
         }).expect(409);
+        const reviewKey = randomUUID();
         const review = () =>
-          post(`/api/production/cutting/worksheets/${sheet.id}/review`, {
-            expectedRevision: submitted.revision,
-          });
+          post(
+            `/api/production/cutting/worksheets/${sheet.id}/review`,
+            {
+              expectedRevision: submitted.revision,
+            },
+            reviewKey,
+          );
         const reviewed = await Promise.all([review(), review()]);
         assert.deepEqual(
           reviewed.map((r) => r.status),
@@ -476,6 +482,303 @@ test(
         assert.equal(
           (await fixtures.workOrder(allocation.workOrderId)).cut_at,
           null,
+        );
+      },
+    );
+    await t.test(
+      'a successful duplicate retry cannot restore an admin-cleared milestone',
+      async () => {
+        await role('admin');
+        const fresh = await create(await input(await seed()));
+        const path = `/api/production/checking/orders/${fresh.workOrderId}/complete`;
+        await post(path, { employeeId: other.id }).expect(201);
+        const key = randomUUID();
+        const duplicate = (
+          await post(path, { employeeId: other.id }, key).expect(201)
+        ).body;
+        const current = (
+          await get(`/api/work-orders/${fresh.workOrderId}`).expect(200)
+        ).body;
+        await post(
+          `/api/production/checking/orders/${fresh.workOrderId}/corrections`,
+          {
+            expectedRevision: current.revision,
+            employeeId: null,
+            completedAt: null,
+            reason: 'Wrong order scanned',
+          },
+        ).expect(201);
+        assert.deepEqual(
+          (await post(path, { employeeId: other.id }, key).expect(201)).body,
+          duplicate,
+        );
+        assert.equal(
+          (await fixtures.workOrder(fresh.workOrderId)).checked_at,
+          null,
+        );
+        assert.equal(
+          (
+            await get(
+              `/api/production/orders/${fresh.workOrderId}/completions`,
+            ).expect(200)
+          ).body.length,
+          0,
+        );
+      },
+    );
+    await t.test(
+      'a final worksheet audit failure rolls back inventory, remnants and both workflow records',
+      async () => {
+        await role('admin');
+        const stock = await seed();
+        const allocation = await create(await input(stock));
+        const sheet = (
+          await post(
+            `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
+            { employeeId: other.id },
+          ).expect(201)
+        ).body;
+        const submitted = (
+          await post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
+            expectedRevision: sheet.revision,
+            results: {
+              expectedRevision: allocation.revision,
+              items: [
+                {
+                  stockItemId: stock,
+                  expectedRevision: 1,
+                  outcome: 'returned-roll',
+                  radialDepthMm: 10,
+                  tubeOuterDiameterMm: 50,
+                  locationId: ids.location,
+                  scraps: [
+                    {
+                      widthMm: 100,
+                      lengthMm: 100,
+                      quantity: 1,
+                      locationId: ids.location,
+                    },
+                  ],
+                },
+              ],
+            },
+          }).expect(201)
+        ).body;
+        const before = (
+          await pool.query(
+            'SELECT count(*)::int AS count FROM fabric_stock_items',
+          )
+        ).rows[0].count;
+        const audit = h.app.get(AuditService);
+        const original = audit.record;
+        const failure = t.mock.method(
+          audit,
+          'record',
+          (...args: Parameters<AuditService['record']>) => {
+            if (args[2] === 'cutting.reviewed')
+              throw new Error('Simulated final worksheet audit failure');
+            return original.apply(audit, args);
+          },
+        );
+        try {
+          await post(`/api/production/cutting/worksheets/${sheet.id}/review`, {
+            expectedRevision: submitted.revision,
+          }).expect(503);
+        } finally {
+          failure.mock.restore();
+        }
+        const after = (
+          await pool.query(
+            'SELECT count(*)::int AS count FROM fabric_stock_items',
+          )
+        ).rows[0].count;
+        assert.equal(after, before);
+        assert.equal(
+          (
+            await pool.query(
+              'SELECT revision FROM fabric_stock_items WHERE id=$1',
+              [stock],
+            )
+          ).rows[0].revision,
+          1,
+        );
+        assert.equal(
+          (await get(`/api/allocations/${allocation.id}`).expect(200)).body
+            .state,
+          'active',
+        );
+        const retained = (
+          await get(`/api/production/cutting/worksheets/${sheet.id}`).expect(
+            200,
+          )
+        ).body;
+        assert.equal(retained.reviewedAt, null);
+        assert.equal(retained.revision, submitted.revision);
+        await post(`/api/production/cutting/worksheets/${sheet.id}/review`, {
+          expectedRevision: submitted.revision,
+        }).expect(201);
+        assert.equal(
+          (
+            await pool.query(
+              'SELECT count(*)::int AS count FROM fabric_stock_items',
+            )
+          ).rows[0].count,
+          before + 1,
+        );
+      },
+    );
+
+    await t.test(
+      'a physical resolution breaks revision propagation to older captured successor observations',
+      async () => {
+        await role('admin');
+        const stock = await seed();
+        const first = await create(await input(stock));
+        const second = await create(await input(stock));
+        const begin = async (orderId: string) =>
+          (
+            await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
+              employeeId: other.id,
+            }).expect(201)
+          ).body;
+        const results = (
+          revision: number,
+          depth: number,
+          stockRevision = 1,
+        ) => ({
+          expectedRevision: revision,
+          items: [
+            {
+              stockItemId: stock,
+              expectedRevision: stockRevision,
+              outcome: 'returned-roll',
+              radialDepthMm: depth,
+              tubeOuterDiameterMm: 50,
+              locationId: ids.location,
+              scraps: [],
+            },
+          ],
+        });
+        const a = await begin(first.workOrderId);
+        const sa = (
+          await post(`/api/production/cutting/worksheets/${a.id}/submit`, {
+            expectedRevision: a.revision,
+            results: results(first.revision, 10),
+          }).expect(201)
+        ).body;
+        const b = await begin(second.workOrderId);
+        const sb = (
+          await post(`/api/production/cutting/worksheets/${b.id}/submit`, {
+            expectedRevision: b.revision,
+            results: results(second.revision, 8),
+          }).expect(201)
+        ).body;
+        await pool.query(
+          'UPDATE fabric_stock_items SET revision=revision+1 WHERE id=$1',
+          [stock],
+        );
+        const key = randomUUID();
+        const path = `/api/production/cutting/worksheets/${a.id}/review`;
+        const body = {
+          expectedRevision: sa.revision,
+          resolution: {
+            reason: 'Current physical remeasurement after later work',
+            results: results(first.revision, 6, 2),
+          },
+        };
+        const different = {
+          ...body,
+          resolution: {
+            ...body.resolution,
+            results: results(first.revision, 9, 2),
+          },
+        };
+        // Competing payloads never both report successful application.
+        const concurrent = await Promise.all([
+          post(path, body, key),
+          post(path, different, key),
+        ]);
+        assert.deepEqual(
+          concurrent.map((reply) => reply.status).sort(),
+          [201, 409],
+        );
+        const accepted = concurrent[0]!.status === 201 ? body : different;
+        const declined = concurrent[0]!.status === 201 ? different : body;
+        await post(path, accepted, key).expect(201);
+        await post(path, declined, key).expect(409);
+        await post(path, accepted).expect(409);
+        await post(path, { expectedRevision: sa.revision }).expect(409);
+        const before = (
+          await pool.query(
+            'SELECT radial_depth_mm,revision FROM fabric_stock_items WHERE id=$1',
+            [stock],
+          )
+        ).rows[0];
+        await post(`/api/production/cutting/worksheets/${b.id}/review`, {
+          expectedRevision: sb.revision,
+        }).expect(409);
+        const after = (
+          await pool.query(
+            'SELECT radial_depth_mm,revision FROM fabric_stock_items WHERE id=$1',
+            [stock],
+          )
+        ).rows[0];
+        assert.deepEqual(after, before);
+        await post(`/api/production/cutting/worksheets/${b.id}/review`, {
+          expectedRevision: sb.revision,
+          resolution: {
+            reason: 'Verified current measurement for the remaining sheet',
+            results: results(second.revision, 5, before.revision),
+          },
+        }).expect(201);
+        const final = (
+          await pool.query(
+            'SELECT radial_depth_mm FROM fabric_stock_items WHERE id=$1',
+            [stock],
+          )
+        ).rows[0];
+        assert.equal(Number(final.radial_depth_mm), 5);
+      },
+    );
+
+    await t.test(
+      'production and order projections roll back together when completion audit fails',
+      async () => {
+        await role('admin');
+        const allocation = await create(await input(await seed()));
+        const before = await fixtures.workOrder(allocation.workOrderId);
+        const path = `/api/production/checking/orders/${allocation.workOrderId}/complete`;
+        const key = randomUUID();
+        const audit = h.app.get(AuditService);
+        const original = audit.record;
+        const failure = t.mock.method(
+          audit,
+          'record',
+          (...args: Parameters<AuditService['record']>) => {
+            if (args[2] === 'order.checking.completed')
+              throw new Error('Simulated completion audit failure');
+            return original.apply(audit, args);
+          },
+        );
+        try {
+          await post(path, { employeeId: other.id }, key).expect(503);
+        } finally {
+          failure.mock.restore();
+        }
+        const after = await fixtures.workOrder(allocation.workOrderId);
+        assert.equal(after.checked_at, null);
+        assert.equal(after.revision, before.revision);
+        assert.equal(
+          (
+            await get(
+              `/api/production/orders/${allocation.workOrderId}/completions`,
+            ).expect(200)
+          ).body.length,
+          0,
+        );
+        await post(path, { employeeId: other.id }, key).expect(201);
+        assert.ok(
+          (await fixtures.workOrder(allocation.workOrderId)).checked_at,
         );
       },
     );

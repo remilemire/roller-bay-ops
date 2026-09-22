@@ -20,7 +20,7 @@ The worksheet has cut checkboxes, instructions, return measurements, locations a
 
 In **Stations → Review cutting results**, an admin opens submissions and accepts them to reconcile inventory. Reconciliation applies the existing allocation completion rules, creates retained remnants and releases reservations atomically. It never writes production timestamps. A submission can be returned for correction with a reason. Admins can explicitly resolve a stock discrepancy using verified measurements and a reason; original submissions remain in the audit records. Review every measurement and its place in the cutting sequence before resolving a discrepancy.
 
-Worksheets sharing a roll are sequenced under stock locks. A cutter must submit the preceding worksheet before starting another on that roll. The office must reconcile them in physical cutting order. Stock revisions may advance automatically only through the recorded, reviewed predecessor. An unrelated stock change blocks normal review rather than silently replacing a newer balance. Duplicate reviews do not create duplicate remnants.
+Worksheets sharing a roll are sequenced under stock locks. A cutter must submit the preceding worksheet before starting another on that roll. The office must reconcile them in physical cutting order. Stock revisions may advance automatically only through the recorded, reviewed predecessor. An unrelated stock change blocks normal review rather than silently replacing a newer balance. Review requests require a UUID idempotency key. Exact retries return the accepted sheet; a different request after review is rejected instead of claiming its measurements were applied. Duplicate reviews do not create duplicate remnants. An explicit physical resolution breaks automatic revision propagation to already captured successors: each successor must resolve its discrepancy before its historical observations can affect current inventory.
 
 The station requires a connection. Saved progress survives reload; unsaved edits do not. Failed saves retain the open form, and leaving dirty work prompts for confirmation. The app does not provide an offline synchronization queue.
 
@@ -46,13 +46,19 @@ All paths below have the `/api` prefix. Mutations require the configured Origin.
 | `PUT /production/cutting/worksheets/:id/draft`       | Save partial form and checkmarks with expected revision; cutting access                       |
 | `POST /production/cutting/worksheets/:id/submit`     | Submit measurements and optional current draft with expected revision; cutting access         |
 | `GET /production/cutting/worksheets`                 | Admin review queue                                                                            |
-| `POST /production/cutting/worksheets/:id/review`     | Admin inventory reconciliation; expected revision, optional explicit resolution               |
+| `POST /production/cutting/worksheets/:id/review`     | Admin inventory reconciliation; UUID key, expected revision, optional explicit resolution     |
 | `POST /production/cutting/worksheets/:id/return`     | Admin return for correction; revision and reason                                              |
 | `POST /production/cutting/worksheets/:id/abandon`    | Admin abandon unused sheet; revision and reason                                               |
 | `GET, POST /employees`                               | Admin employee directory and creation                                                         |
 | `PUT /employees/:id`                                 | Admin update/deactivate; expected revision                                                    |
 
-`production` coordinates the station interface and access checks. Work orders own milestones and completion attribution. Allocations own cutting worksheets and reconciliation; stock items remain the owner of stock mutation rules. Employees are a separate directory, and users remain the authentication identity.
+`production` owns the completion table, attribution, corrections and station read model. Its controller delegates to `ProductionService`; its injected repository returns records, and its presenter formats public responses. Work orders own the order and scheduling. Production updates the existing order timestamp projection through `WorkOrdersService` inside the completion transaction; no duplicate order type is introduced. The station-to-timestamp mapping lives in the work-order milestone definitions, not in a repository.
+
+`cutting-worksheets` owns its table, saved instructions, draft/submission state, sequence rules and audit changes. Its injected repository only queries that feature's table. `CuttingWorksheetsService` has no dependency on allocations, work orders or stock services. Allocations calls worksheet service guards for planning, cancellation and reconciliation; it never inspects worksheet rows itself.
+
+`CuttingWorkflowService` coordinates beginning, abandoning and reviewing sheets through allocation, work-order, stock and worksheet services. One explicit transaction crosses those calls; its lock order is allocation, order when needed, worksheet, then stock sorted by ID. Allocations owns fabric plans and reconciliation; stock items owns stock mutation rules. Employees is a separate directory, and users remains the authentication identity.
+
+Repositories are injected. New production/worksheet methods receive the active transaction explicitly; the existing allocation repository binds itself internally when joining a transaction. Controllers do not call repositories, and repositories do not import services or response presenters. These ownership changes move TypeScript files without renaming or recreating database tables.
 
 ## Validation
 

@@ -11,10 +11,10 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { Worksheet } from '@roller-bay/shared/production';
-import { workOrders } from '../../work-orders/work-orders.table.js';
-import { allocations } from './allocations.table.js';
-import { users } from '../../users/users.table.js';
-import { employees } from '../../employees/employees.table.js';
+import { workOrders } from '../work-orders/work-orders.table.js';
+import { allocations } from '../allocations/tables/allocations.table.js';
+import { users } from '../users/users.table.js';
+import { employees } from '../employees/employees.table.js';
 export const cuttingWorksheets = pgTable(
   'cutting_worksheets',
   {
@@ -72,3 +72,6 @@ export const cuttingWorksheets = pgTable(
     ),
   ],
 );
+
+export type WorksheetRecord = typeof cuttingWorksheets.$inferSelect;
+export type WorksheetInsert = typeof cuttingWorksheets.$inferInsert;

@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { sql } from 'drizzle-orm';
 import type { Environment } from '../config/environment.js';
 
 @Injectable()
@@ -24,6 +25,22 @@ export class DatabaseService implements OnApplicationShutdown {
 
   async onApplicationShutdown() {
     await this.pool.end();
+  }
+
+  transaction<T>(
+    operation: (tx: DatabaseTransaction) => Promise<T>,
+    readOnly = false,
+  ) {
+    return this.db.transaction(
+      async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+        return operation(tx);
+      },
+      readOnly
+        ? { isolationLevel: 'repeatable read', accessMode: 'read only' }
+        : undefined,
+    );
   }
 
   async checkConnection() {

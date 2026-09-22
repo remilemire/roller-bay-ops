@@ -1,3 +1,4 @@
+import type { Station } from '@roller-bay/shared/users';
 import {
   BadRequestException,
   ConflictException,
@@ -274,20 +275,22 @@ export class WorkOrdersService {
   }
 
   // The allocation workflow stamps the order inside its own transaction and
-  // records the returned change on its own audit event. allocated_at and
-  // cut_at mirror the live allocation's confirmed_at and completed_at.
+  // records the returned change on its own audit event. Only allocated_at
+  // mirrors allocation state; production records its milestones separately.
 
   /** The blinds a plan may assign; refuses an order that does not exist. */
   async lines(tx: DatabaseTransaction, workOrderId: string) {
-    const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findById(workOrderId);
+    const order = await this.repository.findById(workOrderId, tx);
     if (!order) throw orderNotFound();
-    return { order, lines: await repository.lines(workOrderId) };
+    return {
+      order,
+      lines: await this.repository.lines(workOrderId, false, tx),
+    };
   }
 
   /** Blinds by id, retired or not: what a past plan's cuts were made for. */
   linesById(tx: DatabaseTransaction, ids: string[]) {
-    return new WorkOrdersRepository({ db: tx }).linesById(ids);
+    return this.repository.linesById(ids, tx);
   }
 
   /**
@@ -296,8 +299,7 @@ export class WorkOrdersService {
    * blinds, which takes the same lock, from slipping in before confirmation.
    */
   async allocate(tx: DatabaseTransaction, workOrderId: string, at: Date) {
-    const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findByIdForUpdate(workOrderId);
+    const order = await this.repository.findByIdForUpdate(workOrderId, tx);
     if (!order) throw orderNotFound();
     if (order.allocatedAt) throw orderAlreadyAllocated();
     // The derived status would hide an allocation made after shipping.
@@ -312,7 +314,7 @@ export class WorkOrdersService {
           },
         ],
       });
-    const lines = await repository.lines(workOrderId);
+    const lines = await this.repository.lines(workOrderId, false, tx);
     if (!lines.length)
       throw new BadRequestException({
         message: 'This order has no blinds. Enter them before allocating.',
@@ -328,7 +330,7 @@ export class WorkOrdersService {
       lines,
       change: change(
         order,
-        await repository.stamp(order.id, { allocatedAt: at }),
+        await this.repository.stamp(order.id, { allocatedAt: at }, tx),
       ),
     };
   }
@@ -364,10 +366,30 @@ export class WorkOrdersService {
     });
   }
 
+  async getForProduction(tx: DatabaseTransaction, id: string, lock = true) {
+    const order = lock
+      ? await this.repository.findByIdForUpdate(id, tx)
+      : await this.repository.findById(id, tx);
+    if (!order) throw orderNotFound();
+    return order;
+  }
+
+  async recordProductionMilestone(
+    tx: DatabaseTransaction,
+    id: string,
+    station: Station,
+    at: Date | null,
+  ) {
+    const order = await this.getForProduction(tx, id);
+    if (!order.allocatedAt)
+      throw new ConflictException(
+        'Allocate fabric before recording production.',
+      );
+    return this.repository.setProductionMilestone(tx, id, station, at);
+  }
+
   async assertPlanningAllowed(tx: DatabaseTransaction, workOrderId: string) {
-    const order = await new WorkOrdersRepository({ db: tx }).findByIdForUpdate(
-      workOrderId,
-    );
+    const order = await this.repository.findByIdForUpdate(workOrderId, tx);
     if (!order) throw orderNotFound();
     if (order.cutAt || order.assembledAt || order.checkedAt || order.shippedAt)
       throw new ConflictException(
@@ -381,11 +403,10 @@ export class WorkOrdersService {
     values: Parameters<WorkOrdersRepository['stamp']>[1],
     allow?: (order: WorkOrderRecord) => void,
   ): Promise<AuditChange> {
-    const repository = new WorkOrdersRepository({ db: tx });
-    const order = await repository.findByIdForUpdate(workOrderId);
+    const order = await this.repository.findByIdForUpdate(workOrderId, tx);
     // The foreign key keeps an allocation's order in existence.
     if (!order) throw orderNotFound();
     allow?.(order);
-    return change(order, await repository.stamp(order.id, values));
+    return change(order, await this.repository.stamp(order.id, values, tx));
   }
 }

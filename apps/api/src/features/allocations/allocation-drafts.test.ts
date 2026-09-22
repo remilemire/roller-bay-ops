@@ -1,3 +1,4 @@
+import type { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { ConfigService } from '@nestjs/config';
 import { CuttingRulesService } from './cutting-rules.service.js';
@@ -164,6 +165,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     },
   };
   const service = new AllocationsService(
+    {} as CuttingWorksheetsService,
     {} as AuditService,
     repository as unknown as AllocationsRepository,
     stock as unknown as StockItemsService,

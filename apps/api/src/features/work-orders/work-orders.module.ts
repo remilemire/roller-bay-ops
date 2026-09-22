@@ -1,4 +1,3 @@
-import { WorkOrderProductionService } from './work-order-production.service.js';
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../database/database.module.js';
 import { AuditModule } from '../audit/audit.module.js';
@@ -9,11 +8,7 @@ import { WorkOrdersService } from './work-orders.service.js';
 @Module({
   imports: [AuditModule, DatabaseModule],
   controllers: [WorkOrdersController],
-  providers: [
-    WorkOrdersService,
-    WorkOrdersRepository,
-    WorkOrderProductionService,
-  ],
-  exports: [WorkOrdersService, WorkOrderProductionService],
+  providers: [WorkOrdersService, WorkOrdersRepository],
+  exports: [WorkOrdersService],
 })
 export class WorkOrdersModule {}

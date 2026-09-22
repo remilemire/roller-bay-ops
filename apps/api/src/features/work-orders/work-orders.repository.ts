@@ -1,3 +1,5 @@
+import { milestoneTimestampField } from './work-order-milestones.js';
+import type { Station } from '@roller-bay/shared/users';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   and,
@@ -134,8 +136,8 @@ export class WorkOrdersRepository {
     );
   }
 
-  async findById(id: string) {
-    const [row] = await this.db
+  async findById(id: string, tx: WorkOrdersDatabase = this.db) {
+    const [row] = await tx
       .select(columns)
       .from(workOrders)
       .where(and(eq(workOrders.id, id), present));
@@ -148,8 +150,8 @@ export class WorkOrdersRepository {
    * foreign key already holds on its order, so two requests for one order
    * wait on each other instead of deadlocking.
    */
-  async findByIdForUpdate(id: string) {
-    const [row] = await this.db
+  async findByIdForUpdate(id: string, tx: WorkOrdersDatabase = this.db) {
+    const [row] = await tx
       .select(columns)
       .from(workOrders)
       .where(and(eq(workOrders.id, id), present))
@@ -199,32 +201,45 @@ export class WorkOrdersRepository {
     return (await this.findById(id))!;
   }
 
+  async setProductionMilestone(
+    tx: DatabaseTransaction,
+    id: string,
+    station: Station,
+    at: Date | null,
+  ) {
+    await tx
+      .update(workOrders)
+      .set({
+        [milestoneTimestampField[station]]: at,
+        updatedAt: new Date(),
+        revision: sql`${workOrders.revision}+1`,
+      })
+      .where(eq(workOrders.id, id));
+    return (await this.findById(id, tx))!;
+  }
+
   /**
-   * Milestones mirrored from the order's allocation. They leave `revision`
+   * The allocation stamp leaves `revision`
    * alone: they touch columns no edit writes, and the row lock already
    * serialises them against edits, so allocating fabric never makes an
    * admin's open edit stale.
    */
   async stamp(
     id: string,
-    values: Partial<
-      Pick<
-        WorkOrderRecord,
-        'allocatedAt' | 'cutAt' | 'assembledAt' | 'checkedAt' | 'shippedAt'
-      >
-    >,
+    values: Pick<WorkOrderRecord, 'allocatedAt'>,
+    tx: WorkOrdersDatabase = this.db,
   ) {
-    await this.db
+    await tx
       .update(workOrders)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
-    return (await this.findById(id))!;
+    return (await this.findById(id, tx))!;
   }
 
   /** Blinds by id, retired or not: what a past plan's cuts were made for. */
-  linesById(ids: string[]) {
+  linesById(ids: string[], tx: WorkOrdersDatabase = this.db) {
     if (!ids.length) return Promise.resolve([]);
-    return this.db
+    return tx
       .select()
       .from(workOrderLines)
       .where(inArray(workOrderLines.id, ids))
@@ -232,8 +247,12 @@ export class WorkOrdersRepository {
   }
 
   /** The order's blinds in order; retired ones only for a save to compare. */
-  lines(workOrderId: string, includeRetired = false) {
-    return this.db
+  lines(
+    workOrderId: string,
+    includeRetired = false,
+    tx: WorkOrdersDatabase = this.db,
+  ) {
+    return tx
       .select()
       .from(workOrderLines)
       .where(

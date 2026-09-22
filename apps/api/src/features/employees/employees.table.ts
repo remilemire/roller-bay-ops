@@ -30,3 +30,5 @@ export const employees = pgTable(
     check('employees_revision_positive', sql`${t.revision} > 0`),
   ],
 );
+
+export type EmployeeRecord = typeof employees.$inferSelect;

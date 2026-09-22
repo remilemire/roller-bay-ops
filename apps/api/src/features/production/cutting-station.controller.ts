@@ -1,7 +1,10 @@
+import { correctionKeySchema } from '@roller-bay/shared/corrections';
+import { CuttingWorkflowService } from './cutting-workflow.service.js';
 import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -27,13 +30,14 @@ import {
 } from '@roller-bay/shared/production';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
-import { CuttingWorksheetsService } from '../allocations/cutting-worksheets.service.js';
+import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
 import { requireStation } from './production-access.js';
 @Controller('production/cutting')
 @Roles('station')
 export class CuttingStationController {
   constructor(
     private readonly service: CuttingWorksheetsService,
+    private readonly workflow: CuttingWorkflowService,
     private readonly locations: LocationLevelsService,
   ) {}
   @Get('locations') locationsList(
@@ -60,7 +64,7 @@ export class CuttingStationController {
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!, 'cutting');
-    return this.service.begin(id, body.employeeId, req.currentUser!.id);
+    return this.workflow.begin(id, body.employeeId, req.currentUser!.id);
   }
   @Get('worksheets/:id') get(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -89,13 +93,15 @@ export class CuttingStationController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetReviewSchema))
     body: z.infer<typeof worksheetReviewSchema>,
+    @Headers('idempotency-key') key: string,
     @Req() req: Request,
   ) {
-    return this.service.review(
+    return this.workflow.review(
       id,
       body.expectedRevision,
       req.currentUser!.id,
       body.resolution,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
     );
   }
   @Post('worksheets/:id/return') @Roles('admin') returnForCorrection(
@@ -117,7 +123,7 @@ export class CuttingStationController {
     body: { expectedRevision: number; reason: string },
     @Req() req: Request,
   ) {
-    return this.service.abandon(
+    return this.workflow.abandon(
       id,
       body.expectedRevision,
       body.reason,

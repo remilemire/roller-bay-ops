@@ -1,24 +1,28 @@
+import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
-  employeeSchema,
   type EmployeeInput,
   type EmployeeUpdate,
 } from '@roller-bay/shared/employees';
 import { AuditService } from '../audit/audit.service.js';
 import { EmployeesRepository } from './employees.repository.js';
-export const presentEmployee = (
-  row: Awaited<ReturnType<EmployeesRepository['create']>>,
-) => employeeSchema.parse({ ...row, createdAt: row.createdAt.toISOString() });
+import { presentEmployee } from './employees.presenter.js';
 @Injectable()
 export class EmployeesService {
   constructor(
     private readonly repository: EmployeesRepository,
     private readonly audit: AuditService,
   ) {}
+  async requireActive(tx: DatabaseTransaction, id: string) {
+    const row = await this.repository.find(id, true, tx);
+    if (!row?.isActive)
+      throw new ConflictException('Choose an active employee.');
+    return presentEmployee(row);
+  }
   async list(activeOnly = false) {
     return (await this.repository.list(activeOnly)).map(presentEmployee);
   }

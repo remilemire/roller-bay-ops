@@ -19,11 +19,8 @@ export class EmployeesRepository {
       .where(activeOnly ? eq(employees.isActive, true) : undefined)
       .orderBy(asc(employees.name), asc(employees.id));
   }
-  async find(id: string, lock = false) {
-    const q = this.connection.db
-      .select()
-      .from(employees)
-      .where(eq(employees.id, id));
+  async find(id: string, lock = false, tx: DB = this.connection.db) {
+    const q = tx.select().from(employees).where(eq(employees.id, id));
     return (await (lock ? q.for('share') : q))[0];
   }
   async create(input: EmployeeInput) {
