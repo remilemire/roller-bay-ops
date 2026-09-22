@@ -127,7 +127,9 @@ test('admins maintain employees without creating application accounts', async ({
   page,
 }) => {
   const state = await mockApi(page);
-  await page.goto('/settings/employees');
+  await page.goto('/stations');
+  await page.getByRole('link', { name: 'Manage employees' }).click();
+  await expect(page).toHaveURL(/stations\/employees$/);
   await page.getByRole('button', { name: 'Add employee' }).click();
   await page.getByLabel('Full name').fill('Robin Park');
   await page.getByLabel('Initials', { exact: true }).fill('RP');

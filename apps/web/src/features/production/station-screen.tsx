@@ -53,9 +53,14 @@ export function StationsScreen() {
           />
         )}
         {canManage && (
-          <Button asChild variant="outline">
-            <Link href="/stations/review">Review cutting results</Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href="/stations/employees">Manage employees</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/stations/review">Review cutting results</Link>
+            </Button>
+          </>
         )}
       </PageHeading>
       <StationQueue key={station} station={station} />

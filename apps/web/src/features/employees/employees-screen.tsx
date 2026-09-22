@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { Dialog } from '@/components/ui/dialog';
+import { SearchToolbar } from '@/components/ui/search-toolbar';
 import {
   PageHeading,
   Loading,
@@ -44,7 +45,11 @@ function EmployeeDirectory() {
       >
         <Button onClick={() => setEditing(null)}>Add employee</Button>
       </PageHeading>
-      <TextField label="Find employee" value={search} onChange={setSearch} />
+      <SearchToolbar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Find employee…"
+      />
       {query.isPending ? (
         <Loading />
       ) : query.error ? (

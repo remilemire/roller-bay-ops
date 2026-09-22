@@ -1,4 +1,4 @@
-import { EmployeesScreen } from '@/features/employees/employees-screen';
+import { redirect } from 'next/navigation';
 export default function Page() {
-  return <EmployeesScreen />;
+  redirect('/stations/employees');
 }
