@@ -17,14 +17,12 @@ export function CompletionAction({
   orderNumber,
   employeeId,
   done,
-  onCompleted,
 }: {
   station: Station;
   orderId: string;
   orderNumber: string;
   employeeId: string;
   done: boolean;
-  onCompleted?: () => void;
 }) {
   const client = useQueryClient();
   const user = useCurrentUser();
@@ -35,7 +33,6 @@ export function CompletionAction({
     inputSchema: completionInputSchema,
     outputSchema: mutationResultSchema,
     onSuccess: async () => {
-      onCompleted?.();
       await Promise.all([
         client.invalidateQueries({ queryKey: productionKey }),
         client.invalidateQueries({ queryKey: ['work-orders'] }),

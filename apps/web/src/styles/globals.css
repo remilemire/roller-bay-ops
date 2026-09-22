@@ -2053,8 +2053,8 @@ td strong {
 }
 
 /* Station controls are generous enough for repeated use on an iPad. */
-.station-workspace {
-  max-width: 1100px;
+.station-workspace.stack > .page-heading {
+  margin-bottom: 0;
 }
 .station-workspace button,
 .station-workspace select,
