@@ -1,5 +1,15 @@
 import type { NextConfig } from 'next';
 
+const facilityTimeZone =
+  process.env.FACILITY_TIME_ZONE?.trim() || 'America/Edmonton';
+try {
+  new Intl.DateTimeFormat('en', { timeZone: facilityTimeZone }).format();
+} catch {
+  throw new Error(
+    'FACILITY_TIME_ZONE must be a valid IANA time zone such as America/Edmonton.',
+  );
+}
+
 const apiOrigin = process.env.API_ORIGIN?.trim();
 if (process.env.VERCEL === '1' && !apiOrigin) {
   throw new Error(
@@ -43,6 +53,9 @@ if (
 const nextConfig: NextConfig = {
   agentRules: false,
   transpilePackages: ['@roller-bay/shared'],
+  // Next replaces this value at build time. The source variable remains a
+  // server-side deployment setting rather than a second browser-side setting.
+  env: { NEXT_PUBLIC_FACILITY_TIME_ZONE: facilityTimeZone },
 };
 
 export default nextConfig;

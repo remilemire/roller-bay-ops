@@ -5,6 +5,7 @@ import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { PageHeading, Status } from '@/components/ui/feedback';
 import { ColorThemePicker } from './color-theme-picker';
 import { MeasurementUnitsPanel } from './measurement-units-panel';
+import { FACILITY_TIME_ZONE } from '@/lib/facility-time';
 export function SettingsScreen() {
   const user = useCurrentUser();
   return (
@@ -35,6 +36,10 @@ export function SettingsScreen() {
             <div>
               <div className="detail-label">Sign-in method</div>
               <div className="detail-value">Microsoft work account</div>
+            </div>
+            <div>
+              <div className="detail-label">Facility time zone</div>
+              <div className="detail-value">{FACILITY_TIME_ZONE}</div>
             </div>
           </div>
         </section>

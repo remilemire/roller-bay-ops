@@ -13,9 +13,10 @@ Set the Vercel environment variables, in every environment that builds (Producti
 ```text
 API_ORIGIN=https://YOUR_API_SERVICE.onrender.com
 API_PROXY_SECRET=THE_SAME_VALUE_AS_THE_API
+FACILITY_TIME_ZONE=America/Edmonton
 ```
 
-Use the actual public API origin, with no `/api` suffix. Generate the secret with `openssl rand -base64 48`; it must be at least 32 printable characters without whitespace. Both are server-side settings, never `NEXT_PUBLIC_*` variables. Vercel builds fail if either is missing or malformed. Redeploy the frontend after changing them.
+Use the actual public API origin, with no `/api` suffix. Generate the secret with `openssl rand -base64 48`; it must be at least 32 printable characters without whitespace. `FACILITY_TIME_ZONE` is the facility's IANA time zone; it defaults to `America/Edmonton` and is embedded in the frontend at build time. These are server-side source settings, never manually duplicated as `NEXT_PUBLIC_*` variables. Vercel builds fail if the origin or secret is missing or malformed, or if the time zone is invalid. Redeploy the frontend after changing them.
 
 Leave `NEXT_PUBLIC_API_URL` unset on Vercel (or set it to `/api`). Local development retains the direct `http://localhost:3001/api` override from `.env.example`. Do not copy local environment files into the hosting configuration.
 

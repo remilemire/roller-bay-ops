@@ -7,6 +7,7 @@ import { milestoneCorrectionSchema } from '@roller-bay/shared/production';
 import { useCurrentUser, useCanManage } from '@/features/auth/auth-boundary';
 import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
+import { FACILITY_TIME_ZONE, facilityTimeToIso } from '@/lib/facility-time';
 import { Button } from '@/components/ui/button';
 import { ChoiceField, TextField } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/dialog';
@@ -114,6 +115,7 @@ function Correction({
   const [reason, setReason] = useState('');
   const [clear, setClear] = useState(false);
   const [time, setTime] = useState('');
+  const [timeError, setTimeError] = useState<string>();
   const user = useCurrentUser();
   const client = useQueryClient();
   const scope = `production-correction:${user.id}:${order.id}:${station}`;
@@ -151,10 +153,14 @@ function Correction({
           <>
             <p>The selected employee will receive the corrected attribution.</p>
             <TextField
-              label="Actual completion time"
+              label={`Actual completion time (${FACILITY_TIME_ZONE})`}
               type="datetime-local"
               value={time}
-              onChange={setTime}
+              onChange={(value) => {
+                setTime(value);
+                setTimeError(undefined);
+              }}
+              error={timeError}
             />
           </>
         )}
@@ -187,14 +193,20 @@ function Correction({
             !reason.trim() ||
             (!clear && (!employeeId || !time))
           }
-          onClick={() =>
-            mutation.mutate({
-              expectedRevision: order.revision,
-              reason,
-              employeeId: clear ? null : employeeId,
-              completedAt: clear ? null : new Date(time).toISOString(),
-            })
-          }
+          onClick={() => {
+            try {
+              mutation.mutate({
+                expectedRevision: order.revision,
+                reason,
+                employeeId: clear ? null : employeeId,
+                completedAt: clear ? null : facilityTimeToIso(time),
+              });
+            } catch (error) {
+              setTimeError(
+                error instanceof Error ? error.message : 'Invalid time.',
+              );
+            }
+          }}
         >
           Save correction
         </Button>

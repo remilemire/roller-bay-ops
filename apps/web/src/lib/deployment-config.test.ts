@@ -7,6 +7,7 @@ beforeEach(() => {
   vi.stubEnv('API_ORIGIN', undefined);
   vi.stubEnv('API_PROXY_SECRET', undefined);
   vi.stubEnv('VERCEL', undefined);
+  vi.stubEnv('FACILITY_TIME_ZONE', undefined);
   vi.resetModules();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -64,4 +65,16 @@ it('allows a loopback upstream for local proxy verification', async () => {
 it('rejects a malformed proxy secret in any environment', async () => {
   vi.stubEnv('API_PROXY_SECRET', 'too-short');
   await expect(import('../../next.config')).rejects.toThrow('API_PROXY_SECRET');
+});
+
+it('publishes a valid facility time zone and rejects an invalid one', async () => {
+  vi.stubEnv('FACILITY_TIME_ZONE', 'America/Toronto');
+  const { default: config } = await import('../../next.config');
+  expect(config.env?.NEXT_PUBLIC_FACILITY_TIME_ZONE).toBe('America/Toronto');
+
+  vi.resetModules();
+  vi.stubEnv('FACILITY_TIME_ZONE', 'Pacific Standard Time');
+  await expect(import('../../next.config')).rejects.toThrow(
+    'FACILITY_TIME_ZONE',
+  );
 });

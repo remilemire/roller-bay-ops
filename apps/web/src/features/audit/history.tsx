@@ -5,8 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { historySchema, type AuditRecordType } from '@roller-bay/shared/audit';
 import type { MeasurementField } from '@roller-bay/shared/users';
 import { api } from '@/lib/api';
-import { useHydrated } from '@/lib/use-hydrated';
-import { calendarDateLabel, dateLabel, shortId } from '@/lib/format';
+import {
+  calendarDateLabel,
+  dateLabel,
+  dateTimeLabel,
+  shortId,
+} from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { Loading, ErrorNotice, Pagination } from '@/components/ui/feedback';
@@ -156,17 +160,7 @@ export function RecordValues({
   );
 }
 function AuditTime({ value }: { value: string }) {
-  const hydrated = useHydrated();
-  return (
-    <time dateTime={value}>
-      {hydrated
-        ? new Intl.DateTimeFormat(undefined, {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          }).format(new Date(value))
-        : value}
-    </time>
-  );
+  return <time dateTime={value}>{dateTimeLabel(value)}</time>;
 }
 export function History({ type, id }: { type: AuditRecordType; id: string }) {
   const [page, setPage] = useState(1);
