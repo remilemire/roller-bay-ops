@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   CalendarDays,
+  Factory,
   Layers3,
   LayoutDashboard,
   LogOut,
@@ -25,12 +26,12 @@ import { ErrorNotice } from '@/components/ui/feedback';
 import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
 import { ThemeSwitch } from './theme-switch';
 const navigation = [
-  { href: '/stations', label: 'Stations', Icon: Scissors },
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
   { href: '/stock-items', label: 'Fabric stock', Icon: Layers3 },
   { href: '/stock-receipts', label: 'Stock receipts', Icon: PackagePlus },
   { href: '/work-orders', label: 'Work orders', Icon: CalendarDays },
   { href: '/allocations', label: 'Allocations', Icon: Scissors },
+  { href: '/stations', label: 'Stations', Icon: Factory },
   { href: '/fabric-catalog', label: 'Fabric catalog', Icon: Box },
   { href: '/locations', label: 'Locations', Icon: MapPin },
   { href: '/users', label: 'Users', Icon: Users, manageOnly: true },
