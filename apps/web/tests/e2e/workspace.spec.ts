@@ -197,10 +197,10 @@ test('cutting completion preserves the stock revision and sends tube measurement
     .getByLabel('What happened to this stock item?')
     .selectOption('consumed');
   await page.getByLabel('Tube outer diameter (mm)').fill('50');
-  await page.getByRole('button', { name: 'Review and complete' }).click();
+  await page.getByRole('button', { name: 'Review and reconcile' }).click();
   await page
     .getByRole('dialog')
-    .getByRole('button', { name: 'Complete order' })
+    .getByRole('button', { name: 'Reconcile allocation' })
     .click();
   await expect(
     page.getByRole('heading', { name: 'Cutting results recorded' }),

@@ -103,7 +103,8 @@ function AllocationRecord({
         title={allocation.orderNumber}
         description={`Created ${dateLabel(allocation.createdAt)} · Revision ${allocation.revision}`}
       >
-        {allocation.state === 'active' && (
+        {(allocation.state === 'active' ||
+          allocation.state === 'completed') && (
           <Button asChild variant="outline">
             <Link href={`/allocations/${id}/cutting-sheet`}>
               <Printer size={16} />

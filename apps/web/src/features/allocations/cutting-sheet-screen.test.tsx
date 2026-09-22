@@ -180,12 +180,12 @@ it('links an active allocation to its cutting sheet and hides the link afterward
   );
 });
 
-it('hides the cutting sheet link on completed allocations', () => {
+it('keeps the cutting sheet link for completed allocation snapshots', () => {
   show(
     { ...allocation, state: 'completed', completedAt: timestamp },
     AllocationDetailScreen,
   );
   expect(
     screen.queryByRole('link', { name: 'Cutting sheet' }),
-  ).not.toBeInTheDocument();
+  ).toBeInTheDocument();
 });

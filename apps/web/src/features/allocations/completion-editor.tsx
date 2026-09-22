@@ -7,6 +7,8 @@ import {
   completeAllocationSchema,
   type AllocationDetail,
 } from '@roller-bay/shared/allocations';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
+import { lookupCuttingLocations } from '@/features/production/production.api';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -42,28 +44,51 @@ import {
 export function CompletionEditor({
   allocation,
   close,
+  worksheet,
 }: {
   allocation: AllocationDetail;
   close: () => void;
+  worksheet?: {
+    initialForm: CompletionForm | null;
+    units: MeasurementUnits;
+    saveDraft?: (form: CompletionForm) => Promise<void>;
+    resolution?: boolean;
+    dirty?: boolean;
+    submit: (
+      body: ReturnType<typeof completionFromForm>,
+      form: CompletionForm,
+    ) => Promise<void>;
+  };
 }) {
   const user = useCurrentUser();
   // Pin the units this form opened with: a session refetch must not relabel
   // or reinterpret dirty input.
   const liveUnits = useMeasurementUnits();
-  const [units] = useState(liveUnits);
+  const [units] = useState(worksheet?.units ?? liveUnits);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const saveDraft = useMutation({
+    mutationFn: () => worksheet!.saveDraft!(form.getValues()),
+    onSuccess: () => {
+      setDraftSaved(true);
+      form.reset(form.getValues());
+    },
+  });
   const scope = `completion:${user.id}:${allocation.id}:${allocation.revision}`;
   const recovery = completeAllocationSchema.safeParse(pendingPayload(scope));
   const form = useForm<CompletionForm>({
     resolver: zodResolver(completionFormSchema),
-    defaultValues: recovery.success
-      ? completionRecovery(recovery.data, allocation, units)
-      : completionToForm(allocation, units),
+    defaultValues:
+      worksheet?.initialForm ??
+      (recovery.success
+        ? completionRecovery(recovery.data, allocation, units)
+        : completionToForm(allocation, units)),
   });
   const values = useWatch({ control: form.control }) as CompletionForm;
   const client = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const [validationError, setValidationError] = useState<unknown>(null);
-  useUnsavedChanges(form.formState.isDirty);
+  const dirty = form.formState.isDirty || !!worksheet?.dirty;
+  useUnsavedChanges(dirty);
   const fieldName = (issue: ErrorIssue) =>
     completionFieldName(issuePath(issue));
   // Issues with a field of their own show beside it; the rest stay in the
@@ -73,9 +98,11 @@ export function CompletionEditor({
   const fieldError = (name: FieldPath<CompletionForm>) =>
     form.getFieldState(name, form.formState).error?.message;
   const mutation = useMutation({
-    mutationFn: (value: CompletionForm) => {
+    mutationFn: async (value: CompletionForm) => {
       const body = completionFromForm(value, allocation.revision, units);
-      return completeAllocation(allocation.id, body, requestKey(scope, body));
+      if (worksheet) await worksheet.submit(body, value);
+      else
+        await completeAllocation(allocation.id, body, requestKey(scope, body));
     },
     onError: (error) => showIssues(error),
     onSuccess: async () => {
@@ -85,7 +112,7 @@ export function CompletionEditor({
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
         client.invalidateQueries({ queryKey: ['stock-receipts'] }),
-        // Completing marks the scheduled order cut.
+        // Refresh related office views after reconciliation or station capture.
         client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
       close();
@@ -103,8 +130,12 @@ export function CompletionEditor({
     <>
       <PageHeading
         eyebrow="AFTER CUTTING"
-        title={`Complete ${allocation.orderNumber}`}
-        description="Record what actually remains. Measurements update stock and any affected reservations."
+        title={`${worksheet && !worksheet.resolution ? 'Cutting results' : 'Reconcile'} ${allocation.orderNumber}`}
+        description={
+          worksheet && !worksheet.resolution
+            ? 'Save measurements as you work, then submit them for office review.'
+            : 'Record what actually remains. Measurements update stock and any affected reservations.'
+        }
       />
       <form
         onSubmit={form.handleSubmit((value) => {
@@ -119,7 +150,7 @@ export function CompletionEditor({
         })}
       >
         <fieldset
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || saveDraft.isPending}
           style={{ border: 0, margin: 0, padding: 0 }}
         >
           <div className="stack">
@@ -217,7 +248,11 @@ export function CompletionEditor({
                               }
                               error={fieldError(`items.${index}.locationId`)}
                               queryKey={locationsKey}
-                              load={lookupLocations}
+                              load={
+                                worksheet
+                                  ? lookupCuttingLocations
+                                  : lookupLocations
+                              }
                             />
                           </div>
                         )}
@@ -326,7 +361,11 @@ export function CompletionEditor({
                                   `items.${index}.scraps.${si}.locationId`,
                                 )}
                                 queryKey={locationsKey}
-                                load={lookupLocations}
+                                load={
+                                  worksheet
+                                    ? lookupCuttingLocations
+                                    : lookupLocations
+                                }
                               />
                             </div>
                           </div>
@@ -344,13 +383,24 @@ export function CompletionEditor({
               inline={(issue) => fieldName(issue) !== null}
             />
           )}
+          {saveDraft.error && <ErrorNotice error={saveDraft.error} />}
+          {draftSaved && !dirty && <p role="status">Progress saved.</p>}
           <div className="form-actions">
+            {worksheet?.saveDraft && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => saveDraft.mutate()}
+              >
+                Save progress
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
               onClick={() => {
                 if (
-                  !form.formState.isDirty ||
+                  !dirty ||
                   window.confirm('Discard your unsaved cutting results?')
                 )
                   close();
@@ -358,30 +408,46 @@ export function CompletionEditor({
             >
               Cancel
             </Button>
-            <Button type="submit">Review and complete</Button>
+            <Button type="submit">
+              {worksheet && !worksheet.resolution
+                ? 'Review and submit results'
+                : 'Review and reconcile'}
+            </Button>
           </div>
         </fieldset>
       </form>
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
-        title="Record these cutting results?"
-        description="Stock measurements will be updated, retained remnants created, and this allocation completed. Orders with insufficient remaining stock will be flagged for replanning."
+        title={
+          worksheet && !worksheet.resolution
+            ? 'Submit these results for office review?'
+            : 'Record these cutting results?'
+        }
+        description={
+          worksheet && !worksheet.resolution
+            ? 'The office will review these measurements before updating inventory. This does not mark the order cut.'
+            : 'Stock measurements will be updated, retained remnants created, and this allocation reconciled. This does not change production milestones.'
+        }
       >
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
             variant="outline"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || saveDraft.isPending}
             onClick={() => setConfirm(false)}
           >
             Go back
           </Button>
           <Button
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || saveDraft.isPending}
             onClick={() => mutation.mutate(form.getValues())}
           >
-            {mutation.isPending ? 'Recording…' : 'Complete order'}
+            {mutation.isPending
+              ? 'Recording…'
+              : worksheet && !worksheet.resolution
+                ? 'Submit results'
+                : 'Reconcile allocation'}
           </Button>
         </div>
       </Dialog>

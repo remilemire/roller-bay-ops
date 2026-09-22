@@ -1,9 +1,13 @@
 'use client';
 import Link from 'next/link';
+import type { z } from 'zod';
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
-import type { AllocationDetail } from '@roller-bay/shared/allocations';
+import type {
+  AllocationDetail,
+  allocationDraftSchema,
+} from '@roller-bay/shared/allocations';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading, PageHeading } from '@/components/ui/feedback';
@@ -11,6 +15,7 @@ import { stockLocationLabel } from '@/features/stock-items/stock-location';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { dateLabel, shortId } from '@/lib/format';
 import { fieldAmount, fieldLabel, fieldSuffix } from '@/lib/measurements';
+import { worksheetForOrder } from '@/features/production/production.api';
 import { useHydrated } from '@/lib/use-hydrated';
 import { allocationDetail } from './allocations.api';
 import { cuttingSheetItems, type SheetItem } from './cutting-sheet';
@@ -19,7 +24,17 @@ export function CuttingSheetScreen({ id }: { id: string }) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
-  const record = query.data;
+  return <AvailableCuttingSheet record={query.data} />;
+}
+function AvailableCuttingSheet({
+  record,
+}: {
+  record: AllocationDetail | z.infer<typeof allocationDraftSchema>;
+}) {
+  const query = useQuery(worksheetForOrder(record.workOrderId));
+  if (query.data && query.data.allocationId === record.id)
+    return <CuttingSheet allocation={query.data.snapshot} />;
+  const id = record.id;
   // Drafts may be incomplete, and once results are recorded the embedded
   // stock rows already hold post-cut balances, so only active plans print.
   if (record.state !== 'active')

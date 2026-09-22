@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { PageHeading, Status } from '@/components/ui/feedback';
@@ -10,6 +11,13 @@ export function SettingsScreen() {
     <>
       <PageHeading title="Settings" />
       <div className="stack">
+        {['admin', 'owner'].includes(user.role) && (
+          <section className="panel panel-body">
+            <Link className="text-link" href="/settings/employees">
+              Manage employees
+            </Link>
+          </section>
+        )}
         <section className="panel">
           <div className="panel-heading">
             <h2>Account</h2>

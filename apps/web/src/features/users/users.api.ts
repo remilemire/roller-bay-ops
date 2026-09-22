@@ -8,6 +8,7 @@ import {
   type ColorTheme,
   type UpdateMeasurementUnits,
   type UpdateUserRole,
+  type Station,
 } from '@roller-bay/shared/users';
 import { api, queryString } from '@/lib/api';
 export const usersKey = ['users'] as const;
@@ -25,10 +26,14 @@ export const listUsers = (search: string, page: number, signal?: AbortSignal) =>
   api(`/users${queryString({ search, page, pageSize: 25 })}`, userListSchema, {
     signal,
   });
-export const setUserRole = (id: string, role: UpdateUserRole['role']) =>
+export const setUserRole = (
+  id: string,
+  role: UpdateUserRole['role'],
+  stations: Station[] = [],
+) =>
   api(`/users/${id}/role`, userSchema, {
     method: 'PATCH',
-    body: updateUserRoleSchema.parse({ role }),
+    body: updateUserRoleSchema.parse({ role, stations }),
   });
 export const setUserActivation = (id: string, isActive: boolean) =>
   api(`/users/${id}/activation`, userSchema, {

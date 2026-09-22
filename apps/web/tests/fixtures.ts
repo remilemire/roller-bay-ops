@@ -29,6 +29,7 @@ export const user = {
   name: 'Jamie Chen',
   email: 'jamie@example.com',
   role: 'admin',
+  stations: [],
   isActive: true,
   createdAt: timestamp,
   measurementUnits: defaultMeasurementUnits,

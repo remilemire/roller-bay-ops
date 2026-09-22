@@ -48,6 +48,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/features/auth/auth-boundary', () => ({
   useCanManage: () => state.canManage,
 }));
+vi.mock('@/features/production/order-production', () => ({
+  OrderProduction: () => null,
+}));
 vi.mock('@/features/audit/history', () => ({ History: () => null }));
 vi.mock('@/lib/calendar-dates', async (original) => ({
   ...(await original<typeof import('@/lib/calendar-dates')>()),
@@ -213,7 +216,7 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
   expect(row).toHaveTextContent('scheduled');
   expect(row).toHaveTextContent('Rush');
   expect(within(row).getByRole('cell', { name: '14' })).toBeInTheDocument();
-  expect(within(row).getByRole('link')).toHaveAttribute(
+  expect(within(row).getByRole('link', { name: '104801' })).toHaveAttribute(
     'href',
     `/work-orders/${order.id}`,
   );
@@ -318,34 +321,16 @@ it('sends an order with no allocation to be planned, whoever is signed in', asyn
   );
 });
 
-it('marks an order shipped from its row with the revision the row shows', async () => {
+it('links an allocated order to attributed production logging', async () => {
   state.search = 'view=list';
-  vi.mocked(updateOrder).mockResolvedValueOnce(order);
-  vi.mocked(updateOrder).mockRejectedValueOnce(
-    new ApiError(409, 'Order changed; refresh before saving.'),
-  );
   show(<WorkOrdersScreen />);
-  const user = userEvent.setup();
-  const button = await screen.findByRole('button', {
-    name: 'Mark order 104801 shipped',
-  });
-  await user.click(button);
-  await waitFor(() =>
-    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
-      expectedRevision: 3,
-      shipped: true,
-    }),
-  );
-  // A stale row is reported above the list.
-  await user.click(
-    await screen.findByRole('button', { name: 'Mark order 104801 shipped' }),
-  );
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Order changed; refresh before saving.',
-  );
+  expect(
+    await screen.findByRole('link', { name: 'Record production' }),
+  ).toHaveAttribute('href', '/stations?station=shipping&search=104801');
+  expect(updateOrder).not.toHaveBeenCalled();
 });
 
-it('edits, ships, and deletes an order with the revision it shows', async () => {
+it('edits and deletes an order with the revision it shows', async () => {
   vi.mocked(updateOrder).mockResolvedValue(order);
   vi.mocked(deleteOrder).mockResolvedValue(undefined);
   show(<OrderDetailScreen id={order.id} />);
@@ -389,14 +374,6 @@ it('edits, ships, and deletes an order with the revision it shows', async () => 
     }),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-
-  await user.click(screen.getByRole('button', { name: 'Mark shipped' }));
-  await waitFor(() =>
-    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
-      expectedRevision: 3,
-      shipped: true,
-    }),
-  );
 
   await user.click(screen.getByRole('button', { name: 'Delete' }));
   await user.click(

@@ -1,3 +1,8 @@
+import type {
+  ProductionCompletion,
+  Worksheet,
+} from '@roller-bay/shared/production';
+import type { Station } from '@roller-bay/shared/users';
 import type { Page } from '@playwright/test';
 import {
   allocationDraftSchema,
@@ -73,9 +78,24 @@ function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
 export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
 export async function mockApi(
   page: Page,
-  options: { role?: string; signedIn?: boolean } = {},
+  options: { role?: string; signedIn?: boolean; stations?: Station[] } = {},
 ) {
   const state = {
+    stations: options.stations ?? ['cutting'],
+    employees: [
+      {
+        id: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        name: 'Alex Reed',
+        initials: 'AR',
+        isActive: true,
+        linkedUserId: null,
+        revision: 1,
+        createdAt: timestamp,
+      },
+    ],
+    productionCompletions: [] as ProductionCompletion[],
+    worksheets: [] as Worksheet[],
+    productionRequests: [] as { path: string; body: unknown }[],
     authenticated: options.signedIn !== false,
     disabled: false,
     catalogColor: structuredClone(color),
@@ -165,6 +185,7 @@ export async function mockApi(
           ? {
               ...user,
               role: state.role,
+              stations: state.stations,
               measurementUnits: state.measurementUnits,
               colorTheme: state.colorTheme,
             }
@@ -176,6 +197,179 @@ export async function mockApi(
       return send(null, 204);
     }
     if (!state.authenticated) return send({ message: 'Session expired' }, 401);
+
+    if (path === '/production/employees')
+      return send(state.employees.filter((e) => e.isActive));
+    if (path === '/employees' && method === 'GET') return send(state.employees);
+    if (path === '/employees' && method === 'POST') {
+      const body = request.postDataJSON();
+      const result = {
+        ...body,
+        id: crypto.randomUUID(),
+        revision: 1,
+        createdAt: timestamp,
+      };
+      state.employees.push(result);
+      return send(result, 201);
+    }
+    if (path.startsWith('/employees/') && method === 'PUT') {
+      const { expectedRevision, ...body } = request.postDataJSON();
+      void expectedRevision;
+      const i = state.employees.findIndex((e) => path.endsWith(e.id));
+      state.employees[i] = {
+        ...state.employees[i]!,
+        ...body,
+        revision: state.employees[i]!.revision + 1,
+      };
+      return send(state.employees[i]);
+    }
+    const completionPath = path.match(
+      /^\/production\/orders\/([^/]+)\/completions$/,
+    );
+    if (completionPath)
+      return send(
+        state.productionCompletions.filter(
+          (c) => c.workOrderId === completionPath[1],
+        ),
+      );
+    const productionList = path.match(
+      /^\/production\/(cutting|assembly|checking|shipping)\/orders$/,
+    );
+    if (productionList) {
+      const station = productionList[1] as Station;
+      const view = url.searchParams.get('view');
+      const search = url.searchParams.get('search') ?? '';
+      return send(
+        paged(
+          state.orders
+            .filter(
+              (o) =>
+                o.allocatedAt &&
+                o.orderNumber.includes(search) &&
+                (view !== 'queue' ||
+                  (!o.shippedAt &&
+                    !state.productionCompletions.some(
+                      (c) => c.workOrderId === o.id && c.station === station,
+                    ))),
+            )
+            .map((o) => ({
+              ...o,
+              completions: state.productionCompletions.filter(
+                (c) => c.workOrderId === o.id,
+              ),
+            })),
+          url,
+        ),
+      );
+    }
+    const productionComplete = path.match(
+      /^\/production\/(cutting|assembly|checking|shipping)\/orders\/([^/]+)\/complete$/,
+    );
+    if (productionComplete) {
+      const station = productionComplete[1] as Station;
+      const id = productionComplete[2];
+      const body = request.postDataJSON();
+      const employee = state.employees.find((e) => e.id === body.employeeId)!;
+      const order = state.orders.find((o) => o.id === id)!;
+      state.productionRequests.push({ path, body });
+      const completedAt = new Date().toISOString();
+      state.productionCompletions.push({
+        workOrderId: order.id,
+        station,
+        employeeId: employee.id,
+        employeeName: employee.name,
+        employeeInitials: employee.initials,
+        completedAt,
+        recordedAt: completedAt,
+        recordedByUserId: ids.user,
+      });
+      const field = {
+        cutting: 'cutAt',
+        assembly: 'assembledAt',
+        checking: 'checkedAt',
+        shipping: 'shippedAt',
+      } as const;
+      order[field[station]] = completedAt;
+      order.revision++;
+      order.status = order.shippedAt
+        ? 'shipped'
+        : order.checkedAt
+          ? 'checked'
+          : order.assembledAt
+            ? 'assembled'
+            : order.cutAt
+              ? 'cut'
+              : order.shipDate
+                ? 'scheduled'
+                : 'allocated';
+      return send({ recordId: order.id, revision: order.revision }, 201);
+    }
+    const orderWorksheet = path.match(
+      /^\/production\/cutting\/orders\/([^/]+)\/worksheet$/,
+    );
+    if (orderWorksheet) {
+      const existing = state.worksheets.find(
+        (w) => w.workOrderId === orderWorksheet[1],
+      );
+      if (method === 'GET') return send(existing ?? null);
+      if (existing) return send(existing);
+      const body = request.postDataJSON();
+      const employee = state.employees.find((e) => e.id === body.employeeId)!;
+      const sheet: Worksheet = {
+        id: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        allocationId: state.allocation.id,
+        workOrderId: state.allocation.workOrderId,
+        orderNumber: state.allocation.orderNumber,
+        revision: 1,
+        employeeId: employee.id,
+        employeeName: employee.name,
+        employeeInitials: employee.initials,
+        startedAt: timestamp,
+        abandonedAt: null,
+        submittedAt: null,
+        reviewedAt: null,
+        startedByUserId: ids.user,
+        submittedByUserId: null,
+        reviewedByUserId: null,
+        snapshot: structuredClone(state.allocation),
+        draft: null,
+        results: null,
+      };
+      state.worksheets.push(sheet);
+      return send(sheet, 201);
+    }
+    if (path === '/production/cutting/worksheets')
+      return send(state.worksheets.filter((w) => !w.reviewedAt));
+    const sheetPath = path.match(
+      /^\/production\/cutting\/worksheets\/([^/]+)(?:\/(draft|submit|review|return))?$/,
+    );
+    if (sheetPath) {
+      const sheet = state.worksheets.find((w) => w.id === sheetPath[1])!;
+      if (method === 'GET') return send(sheet);
+      const body = request.postDataJSON();
+      if (body.expectedRevision !== sheet.revision)
+        return send(
+          { message: 'Worksheet changed; reload before saving.' },
+          409,
+        );
+      if (sheetPath[2] === 'draft') sheet.draft = body.draft;
+      if (sheetPath[2] === 'submit') {
+        sheet.results = body.results;
+        sheet.draft = body.draft ?? sheet.draft;
+        sheet.submittedAt = new Date().toISOString();
+        sheet.submittedByUserId = ids.user;
+      }
+      if (sheetPath[2] === 'return') {
+        sheet.submittedAt = null;
+        sheet.submittedByUserId = null;
+      }
+      if (sheetPath[2] === 'review') {
+        sheet.reviewedAt = new Date().toISOString();
+        sheet.reviewedByUserId = ids.user;
+      }
+      sheet.revision++;
+      return send(sheet);
+    }
     if (path.endsWith('/history')) return send(paged([], url));
     if (path === '/users/me/measurement-units' && method === 'PATCH') {
       const body = request.postDataJSON() as Partial<MeasurementUnits>;
@@ -353,7 +547,7 @@ export async function mockApi(
           url,
         ),
       );
-    if (path === '/locations')
+    if (path === '/locations' || path === '/production/cutting/locations')
       return send(
         paged(
           [

@@ -6,7 +6,11 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { User } from '@roller-bay/shared/users';
+import {
+  stationSchema,
+  type Station,
+  type User,
+} from '@roller-bay/shared/users';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import {
@@ -30,7 +34,12 @@ import {
   usersKey,
 } from './users.api';
 type PendingAction =
-  | { kind: 'role'; target: User; role: 'user' | 'admin' }
+  | {
+      kind: 'role';
+      target: User;
+      role: 'station' | 'user' | 'admin';
+      stations?: Station[];
+    }
   | { kind: 'activation'; target: User; isActive: boolean }
   | { kind: 'transfer'; target: User };
 const confirmation = (action: PendingAction) =>
@@ -54,18 +63,25 @@ const confirmation = (action: PendingAction) =>
               'They lose access on their next request. Their records and role are kept.',
             confirm: 'Deactivate',
           }
-      : action.role === 'admin'
+      : action.role === 'station'
         ? {
-            title: `Make ${action.target.name} an admin?`,
+            title: `Restrict ${action.target.name} to stations?`,
             description:
-              'Admins can change the catalog, locations, and stock, and manage users.',
-            confirm: 'Make admin',
+              'This account can only use its assigned stations and personal settings.',
+            confirm: 'Save station access',
           }
-        : {
-            title: `Remove admin access from ${action.target.name}?`,
-            description: 'They keep receipt and allocation workflows.',
-            confirm: 'Remove admin',
-          };
+        : action.role === 'admin'
+          ? {
+              title: `Make ${action.target.name} an admin?`,
+              description:
+                'Admins can change the catalog, locations, and stock, and manage users.',
+              confirm: 'Make admin',
+            }
+          : {
+              title: `Remove admin access from ${action.target.name}?`,
+              description: 'They keep receipt and allocation workflows.',
+              confirm: 'Remove admin',
+            };
 export function UsersScreen() {
   const canManage = useCanManage();
   if (!canManage)
@@ -97,7 +113,7 @@ function UserDirectory() {
       if (next.kind === 'transfer') await transferOwnership(next.target.id);
       else if (next.kind === 'activation')
         await setUserActivation(next.target.id, next.isActive);
-      else await setUserRole(next.target.id, next.role);
+      else await setUserRole(next.target.id, next.role, next.stations ?? []);
     },
     onSuccess: async (_result, next) => {
       setAction(null);
@@ -171,6 +187,37 @@ function UserDirectory() {
                               open({
                                 kind: 'role',
                                 target: row,
+                                role: 'station',
+                                stations: row.stations ?? [],
+                              })
+                            }
+                          >
+                            {row.role === 'station'
+                              ? 'Station access'
+                              : 'Make station'}
+                          </Button>
+                          {row.role === 'station' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                open({
+                                  kind: 'role',
+                                  target: row,
+                                  role: 'user',
+                                })
+                              }
+                            >
+                              Make team member
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              open({
+                                kind: 'role',
+                                target: row,
                                 role: row.role === 'admin' ? 'user' : 'admin',
                               })
                             }
@@ -228,6 +275,28 @@ function UserDirectory() {
         title={copy?.title ?? ''}
         description={copy?.description}
       >
+        {action?.kind === 'role' && action.role === 'station' && (
+          <fieldset>
+            <legend>Allowed stations</legend>
+            {stationSchema.options.map((s) => (
+              <label key={s} style={{ display: 'block', padding: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={action.stations?.includes(s) ?? false}
+                  onChange={(e) =>
+                    setAction({
+                      ...action,
+                      stations: e.target.checked
+                        ? [...(action.stations ?? []), s]
+                        : (action.stations ?? []).filter((v) => v !== s),
+                    })
+                  }
+                />
+                {s}
+              </label>
+            ))}
+          </fieldset>
+        )}
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button

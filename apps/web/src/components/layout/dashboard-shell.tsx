@@ -1,5 +1,5 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +25,7 @@ import { ErrorNotice } from '@/components/ui/feedback';
 import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
 import { ThemeSwitch } from './theme-switch';
 const navigation = [
+  { href: '/stations', label: 'Stations', Icon: Scissors },
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
   { href: '/stock-items', label: 'Fabric stock', Icon: Layers3 },
   { href: '/stock-receipts', label: 'Stock receipts', Icon: PackagePlus },
@@ -37,13 +38,21 @@ const navigation = [
 const sections = [...navigation, { href: '/settings', label: 'Settings' }];
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useCurrentUser();
   const canManage = useCanManage();
+  const stationOnly = user.role === 'station';
+  const stationRoute =
+    pathname === '/stations' ||
+    pathname.startsWith('/stations/cutting/') ||
+    pathname === '/settings';
+  useEffect(() => {
+    if (stationOnly && !stationRoute) router.replace('/stations');
+  }, [stationOnly, stationRoute, router]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [pageTitle, setPageTitle] = useState<string | null>(null);
   const client = useQueryClient();
-  const router = useRouter();
   const logout = useMutation({
     mutationFn: () => api('/auth/logout', noContent, { method: 'POST' }),
     onSuccess: async () => {
@@ -53,9 +62,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       router.replace('/login');
     },
   });
+  if (stationOnly && !stationRoute) return <p>Opening station…</p>;
   const nav = (
     <>
-      <Link href="/" className="brand" onClick={() => setMobileOpen(false)}>
+      <Link
+        href={stationOnly ? '/stations' : '/'}
+        className="brand"
+        onClick={() => setMobileOpen(false)}
+      >
         <span className="brand-symbol">
           <Layers3 size={23} />
         </span>
@@ -65,7 +79,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       </Link>
       <nav aria-label="Main navigation">
         {navigation
-          .filter((item) => !item.manageOnly || canManage)
+          .filter((item) =>
+            stationOnly
+              ? item.href === '/stations'
+              : !item.manageOnly || canManage,
+          )
           .map(({ href, label, Icon }) => {
             const active =
               href === '/' ? pathname === href : pathname.startsWith(href);

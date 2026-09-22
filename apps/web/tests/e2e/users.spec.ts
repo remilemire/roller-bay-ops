@@ -22,7 +22,7 @@ test('admins reach the user directory from navigation and confirm a role change'
     .getByRole('button', { name: 'Make admin' })
     .click();
   await expect(row.getByRole('button', { name: 'Remove admin' })).toBeVisible();
-  expect(state.userRequests).toEqual([{ role: 'admin' }]);
+  expect(state.userRequests).toEqual([{ role: 'admin', stations: [] }]);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

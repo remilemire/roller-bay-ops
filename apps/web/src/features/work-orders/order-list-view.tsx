@@ -1,11 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
@@ -21,7 +16,7 @@ import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
 import { OrderReschedule } from './order-reschedule';
-import { orderList, workOrdersKey, updateOrder } from './work-orders.api';
+import { orderList } from './work-orders.api';
 
 // The schedule opens on orders that still need work; `all` includes shipped.
 const tabs = [
@@ -31,6 +26,8 @@ const tabs = [
   { value: 'unscheduled', label: 'To schedule' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'cut', label: 'Cut' },
+  { value: 'assembled', label: 'Assembled' },
+  { value: 'checked', label: 'Checked' },
   { value: 'shipped', label: 'Shipped' },
   { value: 'all', label: 'All orders' },
 ];
@@ -48,16 +45,6 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
     }),
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
-  });
-  const client = useQueryClient();
-  const ship = useMutation({
-    mutationFn: (order: WorkOrder) =>
-      updateOrder(order.id, {
-        expectedRevision: order.revision,
-        shipped: !order.shippedAt,
-      }),
-    // A refused request usually means the row is stale, so refresh either way.
-    onSettled: () => client.invalidateQueries({ queryKey: workOrdersKey }),
   });
   return (
     <>
@@ -81,7 +68,6 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
           ))}
         </div>
       </SearchToolbar>
-      {ship.error && <ErrorNotice error={ship.error} />}
       <section className="panel">
         {query.isPending ? (
           <Loading />
@@ -153,20 +139,15 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                                 {order.shipDate ? 'Reschedule' : 'Schedule'}
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={ship.isPending}
-                              // Every row has this button; name the order it acts on.
-                              aria-label={`Mark order ${order.orderNumber} ${order.shippedAt ? 'not shipped' : 'shipped'}`}
-                              onClick={() => ship.mutate(order)}
-                            >
-                              {ship.isPending && ship.variables.id === order.id
-                                ? 'Saving…'
-                                : order.shippedAt
-                                  ? 'Mark not shipped'
-                                  : 'Mark shipped'}
-                            </Button>
+                            {order.allocatedAt && (
+                              <Button asChild variant="ghost" size="sm">
+                                <Link
+                                  href={`/stations?station=shipping&search=${order.orderNumber}`}
+                                >
+                                  Record production
+                                </Link>
+                              </Button>
+                            )}
                           </>
                         )}
                       </div>

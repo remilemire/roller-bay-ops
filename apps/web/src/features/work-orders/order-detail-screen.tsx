@@ -1,4 +1,5 @@
 'use client';
+import { OrderProduction } from '@/features/production/order-production';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,12 +18,7 @@ import {
 import { calendarDateLabel, dateLabel } from '@/lib/format';
 import { OrderEditor } from './order-editor';
 import { OrderReschedule } from './order-reschedule';
-import {
-  deleteOrder,
-  orderDetail,
-  workOrdersKey,
-  updateOrder,
-} from './work-orders.api';
+import { deleteOrder, orderDetail, workOrdersKey } from './work-orders.api';
 
 export function OrderDetailScreen({ id }: { id: string }) {
   const query = useQuery(orderDetail(id));
@@ -44,14 +40,6 @@ function OrderRecord({ order }: { order: WorkOrder }) {
   const [editing, setEditing] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const ship = useMutation({
-    mutationFn: () =>
-      updateOrder(order.id, {
-        expectedRevision: order.revision,
-        shipped: !order.shippedAt,
-      }),
-    onSuccess: () => client.invalidateQueries({ queryKey: workOrdersKey }),
-  });
   const remove = useMutation({
     mutationFn: () => deleteOrder(order.id, order.revision),
     // Leave before refreshing: refetching this record would only report 404.
@@ -93,17 +81,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
                 {order.shipDate ? 'Reschedule' : 'Schedule'}
               </Button>
             )}
-            <Button
-              variant="outline"
-              disabled={ship.isPending}
-              onClick={() => ship.mutate()}
-            >
-              {ship.isPending
-                ? 'Saving…'
-                : order.shippedAt
-                  ? 'Mark not shipped'
-                  : 'Mark shipped'}
-            </Button>
+
             <Button
               variant="outline"
               onClick={() => {
@@ -116,7 +94,6 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           </>
         )}
       </PageHeading>
-      {ship.error && <ErrorNotice error={ship.error} />}
       <section className="panel">
         <div className="panel-body">
           <div className="details-grid">
@@ -126,6 +103,8 @@ function OrderRecord({ order }: { order: WorkOrder }) {
               ['Allocated', milestone(order.allocatedAt)],
               ['Scheduled', milestone(order.scheduledAt)],
               ['Cut', milestone(order.cutAt)],
+              ['Assembled', milestone(order.assembledAt)],
+              ['Checked', milestone(order.checkedAt)],
               ['Shipped', milestone(order.shippedAt)],
               ['Note', order.note ?? '—'],
             ].map(([label, value]) => (
@@ -147,6 +126,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           )}
         </div>
       </section>
+      {order.allocatedAt && <OrderProduction order={order} />}
       <History type="work-orders" id={order.id} />
       {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
       {rescheduling && (

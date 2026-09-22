@@ -16,6 +16,7 @@ const person = (id: string, name: string, role: User['role']): User => ({
   id,
   name,
   role,
+  stations: [],
   isActive: true,
   email: `${name.split(' ')[0]!.toLowerCase()}@example.com`,
   createdAt: '2026-09-16T12:00:00.000Z',
@@ -112,7 +113,7 @@ it('changes a role only after confirmation and keeps the dialog open on failure'
     'User storage is unavailable.',
   );
   await user.click(dialog.getByRole('button', { name: 'Make admin' }));
-  expect(setUserRole).toHaveBeenLastCalledWith(member.id, 'admin');
+  expect(setUserRole).toHaveBeenLastCalledWith(member.id, 'admin', []);
   expect(listUsers).toHaveBeenCalledTimes(2);
 });
 

@@ -2051,3 +2051,23 @@ td strong {
   white-space: normal;
   pointer-events: none;
 }
+
+/* Station controls are generous enough for repeated use on an iPad. */
+.station-workspace {
+  max-width: 1100px;
+}
+.station-workspace button,
+.station-workspace select,
+.station-workspace input {
+  min-height: 48px;
+}
+.station-workspace input[type='checkbox'] {
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+}
+.status-assembled,
+.status-checked {
+  background: var(--primary-soft);
+  color: var(--primary);
+}

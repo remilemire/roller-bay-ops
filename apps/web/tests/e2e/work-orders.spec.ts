@@ -49,7 +49,7 @@ test('admins schedule, ship, and delete work orders', async ({
   await expect(page.getByText('No orders here')).toBeVisible();
   await page.getByRole('button', { name: 'Open', exact: true }).click();
 
-  await existing.getByRole('link').click();
+  await existing.getByRole('link', { name: '104801' }).click();
   await expect(page).toHaveURL(new RegExp(`/work-orders/${ids.order}$`));
   await expect(page.getByRole('heading', { name: '104801' })).toBeVisible();
   // Dates are picked from a weekday calendar, already open, rather than typed.
@@ -63,16 +63,22 @@ test('admins schedule, ship, and delete work orders', async ({
     .getByRole('button', { name: 'Reschedule', exact: true })
     .click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
-  await page.getByRole('button', { name: 'Mark shipped' }).click();
+  await page.getByLabel('Station', { exact: true }).selectOption('shipping');
+  await page
+    .getByLabel('Completed by', { exact: true })
+    .selectOption(state.employees[0]!.id);
+  await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await expect(
-    page.getByRole('button', { name: 'Mark not shipped' }),
+    page.getByRole('button', { name: 'shipped recorded', exact: true }),
   ).toBeVisible();
   expect(state.orderRequests).toEqual([
+    { method: 'PATCH', body: { expectedRevision: 3, shipDate: '2026-10-06' } },
+  ]);
+  expect(state.productionRequests).toEqual([
     {
-      method: 'PATCH',
-      body: { expectedRevision: 3, shipDate: '2026-10-06' },
+      path: `/production/shipping/orders/${ids.order}/complete`,
+      body: { employeeId: state.employees[0]!.id },
     },
-    { method: 'PATCH', body: { expectedRevision: 4, shipped: true } },
   ]);
 
   await page.getByRole('button', { name: 'Delete' }).click();
@@ -93,21 +99,19 @@ test('admins schedule, ship, and delete work orders', async ({
     ),
   ).toBe(true);
 });
-test('admins mark an order shipped from its row and it leaves the open list', async ({
-  page,
-}) => {
+test('order rows open attributed station logging', async ({ page }) => {
   const state = await mockApi(page);
   await page.goto('/work-orders?view=list');
-  await page.getByRole('button', { name: 'Mark order 104801 shipped' }).click();
-  await expect(page.getByRole('row', { name: /104801/ })).toHaveCount(0);
-  expect(state.orderRequests).toEqual([
-    { method: 'PATCH', body: { expectedRevision: 3, shipped: true } },
-  ]);
-  await page.getByRole('button', { name: 'Shipped', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Mark order 104801 not shipped' }),
-  ).toBeVisible();
+  await page.getByRole('link', { name: 'Record production' }).click();
+  await expect(page).toHaveURL(/stations\?station=shipping&search=104801/);
+  await page
+    .getByLabel('Completed by', { exact: true })
+    .selectOption(state.employees[0]!.id);
+  await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
+  await expect(page.getByText(/shipped · Alex Reed/)).toBeVisible();
+  expect(state.orders.find((o) => o.id === ids.order)!.cutAt).toBeNull();
 });
+
 test('admins drag an order between days and the to-schedule tray, by mouse and by keyboard', async ({
   page,
 }) => {

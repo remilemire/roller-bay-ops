@@ -7,6 +7,15 @@ export const dateLabel = (value: string) =>
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+export const dateTimeLabel = (value: string) =>
+  new Intl.DateTimeFormat('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(new Date(value));
 // For date-only values (YYYY-MM-DD). They parse as UTC midnight, so they are
 // formatted in UTC; in the viewer's zone the day would slip west of Greenwich.
 export const calendarDateLabel = (value: string) =>
