@@ -1,11 +1,13 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import { useCurrentUser, useCanManage } from '@/features/auth/auth-boundary';
 import { useListParams } from '@/lib/use-list-params';
 import { calendarDateLabel, dateTimeLabel } from '@/lib/format';
-import { TextField } from '@/components/ui/field';
+import { ChoiceField, TextField } from '@/components/ui/field';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,
@@ -38,29 +40,92 @@ export function StationsScreen() {
       </>
     );
   return (
-    <div className="stack station-workspace">
+    <div className="station-workspace">
       <PageHeading title={`${stationLabels[station]} station`}>
+        {allowed.length > 1 && (
+          <StationSwitcher
+            key={`${station}:${allowed.join(',')}`}
+            station={station}
+            allowed={allowed}
+            onChange={(next) =>
+              params.set({ station: next, search: '', page: 1, view: 'queue' })
+            }
+          />
+        )}
         {canManage && (
           <Button asChild variant="outline">
             <Link href="/stations/review">Review cutting results</Link>
           </Button>
         )}
       </PageHeading>
-      <nav className="tabs" aria-label="Stations">
-        {allowed.map((s) => (
-          <button
-            key={s}
-            className={`tab ${s === station ? 'active' : ''}`}
-            onClick={() =>
-              params.set({ station: s, search: '', page: 1, view: 'queue' })
-            }
-          >
-            {stationLabels[s]}
-          </button>
-        ))}
-      </nav>
       <StationQueue key={station} station={station} />
     </div>
+  );
+}
+function StationSwitcher({
+  station,
+  allowed,
+  onChange,
+}: {
+  station: Station;
+  allowed: readonly Station[];
+  onChange: (station: Station) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState('');
+  const parsed = stationSchema.safeParse(selected);
+  const next =
+    parsed.success && parsed.data !== station && allowed.includes(parsed.data)
+      ? parsed.data
+      : null;
+  return (
+    <>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setSelected('');
+          setOpen(true);
+        }}
+      >
+        Change station
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Change station"
+        description={`Currently recording for ${stationLabels[station]}.`}
+      >
+        <div className="stack">
+          <ChoiceField
+            label="Switch to station"
+            value={selected}
+            onChange={setSelected}
+            placeholder="Choose station"
+            options={allowed
+              .filter((value) => value !== station)
+              .map((value) => ({ value, label: stationLabels[value] }))}
+          />
+          {next && (
+            <p>New completions will be recorded as {completionLabels[next]}.</p>
+          )}
+        </div>
+        <div className="form-actions">
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!next}
+            onClick={() => {
+              if (!next) return;
+              onChange(next);
+              setOpen(false);
+            }}
+          >
+            {next ? `Switch to ${stationLabels[next]}` : 'Switch station'}
+          </Button>
+        </div>
+      </Dialog>
+    </>
   );
 }
 function StationQueue({ station }: { station: Station }) {
@@ -95,24 +160,27 @@ function StationQueue({ station }: { station: Station }) {
   return (
     <div className="stack">
       <section className="panel panel-body stack">
-        <EmployeeSelection
-          value={employee.employeeId}
-          onChange={employee.selectEmployee}
-        />
-        <TextField
-          label="Find order"
-          inputMode="numeric"
-          maxLength={6}
-          value={params.search}
-          onChange={(search) =>
-            params.set({ search: search.replace(/\D/g, ''), page: 1 })
-          }
-        />
-        <div className="tabs">
+        <div className="form-grid">
+          <EmployeeSelection
+            value={employee.employeeId}
+            onChange={employee.selectEmployee}
+          />
+          <TextField
+            label="Find order"
+            inputMode="numeric"
+            maxLength={6}
+            value={params.search}
+            onChange={(search) =>
+              params.set({ search: search.replace(/\D/g, ''), page: 1 })
+            }
+          />
+        </div>
+        <div className="tabs" role="group" aria-label="Order view">
           {(['queue', 'completed', 'all'] as const).map((v) => (
             <button
               key={v}
               className={`tab ${view === v ? 'active' : ''}`}
+              aria-pressed={view === v}
               onClick={() => params.set({ view: v, search: '', page: 1 })}
             >
               {v === 'queue'
