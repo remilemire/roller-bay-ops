@@ -2,18 +2,23 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   fabricMaterialSchema,
   type CreateFabricMaterial,
-  type UpdateFabricMaterial,
   type FabricMaterialQuery,
+  type UpdateFabricMaterial,
 } from '@roller-bay/shared/fabric-catalog';
-import { FabricMaterialsRepository } from './fabric-materials.repository.js';
+import { UnitOfWork } from '../../../unit-of-work/unit-of-work.js';
 import { catalogOperation } from '../catalog.operation.js';
-
+import { FabricMaterialsRepository } from './fabric-materials.repository.js';
 @Injectable()
 export class FabricMaterialsService {
-  constructor(private readonly repository: FabricMaterialsRepository) {}
+  constructor(
+    private readonly unitOfWork: UnitOfWork,
+    private readonly repository: FabricMaterialsRepository,
+  ) {}
   list(query: FabricMaterialQuery) {
     return catalogOperation(async () => {
-      const result = await this.repository.list(query);
+      const result = await this.unitOfWork.readOnlyTransaction(
+        async (context) => context.fabricMaterials.list(query),
+      );
       return {
         items: result.items.map((row) => this.toPublic(row)),
         total: result.total,
@@ -29,12 +34,20 @@ export class FabricMaterialsService {
   }
   create(input: CreateFabricMaterial) {
     return catalogOperation(async () =>
-      this.toPublic(await this.repository.create(input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.fabricMaterials.create(input),
+        ),
+      ),
     );
   }
   update(id: string, input: UpdateFabricMaterial) {
     return catalogOperation(async () =>
-      this.toPublic(await this.repository.update(id, input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.fabricMaterials.update(id, input),
+        ),
+      ),
     );
   }
   delete(id: string) {

@@ -1,30 +1,28 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
-import { Injectable } from '@nestjs/common';
 import type { AuditChange, AuditRecordType } from '@roller-bay/shared/audit';
-import type { DatabaseTransaction } from '../../database/database.service.js';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { users } from '../users/users.table.js';
 import {
-  auditEvents,
   auditChanges,
+  auditEvents,
   correctionRequests,
 } from './audit.table.js';
-@Injectable()
 export class AuditRepository {
-  async findActor(tx: DatabaseTransaction, actorId: string) {
-    const [actor] = await tx
+  constructor(private readonly db: DatabaseExecutor) {}
+  async findActor(actorId: string) {
+    const [actor] = await this.db
       .select({ name: users.name })
       .from(users)
       .where(eq(users.id, actorId));
     return actor;
   }
   async insertEvent(
-    tx: DatabaseTransaction,
     input: typeof auditEvents.$inferInsert,
     changes: AuditChange[],
   ) {
-    const [event] = await tx.insert(auditEvents).values(input).returning();
+    const [event] = await this.db.insert(auditEvents).values(input).returning();
     for (let offset = 0; offset < changes.length; offset += 100)
-      await tx.insert(auditChanges).values(
+      await this.db.insert(auditChanges).values(
         changes.slice(offset, offset + 100).map((c, i) => ({
           ...c,
           eventId: event!.id,
@@ -34,13 +32,12 @@ export class AuditRepository {
     return event!.id;
   }
   async findRequest(
-    tx: DatabaseTransaction,
     actorId: string,
     scope: string,
     recordId: string,
     key: string,
   ) {
-    const [row] = await tx
+    const [row] = await this.db
       .select()
       .from(correctionRequests)
       .where(
@@ -53,19 +50,18 @@ export class AuditRepository {
       );
     return row;
   }
-  async insertRequest(
-    tx: DatabaseTransaction,
-    input: typeof correctionRequests.$inferInsert,
-  ) {
-    await tx.insert(correctionRequests).values(input);
+  async insertRequest(input: typeof correctionRequests.$inferInsert) {
+    await this.db.insert(correctionRequests).values(input);
   }
   async history(
-    tx: DatabaseTransaction,
     recordType: AuditRecordType,
     recordId: string,
-    query: { page: number; pageSize: number },
+    query: {
+      page: number;
+      pageSize: number;
+    },
   ) {
-    const eventIds = tx
+    const eventIds = this.db
       .select({ id: auditChanges.eventId })
       .from(auditChanges)
       .where(
@@ -75,19 +71,19 @@ export class AuditRepository {
         ),
       );
     const where = inArray(auditEvents.id, eventIds);
-    const events = await tx
+    const events = await this.db
       .select()
       .from(auditEvents)
       .where(where)
       .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize);
-    const [total] = await tx
+    const [total] = await this.db
       .select({ total: count() })
       .from(auditEvents)
       .where(where);
     const changes = events.length
-      ? await tx
+      ? await this.db
           .select()
           .from(auditChanges)
           .where(

@@ -1,5 +1,7 @@
-import * as crypto from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import type {
+  AllocationDraftData,
+  AllocationQuery,
+} from '@roller-bay/shared/allocations';
 import {
   and,
   asc,
@@ -9,32 +11,21 @@ import {
   getTableColumns,
   ilike,
   inArray,
-  isNull,
   isNotNull,
+  isNull,
   ne,
   sql,
   type SQL,
 } from 'drizzle-orm';
-import type {
-  AllocationQuery,
-  AllocationDraftData,
-} from '@roller-bay/shared/allocations';
-import {
-  DatabaseService,
-  type DatabaseTransaction,
-} from '../../database/database.service.js';
+import * as crypto from 'node:crypto';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { stockItems } from '../stock-items/stock-items.table.js';
 import { workOrders } from '../work-orders/work-orders.table.js';
-import { allocations } from './tables/allocations.table.js';
-import { allocationItems } from './tables/allocation-items.table.js';
-import { allocationCuts } from './tables/allocation-cuts.table.js';
-import { allocationCutItems } from './tables/allocation-cut-items.table.js';
 import type { CuttingPlanSummary } from './cutting-plan/cutting-plan.types.js';
-
-type AllocationDatabase = Pick<
-  DatabaseService['db'],
-  'select' | 'selectDistinct' | 'insert' | 'update' | 'delete' | 'transaction'
->;
+import { allocationCutItems } from './tables/allocation-cut-items.table.js';
+import { allocationCuts } from './tables/allocation-cuts.table.js';
+import { allocationItems } from './tables/allocation-items.table.js';
+import { allocations } from './tables/allocations.table.js';
 // Reads carry the order's number, which lives on the work order alone.
 const columns = {
   ...getTableColumns(allocations),
@@ -54,43 +45,8 @@ const batches = <T>(values: T[]): T[][] =>
   Array.from({ length: Math.ceil(values.length / 1000) }, (_, index) =>
     values.slice(index * 1000, (index + 1) * 1000),
   );
-
-@Injectable()
 export class AllocationsRepository {
-  private readonly db: AllocationDatabase;
-  constructor(@Inject(DatabaseService) connection: { db: AllocationDatabase }) {
-    this.db = connection.db;
-  }
-
-  /**
-   * Use one connection for allocation and stock work; read-only calls see a
-   * consistent snapshot.
-   */
-  withTransaction<T>(
-    operation: (
-      repository: AllocationsRepository,
-      tx: DatabaseTransaction,
-    ) => Promise<T>,
-    readOnly = false,
-    transaction?: DatabaseTransaction,
-  ): Promise<T> {
-    if (transaction)
-      return operation(
-        new AllocationsRepository({ db: transaction }),
-        transaction,
-      );
-    return this.db.transaction(
-      async (tx) => {
-        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
-        await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
-        return operation(new AllocationsRepository({ db: tx }), tx);
-      },
-      readOnly
-        ? { isolationLevel: 'repeatable read', accessMode: 'read only' }
-        : undefined,
-    );
-  }
-
+  constructor(private readonly db: DatabaseExecutor) {}
   async liveForOrder(orderId: string) {
     return (
       await this.db
@@ -240,7 +196,6 @@ export class AllocationsRepository {
       })),
     };
   }
-
   async clearPlan(id: string) {
     const itemIds = this.db
       .select({ id: allocationItems.id })
@@ -260,12 +215,10 @@ export class AllocationsRepository {
       .delete(allocationItems)
       .where(eq(allocationItems.allocationId, id));
   }
-
   async delete(id: string) {
     await this.clearPlan(id);
     await this.db.delete(allocations).where(eq(allocations.id, id));
   }
-
   /**
    * Replace the full child graph inside the caller's header-locked
    * transaction. The blinds it assigns are the order's and are not written.
@@ -276,7 +229,6 @@ export class AllocationsRepository {
     summary?: CuttingPlanSummary,
   ) {
     await this.clearPlan(id);
-
     // Unassigned cuts each get a placeholder; selected stock is shared across its cuts.
     const itemKeys = input.plan.cuts.map(
       (cut, index) => cut.stockItemId ?? `unassigned:${index}`,
@@ -332,7 +284,6 @@ export class AllocationsRepository {
     for (const batch of batches(assignments))
       await this.db.insert(allocationCutItems).values(batch);
   }
-
   async reservations(stockIds: string[], excludeAllocationId?: string) {
     if (!stockIds.length) return new Map<string, string>();
     const rows = await this.db
@@ -354,7 +305,6 @@ export class AllocationsRepository {
       .groupBy(allocationItems.stockItemId);
     return new Map(rows.map((row) => [row.stockItemId!, row.reserved]));
   }
-
   async affectedAllocations(stockIds?: string[], allocationIds?: string[]) {
     if (stockIds?.length === 0 || allocationIds?.length === 0) return [];
     // Scope only the reported orders, not the total demand on each stock item.
@@ -383,7 +333,6 @@ export class AllocationsRepository {
       );
     return rows.map((row) => row.id).sort();
   }
-
   async list(query: AllocationQuery) {
     const state: SQL =
       query.state === 'draft'

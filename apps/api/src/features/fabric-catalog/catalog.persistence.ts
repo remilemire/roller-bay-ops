@@ -12,6 +12,14 @@ export async function catalogQuery<T>(
   try {
     return await operation();
   } catch (error) {
+    // The service also translates commit failures. Preserve a query's existing
+    // classification, especially a foreign-key error from a delete.
+    if (
+      error instanceof CatalogCodeConflictError ||
+      error instanceof CatalogInUseError ||
+      error instanceof CatalogReferenceNotFoundError
+    )
+      throw error;
     const seen = new Set<object>();
     let cause: unknown = error;
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {

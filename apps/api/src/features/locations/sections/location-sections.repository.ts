@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import type {
+  CreateLocationSection,
+  LocationSectionQuery,
+  UpdateLocationSection,
+} from '@roller-bay/shared/locations';
 import {
   and,
   asc,
@@ -9,20 +13,13 @@ import {
   ilike,
   or,
 } from 'drizzle-orm';
-import type {
-  CreateLocationSection,
-  UpdateLocationSection,
-  LocationSectionQuery,
-} from '@roller-bay/shared/locations';
-import { DatabaseService } from '../../../database/database.service.js';
-import { locationSections } from './location-sections.table.js';
-import { locationZones } from '../zones/location-zones.table.js';
+import type { DatabaseExecutor } from '../../../database/database-executor.js';
 import { locations } from '../levels/location-levels.table.js';
-import { locationsQuery, containsPattern } from '../locations.persistence.js';
-
-@Injectable()
+import { containsPattern, locationsQuery } from '../locations.persistence.js';
+import { locationZones } from '../zones/location-zones.table.js';
+import { locationSections } from './location-sections.table.js';
 export class LocationSectionsRepository {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly db: DatabaseExecutor) {}
   list(query: LocationSectionQuery) {
     const pattern = containsPattern(query.search ?? '');
     const where = and(
@@ -33,7 +30,7 @@ export class LocationSectionsRepository {
             ilike(locationSections.label, pattern),
             ilike(locationZones.name, pattern),
             exists(
-              this.database.db
+              this.db
                 .select({ id: locations.id })
                 .from(locations)
                 .where(
@@ -47,44 +44,33 @@ export class LocationSectionsRepository {
         : undefined,
       query.zoneId ? eq(locationSections.zoneId, query.zoneId) : undefined,
     );
-    return locationsQuery(() =>
-      this.database.db.transaction(
-        async (tx) => {
-          const items = await tx
-            .select({
-              ...getTableColumns(locationSections),
-              zoneName: locationZones.name,
-            })
-            .from(locationSections)
-            .innerJoin(
-              locationZones,
-              eq(locationSections.zoneId, locationZones.id),
-            )
-            .where(where)
-            .orderBy(
-              asc(locationSections.sortOrder),
-              asc(locationSections.label),
-              asc(locationSections.id),
-            )
-            .limit(query.pageSize)
-            .offset((query.page - 1) * query.pageSize);
-          const [result] = await tx
-            .select({ total: count() })
-            .from(locationSections)
-            .innerJoin(
-              locationZones,
-              eq(locationSections.zoneId, locationZones.id),
-            )
-            .where(where);
-          return { items, total: result!.total };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
-      ),
-    );
+    return locationsQuery(async () => {
+      const items = await this.db
+        .select({
+          ...getTableColumns(locationSections),
+          zoneName: locationZones.name,
+        })
+        .from(locationSections)
+        .innerJoin(locationZones, eq(locationSections.zoneId, locationZones.id))
+        .where(where)
+        .orderBy(
+          asc(locationSections.sortOrder),
+          asc(locationSections.label),
+          asc(locationSections.id),
+        )
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+      const [result] = await this.db
+        .select({ total: count() })
+        .from(locationSections)
+        .innerJoin(locationZones, eq(locationSections.zoneId, locationZones.id))
+        .where(where);
+      return { items, total: result!.total };
+    });
   }
   findById(id: string) {
     return locationsQuery(async () => {
-      const [row] = await this.database.db
+      const [row] = await this.db
         .select({
           ...getTableColumns(locationSections),
           zoneName: locationZones.name,
@@ -96,57 +82,46 @@ export class LocationSectionsRepository {
     });
   }
   create(input: CreateLocationSection) {
-    return locationsQuery(() =>
-      this.database.db.transaction(async (tx) => {
-        const [inserted] = await tx
-          .insert(locationSections)
-          .values(input)
-          .returning({ id: locationSections.id });
-        if (!inserted) throw new Error('Insert returned no location record.');
-        const [row] = await tx
-          .select({
-            ...getTableColumns(locationSections),
-            zoneName: locationZones.name,
-          })
-          .from(locationSections)
-          .innerJoin(
-            locationZones,
-            eq(locationSections.zoneId, locationZones.id),
-          )
-          .where(eq(locationSections.id, inserted.id));
-        if (!row)
-          throw new Error('Inserted location record could not be read.');
-        return row;
-      }),
-    );
+    return locationsQuery(async () => {
+      const [inserted] = await this.db
+        .insert(locationSections)
+        .values(input)
+        .returning({ id: locationSections.id });
+      if (!inserted) throw new Error('Insert returned no location record.');
+      const [row] = await this.db
+        .select({
+          ...getTableColumns(locationSections),
+          zoneName: locationZones.name,
+        })
+        .from(locationSections)
+        .innerJoin(locationZones, eq(locationSections.zoneId, locationZones.id))
+        .where(eq(locationSections.id, inserted.id));
+      if (!row) throw new Error('Inserted location record could not be read.');
+      return row;
+    });
   }
   update(id: string, input: UpdateLocationSection) {
-    return locationsQuery(() =>
-      this.database.db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(locationSections)
-          .set(input)
-          .where(eq(locationSections.id, id))
-          .returning({ id: locationSections.id });
-        if (!updated) return undefined;
-        const [row] = await tx
-          .select({
-            ...getTableColumns(locationSections),
-            zoneName: locationZones.name,
-          })
-          .from(locationSections)
-          .innerJoin(
-            locationZones,
-            eq(locationSections.zoneId, locationZones.id),
-          )
-          .where(eq(locationSections.id, id));
-        return row;
-      }),
-    );
+    return locationsQuery(async () => {
+      const [updated] = await this.db
+        .update(locationSections)
+        .set(input)
+        .where(eq(locationSections.id, id))
+        .returning({ id: locationSections.id });
+      if (!updated) return undefined;
+      const [row] = await this.db
+        .select({
+          ...getTableColumns(locationSections),
+          zoneName: locationZones.name,
+        })
+        .from(locationSections)
+        .innerJoin(locationZones, eq(locationSections.zoneId, locationZones.id))
+        .where(eq(locationSections.id, id));
+      return row;
+    });
   }
   delete(id: string) {
     return locationsQuery(async () => {
-      const [row] = await this.database.db
+      const [row] = await this.db
         .delete(locationSections)
         .where(eq(locationSections.id, id))
         .returning({ id: locationSections.id });

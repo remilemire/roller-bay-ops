@@ -1,16 +1,18 @@
-import 'reflect-metadata';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, mock, test } from 'node:test';
-import { Test, type TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
-import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import 'reflect-metadata';
 import { DatabaseService } from '../../database/database.service.js';
+import { stubUnitOfWork } from '../../testing/unit-of-work.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import { UserEmailConflictError } from './users.errors.js';
 import { UsersRepository } from './users.repository.js';
 import { UsersService } from './users.service.js';
-import { UserEmailConflictError } from './users.errors.js';
 
 const pool = new Pool();
 let failure: unknown;
@@ -30,7 +32,13 @@ before(async () => {
   });
   module = await Test.createTestingModule({
     providers: [
-      UsersRepository,
+      {
+        provide: UsersRepository,
+        inject: [DatabaseService],
+        useFactory: (database: DatabaseService) =>
+          new UsersRepository(database.db),
+      },
+      { provide: UnitOfWork, useValue: stubUnitOfWork({}) },
       UsersService,
       { provide: ConfigService, useValue: new ConfigService({}) },
       {
@@ -57,11 +65,14 @@ test('repository translates only the named email constraint into a typed conflic
     }),
   ]) {
     failure = error;
-    await assert.rejects(repository.synchronize(profile), (error: unknown) => {
-      assert.ok(error instanceof UserEmailConflictError);
-      assert.ok(error.cause instanceof Error);
-      return true;
-    });
+    await assert.rejects(
+      repository.upsertMicrosoftProfile(profile),
+      (error: unknown) => {
+        assert.ok(error instanceof UserEmailConflictError);
+        assert.ok(error.cause instanceof Error);
+        return true;
+      },
+    );
     await assert.rejects(
       service.synchronizeMicrosoftProfile(profile),
       ConflictException,
@@ -99,12 +110,15 @@ test('other database failures are not mislabeled as email conflicts', async () =
     null,
   ]) {
     failure = error;
-    await assert.rejects(repository.synchronize(profile), (error: unknown) => {
-      assert.ok(error instanceof Error);
-      assert.ok(!(error instanceof UserEmailConflictError));
-      assert.equal(error.cause, failure);
-      return true;
-    });
+    await assert.rejects(
+      repository.upsertMicrosoftProfile(profile),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.ok(!(error instanceof UserEmailConflictError));
+        assert.equal(error.cause, failure);
+        return true;
+      },
+    );
     await assert.rejects(
       service.synchronizeMicrosoftProfile(profile),
       ServiceUnavailableException,

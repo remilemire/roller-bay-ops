@@ -1,33 +1,34 @@
-import type { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
-import { AuditService } from '../audit/audit.service.js';
-import { ConfigService } from '@nestjs/config';
-import { CuttingRulesService } from './cutting-rules.service.js';
-import { AllocationsService } from './allocations.service.js';
-import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import type { StockItemsService } from '../stock-items/stock-items.service.js';
-import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { test } from 'node:test';
 import {
   BadRequestException,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { ConfigService } from '@nestjs/config';
 import {
   allocationDraftDataSchema,
   createAllocationSchema,
 } from '@roller-bay/shared/allocations';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { test } from 'node:test';
+import { stubUnitOfWork } from '../../testing/unit-of-work.js';
+import { AuditService } from '../audit/audit.service.js';
+import type { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
+import type { StockItemsService } from '../stock-items/stock-items.service.js';
+import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import {
   requireActiveRevision,
   requireDraftRevision,
   requirePlanningRevision,
 } from './allocation.rules.js';
+import { allocationSummary } from './allocations.presenter.js';
 import {
   AllocationsRepository,
   type AllocationRecord,
 } from './allocations.repository.js';
-import { allocationSummary } from './allocations.presenter.js';
+import { AllocationsService } from './allocations.service.js';
+import { CuttingRulesService } from './cutting-rules.service.js';
 
 const header = (): AllocationRecord => ({
   id: randomUUID(),
@@ -121,7 +122,7 @@ test('all reservation and shortage SQL excludes unconfirmed allocations', async 
       },
     } as never,
   });
-  const repository = new AllocationsRepository({ db });
+  const repository = new AllocationsRepository(db);
   await repository.reservations([randomUUID()]);
   await repository.affectedAllocations([randomUUID()]);
   assert.match(queries[0]!, /"allocations"\."is_draft" = \$1/i);
@@ -136,12 +137,6 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
   const draft = header();
   let writes = 0;
   const repository = {
-    withTransaction: async (
-      operation: (
-        repository: unknown,
-        transaction: unknown,
-      ) => Promise<unknown>,
-    ) => operation(repository, {}),
     findById: async () => draft,
     plan: async () => ({ cuts: [] }),
     replacePlan: async () => {
@@ -165,9 +160,9 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     },
   };
   const service = new AllocationsService(
+    stubUnitOfWork({ allocations: repository }),
     {} as CuttingWorksheetsService,
     {} as AuditService,
-    repository as unknown as AllocationsRepository,
     stock as unknown as StockItemsService,
     new CuttingRulesService(
       new ConfigService({

@@ -1,4 +1,3 @@
-import type { DatabaseTransaction } from '../../database/database.service.js';
 import {
   ConflictException,
   Injectable,
@@ -8,17 +7,20 @@ import {
   type EmployeeInput,
   type EmployeeUpdate,
 } from '@roller-bay/shared/employees';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/audit.service.js';
-import { EmployeesRepository } from './employees.repository.js';
 import { presentEmployee } from './employees.presenter.js';
+import { EmployeesRepository } from './employees.repository.js';
 @Injectable()
 export class EmployeesService {
   constructor(
+    private readonly unitOfWork: UnitOfWork,
     private readonly repository: EmployeesRepository,
     private readonly audit: AuditService,
   ) {}
-  async requireActive(tx: DatabaseTransaction, id: string) {
-    const row = await this.repository.find(id, true, tx);
+  async requireActive(context: UnitOfWorkContext, id: string) {
+    const row = await context.employees.find(id, true);
     if (!row?.isActive)
       throw new ConflictException('Choose an active employee.');
     return presentEmployee(row);
@@ -27,9 +29,9 @@ export class EmployeesService {
     return (await this.repository.list(activeOnly)).map(presentEmployee);
   }
   create(input: EmployeeInput, actor: string) {
-    return this.repository.transaction(async (repo, tx) => {
-      const result = presentEmployee(await repo.create(input));
-      await this.audit.record(tx, actor, 'employee.created', [
+    return this.unitOfWork.transaction(async (context) => {
+      const result = presentEmployee(await context.employees.create(input));
+      await this.audit.record(context, actor, 'employee.created', [
         {
           recordType: 'employees',
           recordId: result.id,
@@ -41,15 +43,17 @@ export class EmployeesService {
     });
   }
   update(id: string, input: EmployeeUpdate, actor: string) {
-    return this.repository.transaction(async (repo, tx) => {
-      const old = await repo.lock(id);
+    return this.unitOfWork.transaction(async (context) => {
+      const old = await context.employees.lock(id);
       if (!old) throw new NotFoundException('Employee not found.');
       if (old.revision !== input.expectedRevision)
         throw new ConflictException('Employee changed; refresh before saving.');
       const { expectedRevision: _, ...values } = input;
       void _;
-      const result = presentEmployee(await repo.update(id, values));
-      await this.audit.record(tx, actor, 'employee.updated', [
+      const result = presentEmployee(
+        await context.employees.update(id, values),
+      );
+      await this.audit.record(context, actor, 'employee.updated', [
         {
           recordType: 'employees',
           recordId: id,

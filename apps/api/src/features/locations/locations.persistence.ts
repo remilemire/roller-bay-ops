@@ -1,6 +1,6 @@
 import {
-  LocationLabelConflictError,
   LocationInUseError,
+  LocationLabelConflictError,
   LocationReferenceNotFoundError,
 } from './locations.errors.js';
 
@@ -12,6 +12,14 @@ export async function locationsQuery<T>(
   try {
     return await operation();
   } catch (error) {
+    // The service also translates commit failures. Preserve a query's existing
+    // classification, especially a foreign-key error from a delete.
+    if (
+      error instanceof LocationLabelConflictError ||
+      error instanceof LocationInUseError ||
+      error instanceof LocationReferenceNotFoundError
+    )
+      throw error;
     const seen = new Set<object>();
     let cause: unknown = error;
     while (typeof cause === 'object' && cause !== null && !seen.has(cause)) {

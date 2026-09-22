@@ -1,12 +1,14 @@
-import { AuditService } from '../audit/audit.service.js';
-import 'reflect-metadata';
+import { historySchema } from '@roller-bay/shared/audit';
+import { worksheetSchema } from '@roller-bay/shared/production';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
+import 'reflect-metadata';
 import request from 'supertest';
+import { DatabaseService } from '../../database/database.service.js';
+import { AllocationsService } from '../allocations/allocations.service.js';
 import { startAllocationsApp } from '../allocations/testing/allocations-app.js';
-import { worksheetSchema } from '@roller-bay/shared/production';
-import { historySchema } from '@roller-bay/shared/audit';
+import { AuditService } from '../audit/audit.service.js';
 
 test(
   'station production and digital cutting',
@@ -580,12 +582,28 @@ test(
             return original.apply(audit, args);
           },
         );
+        const transaction = t.mock.method(
+          h.app.get(DatabaseService).db,
+          'transaction',
+        );
+        const completion = t.mock.method(
+          h.app.get(AllocationsService),
+          'completeInTransaction',
+        );
         try {
           await post(`/api/production/cutting/worksheets/${sheet.id}/review`, {
             expectedRevision: submitted.revision,
           }).expect(503);
+          assert.equal(transaction.mock.callCount(), 1);
+          assert.equal(completion.mock.callCount(), 1);
+          const context = completion.mock.calls[0]!.arguments[0];
+          assert.ok(
+            failure.mock.calls.every((call) => call.arguments[0] === context),
+          );
         } finally {
           failure.mock.restore();
+          transaction.mock.restore();
+          completion.mock.restore();
         }
         const after = (
           await pool.query(

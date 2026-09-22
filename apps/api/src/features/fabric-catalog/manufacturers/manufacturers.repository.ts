@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import type {
+  CreateManufacturer,
+  ManufacturerQuery,
+  UpdateManufacturer,
+} from '@roller-bay/shared/fabric-catalog';
 import {
   and,
   asc,
@@ -9,20 +13,13 @@ import {
   ilike,
   or,
 } from 'drizzle-orm';
-import type {
-  CreateManufacturer,
-  UpdateManufacturer,
-  ManufacturerQuery,
-} from '@roller-bay/shared/fabric-catalog';
-import { DatabaseService } from '../../../database/database.service.js';
-import { manufacturers } from './manufacturers.table.js';
-import { fabricMaterials } from '../materials/fabric-materials.table.js';
-import { fabricColors } from '../colors/fabric-colors.table.js';
+import type { DatabaseExecutor } from '../../../database/database-executor.js';
 import { catalogQuery, containsPattern } from '../catalog.persistence.js';
-
-@Injectable()
+import { fabricColors } from '../colors/fabric-colors.table.js';
+import { fabricMaterials } from '../materials/fabric-materials.table.js';
+import { manufacturers } from './manufacturers.table.js';
 export class ManufacturersRepository {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly db: DatabaseExecutor) {}
   list(query: ManufacturerQuery) {
     const pattern = containsPattern(query.search ?? '');
     const where = and(
@@ -32,7 +29,7 @@ export class ManufacturersRepository {
         ? or(
             ilike(manufacturers.name, pattern),
             exists(
-              this.database.db
+              this.db
                 .select({ id: fabricMaterials.id })
                 .from(fabricMaterials)
                 .leftJoin(
@@ -52,29 +49,24 @@ export class ManufacturersRepository {
           )
         : undefined,
     );
-    return catalogQuery(() =>
-      this.database.db.transaction(
-        async (tx) => {
-          const items = await tx
-            .select({ ...getTableColumns(manufacturers) })
-            .from(manufacturers)
-            .where(where)
-            .orderBy(asc(manufacturers.name), asc(manufacturers.id))
-            .limit(query.pageSize)
-            .offset((query.page - 1) * query.pageSize);
-          const [result] = await tx
-            .select({ total: count() })
-            .from(manufacturers)
-            .where(where);
-          return { items, total: result!.total };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
-      ),
-    );
+    return catalogQuery(async () => {
+      const items = await this.db
+        .select({ ...getTableColumns(manufacturers) })
+        .from(manufacturers)
+        .where(where)
+        .orderBy(asc(manufacturers.name), asc(manufacturers.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+      const [result] = await this.db
+        .select({ total: count() })
+        .from(manufacturers)
+        .where(where);
+      return { items, total: result!.total };
+    });
   }
   findById(id: string) {
     return catalogQuery(async () => {
-      const [row] = await this.database.db
+      const [row] = await this.db
         .select({ ...getTableColumns(manufacturers) })
         .from(manufacturers)
         .where(eq(manufacturers.id, id));
@@ -82,42 +74,38 @@ export class ManufacturersRepository {
     });
   }
   create(input: CreateManufacturer) {
-    return catalogQuery(() =>
-      this.database.db.transaction(async (tx) => {
-        const [inserted] = await tx
-          .insert(manufacturers)
-          .values(input)
-          .returning({ id: manufacturers.id });
-        if (!inserted) throw new Error('Insert returned no catalog record.');
-        const [row] = await tx
-          .select({ ...getTableColumns(manufacturers) })
-          .from(manufacturers)
-          .where(eq(manufacturers.id, inserted.id));
-        if (!row) throw new Error('Inserted catalog record could not be read.');
-        return row;
-      }),
-    );
+    return catalogQuery(async () => {
+      const [inserted] = await this.db
+        .insert(manufacturers)
+        .values(input)
+        .returning({ id: manufacturers.id });
+      if (!inserted) throw new Error('Insert returned no catalog record.');
+      const [row] = await this.db
+        .select({ ...getTableColumns(manufacturers) })
+        .from(manufacturers)
+        .where(eq(manufacturers.id, inserted.id));
+      if (!row) throw new Error('Inserted catalog record could not be read.');
+      return row;
+    });
   }
   update(id: string, input: UpdateManufacturer) {
-    return catalogQuery(() =>
-      this.database.db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(manufacturers)
-          .set(input)
-          .where(eq(manufacturers.id, id))
-          .returning({ id: manufacturers.id });
-        if (!updated) return undefined;
-        const [row] = await tx
-          .select({ ...getTableColumns(manufacturers) })
-          .from(manufacturers)
-          .where(eq(manufacturers.id, id));
-        return row;
-      }),
-    );
+    return catalogQuery(async () => {
+      const [updated] = await this.db
+        .update(manufacturers)
+        .set(input)
+        .where(eq(manufacturers.id, id))
+        .returning({ id: manufacturers.id });
+      if (!updated) return undefined;
+      const [row] = await this.db
+        .select({ ...getTableColumns(manufacturers) })
+        .from(manufacturers)
+        .where(eq(manufacturers.id, id));
+      return row;
+    });
   }
   delete(id: string) {
     return catalogQuery(async () => {
-      const [row] = await this.database.db
+      const [row] = await this.db
         .delete(manufacturers)
         .where(eq(manufacturers.id, id))
         .returning({ id: manufacturers.id });

@@ -4,24 +4,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { MoveLocation } from '@roller-bay/shared/locations';
-import { DatabaseService } from '../../database/database.service.js';
-import {
-  LocationOrderRepository,
-  type OrderedLocationKind,
-} from './location-order.repository.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import { type OrderedLocationKind } from './location-order.repository.js';
 import { locationsOperation } from './locations.operation.js';
-
 @Injectable()
 export class LocationOrderService {
-  constructor(
-    private readonly database: DatabaseService,
-    private readonly repository: LocationOrderRepository,
-  ) {}
-
+  constructor(private readonly unitOfWork: UnitOfWork) {}
   move(kind: OrderedLocationKind, id: string, input: MoveLocation) {
     return locationsOperation(() =>
-      this.database.db.transaction(async (tx) => {
-        const siblings = await this.repository.lockSiblings(tx, kind, id);
+      this.unitOfWork.transaction(async (context) => {
+        const siblings = await context.locationOrder.lockSiblings(kind, id);
         const ids = siblings.map((row) => row.id);
         if (!ids.includes(id))
           throw new NotFoundException('Location record not found.');
@@ -36,7 +28,7 @@ export class LocationOrderService {
           ordered.indexOf(input.targetId) +
           (input.position === 'after' ? 1 : 0);
         ordered.splice(destination, 0, id);
-        await this.repository.saveOrder(tx, kind, ordered);
+        await context.locationOrder.saveOrder(kind, ordered);
       }),
     );
   }

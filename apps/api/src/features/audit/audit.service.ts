@@ -1,9 +1,8 @@
 import {
-  Injectable,
   ConflictException,
+  Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import {
   auditChangeSchema,
   historySchema,
@@ -14,11 +13,9 @@ import {
   correctionResultSchema,
   type CorrectionResult,
 } from '@roller-bay/shared/corrections';
-import {
-  DatabaseService,
-  type DatabaseTransaction,
-} from '../../database/database.service.js';
-import { AuditRepository } from './audit.repository.js';
+import { createHash } from 'node:crypto';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 // Object-key order must not change the identity of a normalized request.
 export function canonicalJson(value: unknown): string {
   if (value instanceof Date) return JSON.stringify(value.toISOString());
@@ -32,28 +29,24 @@ export function canonicalJson(value: unknown): string {
 }
 @Injectable()
 export class AuditService {
-  constructor(
-    private readonly database: DatabaseService,
-    private readonly repository: AuditRepository,
-  ) {}
+  constructor(private readonly unitOfWork: UnitOfWork) {}
   async record(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     actorId: string,
     action: string,
     changes: AuditChange[],
     reason: string | null = null,
   ) {
-    const actor = await this.repository.findActor(tx, actorId);
+    const actor = await context.audit.findActor(actorId);
     if (!actor) throw new UnauthorizedException();
     const snapshots = changes.map((c) => auditChangeSchema.parse(c));
-    return this.repository.insertEvent(
-      tx,
+    return context.audit.insertEvent(
       { actorId, actorName: actor.name, action, reason },
       snapshots,
     );
   }
   async replay(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     actorId: string,
     scope: string,
     recordId: string,
@@ -63,8 +56,7 @@ export class AuditService {
     const requestHash = createHash('sha256')
       .update(canonicalJson(input))
       .digest('hex');
-    const previous = await this.repository.findRequest(
-      tx,
+    const previous = await context.audit.findRequest(
       actorId,
       scope,
       recordId,
@@ -80,7 +72,7 @@ export class AuditService {
     };
   }
   async remember(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     actorId: string,
     scope: string,
     recordId: string,
@@ -89,7 +81,7 @@ export class AuditService {
     result: CorrectionResult,
   ) {
     const parsed = correctionResultSchema.parse(result);
-    await this.repository.insertRequest(tx, {
+    await context.audit.insertRequest({
       actorId,
       scope,
       recordId,
@@ -102,12 +94,13 @@ export class AuditService {
   history(
     type: AuditRecordType,
     id: string,
-    query: { page: number; pageSize: number },
+    query: {
+      page: number;
+      pageSize: number;
+    },
   ) {
-    return this.database.db.transaction(
-      async (tx) =>
-        historySchema.parse(await this.repository.history(tx, type, id, query)),
-      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    return this.unitOfWork.readOnlyTransaction(async (context) =>
+      historySchema.parse(await context.audit.history(type, id, query)),
     );
   }
 }

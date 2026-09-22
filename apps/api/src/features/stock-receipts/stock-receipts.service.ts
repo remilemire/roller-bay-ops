@@ -1,11 +1,3 @@
-import { AuditService } from '../audit/audit.service.js';
-import { stockChanges } from '../stock-items/stock-items.audit.js';
-import type { StockEffect } from '@roller-bay/shared/stock-items';
-import {
-  receiptCorrectionContextSchema,
-  type ReceiptCorrection,
-} from '@roller-bay/shared/corrections';
-import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -15,39 +7,46 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  receiptCorrectionContextSchema,
+  type ReceiptCorrection,
+} from '@roller-bay/shared/corrections';
+import type { StockEffect } from '@roller-bay/shared/stock-items';
+import {
   createStockReceiptSchema,
+  stockReceiptDetailSchema,
   stockReceiptDraftDataSchema,
   stockReceiptDraftSchema,
   stockReceiptDraftSummarySchema,
   stockReceiptSummarySchema,
-  stockReceiptDetailSchema,
   type CreateStockReceipt,
   type StockReceiptDraftData,
   type StockReceiptQuery,
 } from '@roller-bay/shared/stock-receipts';
-import type { DatabaseTransaction } from '../../database/database.service.js';
+import { createHash } from 'node:crypto';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import { AuditService } from '../audit/audit.service.js';
+import { stockChanges } from '../stock-items/stock-items.audit.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
-import {
-  StockReceiptsRepository,
-  type StockReceiptRecord,
-} from './stock-receipts.repository.js';
 import {
   InvalidStockReceiptError,
   StockReceiptConflictError,
   StockReceiptReferenceNotFoundError,
 } from './stock-receipts.errors.js';
-
+import { stockReceiptsQuery } from './stock-receipts.persistence.js';
+import {
+  StockReceiptsRepository,
+  type StockReceiptRecord,
+} from './stock-receipts.repository.js';
 const hash = (input: unknown) =>
   createHash('sha256').update(JSON.stringify(input)).digest('hex');
-
 @Injectable()
 export class StockReceiptsService {
   constructor(
+    private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditService,
-    private readonly repository: StockReceiptsRepository,
     private readonly stockItems: StockItemsService,
   ) {}
-
   create(input: CreateStockReceipt, userId: string, key: string) {
     return this.createRecord(
       stockReceiptDraftDataSchema.parse(input),
@@ -57,7 +56,6 @@ export class StockReceiptsService {
       false,
     );
   }
-
   createDraft(data: StockReceiptDraftData, userId: string, key: string) {
     return this.createRecord(
       data,
@@ -67,7 +65,6 @@ export class StockReceiptsService {
       true,
     );
   }
-
   private createRecord(
     data: StockReceiptDraftData,
     userId: string,
@@ -76,70 +73,72 @@ export class StockReceiptsService {
     draft: boolean,
   ) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
+      this.unitOfWork.transaction(async (context) => {
         // Claim the creator/key pair in the same transaction as its contents.
         // Concurrent retries then reuse the committed receipt instead of adding rolls.
-        const header = await repository.create({
+        const header = await context.stockReceipts.create({
           purchaseOrderNumber: data.purchaseOrderNumber,
           createdByUserId: userId,
           idempotencyKey: key,
           requestHash,
         });
         if (!header) {
-          const existing = await repository.findByKey(userId, key);
+          const existing = await context.stockReceipts.findByKey(userId, key);
           if (!existing || existing.requestHash !== requestHash)
             throw new ConflictException(
               'This Idempotency-Key was already used with a different stock receipt.',
             );
-          return this.detail(repository, tx, existing);
+          return this.detail(context, existing);
         }
-        await this.writeLines(repository, header.id, data);
+        await this.writeLines(context.stockReceipts, header.id, data);
         // Drafts stay out of history, which begins at submission.
-        if (draft) return this.detail(repository, tx, header);
-        return this.submitRecords(repository, tx, header, userId, false);
+        if (draft) return this.detail(context, header);
+        return this.submitRecords(context, header, userId, false);
       }),
     );
   }
-
   updateDraft(id: string, revision: number, data: StockReceiptDraftData) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        this.requireDraft(await repository.findById(id, true), revision);
-        await repository.deleteItems(id);
-        await this.writeLines(repository, id, data);
-        const header = await repository.update(id, {
+      this.unitOfWork.transaction(async (context) => {
+        this.requireDraft(
+          await context.stockReceipts.findById(id, true),
+          revision,
+        );
+        await context.stockReceipts.deleteItems(id);
+        await this.writeLines(context.stockReceipts, id, data);
+        const header = await context.stockReceipts.update(id, {
           purchaseOrderNumber: data.purchaseOrderNumber,
         });
-        return this.detail(repository, tx, header);
+        return this.detail(context, header);
       }),
     );
   }
-
   deleteDraft(id: string, revision: number) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository) => {
-        this.requireDraft(await repository.findById(id, true), revision);
-        await repository.deleteItems(id);
-        await repository.delete(id);
+      this.unitOfWork.transaction(async (context) => {
+        this.requireDraft(
+          await context.stockReceipts.findById(id, true),
+          revision,
+        );
+        await context.stockReceipts.deleteItems(id);
+        await context.stockReceipts.delete(id);
       }),
     );
   }
-
   submitDraft(id: string, revision: number, userId: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = await repository.findById(id, true);
+      this.unitOfWork.transaction(async (context) => {
+        const header = await context.stockReceipts.findById(id, true);
         if (!header) throw new NotFoundException('Stock receipt not found.');
         // A successful commit may have lost its response. Replay that draft
         // revision before rejecting changes to an already submitted receipt.
         if (!header.isDraft && header.submittedDraftRevision === revision)
-          return this.detail(repository, tx, header);
+          return this.detail(context, header);
         this.requireDraft(header, revision);
-        return this.submitRecords(repository, tx, header, userId, true);
+        return this.submitRecords(context, header, userId, true);
       }),
     );
   }
-
   private requireDraft(
     header: StockReceiptRecord | undefined,
     revision: number,
@@ -155,7 +154,6 @@ export class StockReceiptsService {
       );
     return header;
   }
-
   private writeLines(
     repository: StockReceiptsRepository,
     id: string,
@@ -173,16 +171,14 @@ export class StockReceiptsService {
       })),
     );
   }
-
   // Both direct submission and draft submission use the persisted, ordered lines.
   private async submitRecords(
-    repository: StockReceiptsRepository,
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     header: StockReceiptRecord,
     userId: string,
     fromDraft: boolean,
   ) {
-    const lines = await repository.findItems(header.id);
+    const lines = await context.stockReceipts.findItems(header.id);
     const parsed = createStockReceiptSchema.safeParse(
       this.formData(header, lines),
     );
@@ -196,9 +192,9 @@ export class StockReceiptsService {
         ...line,
         stockReceiptItemId: lines[index]!.id,
       })),
-      tx,
+      context,
     );
-    const saved = await repository.update(
+    const saved = await context.stockReceipts.update(
       header.id,
       {
         stockEffects: effects,
@@ -209,8 +205,8 @@ export class StockReceiptsService {
       },
       fromDraft,
     );
-    const result = await this.receipt(repository, tx, saved);
-    await this.audit.record(tx, userId, 'receipt.submitted', [
+    const result = await this.receipt(context, saved);
+    await this.audit.record(context, userId, 'receipt.submitted', [
       {
         recordType: 'stock-receipts',
         recordId: header.id,
@@ -222,39 +218,37 @@ export class StockReceiptsService {
     ]);
     return result;
   }
-
   correctionContext(id: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = await repository.findById(id);
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        const header = await context.stockReceipts.findById(id);
         if (!header) throw new NotFoundException('Stock receipt not found.');
         if (header.isDraft)
           throw new ConflictException(
             'Submit the receipt before correcting it.',
           );
-        const record = await this.receipt(repository, tx, header);
+        const record = await this.receipt(context, header);
         const ids = record.items.flatMap((i) => i.stockItemIds);
         return receiptCorrectionContextSchema.parse({
           record,
           baselineAvailable: header.stockEffects !== null,
           eligibility: await this.stockItems.eligibility(
-            tx,
+            context,
             header.stockEffects ?? [],
             ids,
           ),
         });
-      }, true),
+      }),
     );
   }
-
   correct(id: string, input: ReceiptCorrection, userId: string, key: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = await repository.findById(id, true);
+      this.unitOfWork.transaction(async (context) => {
+        const header = await context.stockReceipts.findById(id, true);
         if (!header) throw new NotFoundException('Stock receipt not found.');
         const audit = this.audit;
         const replay = await audit.replay(
-          tx,
+          context,
           userId,
           'receipt.correct',
           id,
@@ -268,8 +262,8 @@ export class StockReceiptsService {
           throw new ConflictException(
             'This older receipt lacks a trustworthy stock baseline. Use a current-stock adjustment.',
           );
-        const before = await this.receipt(repository, tx, header);
-        const lines = await repository.findItems(id);
+        const before = await this.receipt(context, header);
+        const lines = await context.stockReceipts.findItems(id);
         const operated = input.operations.flatMap((op) =>
           op.action === 'add' ? [] : [op.lineId],
         );
@@ -295,9 +289,9 @@ export class StockReceiptsService {
           return dimensionsChanged ? allRolls : op.removeStockItemIds;
         });
         const locked = new Map(
-          (await this.stockItems.lockForCorrection(tx, affectedStockIds)).map(
-            (stock) => [stock.id, stock],
-          ),
+          (
+            await this.stockItems.lockForCorrection(context, affectedStockIds)
+          ).map((stock) => [stock.id, stock]),
         );
         const effects: StockEffect[] = [];
         let position = Math.max(0, ...lines.map((l) => l.position));
@@ -306,7 +300,7 @@ export class StockReceiptsService {
           input.purchaseOrderNumber !== header.purchaseOrderNumber;
         for (const op of input.operations) {
           if (op.action === 'add') {
-            const [line] = await repository.createItems([
+            const [line] = await context.stockReceipts.createItems([
               {
                 stockReceiptId: id,
                 position: ++position,
@@ -318,7 +312,7 @@ export class StockReceiptsService {
             effects.push(
               ...(await this.stockItems.receiveRolls(
                 [{ ...op.data, stockReceiptItemId: line!.id }],
-                tx,
+                context,
               )),
             );
             changed = true;
@@ -330,7 +324,7 @@ export class StockReceiptsService {
               'Select an active line from this receipt.',
             );
           const stocks = (
-            await this.stockItems.findByStockReceiptItemIds([line.id], tx)
+            await this.stockItems.findByStockReceiptItemIds([line.id], context)
           ).filter((r) => !r.voidedAt);
           const data = op.action === 'update' ? op.data : null;
           const dimensionsChanged =
@@ -361,7 +355,7 @@ export class StockReceiptsService {
             ? stocks.map((r) => r.id)
             : removeIds;
           await this.stockItems.requireCorrectionEligible(
-            tx,
+            context,
             header.stockEffects ?? [],
             input.stockVersions,
             affectedIds,
@@ -373,7 +367,7 @@ export class StockReceiptsService {
               ? { ...current, voidedAt: new Date().toISOString() }
               : { ...current, ...data!, quantity: undefined };
             effects.push(
-              ...(await this.stockItems.applySnapshots(tx, [
+              ...(await this.stockItems.applySnapshots(context, [
                 { before: current, value },
               ])),
             );
@@ -389,23 +383,25 @@ export class StockReceiptsService {
                       stockReceiptItemId: line.id,
                     },
                   ],
-                  tx,
+                  context,
                 )),
               );
-            await repository.updateItem(line.id, {
+            await context.stockReceipts.updateItem(line.id, {
               ...data,
               widthMm: data.widthMm.toFixed(3),
               initialLengthMm: data.initialLengthMm.toFixed(3),
             });
             changed ||= dimensionsChanged || data.quantity !== stocks.length;
           } else {
-            await repository.updateItem(line.id, { voidedAt: new Date() });
+            await context.stockReceipts.updateItem(line.id, {
+              voidedAt: new Date(),
+            });
             changed = true;
           }
         }
         if (!changed)
           throw new BadRequestException('Provide an actual change.');
-        const currentLines = (await repository.findItems(id)).filter(
+        const currentLines = (await context.stockReceipts.findItems(id)).filter(
           (l) => !l.voidedAt,
         );
         if (
@@ -425,7 +421,7 @@ export class StockReceiptsService {
               ? baseline.get(e.stockItemId)!.before
               : e.before,
           });
-        const saved = await repository.update(id, {
+        const saved = await context.stockReceipts.update(id, {
           purchaseOrderNumber:
             input.purchaseOrderNumber ?? header.purchaseOrderNumber,
           stockEffects:
@@ -433,9 +429,9 @@ export class StockReceiptsService {
               ? null
               : [...baseline.values()],
         });
-        const result = await this.receipt(repository, tx, saved);
+        const result = await this.receipt(context, saved);
         const eventId = await audit.record(
-          tx,
+          context,
           userId,
           'receipt.corrected',
           [
@@ -450,7 +446,7 @@ export class StockReceiptsService {
           input.reason,
         );
         return audit.remember(
-          tx,
+          context,
           userId,
           'receipt.correct',
           id,
@@ -469,29 +465,26 @@ export class StockReceiptsService {
       }),
     );
   }
-
   list(query: StockReceiptQuery) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository) => {
-        const result = await repository.list(query);
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        const result = await context.stockReceipts.list(query);
         return {
           ...result,
           items: result.items.map((item) => this.toPublic(item)),
         };
-      }, true),
+      }),
     );
   }
-
   findById(id: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = await repository.findById(id);
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        const header = await context.stockReceipts.findById(id);
         if (!header) throw new NotFoundException('Stock receipt not found.');
-        return this.detail(repository, tx, header);
-      }, true),
+        return this.detail(context, header);
+      }),
     );
   }
-
   private formData(
     header: StockReceiptRecord,
     lines: Awaited<ReturnType<StockReceiptsRepository['findItems']>>,
@@ -508,28 +501,24 @@ export class StockReceiptsService {
       })),
     };
   }
-
-  private async detail(
-    repository: StockReceiptsRepository,
-    tx: DatabaseTransaction,
-    header: StockReceiptRecord,
-  ) {
-    if (!header.isDraft) return this.receipt(repository, tx, header);
+  private async detail(context: UnitOfWorkContext, header: StockReceiptRecord) {
+    if (!header.isDraft) return this.receipt(context, header);
     return stockReceiptDraftSchema.parse({
       ...this.toPublic(header),
-      data: this.formData(header, await repository.findItems(header.id)),
+      data: this.formData(
+        header,
+        await context.stockReceipts.findItems(header.id),
+      ),
     });
   }
-
   private async receipt(
-    repository: StockReceiptsRepository,
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     header: StockReceiptRecord,
   ) {
-    const lines = await repository.findItems(header.id);
+    const lines = await context.stockReceipts.findItems(header.id);
     const stock = await this.stockItems.findByStockReceiptItemIds(
       lines.map((line) => line.id),
-      tx,
+      context,
     );
     const result = {
       ...this.toPublic(header),
@@ -549,7 +538,6 @@ export class StockReceiptsService {
     };
     return stockReceiptDetailSchema.parse(result);
   }
-
   private toPublic(row: StockReceiptRecord) {
     const result = {
       ...row,
@@ -562,10 +550,9 @@ export class StockReceiptsService {
       ? stockReceiptSummarySchema.parse(result)
       : stockReceiptDraftSummarySchema.parse(result);
   }
-
   private async operation<T>(operation: () => Promise<T>): Promise<T> {
     try {
-      return await operation();
+      return await stockReceiptsQuery(operation);
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error instanceof StockReceiptConflictError)

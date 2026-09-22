@@ -1,31 +1,32 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
+  allocationCompletionSchema,
   completeAllocationRequestSchema,
   completeAllocationSchema,
-  allocationCompletionSchema,
 } from '@roller-bay/shared/allocations';
+import { auditChangeSchema } from '@roller-bay/shared/audit';
+import {
+  completionCorrectionSchema,
+  receiptCorrectionSchema,
+  stockCorrectionSchema,
+} from '@roller-bay/shared/corrections';
+import {
+  stockCuttingOutcomeSchema,
+  stockItemQuerySchema,
+  stockSnapshotSchema,
+} from '@roller-bay/shared/stock-items';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { BadRequestException, ConflictException } from '@nestjs/common';
-import {
-  stockCorrectionSchema,
-  receiptCorrectionSchema,
-  completionCorrectionSchema,
-} from '@roller-bay/shared/corrections';
-import {
-  stockItemQuerySchema,
-  stockSnapshotSchema,
-  stockCuttingOutcomeSchema,
-} from '@roller-bay/shared/stock-items';
-import { auditChangeSchema } from '@roller-bay/shared/audit';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
+import { stubUnitOfWork } from '../../testing/unit-of-work.js';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import {
   cuttingWrite,
   retainedPieceWrite,
 } from '../stock-items/stock-items.cutting.js';
-import { AuditService, canonicalJson } from './audit.service.js';
 import { AuditRepository } from './audit.repository.js';
-import type { DatabaseService } from '../../database/database.service.js';
-import type { DatabaseTransaction } from '../../database/database.service.js';
+import { AuditService, canonicalJson } from './audit.service.js';
 const id = randomUUID(),
   color = randomUUID(),
   location = randomUUID(),
@@ -259,21 +260,26 @@ test('correction replay is stable under object key order and rejects a changed p
   let rows: unknown[] = [];
   const tx = {
     select: () => ({ from: () => ({ where: async () => rows }) }),
-  } as unknown as DatabaseTransaction;
-  const repository = new AuditService(
-    {} as DatabaseService,
-    new AuditRepository(),
-  );
+  } as unknown as DatabaseExecutor;
+  const context = { audit: new AuditRepository(tx) } as UnitOfWorkContext;
+  const repository = new AuditService(stubUnitOfWork(context));
   const input = {
     reason: 'Count',
     changes: { widthMm: 10 },
     expectedRevision: 2,
   };
-  const first = await repository.replay(tx, id, 'stock.correct', id, id, input);
+  const first = await repository.replay(
+    context,
+    id,
+    'stock.correct',
+    id,
+    id,
+    input,
+  );
   rows = [{ requestHash: first.requestHash, result }];
   assert.deepEqual(
     (
-      await repository.replay(tx, id, 'stock.correct', id, id, {
+      await repository.replay(context, id, 'stock.correct', id, id, {
         expectedRevision: 2,
         changes: { widthMm: 10 },
         reason: 'Count',
@@ -282,7 +288,7 @@ test('correction replay is stable under object key order and rejects a changed p
     result,
   );
   await assert.rejects(
-    repository.replay(tx, id, 'stock.correct', id, id, {
+    repository.replay(context, id, 'stock.correct', id, id, {
       ...input,
       reason: 'Different',
     }),

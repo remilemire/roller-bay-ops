@@ -2,18 +2,23 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   locationSchema,
   type CreateLocation,
-  type UpdateLocation,
   type LocationQuery,
+  type UpdateLocation,
 } from '@roller-bay/shared/locations';
-import { LocationLevelsRepository } from './location-levels.repository.js';
+import { UnitOfWork } from '../../../unit-of-work/unit-of-work.js';
 import { locationsOperation } from '../locations.operation.js';
-
+import { LocationLevelsRepository } from './location-levels.repository.js';
 @Injectable()
 export class LocationLevelsService {
-  constructor(private readonly repository: LocationLevelsRepository) {}
+  constructor(
+    private readonly unitOfWork: UnitOfWork,
+    private readonly repository: LocationLevelsRepository,
+  ) {}
   list(query: LocationQuery) {
     return locationsOperation(async () => {
-      const result = await this.repository.list(query);
+      const result = await this.unitOfWork.readOnlyTransaction(
+        async (context) => context.locationLevels.list(query),
+      );
       return {
         items: result.items.map((row) => this.toPublic(row)),
         total: result.total,
@@ -29,12 +34,20 @@ export class LocationLevelsService {
   }
   create(input: CreateLocation) {
     return locationsOperation(async () =>
-      this.toPublic(await this.repository.create(input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.locationLevels.create(input),
+        ),
+      ),
     );
   }
   update(id: string, input: UpdateLocation) {
     return locationsOperation(async () =>
-      this.toPublic(await this.repository.update(id, input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.locationLevels.update(id, input),
+        ),
+      ),
     );
   }
   delete(id: string) {

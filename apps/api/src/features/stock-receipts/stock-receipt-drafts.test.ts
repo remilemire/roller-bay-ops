@@ -1,21 +1,21 @@
-import { AuditService } from '../audit/audit.service.js';
-import { randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
-import { StockReceiptsService } from './stock-receipts.service.js';
 import {
-  StockReceiptsRepository,
-  type StockReceiptRecord,
-  type StockReceiptItemRecord,
-} from './stock-receipts.repository.js';
-import type { StockItemsService } from '../stock-items/stock-items.service.js';
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import {
-  stockReceiptDraftDataSchema,
   createStockReceiptSchema,
+  stockReceiptDraftDataSchema,
 } from '@roller-bay/shared/stock-receipts';
-import { stockReceiptsQuery } from './stock-receipts.persistence.js';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { test } from 'node:test';
+import { stubUnitOfWork } from '../../testing/unit-of-work.js';
+import { AuditService } from '../audit/audit.service.js';
+import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import { StockReceiptConflictError } from './stock-receipts.errors.js';
+import { stockReceiptsQuery } from './stock-receipts.persistence.js';
+import {
+  type StockReceiptItemRecord,
+  type StockReceiptRecord,
+} from './stock-receipts.repository.js';
+import { StockReceiptsService } from './stock-receipts.service.js';
 
 test('receipt drafts save incomplete lines without inventing dimensions or quantities', () => {
   const data = stockReceiptDraftDataSchema.parse({
@@ -108,12 +108,6 @@ test('incomplete saved receipt submission never reaches stock creation or confir
   ];
   let writes = 0;
   const repository = {
-    withTransaction: async (
-      operation: (
-        repository: unknown,
-        transaction: unknown,
-      ) => Promise<unknown>,
-    ) => operation(repository, {}),
     findById: async () => header,
     findItems: async () => lines,
     update: async () => {
@@ -127,8 +121,8 @@ test('incomplete saved receipt submission never reaches stock creation or confir
     },
   };
   const service = new StockReceiptsService(
+    stubUnitOfWork({ stockReceipts: repository }),
     {} as AuditService,
-    repository as unknown as StockReceiptsRepository,
     stock as unknown as StockItemsService,
   );
   await assert.rejects(

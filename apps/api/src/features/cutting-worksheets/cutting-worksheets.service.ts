@@ -4,40 +4,43 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { z } from 'zod';
+import type { AllocationDetail } from '@roller-bay/shared/allocations';
 import type {
   WorksheetSave,
   WorksheetSubmit,
   worksheetReviewSchema,
 } from '@roller-bay/shared/production';
-import type { AllocationDetail } from '@roller-bay/shared/allocations';
-import {
-  DatabaseService,
-  type DatabaseTransaction,
-} from '../../database/database.service.js';
+import type { z } from 'zod';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService, canonicalJson } from '../audit/audit.service.js';
 import { EmployeesService } from '../employees/employees.service.js';
-import { CuttingWorksheetsRepository } from './cutting-worksheets.repository.js';
-import type { WorksheetRecord } from './cutting-worksheets.table.js';
+import { worksheetOperation } from './cutting-worksheets.operation.js';
 import {
   presentWorksheet,
   presentWorksheetSummary,
 } from './cutting-worksheets.presenter.js';
-import { worksheetOperation } from './cutting-worksheets.operation.js';
-type StockRevision = { id: string; revision: number };
+import type { WorksheetRecord } from './cutting-worksheets.table.js';
+type StockRevision = {
+  id: string;
+  revision: number;
+};
 @Injectable()
 export class CuttingWorksheetsService {
   constructor(
-    private readonly repository: CuttingWorksheetsRepository,
-    private readonly database: DatabaseService,
+    private readonly unitOfWork: UnitOfWork,
     private readonly employees: EmployeesService,
     private readonly audit: AuditService,
   ) {}
   private operation<T>(
-    fn: (tx: DatabaseTransaction) => Promise<T>,
+    fn: (context: UnitOfWorkContext) => Promise<T>,
     readOnly = false,
   ) {
-    return worksheetOperation(() => this.database.transaction(fn, readOnly));
+    return worksheetOperation(() =>
+      readOnly
+        ? this.unitOfWork.readOnlyTransaction(fn)
+        : this.unitOfWork.transaction(fn),
+    );
   }
   private validateDraft(row: WorksheetRecord, draft: WorksheetSave['draft']) {
     const ids = row.snapshot.items.map((i) => i.stockItemId);
@@ -53,56 +56,57 @@ export class CuttingWorksheetsService {
       throw new BadRequestException('Unknown cut.');
   }
   findForOrder(id: string) {
-    return this.operation(async (tx) => {
-      const row = await this.repository.forOrder(tx, id);
+    return this.operation(async (context) => {
+      const row = await context.cuttingWorksheets.forOrder(id);
       return row ? presentWorksheet(row) : null;
     }, true);
   }
   find(id: string) {
     return this.operation(
-      async (tx) => presentWorksheet(await this.requireRecord(tx, id)),
+      async (context) =>
+        presentWorksheet(await this.requireRecord(context, id)),
       true,
     );
   }
   list() {
     return this.operation(
-      async (tx) =>
-        (await this.repository.list(tx)).map(presentWorksheetSummary),
+      async (context) =>
+        (await context.cuttingWorksheets.list()).map(presentWorksheetSummary),
       true,
     );
   }
-  async requireRecord(tx: DatabaseTransaction, id: string, lock = false) {
-    const row = await this.repository.find(tx, id, lock);
+  async requireRecord(context: UnitOfWorkContext, id: string, lock = false) {
+    const row = await context.cuttingWorksheets.find(id, lock);
     if (!row) throw new NotFoundException('Cutting worksheet not found.');
     return row;
   }
-  async forAllocation(tx: DatabaseTransaction, id: string) {
-    const row = await this.repository.forAllocation(tx, id);
+  async forAllocation(context: UnitOfWorkContext, id: string) {
+    const row = await context.cuttingWorksheets.forAllocation(id);
     return row ? presentWorksheet(row) : null;
   }
-  async assertPlanMutable(tx: DatabaseTransaction, allocationId: string) {
-    if (await this.repository.forAllocation(tx, allocationId))
+  async assertPlanMutable(context: UnitOfWorkContext, allocationId: string) {
+    if (await context.cuttingWorksheets.forAllocation(allocationId))
       throw new ConflictException(
         'Cutting has begun; resolve the working sheet before changing this allocation.',
       );
   }
   async assertReconciliationAllowed(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     allocationId: string,
     worksheetId?: string,
   ) {
-    const row = await this.repository.forAllocation(tx, allocationId);
+    const row = await context.cuttingWorksheets.forAllocation(allocationId);
     if (row && row.id !== worksheetId)
       throw new ConflictException(
         'Review the saved cutting worksheet to reconcile this allocation.',
       );
   }
   async assertStockReconciliationAllowed(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     stockIds: string[],
   ) {
     for (const id of stockIds) {
-      const pending = await this.repository.latestForStock(tx, id);
+      const pending = await context.cuttingWorksheets.latestForStock(id);
       if (pending && !pending.reviewedAt)
         throw new ConflictException(
           `Review pending cutting results for order ${pending.orderNumber} first.`,
@@ -111,20 +115,20 @@ export class CuttingWorksheetsService {
   }
   // The workflow holds allocation, order and sorted stock locks before capturing this sequence.
   async start(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     snapshot: AllocationDetail,
     stocks: StockRevision[],
     employeeId: string,
     actor: string,
   ) {
-    const employee = await this.employees.requireActive(tx, employeeId);
+    const employee = await this.employees.requireActive(context, employeeId);
     if (snapshot.needsReplanning)
       throw new ConflictException(
         'This allocation needs replanning before cutting.',
       );
     const baselines: WorksheetRecord['baselines'] = {};
     for (const stock of stocks) {
-      const previous = await this.repository.latestForStock(tx, stock.id);
+      const previous = await context.cuttingWorksheets.latestForStock(stock.id);
       if (previous && !previous.submittedAt)
         throw new ConflictException(
           `Finish and submit the cutting results for order ${previous.orderNumber} before using this fabric again.`,
@@ -141,7 +145,7 @@ export class CuttingWorksheetsService {
         predecessorId: previous && !previous.reviewedAt ? previous.id : null,
       };
     }
-    const row = await this.repository.create(tx, {
+    const row = await context.cuttingWorksheets.create({
       allocationId: snapshot.id,
       workOrderId: snapshot.workOrderId,
       orderNumber: snapshot.orderNumber,
@@ -153,7 +157,7 @@ export class CuttingWorksheetsService {
       baselines,
     });
     const result = presentWorksheet(row);
-    await this.audit.record(tx, actor, 'cutting.started', [
+    await this.audit.record(context, actor, 'cutting.started', [
       {
         recordType: 'cutting-worksheets',
         recordId: row.id,
@@ -164,8 +168,8 @@ export class CuttingWorksheetsService {
     return result;
   }
   save(id: string, input: WorksheetSave) {
-    return this.operation(async (tx) => {
-      const row = await this.repository.find(tx, id, true);
+    return this.operation(async (context) => {
+      const row = await context.cuttingWorksheets.find(id, true);
       if (!row) throw new NotFoundException('Worksheet not found.');
       if (row.submittedAt || row.abandonedAt)
         throw new ConflictException('This sheet is submitted or abandoned.');
@@ -177,13 +181,13 @@ export class CuttingWorksheetsService {
         );
       this.validateDraft(row, input.draft);
       return presentWorksheet(
-        await this.repository.update(tx, id, { draft: input.draft }),
+        await context.cuttingWorksheets.update(id, { draft: input.draft }),
       );
     });
   }
   submit(id: string, input: WorksheetSubmit, actor: string) {
-    return this.operation(async (tx) => {
-      const row = await this.repository.find(tx, id, true);
+    return this.operation(async (context) => {
+      const row = await context.cuttingWorksheets.find(id, true);
       if (!row) throw new NotFoundException('Worksheet not found.');
       if (row.abandonedAt)
         throw new ConflictException('This sheet was abandoned.');
@@ -217,14 +221,14 @@ export class CuttingWorksheetsService {
           'Results must match the saved cutting sheet and stock revisions.',
         );
       const result = presentWorksheet(
-        await this.repository.update(tx, id, {
+        await context.cuttingWorksheets.update(id, {
           results: input.results,
           ...(input.draft ? { draft: input.draft } : {}),
           submittedAt: new Date(),
           submittedByUserId: actor,
         }),
       );
-      await this.audit.record(tx, actor, 'cutting.submitted', [
+      await this.audit.record(context, actor, 'cutting.submitted', [
         {
           recordType: 'cutting-worksheets',
           recordId: id,
@@ -241,8 +245,8 @@ export class CuttingWorksheetsService {
     reason: string,
     actor: string,
   ) {
-    return this.operation(async (tx) => {
-      const row = await this.repository.find(tx, id, true);
+    return this.operation(async (context) => {
+      const row = await context.cuttingWorksheets.find(id, true);
       if (!row) throw new NotFoundException('Worksheet not found.');
       if (
         row.abandonedAt ||
@@ -253,13 +257,13 @@ export class CuttingWorksheetsService {
           'Worksheet changed or has been reconciled.',
         );
       const result = presentWorksheet(
-        await this.repository.update(tx, id, {
+        await context.cuttingWorksheets.update(id, {
           submittedAt: null,
           submittedByUserId: null,
         }),
       );
       await this.audit.record(
-        tx,
+        context,
         actor,
         'cutting.returned',
         [
@@ -279,7 +283,7 @@ export class CuttingWorksheetsService {
     });
   }
   async abandon(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     row: WorksheetRecord,
     expectedRevision: number,
     reason: string,
@@ -290,16 +294,18 @@ export class CuttingWorksheetsService {
       row.revision !== expectedRevision ||
       row.submittedAt ||
       row.reviewedAt ||
-      (await this.repository.hasSuccessors(tx, row.id))
+      (await context.cuttingWorksheets.hasSuccessors(row.id))
     )
       throw new ConflictException(
         'Only an unsubmitted sheet with no recorded production or later use can be abandoned.',
       );
     const result = presentWorksheet(
-      await this.repository.update(tx, row.id, { abandonedAt: new Date() }),
+      await context.cuttingWorksheets.update(row.id, {
+        abandonedAt: new Date(),
+      }),
     );
     await this.audit.record(
-      tx,
+      context,
       actor,
       'cutting.abandoned',
       [
@@ -315,7 +321,7 @@ export class CuttingWorksheetsService {
     return result;
   }
   async prepareReview(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     row: WorksheetRecord,
     expectedRevision: number,
     stocks: StockRevision[],
@@ -345,7 +351,7 @@ export class CuttingWorksheetsService {
     for (const outcome of results.items) {
       const baseline = row.baselines[outcome.stockItemId]!;
       const previous = baseline.predecessorId
-        ? await this.repository.find(tx, baseline.predecessorId)
+        ? await context.cuttingWorksheets.find(baseline.predecessorId)
         : null;
       if (previous && !previous.reviewedAt)
         throw new ConflictException(
@@ -367,14 +373,14 @@ export class CuttingWorksheetsService {
     return results;
   }
   async markReviewed(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     row: WorksheetRecord,
     updatedStock: StockRevision[],
     actor: string,
     reason: string | null,
   ) {
     const result = presentWorksheet(
-      await this.repository.update(tx, row.id, {
+      await context.cuttingWorksheets.update(row.id, {
         reviewedAt: new Date(),
         reviewedByUserId: actor,
         // A fresh physical resolution is not the historical observation preceding
@@ -386,7 +392,7 @@ export class CuttingWorksheetsService {
       }),
     );
     const eventId = await this.audit.record(
-      tx,
+      context,
       actor,
       'cutting.reviewed',
       [

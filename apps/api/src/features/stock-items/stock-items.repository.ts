@@ -1,64 +1,36 @@
-import { allocations } from '../allocations/tables/allocations.table.js';
-import { allocationItems } from '../allocations/tables/allocation-items.table.js';
-import { Inject, Injectable } from '@nestjs/common';
+import type { StockItemQuery } from '@roller-bay/shared/stock-items';
 import {
   and,
-  sql,
   asc,
   count,
   eq,
   getTableColumns,
   gte,
   ilike,
-  or,
   inArray,
-  isNull,
   isNotNull,
+  isNull,
+  or,
+  sql,
 } from 'drizzle-orm';
-import type { StockItemQuery } from '@roller-bay/shared/stock-items';
-import {
-  DatabaseService,
-  type DatabaseTransaction,
-} from '../../database/database.service.js';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
+import { allocationItems } from '../allocations/tables/allocation-items.table.js';
+import { allocations } from '../allocations/tables/allocations.table.js';
 import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
-import { fabricMaterials } from '../fabric-catalog/materials/fabric-materials.table.js';
 import { manufacturers } from '../fabric-catalog/manufacturers/manufacturers.table.js';
+import { fabricMaterials } from '../fabric-catalog/materials/fabric-materials.table.js';
 import { locations } from '../locations/levels/location-levels.table.js';
 import { locationSections } from '../locations/sections/location-sections.table.js';
 import { locationZones } from '../locations/zones/location-zones.table.js';
-import { stockItems } from './stock-items.table.js';
 import { stockItemsQuery } from './stock-items.persistence.js';
-
-type StockItemsDatabase = Pick<
-  DatabaseService['db'],
-  'select' | 'insert' | 'update' | 'delete' | 'transaction'
->;
+import { stockItems } from './stock-items.table.js';
 export type StockItemRecord = typeof stockItems.$inferSelect;
 export type StockItemWrite = Omit<
   typeof stockItems.$inferInsert,
   'id' | 'createdAt' | 'updatedAt' | 'revision'
 >;
-
-@Injectable()
 export class StockItemsRepository {
-  private readonly db: StockItemsDatabase;
-  constructor(@Inject(DatabaseService) connection: { db: StockItemsDatabase }) {
-    this.db = connection.db;
-  }
-
-  withTransaction<T>(
-    operation: (
-      repository: StockItemsRepository,
-      tx: DatabaseTransaction,
-    ) => Promise<T>,
-  ): Promise<T> {
-    return stockItemsQuery(() =>
-      this.db.transaction((tx) =>
-        operation(new StockItemsRepository({ db: tx }), tx),
-      ),
-    );
-  }
-
+  constructor(private readonly db: DatabaseExecutor) {}
   list(query: StockItemQuery) {
     const containsPattern = (search: string) =>
       `%${search.replace(/[\\%_]/g, '\\$&')}%`;
@@ -100,40 +72,29 @@ export class StockItemsRepository {
           )
         : undefined,
     );
-    return stockItemsQuery(() =>
-      this.db.transaction(
-        async (tx) => {
-          const repository = new StockItemsRepository({ db: tx });
-          const items = await repository
-            .select()
-            .where(where)
-            .orderBy(asc(stockItems.createdAt), asc(stockItems.id))
-            .limit(query.pageSize)
-            .offset((query.page - 1) * query.pageSize);
-          const [result] = await tx
-            .select({ total: count() })
-            .from(stockItems)
-            .innerJoin(
-              fabricColors,
-              eq(stockItems.fabricColorId, fabricColors.id),
-            )
-            .innerJoin(
-              fabricMaterials,
-              eq(fabricColors.materialId, fabricMaterials.id),
-            )
-            .innerJoin(locations, eq(stockItems.locationId, locations.id))
-            .innerJoin(
-              locationSections,
-              eq(locations.sectionId, locationSections.id),
-            )
-            .where(where);
-          return { items, total: result!.total };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
-      ),
-    );
+    return stockItemsQuery(async () => {
+      const items = await this.select()
+        .where(where)
+        .orderBy(asc(stockItems.createdAt), asc(stockItems.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+      const [result] = await this.db
+        .select({ total: count() })
+        .from(stockItems)
+        .innerJoin(fabricColors, eq(stockItems.fabricColorId, fabricColors.id))
+        .innerJoin(
+          fabricMaterials,
+          eq(fabricColors.materialId, fabricMaterials.id),
+        )
+        .innerJoin(locations, eq(stockItems.locationId, locations.id))
+        .innerJoin(
+          locationSections,
+          eq(locations.sectionId, locationSections.id),
+        )
+        .where(where);
+      return { items, total: result!.total };
+    });
   }
-
   async creationAllocation(id: string) {
     const [row] = await this.db
       .select({ id: allocations.id })
@@ -189,7 +150,6 @@ export class StockItemsRepository {
       return row;
     });
   }
-
   async findByIdForUpdate(id: string) {
     const [row] = await this.db
       .select()
@@ -198,7 +158,6 @@ export class StockItemsRepository {
       .for('update');
     return row;
   }
-
   async findColor(id: string) {
     const [row] = await this.db
       .select({ id: fabricColors.id, thicknessMm: fabricColors.thicknessMm })
@@ -206,7 +165,6 @@ export class StockItemsRepository {
       .where(eq(fabricColors.id, id));
     return row;
   }
-
   async create(input: StockItemWrite) {
     const [row] = await this.db
       .insert(stockItems)
@@ -215,7 +173,6 @@ export class StockItemsRepository {
     if (!row) throw new Error('Insert returned no stock item.');
     return row.id;
   }
-
   async update(id: string, input: StockItemWrite) {
     await this.db
       .update(stockItems)
@@ -226,34 +183,26 @@ export class StockItemsRepository {
       })
       .where(eq(stockItems.id, id));
   }
-
-  async createReceivedRolls(
-    transaction: DatabaseTransaction,
-    values: StockItemWrite[],
-  ) {
+  async createReceivedRolls(values: StockItemWrite[]) {
     return stockItemsQuery(() =>
       // Whole rows, generated balance included: the caller snapshots them
       // without reading each one back.
-      transaction.insert(stockItems).values(values).returning(),
+      this.db.insert(stockItems).values(values).returning(),
     );
   }
-
-  async findByStockReceiptItemIds(
-    ids: string[],
-    transaction: DatabaseTransaction,
-  ) {
+  async findByStockReceiptItemIds(ids: string[]) {
     if (ids.length === 0) return [];
     return stockItemsQuery(() =>
-      this.select(transaction)
+      this.select()
         .where(inArray(stockItems.stockReceiptItemId, ids))
         .orderBy(asc(stockItems.id)),
     );
   }
-
-  async findForAllocation(
-    transaction: DatabaseTransaction,
-    filter: { stockIds?: string[]; colorIds?: string[]; lock?: boolean },
-  ) {
+  async findForAllocation(filter: {
+    stockIds?: string[];
+    colorIds?: string[];
+    lock?: boolean;
+  }) {
     if (filter.stockIds?.length === 0 || filter.colorIds?.length === 0)
       return [];
     const where = and(
@@ -267,29 +216,24 @@ export class StockItemsRepository {
     // Lock stock alone before loading joined labels. A common ID order avoids
     // reversed lock acquisition when allocations share several stock items.
     if (filter.lock)
-      await transaction
+      await this.db
         .select({ id: stockItems.id })
         .from(stockItems)
         .where(where)
         .orderBy(asc(stockItems.id))
         .for('update');
-    return this.select(transaction)
-      .where(where)
-      .orderBy(asc(stockItems.id))
-      .limit(10001);
+    return this.select().where(where).orderBy(asc(stockItems.id)).limit(10001);
   }
-
-  async colorsExist(ids: string[], transaction: DatabaseTransaction) {
+  async colorsExist(ids: string[]) {
     if (!ids.length) return true;
-    const rows = await transaction
+    const rows = await this.db
       .select({ id: fabricColors.id })
       .from(fabricColors)
       .where(inArray(fabricColors.id, ids));
     return rows.length === new Set(ids).size;
   }
-
-  private select(db: StockItemsDatabase = this.db) {
-    return db
+  private select() {
+    return this.db
       .select({
         ...getTableColumns(stockItems),
         fabricColorCode: fabricColors.code,

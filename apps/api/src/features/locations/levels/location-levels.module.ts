@@ -1,21 +1,31 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../../database/database.module.js';
-import { LocationLevelsController } from './location-levels.controller.js';
-import { LocationLevelsService } from './location-levels.service.js';
-import { LocationLevelsRepository } from './location-levels.repository.js';
-
-import { LocationOrderService } from '../location-order.service.js';
+import { DatabaseService } from '../../../database/database.service.js';
+import { UnitOfWorkModule } from '../../../unit-of-work/unit-of-work.module.js';
 import { LocationOrderRepository } from '../location-order.repository.js';
-
+import { LocationOrderService } from '../location-order.service.js';
+import { LocationLevelsController } from './location-levels.controller.js';
+import { LocationLevelsRepository } from './location-levels.repository.js';
+import { LocationLevelsService } from './location-levels.service.js';
 @Module({
-  imports: [DatabaseModule],
+  imports: [UnitOfWorkModule, DatabaseModule],
   exports: [LocationLevelsService],
   controllers: [LocationLevelsController],
   providers: [
     LocationOrderService,
-    LocationOrderRepository,
+    {
+      provide: LocationOrderRepository,
+      inject: [DatabaseService],
+      useFactory: (database: DatabaseService) =>
+        new LocationOrderRepository(database.db),
+    },
     LocationLevelsService,
-    LocationLevelsRepository,
+    {
+      provide: LocationLevelsRepository,
+      inject: [DatabaseService],
+      useFactory: (database: DatabaseService) =>
+        new LocationLevelsRepository(database.db),
+    },
   ],
 })
 export class LocationLevelsModule {}

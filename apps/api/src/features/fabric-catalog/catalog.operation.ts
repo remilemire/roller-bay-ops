@@ -9,12 +9,12 @@ import {
   CatalogInUseError,
   CatalogReferenceNotFoundError,
 } from './catalog.errors.js';
-
+import { catalogQuery } from './catalog.persistence.js';
 export async function catalogOperation<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   try {
-    return await operation();
+    return await catalogQuery(operation);
   } catch (error) {
     if (error instanceof HttpException) throw error;
     if (

@@ -71,3 +71,11 @@ A CI checkout has no `.env` files, so a test that came to depend on one fails th
 ## Listeners
 
 A test that uses Supertest against a server that is not yet listening must listen first on `127.0.0.1` (`await app.listen(0, '127.0.0.1')`). Given a non-listening server, Supertest binds a wildcard port for every request and then connects to `127.0.0.1`; on macOS that port can already belong to another local process on IPv4, which then answers the request.
+
+## Unit of work
+
+Service unit tests can use `stubUnitOfWork` from `apps/api/src/testing/unit-of-work.ts` to supply repository methods. It invokes callbacks directly and does not simulate PostgreSQL commit, rollback, or isolation.
+
+The unit-of-work unit suite exercises Drizzle against a recording driver to verify transaction connection use across all repositories, commit failures, rollback, and connection release. Its integration suite uses the normal isolated application harness to verify concurrent units, snapshot consistency, read-only enforcement, atomic domain/audit/idempotency writes, and transaction-local timeouts on a reused connection. Production integration tests also assert that worksheet review calls allocation completion inside one database transaction and rolls everything back on a late audit failure.
+
+See [Unit of work](unit-of-work.md) for the context-passing convention.

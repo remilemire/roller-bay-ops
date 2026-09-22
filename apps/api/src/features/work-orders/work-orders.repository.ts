@@ -1,6 +1,9 @@
-import { milestoneTimestampField } from './work-order-milestones.js';
 import type { Station } from '@roller-bay/shared/users';
-import { Inject, Injectable } from '@nestjs/common';
+import type {
+  CreateWorkOrder,
+  WorkOrderLine,
+  WorkOrderQuery,
+} from '@roller-bay/shared/work-orders';
 import {
   and,
   asc,
@@ -15,22 +18,10 @@ import {
   lte,
   sql,
 } from 'drizzle-orm';
-import type {
-  CreateWorkOrder,
-  WorkOrderLine,
-  WorkOrderQuery,
-} from '@roller-bay/shared/work-orders';
-import {
-  DatabaseService,
-  type DatabaseTransaction,
-} from '../../database/database.service.js';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { workOrderLines } from './work-order-lines.table.js';
+import { milestoneTimestampField } from './work-order-milestones.js';
 import { workOrders } from './work-orders.table.js';
-
-type WorkOrdersDatabase = Pick<
-  DatabaseService['db'],
-  'select' | 'insert' | 'update' | 'delete' | 'transaction'
->;
 // An order's blind count is the total of its blinds, never a stored number.
 // The names are spelled out: Drizzle leaves table qualifiers off a
 // single-table select, which would compare a line's columns with each other.
@@ -43,7 +34,6 @@ export type WorkOrderRecord = typeof workOrders.$inferSelect & {
   quantity: number;
 };
 export type WorkOrderLineRecord = typeof workOrderLines.$inferSelect;
-
 const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
   workOrders;
 // Each mirrors the presenter's derived status, except the two work queues.
@@ -77,31 +67,11 @@ const statusFilters = {
   checked: and(isNotNull(checkedAt), isNull(shippedAt)),
   shipped: isNotNull(shippedAt),
 };
-
 // Deleted orders are kept for their number and history; reads leave them out.
 const present = isNull(workOrders.deletedAt);
-
-@Injectable()
 export class WorkOrdersRepository {
-  private readonly db: WorkOrdersDatabase;
-  constructor(@Inject(DatabaseService) connection: { db: WorkOrdersDatabase }) {
-    this.db = connection.db;
-  }
-
-  withTransaction<T>(
-    operation: (
-      repository: WorkOrdersRepository,
-      tx: DatabaseTransaction,
-    ) => Promise<T>,
-  ): Promise<T> {
-    return this.db.transaction(async (tx) => {
-      // Allocation work may hold an order's row lock while it plans stock.
-      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
-      return operation(new WorkOrdersRepository({ db: tx }), tx);
-    });
-  }
-
-  list(query: WorkOrderQuery) {
+  constructor(private readonly db: DatabaseExecutor) {}
+  async list(query: WorkOrderQuery) {
     const where = and(
       present,
       query.search
@@ -116,49 +86,41 @@ export class WorkOrdersRepository {
         : undefined,
       query.shipDateTo ? lte(workOrders.shipDate, query.shipDateTo) : undefined,
     );
-    return this.db.transaction(
-      async (tx) => {
-        const items = await tx
-          .select(columns)
-          .from(workOrders)
-          .where(where)
-          // Ascending order puts undated orders after the dated ones.
-          .orderBy(asc(workOrders.shipDate), asc(workOrders.orderNumber))
-          .limit(query.pageSize)
-          .offset((query.page - 1) * query.pageSize);
-        const [result] = await tx
-          .select({ total: count() })
-          .from(workOrders)
-          .where(where);
-        return { items, total: result!.total };
-      },
-      { isolationLevel: 'repeatable read', accessMode: 'read only' },
-    );
+    const items = await this.db
+      .select(columns)
+      .from(workOrders)
+      .where(where)
+      // Ascending order puts undated orders after the dated ones.
+      .orderBy(asc(workOrders.shipDate), asc(workOrders.orderNumber))
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize);
+    const [result] = await this.db
+      .select({ total: count() })
+      .from(workOrders)
+      .where(where);
+    return { items, total: result!.total };
   }
-
-  async findById(id: string, tx: WorkOrdersDatabase = this.db) {
-    const [row] = await tx
+  async findById(id: string) {
+    const [row] = await this.db
       .select(columns)
       .from(workOrders)
       .where(and(eq(workOrders.id, id), present));
     return row;
   }
-
   /**
    * Row locks for edits and milestone stamps are `no key update`: unlike
    * `update`, it does not conflict with the key-share lock an allocation's
    * foreign key already holds on its order, so two requests for one order
    * wait on each other instead of deadlocking.
    */
-  async findByIdForUpdate(id: string, tx: WorkOrdersDatabase = this.db) {
-    const [row] = await tx
+  async findByIdForUpdate(id: string) {
+    const [row] = await this.db
       .select(columns)
       .from(workOrders)
       .where(and(eq(workOrders.id, id), present))
       .for('no key update');
     return row;
   }
-
   /**
    * Creates an order, or restores the deleted one that holds the number.
    * Returns nothing when the number belongs to an order that still exists.
@@ -183,7 +145,6 @@ export class WorkOrdersRepository {
       .returning({ id: workOrders.id });
     return row && this.findById(row.id);
   }
-
   async update(
     id: string,
     values: Partial<
@@ -200,14 +161,8 @@ export class WorkOrdersRepository {
       .where(eq(workOrders.id, id));
     return (await this.findById(id))!;
   }
-
-  async setProductionMilestone(
-    tx: DatabaseTransaction,
-    id: string,
-    station: Station,
-    at: Date | null,
-  ) {
-    await tx
+  async setProductionMilestone(id: string, station: Station, at: Date | null) {
+    await this.db
       .update(workOrders)
       .set({
         [milestoneTimestampField[station]]: at,
@@ -215,44 +170,33 @@ export class WorkOrdersRepository {
         revision: sql`${workOrders.revision}+1`,
       })
       .where(eq(workOrders.id, id));
-    return (await this.findById(id, tx))!;
+    return (await this.findById(id))!;
   }
-
   /**
    * The allocation stamp leaves `revision`
    * alone: they touch columns no edit writes, and the row lock already
    * serialises them against edits, so allocating fabric never makes an
    * admin's open edit stale.
    */
-  async stamp(
-    id: string,
-    values: Pick<WorkOrderRecord, 'allocatedAt'>,
-    tx: WorkOrdersDatabase = this.db,
-  ) {
-    await tx
+  async stamp(id: string, values: Pick<WorkOrderRecord, 'allocatedAt'>) {
+    await this.db
       .update(workOrders)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
-    return (await this.findById(id, tx))!;
+    return (await this.findById(id))!;
   }
-
   /** Blinds by id, retired or not: what a past plan's cuts were made for. */
-  linesById(ids: string[], tx: WorkOrdersDatabase = this.db) {
+  linesById(ids: string[]) {
     if (!ids.length) return Promise.resolve([]);
-    return tx
+    return this.db
       .select()
       .from(workOrderLines)
       .where(inArray(workOrderLines.id, ids))
       .orderBy(asc(workOrderLines.position), asc(workOrderLines.id));
   }
-
   /** The order's blinds in order; retired ones only for a save to compare. */
-  lines(
-    workOrderId: string,
-    includeRetired = false,
-    tx: WorkOrdersDatabase = this.db,
-  ) {
-    return tx
+  lines(workOrderId: string, includeRetired = false) {
+    return this.db
       .select()
       .from(workOrderLines)
       .where(
@@ -263,10 +207,11 @@ export class WorkOrdersRepository {
       )
       .orderBy(asc(workOrderLines.position), asc(workOrderLines.id));
   }
-
   async insertLines(
     workOrderId: string,
-    lines: (WorkOrderLine & { position: number })[],
+    lines: (WorkOrderLine & {
+      position: number;
+    })[],
   ) {
     if (!lines.length) return;
     await this.db.insert(workOrderLines).values(
@@ -278,14 +223,12 @@ export class WorkOrdersRepository {
       })),
     );
   }
-
   async moveLine(id: string, position: number) {
     await this.db
       .update(workOrderLines)
       .set({ position })
       .where(eq(workOrderLines.id, id));
   }
-
   async retireLines(ids: string[]) {
     if (!ids.length) return;
     await this.db
@@ -293,7 +236,6 @@ export class WorkOrdersRepository {
       .set({ retiredAt: new Date() })
       .where(inArray(workOrderLines.id, ids));
   }
-
   /** The service locks the row and checks it may go; see findByIdForUpdate. */
   async delete(id: string) {
     await this.db

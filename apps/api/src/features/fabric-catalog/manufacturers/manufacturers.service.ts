@@ -2,18 +2,23 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   manufacturerSchema,
   type CreateManufacturer,
-  type UpdateManufacturer,
   type ManufacturerQuery,
+  type UpdateManufacturer,
 } from '@roller-bay/shared/fabric-catalog';
-import { ManufacturersRepository } from './manufacturers.repository.js';
+import { UnitOfWork } from '../../../unit-of-work/unit-of-work.js';
 import { catalogOperation } from '../catalog.operation.js';
-
+import { ManufacturersRepository } from './manufacturers.repository.js';
 @Injectable()
 export class ManufacturersService {
-  constructor(private readonly repository: ManufacturersRepository) {}
+  constructor(
+    private readonly unitOfWork: UnitOfWork,
+    private readonly repository: ManufacturersRepository,
+  ) {}
   list(query: ManufacturerQuery) {
     return catalogOperation(async () => {
-      const result = await this.repository.list(query);
+      const result = await this.unitOfWork.readOnlyTransaction(
+        async (context) => context.manufacturers.list(query),
+      );
       return {
         items: result.items.map((row) => this.toPublic(row)),
         total: result.total,
@@ -29,12 +34,20 @@ export class ManufacturersService {
   }
   create(input: CreateManufacturer) {
     return catalogOperation(async () =>
-      this.toPublic(await this.repository.create(input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.manufacturers.create(input),
+        ),
+      ),
     );
   }
   update(id: string, input: UpdateManufacturer) {
     return catalogOperation(async () =>
-      this.toPublic(await this.repository.update(id, input)),
+      this.toPublic(
+        await this.unitOfWork.transaction(async (context) =>
+          context.manufacturers.update(id, input),
+        ),
+      ),
     );
   }
   delete(id: string) {

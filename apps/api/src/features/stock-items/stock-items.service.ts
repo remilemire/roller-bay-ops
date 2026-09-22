@@ -1,22 +1,4 @@
 import {
-  stockSnapshot,
-  snapshotWrite,
-  stockChanges,
-} from './stock-items.audit.js';
-import { AuditService, canonicalJson } from '../audit/audit.service.js';
-import type {
-  StockEffect,
-  StockSnapshot,
-} from '@roller-bay/shared/stock-items';
-import type {
-  StockCorrection,
-  CorrectionEligibility,
-} from '@roller-bay/shared/corrections';
-import { stockItemsQuery } from './stock-items.persistence.js';
-import { recordCuttingResults } from './stock-items.cutting.js';
-import type { StockCuttingOutcome } from '@roller-bay/shared/stock-items';
-import type { DatabaseTransaction } from '../../database/database.service.js';
-import {
   BadRequestException,
   ConflictException,
   HttpException,
@@ -24,26 +6,43 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import type {
+  CorrectionEligibility,
+  StockCorrection,
+} from '@roller-bay/shared/corrections';
+import type {
+  StockCuttingOutcome,
+  StockEffect,
+  StockSnapshot,
+} from '@roller-bay/shared/stock-items';
 import {
   createStockItemSchema,
   stockItemSchema,
   type CreateStockItem,
   type StockItemQuery,
 } from '@roller-bay/shared/stock-items';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import { AuditService, canonicalJson } from '../audit/audit.service.js';
 import {
-  StockItemsRepository,
-  type StockItemRecord,
-  type StockItemWrite,
-} from './stock-items.repository.js';
+  snapshotWrite,
+  stockChanges,
+  stockSnapshot,
+} from './stock-items.audit.js';
+import { recordCuttingResults } from './stock-items.cutting.js';
 import {
   InvalidStockItemError,
   StockItemInUseError,
   StockItemReferenceNotFoundError,
 } from './stock-items.errors.js';
-
+import { stockItemsQuery } from './stock-items.persistence.js';
+import {
+  StockItemsRepository,
+  type StockItemRecord,
+  type StockItemWrite,
+} from './stock-items.repository.js';
 const nullableNumber = (value: string | null) =>
   value === null ? null : Number(value);
-
 export interface ReceiveRollLine {
   stockReceiptItemId: string;
   fabricColorId: string;
@@ -52,17 +51,18 @@ export interface ReceiveRollLine {
   quantity: number;
   locationId: string;
 }
-
 @Injectable()
 export class StockItemsService {
   constructor(
+    private readonly unitOfWork: UnitOfWork,
     private readonly repository: StockItemsRepository,
     private readonly audit: AuditService,
   ) {}
-
   list(query: StockItemQuery) {
     return this.operation(async () => {
-      const result = await this.repository.list(query);
+      const result = await this.unitOfWork.readOnlyTransaction(
+        async (context) => context.stockItems.list(query),
+      );
       return {
         items: result.items.map((row) => this.toPublic(row)),
         total: result.total,
@@ -76,12 +76,11 @@ export class StockItemsService {
       this.toPublic(await this.repository.findById(id)),
     );
   }
-
   create(input: CreateStockItem, userId: string) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
+      this.unitOfWork.transaction(async (context) => {
         if (input.sourceStockItemId) {
-          const source = await repository.findByIdForUpdate(
+          const source = await context.stockItems.findByIdForUpdate(
             input.sourceStockItemId,
           );
           if (!source)
@@ -96,13 +95,13 @@ export class StockItemsService {
         const values = this.toWrite(input);
         if (input.radialDepthMm !== null)
           values.measurementThicknessMm = await this.thickness(
-            repository,
+            context.stockItems,
             input.fabricColorId,
           );
-        const id = await repository.create(values);
-        const created = (await repository.findById(id))!;
+        const id = await context.stockItems.create(values);
+        const created = (await context.stockItems.findById(id))!;
         await this.audit.record(
-          tx,
+          context,
           userId,
           'stock.created',
           stockChanges([
@@ -119,18 +118,17 @@ export class StockItemsService {
       }),
     );
   }
-
   correct(id: string, request: StockCorrection, userId: string, key: string) {
     const input = request.changes;
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
+      this.unitOfWork.transaction(async (context) => {
         // Validate the merged state under a row lock so partial updates cannot lose
         // another admin's measurement or undo their consumption/location change.
-        const current = await repository.findByIdForUpdate(id);
+        const current = await context.stockItems.findByIdForUpdate(id);
         if (!current) throw new NotFoundException('Stock item not found.');
         const audit = this.audit;
         const replay = await audit.replay(
-          tx,
+          context,
           userId,
           'stock.correct',
           id,
@@ -159,7 +157,7 @@ export class StockItemsService {
           values.measurementThicknessMm =
             input.radialDepthMm === null
               ? null
-              : await this.thickness(repository, current.fabricColorId);
+              : await this.thickness(context.stockItems, current.fabricColorId);
         }
         const before = stockSnapshot(current);
         if (
@@ -167,17 +165,17 @@ export class StockItemsService {
           canonicalJson(snapshotWrite(before))
         )
           throw new BadRequestException('Provide an actual change.');
-        await repository.update(id, values);
-        const after = stockSnapshot((await repository.findById(id))!);
+        await context.stockItems.update(id, values);
+        const after = stockSnapshot((await context.stockItems.findById(id))!);
         const affectedAllocationIds = [
           ...new Set(
-            (await repository.allocationReferences([id]))
+            (await context.stockItems.allocationReferences([id]))
               .filter((ref) => !ref.completedAt)
               .map((ref) => ref.allocationId),
           ),
         ].sort();
         const eventId = await audit.record(
-          tx,
+          context,
           userId,
           'stock.corrected',
           stockChanges([
@@ -192,7 +190,7 @@ export class StockItemsService {
           request.reason,
         );
         return audit.remember(
-          tx,
+          context,
           userId,
           'stock.correct',
           id,
@@ -209,9 +207,8 @@ export class StockItemsService {
       }),
     );
   }
-
   /** Expand quantities into physical identities within the receipt's transaction. */
-  receiveRolls(lines: ReceiveRollLine[], transaction: DatabaseTransaction) {
+  receiveRolls(lines: ReceiveRollLine[], context: UnitOfWorkContext) {
     return this.operation(async () => {
       if (
         !lines.length ||
@@ -234,10 +231,7 @@ export class StockItemsService {
           stockReceiptItemId: line.stockReceiptItemId,
         }));
       });
-      const created = await this.repository.createReceivedRolls(
-        transaction,
-        values,
-      );
+      const created = await context.stockItems.createReceivedRolls(values);
       return created.map((row) => ({
         calculationThicknessMm: null,
         stockItemId: row.id,
@@ -247,21 +241,23 @@ export class StockItemsService {
       }));
     });
   }
-
-  findByStockReceiptItemIds(ids: string[], transaction: DatabaseTransaction) {
+  findByStockReceiptItemIds(ids: string[], context: UnitOfWorkContext) {
     return this.operation(async () =>
-      (await this.repository.findByStockReceiptItemIds(ids, transaction)).map(
-        (row) => this.toPublic(row),
+      (await context.stockItems.findByStockReceiptItemIds(ids)).map((row) =>
+        this.toPublic(row),
       ),
     );
   }
-
   findForAllocation(
-    transaction: DatabaseTransaction,
-    filter: { stockIds?: string[]; colorIds?: string[]; lock?: boolean },
+    context: UnitOfWorkContext,
+    filter: {
+      stockIds?: string[];
+      colorIds?: string[];
+      lock?: boolean;
+    },
   ) {
     return this.operation(async () => {
-      const rows = await this.repository.findForAllocation(transaction, filter);
+      const rows = await context.stockItems.findForAllocation(filter);
       if (rows.length > 10000)
         throw new BadRequestException(
           'Too many candidate stock items; narrow the fabric requirements.',
@@ -269,19 +265,17 @@ export class StockItemsService {
       return rows.map((row) => this.toPublic(row));
     });
   }
-
-  async requireColors(ids: string[], transaction: DatabaseTransaction) {
-    if (!(await this.repository.colorsExist(ids, transaction)))
+  async requireColors(ids: string[], context: UnitOfWorkContext) {
+    if (!(await context.stockItems.colorsExist(ids)))
       throw new NotFoundException('A requested fabric color does not exist.');
   }
-
   async recordCuttingResults(
     outcomes: StockCuttingOutcome[],
-    transaction: DatabaseTransaction,
+    context: UnitOfWorkContext,
     now: Date,
   ) {
     return this.operation(async () => {
-      const repository = new StockItemsRepository({ db: transaction });
+      const repository = context.stockItems;
       const previous = await repository.lockRows(
         outcomes.map((o) => o.stockItemId),
       );
@@ -303,21 +297,19 @@ export class StockItemsService {
       return effects;
     });
   }
-
-  async lockForCorrection(transaction: DatabaseTransaction, ids: string[]) {
-    const repository = new StockItemsRepository({ db: transaction });
+  async lockForCorrection(context: UnitOfWorkContext, ids: string[]) {
+    const repository = context.stockItems;
     return this.operation(async () =>
       (await repository.lockRows(ids)).map(stockSnapshot),
     );
   }
-
   async eligibility(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     effects: StockEffect[],
     ids: string[],
     excludeAllocationId?: string,
   ): Promise<CorrectionEligibility[]> {
-    const repository = new StockItemsRepository({ db: tx });
+    const repository = context.stockItems;
     const refs = await repository.allocationReferences(ids);
     const children = await repository.descendants(ids);
     const baseline = new Map(effects.map((e) => [e.stockItemId, e]));
@@ -378,11 +370,13 @@ export class StockItemsService {
     }
     return results;
   }
-
   async requireCorrectionEligible(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     effects: StockEffect[],
-    versions: { stockItemId: string; expectedRevision: number }[],
+    versions: {
+      stockItemId: string;
+      expectedRevision: number;
+    }[],
     ids: string[],
     excludeAllocationId?: string,
   ) {
@@ -392,7 +386,7 @@ export class StockItemsService {
     if (expected.size !== versions.length)
       throw new BadRequestException('Duplicate stock revision.');
     const eligibility = await this.eligibility(
-      tx,
+      context,
       effects,
       ids,
       excludeAllocationId,
@@ -413,15 +407,14 @@ export class StockItemsService {
         );
     }
   }
-
   async applySnapshots(
-    tx: DatabaseTransaction,
+    context: UnitOfWorkContext,
     changes: {
       before: StockSnapshot | null;
       value: StockSnapshot | StockItemWrite;
     }[],
   ): Promise<StockEffect[]> {
-    const repository = new StockItemsRepository({ db: tx });
+    const repository = context.stockItems;
     const effects: StockEffect[] = [];
     for (const change of changes) {
       const write =
@@ -439,20 +432,22 @@ export class StockItemsService {
     }
     return effects;
   }
-
   void(
     id: string,
-    input: { expectedRevision: number; reason: string },
+    input: {
+      expectedRevision: number;
+      reason: string;
+    },
     userId: string,
     key: string,
   ) {
     return this.operation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const row = await repository.findByIdForUpdate(id);
+      this.unitOfWork.transaction(async (context) => {
+        const row = await context.stockItems.findByIdForUpdate(id);
         if (!row) throw new NotFoundException('Stock item not found.');
         const audit = this.audit;
         const replay = await audit.replay(
-          tx,
+          context,
           userId,
           'stock.void',
           id,
@@ -462,30 +457,33 @@ export class StockItemsService {
         if (replay.result) return replay.result;
         if (row.revision !== input.expectedRevision || row.voidedAt)
           throw new ConflictException('Stock changed or was already voided.');
-        if (row.stockReceiptItemId || (await repository.creationAllocation(id)))
+        if (
+          row.stockReceiptItemId ||
+          (await context.stockItems.creationAllocation(id))
+        )
           throw new ConflictException(
             'Void this stock through its originating receipt or cutting result.',
           );
         if (
-          (await repository.allocationReferences([id])).length ||
-          (await repository.descendants([id])).length
+          (await context.stockItems.allocationReferences([id])).length ||
+          (await context.stockItems.descendants([id])).length
         )
           throw new ConflictException(
             'Reserved stock or stock with downstream use cannot be voided.',
           );
         const before = stockSnapshot(row);
-        const effects = await this.applySnapshots(tx, [
+        const effects = await this.applySnapshots(context, [
           { before, value: { ...before, voidedAt: new Date().toISOString() } },
         ]);
         const eventId = await audit.record(
-          tx,
+          context,
           userId,
           'stock.voided',
           stockChanges(effects),
           input.reason,
         );
         return audit.remember(
-          tx,
+          context,
           userId,
           'stock.void',
           id,
@@ -502,13 +500,11 @@ export class StockItemsService {
       }),
     );
   }
-
   private async thickness(repository: StockItemsRepository, colorId: string) {
     const color = await repository.findColor(colorId);
     if (!color) throw new NotFoundException('Fabric color not found.');
     return color.thicknessMm;
   }
-
   private toInput(row: StockItemRecord): CreateStockItem {
     return {
       fabricColorId: row.fabricColorId,
@@ -524,7 +520,6 @@ export class StockItemsService {
       consumedAt: row.consumedAt?.toISOString() ?? null,
     };
   }
-
   private toWrite(input: CreateStockItem): StockItemWrite {
     return {
       ...input,
@@ -537,7 +532,6 @@ export class StockItemsService {
       consumedAt: input.consumedAt === null ? null : new Date(input.consumedAt),
     };
   }
-
   private toPublic(row: Awaited<ReturnType<StockItemsRepository['findById']>>) {
     if (!row) throw new NotFoundException('Stock item not found.');
     return stockItemSchema.parse({
@@ -550,10 +544,9 @@ export class StockItemsService {
       updatedAt: row.updatedAt.toISOString(),
     });
   }
-
   private async operation<T>(operation: () => Promise<T>): Promise<T> {
     try {
-      return await operation();
+      return await stockItemsQuery(operation);
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error instanceof StockItemReferenceNotFoundError)

@@ -1,17 +1,17 @@
-import 'reflect-metadata';
-import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { test } from 'node:test';
-import request from 'supertest';
+import { historySchema } from '@roller-bay/shared/audit';
 import {
   stockReceiptDraftDataSchema,
   stockReceiptDraftSchema,
   stockReceiptRecordSchema,
 } from '@roller-bay/shared/stock-receipts';
-import { historySchema } from '@roller-bay/shared/audit';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { test } from 'node:test';
+import 'reflect-metadata';
+import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
-import { StockReceiptsService } from './stock-receipts.service.js';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
+import { StockReceiptsService } from './stock-receipts.service.js';
 
 test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
   const { app, pool, cookie, userId, origin, fixtures } =
@@ -205,7 +205,8 @@ test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {
         items: [line],
       });
       const before = await stockCount();
-      const repository = app.get(StockItemsRepository);
+      // Transaction-bound instances are constructed for each unit of work.
+      const repository = StockItemsRepository.prototype;
       const original = repository.createReceivedRolls;
       const failure = subtest.mock.method(
         repository,

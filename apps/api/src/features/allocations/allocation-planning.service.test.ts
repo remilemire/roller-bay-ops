@@ -1,22 +1,22 @@
-import { randomUUID } from 'node:crypto';
-import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import { ConfigService } from '@nestjs/config';
-import { CuttingRulesService } from './cutting-rules.service.js';
-import 'reflect-metadata';
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
 import {
   BadRequestException,
   ConflictException,
   HttpException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { StockItem } from '@roller-bay/shared/stock-items';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { test } from 'node:test';
+import 'reflect-metadata';
 import { z } from 'zod';
 import { SolverError } from '../../solver/solver.errors.js';
+import { stubUnitOfWork } from '../../testing/unit-of-work.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
+import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
-import type { AllocationsRepository } from './allocations.repository.js';
+import { CuttingRulesService } from './cutting-rules.service.js';
 import type { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
 import {
@@ -28,11 +28,9 @@ import { fixture } from './optimizer/optimizer.fixtures.js';
 /** Runs a preview whose snapshot succeeds and whose optimizer throws `failure`. */
 function optimizeWith(failure: unknown) {
   const context = fixture();
-  const repository = {
-    withTransaction: (
-      operation: (repository: unknown, tx: unknown) => Promise<unknown>,
-    ) => operation({ reservations: async () => new Map() }, {}),
-  } as unknown as AllocationsRepository;
+  const unitOfWork = stubUnitOfWork({
+    allocations: { reservations: async () => new Map() },
+  });
   const stockItems = {
     requireColors: async () => undefined,
     findForAllocation: async () => context.stockItems as unknown as StockItem[],
@@ -54,7 +52,7 @@ function optimizeWith(failure: unknown) {
     }),
   } as unknown as WorkOrdersService;
   return new AllocationPlanningService(
-    repository,
+    unitOfWork,
     stockItems,
     optimizer,
     new CuttingRulesService(

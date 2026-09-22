@@ -1,3 +1,4 @@
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 /**
  * Preview snapshots are read consistently, then released before solver work.
  * They reserve nothing; confirmation must revalidate availability under stock locks.
@@ -15,32 +16,29 @@ import {
   type OptimizeAllocation,
   type ValidateAllocation,
 } from '@roller-bay/shared/allocations';
+import { SolverError } from '../../solver/solver.errors.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import { AllocationsRepository } from './allocations.repository.js';
-import { allocationOperation } from './allocations.operation.js';
-import { requirePlanningRevision } from './allocation.rules.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
+import { requirePlanningRevision } from './allocation.rules.js';
+import { allocationOperation } from './allocations.operation.js';
 import { validateCuttingPlan } from './cutting-plan/cutting-plan.validator.js';
-import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
-import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
 import {
   CuttingRulesService,
   planCutLengths,
 } from './cutting-rules.service.js';
-import { SolverError } from '../../solver/solver.errors.js';
-
+import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
+import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
 @Injectable()
 export class AllocationPlanningService {
   constructor(
-    private readonly repository: AllocationsRepository,
+    private readonly unitOfWork: UnitOfWork,
     private readonly stockItems: StockItemsService,
     @Inject(CuttingPlanOptimizer)
     private readonly optimizer: CuttingPlanOptimizer | null,
     private readonly cuttingRules: CuttingRulesService,
     private readonly orders: WorkOrdersService,
   ) {}
-
   async optimize(input: OptimizeAllocation, signal?: AbortSignal) {
     if (!this.optimizer)
       throw new ServiceUnavailableException(
@@ -92,7 +90,6 @@ export class AllocationPlanningService {
       });
     }
   }
-
   async validate(input: ValidateAllocation) {
     const snapshot = await this.snapshot(input, [
       ...new Set(input.plan.cuts.map((cut) => cut.stockItemId)),
@@ -105,16 +102,15 @@ export class AllocationPlanningService {
       stockItems: snapshot.stock,
     });
   }
-
   private snapshot(
     input: OptimizeAllocation | ValidateAllocation,
     stockIds?: string[],
   ) {
     return allocationOperation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
+      this.unitOfWork.readOnlyTransaction(async (context) => {
         const header = input.allocationId
           ? requirePlanningRevision(
-              await repository.findById(input.allocationId),
+              await context.allocations.findById(input.allocationId),
               input.expectedRevision,
             )
           : undefined;
@@ -127,7 +123,7 @@ export class AllocationPlanningService {
         )
           throw new BadRequestException('An allocation stays with its order.');
         // The order's saved blinds, not the form's: what would be confirmed.
-        const { lines } = await this.orders.lines(tx, input.workOrderId);
+        const { lines } = await this.orders.lines(context, input.workOrderId);
         const requirements = lines.map((line) => ({
           id: line.id,
           fabricColorId: line.fabricColorId,
@@ -144,7 +140,7 @@ export class AllocationPlanningService {
           header?.settings,
         );
         const stock = await this.stockItems.findForAllocation(
-          tx,
+          context,
           stockIds
             ? { stockIds }
             : {
@@ -153,7 +149,7 @@ export class AllocationPlanningService {
                 ],
               },
         );
-        const reservations = await repository.reservations(
+        const reservations = await context.allocations.reservations(
           stock.map((item) => item.id),
           input.allocationId,
         );
@@ -161,7 +157,7 @@ export class AllocationPlanningService {
           context: buildCuttingContext(configured, stock, reservations),
           stock,
         };
-      }, true),
+      }),
     );
   }
 }

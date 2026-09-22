@@ -105,6 +105,8 @@ packages/
     src/errors/                 # Error envelope shared by the API and the web app
 ```
 
+The [unit of work](docs/unit-of-work.md) defines transaction ownership, repository construction, and cross-service composition.
+
 Development conventions and contribution instructions are maintained in [AGENTS.md](AGENTS.md).
 
 ## Commands

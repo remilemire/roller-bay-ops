@@ -1,17 +1,17 @@
-import 'reflect-metadata';
-import { stockCommands } from '../stock-items/testing/stock-commands.js';
+import {
+  stockReceiptDetailSchema,
+  stockReceiptListSchema,
+  stockReceiptSchema,
+} from '@roller-bay/shared/stock-receipts';
+import type { UserRole } from '@roller-bay/shared/users';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
+import 'reflect-metadata';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
-import type { UserRole } from '@roller-bay/shared/users';
-import {
-  stockReceiptSchema,
-  stockReceiptDetailSchema,
-  stockReceiptListSchema,
-} from '@roller-bay/shared/stock-receipts';
 import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
+import { stockCommands } from '../stock-items/testing/stock-commands.js';
 
 test('stock receipts integration', { timeout: 60_000 }, async (t) => {
   const { app, pool, cookie, userId, origin, fixtures } =
@@ -306,7 +306,8 @@ test('stock receipts integration', { timeout: 60_000 }, async (t) => {
         purchaseOrderNumber: '20007',
         items: [{ ...line, locationId: randomUUID() }],
       }).expect(404);
-      const repository = app.get(StockItemsRepository);
+      // Transaction-bound instances are constructed for each unit of work.
+      const repository = StockItemsRepository.prototype;
       const insert = repository.createReceivedRolls;
       repository.createReceivedRolls = async function (...args) {
         await insert.apply(this, args);

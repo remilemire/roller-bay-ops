@@ -5,16 +5,16 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
-  LocationLabelConflictError,
   LocationInUseError,
+  LocationLabelConflictError,
   LocationReferenceNotFoundError,
 } from './locations.errors.js';
-
+import { locationsQuery } from './locations.persistence.js';
 export async function locationsOperation<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   try {
-    return await operation();
+    return await locationsQuery(operation);
   } catch (error) {
     if (error instanceof HttpException) throw error;
     if (

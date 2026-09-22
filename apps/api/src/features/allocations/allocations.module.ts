@@ -1,22 +1,24 @@
-import { CuttingWorksheetsModule } from '../cutting-worksheets/cutting-worksheets.module.js';
-import { AuditModule } from '../audit/audit.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DatabaseModule } from '../../database/database.module.js';
 import type { Environment } from '../../config/environment.js';
-import { SolverModule } from '../../solver/solver.module.js';
+import { DatabaseModule } from '../../database/database.module.js';
+import { DatabaseService } from '../../database/database.service.js';
 import { SolverClient } from '../../solver/solver.client.js';
-import { WorkOrdersModule } from '../work-orders/work-orders.module.js';
+import { SolverModule } from '../../solver/solver.module.js';
+import { UnitOfWorkModule } from '../../unit-of-work/unit-of-work.module.js';
+import { AuditModule } from '../audit/audit.module.js';
+import { CuttingWorksheetsModule } from '../cutting-worksheets/cutting-worksheets.module.js';
 import { StockItemsModule } from '../stock-items/stock-items.module.js';
+import { WorkOrdersModule } from '../work-orders/work-orders.module.js';
+import { AllocationPlanningService } from './allocation-planning.service.js';
 import { AllocationsController } from './allocations.controller.js';
 import { AllocationsRepository } from './allocations.repository.js';
 import { AllocationsService } from './allocations.service.js';
-import { AllocationPlanningService } from './allocation-planning.service.js';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
-
 @Module({
   imports: [
+    UnitOfWorkModule,
     AuditModule,
     CuttingWorksheetsModule,
     ConfigModule,
@@ -38,7 +40,12 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
   controllers: [AllocationsController],
   providers: [
     CuttingRulesService,
-    AllocationsRepository,
+    {
+      provide: AllocationsRepository,
+      inject: [DatabaseService],
+      useFactory: (database: DatabaseService) =>
+        new AllocationsRepository(database.db),
+    },
     AllocationsService,
     AllocationPlanningService,
     {

@@ -1,43 +1,45 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
-  type StationQuery,
   type MilestoneCorrection,
+  type StationQuery,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import { AuditService } from '../audit/audit.service.js';
 import { EmployeesService } from '../employees/employees.service.js';
-import { DatabaseService } from '../../database/database.service.js';
+import { milestoneTimestampField } from '../work-orders/work-order-milestones.js';
+import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
+import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { productionOperation } from './production.operation.js';
 import {
   presentCompletion,
   presentStationOrders,
 } from './production.presenter.js';
-import { AuditService } from '../audit/audit.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import { ProductionRepository } from './production.repository.js';
-import { milestoneTimestampField } from '../work-orders/work-order-milestones.js';
-import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
-import { productionOperation } from './production.operation.js';
 @Injectable()
 export class ProductionService {
   constructor(
-    private readonly repository: ProductionRepository,
-    private readonly database: DatabaseService,
+    private readonly unitOfWork: UnitOfWork,
     private readonly orders: WorkOrdersService,
     private readonly employees: EmployeesService,
     private readonly audit: AuditService,
   ) {}
   list(id: string) {
     return productionOperation(() =>
-      this.database.transaction(async (tx) => {
-        await this.orders.getForProduction(tx, id, false);
-        return (await this.repository.completions(tx, id)).map(
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        await this.orders.getForProduction(context, id, false);
+        return (await context.production.completions(id)).map(
           presentCompletion,
         );
-      }, true),
+      }),
     );
   }
   async listOrders(station: Station, query: StationQuery) {
     return productionOperation(async () =>
-      presentStationOrders(await this.repository.list(station, query)),
+      presentStationOrders(
+        await this.unitOfWork.readOnlyTransaction(async (context) =>
+          context.production.list(station, query),
+        ),
+      ),
     );
   }
   complete(
@@ -61,17 +63,21 @@ export class ProductionService {
   private write(
     id: string,
     station: Station,
-    input: { employeeId: string } | MilestoneCorrection,
+    input:
+      | {
+          employeeId: string;
+        }
+      | MilestoneCorrection,
     actor: string,
     key: string,
   ) {
     return productionOperation(() =>
-      this.database.transaction(async (tx) => {
-        const order = await this.orders.getForProduction(tx, id);
+      this.unitOfWork.transaction(async (context) => {
+        const order = await this.orders.getForProduction(context, id);
         const correction = 'reason' in input;
         const scope = `production.${station}.${correction ? 'correct' : 'complete'}`;
         const replay = await this.audit.replay(
-          tx,
+          context,
           actor,
           scope,
           id,
@@ -87,7 +93,7 @@ export class ProductionService {
           throw new ConflictException(
             'Order changed; refresh before correcting.',
           );
-        const before = (await this.repository.completions(tx, id)).find(
+        const before = (await context.production.completions(id)).find(
           (r) => r.station === station,
         );
         if (!correction && order[milestoneTimestampField[station]]) {
@@ -102,7 +108,7 @@ export class ProductionService {
             value: presentCompletion(before),
           };
           const eventId = await this.audit.record(
-            tx,
+            context,
             actor,
             `order.${station}.completion-confirmed`,
             [
@@ -115,7 +121,7 @@ export class ProductionService {
             ],
           );
           return this.audit.remember(
-            tx,
+            context,
             actor,
             scope,
             id,
@@ -131,7 +137,7 @@ export class ProductionService {
           );
         }
         const employee = input.employeeId
-          ? await this.employees.requireActive(tx, input.employeeId)
+          ? await this.employees.requireActive(context, input.employeeId)
           : null;
         const now = new Date();
         const completedAt = correction
@@ -154,15 +160,15 @@ export class ProductionService {
                 recordedByUserId: actor,
               }
             : null;
-        await this.repository.save(tx, id, station, next);
+        await context.production.save(id, station, next);
         const after = await this.orders.recordProductionMilestone(
-          tx,
+          context,
           id,
           station,
           completedAt,
         );
         const eventId = await this.audit.record(
-          tx,
+          context,
           actor,
           `order.${station}.${correction ? 'corrected' : 'completed'}`,
           [
@@ -193,7 +199,7 @@ export class ProductionService {
           correction ? input.reason : null,
         );
         return this.audit.remember(
-          tx,
+          context,
           actor,
           scope,
           id,

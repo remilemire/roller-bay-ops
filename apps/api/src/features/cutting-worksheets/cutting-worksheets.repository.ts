@@ -1,19 +1,18 @@
-import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
-import type { DatabaseTransaction } from '../../database/database.service.js';
+import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { cuttingWorksheets } from './cutting-worksheets.table.js';
-@Injectable()
 export class CuttingWorksheetsRepository {
-  async find(tx: DatabaseTransaction, id: string, lock = false) {
-    const q = tx
+  constructor(private readonly db: DatabaseExecutor) {}
+  async find(id: string, lock = false) {
+    const q = this.db
       .select()
       .from(cuttingWorksheets)
       .where(eq(cuttingWorksheets.id, id));
     return (await (lock ? q.for('no key update') : q))[0];
   }
-  async forAllocation(tx: DatabaseTransaction, id: string) {
+  async forAllocation(id: string) {
     return (
-      await tx
+      await this.db
         .select()
         .from(cuttingWorksheets)
         .where(
@@ -24,9 +23,9 @@ export class CuttingWorksheetsRepository {
         )
     )[0];
   }
-  async forOrder(tx: DatabaseTransaction, id: string) {
+  async forOrder(id: string) {
     return (
-      await tx
+      await this.db
         .select()
         .from(cuttingWorksheets)
         .where(
@@ -38,8 +37,8 @@ export class CuttingWorksheetsRepository {
         .orderBy(desc(cuttingWorksheets.startedAt))
     )[0];
   }
-  list(tx: DatabaseTransaction) {
-    return tx
+  list() {
+    return this.db
       .select()
       .from(cuttingWorksheets)
       .where(
@@ -50,10 +49,10 @@ export class CuttingWorksheetsRepository {
       )
       .orderBy(asc(cuttingWorksheets.sequence));
   }
-  async hasSuccessors(tx: DatabaseTransaction, id: string) {
+  async hasSuccessors(id: string) {
     return (
       (
-        await tx
+        await this.db
           .select({ id: cuttingWorksheets.id })
           .from(cuttingWorksheets)
           .where(
@@ -66,9 +65,9 @@ export class CuttingWorksheetsRepository {
       ).length > 0
     );
   }
-  async latestForStock(tx: DatabaseTransaction, id: string) {
+  async latestForStock(id: string) {
     return (
-      await tx
+      await this.db
         .select()
         .from(cuttingWorksheets)
         .where(
@@ -80,19 +79,17 @@ export class CuttingWorksheetsRepository {
         .orderBy(desc(cuttingWorksheets.sequence))
     )[0];
   }
-  async create(
-    tx: DatabaseTransaction,
-    values: typeof cuttingWorksheets.$inferInsert,
-  ) {
-    return (await tx.insert(cuttingWorksheets).values(values).returning())[0]!;
+  async create(values: typeof cuttingWorksheets.$inferInsert) {
+    return (
+      await this.db.insert(cuttingWorksheets).values(values).returning()
+    )[0]!;
   }
   async update(
-    tx: DatabaseTransaction,
     id: string,
     values: Partial<typeof cuttingWorksheets.$inferInsert>,
   ) {
     return (
-      await tx
+      await this.db
         .update(cuttingWorksheets)
         .set({ ...values, revision: sql`${cuttingWorksheets.revision}+1` })
         .where(eq(cuttingWorksheets.id, id))
