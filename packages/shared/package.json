@@ -51,6 +51,14 @@
     "./corrections": {
       "types": "./dist/features/corrections/index.d.ts",
       "default": "./dist/features/corrections/index.js"
+    },
+    "./employees": {
+      "types": "./dist/features/employees/index.d.ts",
+      "default": "./dist/features/employees/index.js"
+    },
+    "./production": {
+      "types": "./dist/features/production/index.d.ts",
+      "default": "./dist/features/production/index.js"
     }
   },
   "files": [

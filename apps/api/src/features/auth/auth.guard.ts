@@ -60,7 +60,10 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (roles && !hasAnyRole(user.role, roles))
+    if (
+      (user.role === 'station' && !roles?.includes('station')) ||
+      (roles && !hasAnyRole(user.role, roles))
+    )
       throw new ForbiddenException('Your role cannot perform this action.');
     return true;
   }

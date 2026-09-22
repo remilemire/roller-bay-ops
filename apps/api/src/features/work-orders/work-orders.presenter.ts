@@ -16,17 +16,23 @@ export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
     ...row,
     status: row.shippedAt
       ? 'shipped'
-      : row.cutAt
-        ? 'cut'
-        : row.shipDate
-          ? 'scheduled'
-          : row.allocatedAt
-            ? 'allocated'
-            : 'new',
+      : row.checkedAt
+        ? 'checked'
+        : row.assembledAt
+          ? 'assembled'
+          : row.cutAt
+            ? 'cut'
+            : row.shipDate
+              ? 'scheduled'
+              : row.allocatedAt
+                ? 'allocated'
+                : 'new',
     createdAt: row.createdAt.toISOString(),
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     allocatedAt: row.allocatedAt?.toISOString() ?? null,
     cutAt: row.cutAt?.toISOString() ?? null,
+    assembledAt: row.assembledAt?.toISOString() ?? null,
+    checkedAt: row.checkedAt?.toISOString() ?? null,
     shippedAt: row.shippedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   });

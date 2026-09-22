@@ -13,6 +13,8 @@ export const orderStatusSchema = z.enum([
   'allocated',
   'scheduled',
   'cut',
+  'assembled',
+  'checked',
   'shipped',
 ]);
 
@@ -40,18 +42,16 @@ export const createWorkOrderSchema = z.strictObject({
   note: noteSchema.default(null),
 });
 // The order number is fixed once created. A null ship date takes the order
-// off the schedule. `shipped` stamps or clears the shipped milestone; the
-// server owns the timestamp.
+// off the schedule. Production completions have dedicated attributed writes.
 export const updateWorkOrderSchema = z
   .strictObject({
     expectedRevision: revision,
     shipDate: shipDateSchema.nullable().optional(),
     note: noteSchema.optional(),
-    shipped: z.boolean().optional(),
   })
   .refine(
-    ({ shipDate, note, shipped }) =>
-      [shipDate, note, shipped].some((field) => field !== undefined),
+    ({ shipDate, note }) =>
+      [shipDate, note].some((field) => field !== undefined),
     'Provide at least one field.',
   );
 export const deleteWorkOrderSchema = z.strictObject({
@@ -109,6 +109,8 @@ export const workOrderSchema = z.object({
   scheduledAt: z.iso.datetime().nullable(),
   allocatedAt: z.iso.datetime().nullable(),
   cutAt: z.iso.datetime().nullable(),
+  assembledAt: z.iso.datetime().nullable().default(null),
+  checkedAt: z.iso.datetime().nullable().default(null),
   shippedAt: z.iso.datetime().nullable(),
   updatedAt: z.iso.datetime(),
   revision: z.number().int().positive(),

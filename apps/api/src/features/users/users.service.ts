@@ -16,6 +16,7 @@ import {
   type UpdateMeasurementUnits,
   type UserQuery,
   type UserRole,
+  type Station,
 } from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
 import { UsersRepository, type UserRecord } from './users.repository.js';
@@ -128,7 +129,12 @@ export class UsersService {
     }
   }
 
-  async setRole(actorId: string, id: string, role: 'user' | 'admin') {
+  async setRole(
+    actorId: string,
+    id: string,
+    role: 'station' | 'user' | 'admin',
+    stations: Station[] = [],
+  ) {
     try {
       return await this.repository.withLockedTransaction(async (users) => {
         await this.requireActor(users, actorId, ['admin', 'owner']);
@@ -137,7 +143,13 @@ export class UsersService {
           throw new ForbiddenException(
             'Change the owner through an ownership transfer.',
           );
-        return this.toPublic(await users.setRole(id, role));
+        return this.toPublic(
+          await users.setStationRole(
+            id,
+            role,
+            role === 'station' ? stations : [],
+          ),
+        );
       });
     } catch (error) {
       this.rethrowStorageError(error);

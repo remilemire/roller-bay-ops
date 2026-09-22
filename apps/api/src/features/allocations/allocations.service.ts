@@ -1,3 +1,4 @@
+import { CuttingWorksheetsRepository } from './cutting-worksheets.repository.js';
 import { AuditService, canonicalJson } from '../audit/audit.service.js';
 import {
   stockChanges,
@@ -311,9 +312,14 @@ export class AllocationsService {
           await repository.findById(id, true),
           input.expectedRevision,
         );
+        await this.orders.assertPlanningAllowed(tx, header.workOrderId);
+        if (await new CuttingWorksheetsRepository(tx).forAllocation(id))
+          throw new ConflictException(
+            'Cutting has begun; the working sheet cannot be replanned.',
+          );
         const before = await this.detail(repository, tx, header);
-        // The order stays allocated throughout, so its blinds are fixed and
-        // it needs no lock, stamp or change of its own.
+        // The order lock above prevents a production completion during replanning.
+        // Its blinds remain fixed; replanning does not change its milestones.
         const { lines } = await this.orders.lines(tx, header.workOrderId);
         requireOrderLines(lines, input.plan);
         const configured = this.configure(lines, input.plan, header.settings);
@@ -351,6 +357,10 @@ export class AllocationsService {
         if (!header) throw new NotFoundException('Allocation not found.');
         if (header.cancelledAt) return this.detail(repository, tx, header);
         requireActiveRevision(header, revision);
+        if (await new CuttingWorksheetsRepository(tx).forAllocation(id))
+          throw new ConflictException(
+            'Cutting has begun; resolve the working sheet before cancelling.',
+          );
         const order = await this.orders.release(tx, header.workOrderId);
         const items = await repository.items(id);
         await this.stockItems.findForAllocation(tx, {
@@ -384,90 +394,120 @@ export class AllocationsService {
     request: CompleteAllocationRequest,
     userId: string,
     key: string,
+    transaction?: DatabaseTransaction,
+    worksheetId?: string,
   ) {
     const requestHash = hash(request);
-    return allocationOperation(() =>
-      this.repository.withTransaction(async (repository, tx) => {
-        const header = await repository.findById(id, true);
-        if (!header) throw new NotFoundException('Allocation not found.');
-        // Completion changes stock and creates remnants. Check its replay identity
-        // before checking the active revision, which the original commit advanced.
-        if (
-          header.completedAt &&
-          header.completionKey === key &&
-          header.completion?.submittedByUserId === userId
-        ) {
-          if (header.completionRequestHash !== requestHash)
-            throw new ConflictException(
-              'This completion key was used with different results.',
-            );
-          return this.detail(repository, tx, header);
-        }
-        const parsed = completeAllocationSchema.safeParse(request);
-        if (!parsed.success)
+    const operation = async (
+      repository: AllocationsRepository,
+      tx: DatabaseTransaction,
+    ) => {
+      const header = await repository.findById(id, true);
+      if (!header) throw new NotFoundException('Allocation not found.');
+      // Completion changes stock and creates remnants. Check its replay identity
+      // before checking the active revision, which the original commit advanced.
+      if (
+        header.completedAt &&
+        header.completionKey === key &&
+        header.completion?.submittedByUserId === userId
+      ) {
+        if (header.completionRequestHash !== requestHash)
           throw new ConflictException(
-            'Refresh stock revisions before submitting cutting results. Older requests may only replay a completed submission.',
+            'This completion key was used with different results.',
           );
-        const input = parsed.data;
-        requireActiveRevision(header, input.expectedRevision);
-        const allocated = await repository.items(id);
-        const ids = allocated.map((item) => item.stockItemId!);
-        if (
-          new Set(input.items.map((item) => item.stockItemId)).size !==
-            input.items.length ||
-          input.items.length !== ids.length ||
-          input.items.some((item) => !ids.includes(item.stockItemId))
-        )
-          throw new BadRequestException(
-            'Provide exactly one cutting result for every allocated stock item.',
-          );
-        // The order's cut_at mirrors this allocation's completed_at.
-        const now = new Date();
-        const order = await this.orders.markCut(tx, header.workOrderId, now);
-        await this.stockItems.findForAllocation(tx, {
-          stockIds: ids,
-          lock: true,
-        });
-        const before = await this.detail(repository, tx, header);
-        const effects = await this.stockItems.recordCuttingResults(
-          input.items,
-          tx,
-          now,
+        return this.detail(repository, tx, header);
+      }
+      const sheets = new CuttingWorksheetsRepository(tx);
+      const sheet = await sheets.forAllocation(id);
+      if (sheet && sheet.id !== worksheetId)
+        throw new ConflictException(
+          'Review the saved cutting worksheet to reconcile this allocation.',
         );
-        let saved = await repository.update(id, {
-          stockEffects: effects,
-          completedAt: now,
-          completionKey: key,
-          completionRequestHash: requestHash,
-          completion: {
-            submittedByUserId: userId,
-            items: input.items,
-            createdStockItemIds: effects
-              .filter((e) => !e.before)
-              .map((e) => e.stockItemId),
-            affectedAllocationIds: [],
-          },
-        });
-        // Retire this order's reservations before looking for shortages in the
-        // remaining orders; observed measurements are kept even if stock is short.
-        const affectedAllocationIds = await repository.affectedAllocations(ids);
-        saved = await repository.saveCompletionFlags(id, {
-          ...saved.completion!,
-          affectedAllocationIds,
-        });
-        const result = await this.detail(repository, tx, saved);
-        await this.audit.record(tx, userId, 'allocation.completed', [
-          {
-            recordType: 'allocations',
-            recordId: id,
-            before: { type: 'allocations', value: before },
-            after: { type: 'allocations', value: result },
-          },
-          order,
-          ...stockChanges(effects),
-        ]);
-        return result;
-      }),
+      const parsed = completeAllocationSchema.safeParse(request);
+      if (!parsed.success)
+        throw new ConflictException(
+          'Refresh stock revisions before submitting cutting results. Older requests may only replay a completed submission.',
+        );
+      const input = parsed.data;
+      requireActiveRevision(header, input.expectedRevision);
+      const allocated = await repository.items(id);
+      const ids = allocated.map((item) => item.stockItemId!);
+      if (
+        new Set(input.items.map((item) => item.stockItemId)).size !==
+          input.items.length ||
+        input.items.length !== ids.length ||
+        input.items.some((item) => !ids.includes(item.stockItemId))
+      )
+        throw new BadRequestException(
+          'Provide exactly one cutting result for every allocated stock item.',
+        );
+      // Inventory reconciliation is independent of the cutting milestone.
+      const now = new Date();
+      await this.stockItems.findForAllocation(tx, {
+        stockIds: ids,
+        lock: true,
+      });
+      if (!worksheetId)
+        for (const stockId of ids) {
+          const pending = await sheets.latestForStock(stockId);
+          if (pending && !pending.reviewedAt)
+            throw new ConflictException(
+              `Review pending cutting results for order ${pending.orderNumber} first.`,
+            );
+        }
+      const before = await this.detail(repository, tx, header);
+      const effects = await this.stockItems.recordCuttingResults(
+        input.items,
+        tx,
+        now,
+      );
+      let saved = await repository.update(id, {
+        stockEffects: effects,
+        completedAt: now,
+        completionKey: key,
+        completionRequestHash: requestHash,
+        completion: {
+          submittedByUserId: userId,
+          items: input.items,
+          createdStockItemIds: effects
+            .filter((e) => !e.before)
+            .map((e) => e.stockItemId),
+          affectedAllocationIds: [],
+        },
+      });
+      // Retire this order's reservations before looking for shortages in the
+      // remaining orders; observed measurements are kept even if stock is short.
+      const affectedAllocationIds = await repository.affectedAllocations(ids);
+      saved = await repository.saveCompletionFlags(id, {
+        ...saved.completion!,
+        affectedAllocationIds,
+      });
+      const result = await this.detail(repository, tx, saved);
+      await this.audit.record(tx, userId, 'allocation.completed', [
+        {
+          recordType: 'allocations',
+          recordId: id,
+          before: { type: 'allocations', value: before },
+          after: { type: 'allocations', value: result },
+        },
+        ...stockChanges(effects),
+      ]);
+      return result;
+    };
+    return allocationOperation(() =>
+      transaction
+        ? operation(new AllocationsRepository({ db: transaction }), transaction)
+        : this.repository.withTransaction(operation),
+    );
+  }
+
+  async worksheetSnapshot(tx: DatabaseTransaction, id: string) {
+    const repository = new AllocationsRepository({ db: tx });
+    const header = await repository.findById(id, true);
+    if (!header) throw new NotFoundException('Allocation not found.');
+    requireActiveRevision(header, header.revision);
+    return allocationDetailSchema.parse(
+      await this.detail(repository, tx, header),
     );
   }
 

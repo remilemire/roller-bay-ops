@@ -41,6 +41,7 @@ export class UsersController {
 
   // Any active user may change their own preferences; the target is never a
   // path id.
+  @Roles('station')
   @Patch('me/measurement-units')
   setMeasurementUnits(
     @Req() request: Request,
@@ -50,6 +51,7 @@ export class UsersController {
     return this.users.setMeasurementUnits(request.currentUser!.id, input);
   }
 
+  @Roles('station')
   @Patch('me/color-theme')
   setColorTheme(
     @Req() request: Request,
@@ -81,7 +83,12 @@ export class UsersController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updateUserRoleSchema)) input: UpdateUserRole,
   ) {
-    return this.users.setRole(request.currentUser!.id, id, input.role);
+    return this.users.setRole(
+      request.currentUser!.id,
+      id,
+      input.role,
+      input.stations,
+    );
   }
 
   @Post('transfer-ownership')

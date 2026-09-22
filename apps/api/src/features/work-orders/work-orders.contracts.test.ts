@@ -110,9 +110,10 @@ test('work order updates require a revision and a change, and cannot rename the 
     false,
   );
   // An omitted note is left alone; a blank one is cleared.
-  assert.deepEqual(
-    updateWorkOrderSchema.parse({ expectedRevision: 2, shipped: false }),
-    { expectedRevision: 2, shipped: false },
+  assert.equal(
+    updateWorkOrderSchema.safeParse({ expectedRevision: 2, shipped: false })
+      .success,
+    false,
   );
   assert.deepEqual(
     updateWorkOrderSchema.parse({ expectedRevision: 2, note: ' ' }),

@@ -26,6 +26,8 @@ export const workOrders = pgTable(
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
     allocatedAt: timestamp('allocated_at', { withTimezone: true }),
     cutAt: timestamp('cut_at', { withTimezone: true }),
+    assembledAt: timestamp('assembled_at', { withTimezone: true }),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
     shippedAt: timestamp('shipped_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
@@ -54,6 +56,10 @@ export const workOrders = pgTable(
     check(
       'work_orders_scheduled_at_matches_ship_date',
       sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,
+    ),
+    check(
+      'work_orders_production_requires_allocated',
+      sql`(${table.assembledAt} IS NULL AND ${table.checkedAt} IS NULL) OR ${table.allocatedAt} IS NOT NULL`,
     ),
     check('work_orders_revision_positive', sql`${table.revision} > 0`),
     // Only an order without a live allocation can be deleted.

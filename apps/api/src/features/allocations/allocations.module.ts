@@ -1,3 +1,4 @@
+import { CuttingWorksheetsService } from './cutting-worksheets.service.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -32,8 +33,10 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
       },
     }),
   ],
+  exports: [CuttingWorksheetsService],
   controllers: [AllocationsController],
   providers: [
+    CuttingWorksheetsService,
     CuttingRulesService,
     AllocationsRepository,
     AllocationsService,

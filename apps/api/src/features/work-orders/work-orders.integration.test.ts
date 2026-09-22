@@ -242,32 +242,11 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         shipDate: '2026-10-09',
       }).expect(200);
 
-      const shipped = workOrderSchema.parse(
-        (
-          await patch(order.id, {
-            expectedRevision: 5,
-            shipped: true,
-          }).expect(200)
-        ).body,
+      // Production now requires an attributed station write.
+      await patch(order.id, { expectedRevision: 5, shipped: true }).expect(400);
+      await patch(order.id, { expectedRevision: 5, shipped: false }).expect(
+        400,
       );
-      assert.equal(shipped.status, 'shipped');
-      assert.ok(shipped.shippedAt);
-      // Shipping again keeps the original time.
-      const again = (
-        await patch(order.id, {
-          expectedRevision: 6,
-          shipped: true,
-        }).expect(200)
-      ).body;
-      assert.equal(again.shippedAt, shipped.shippedAt);
-      const unshipped = (
-        await patch(order.id, {
-          expectedRevision: 7,
-          shipped: false,
-        }).expect(200)
-      ).body;
-      assert.equal(unshipped.status, 'scheduled');
-      assert.equal(unshipped.shippedAt, null);
 
       const history = historySchema.parse(
         (await get(`${path}/${order.id}/history`).expect(200)).body,
@@ -276,10 +255,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         'order.created',
         'order.scheduled',
         'order.scheduled',
-        'order.shipped',
         'order.unscheduled',
-        'order.unshipped',
-        'order.updated',
         'order.updated',
       ]);
       assert.ok(

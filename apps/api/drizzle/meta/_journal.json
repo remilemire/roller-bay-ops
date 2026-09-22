@@ -211,6 +211,20 @@
       "when": 1789983110340,
       "tag": "0029_record_confirmed_cutting_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790057042110,
+      "tag": "0030_station_production_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790057187303,
+      "tag": "0031_cutting_sequence_safeguards",
+      "breakpoints": true
     }
   ]
 }

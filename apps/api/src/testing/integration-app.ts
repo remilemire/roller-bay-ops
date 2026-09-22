@@ -16,6 +16,7 @@ import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
 import { environmentSchema } from '../config/environment.js';
 import { createTestDatabase } from '../database/testing/test-database.js';
 import { AllocationsModule } from '../features/allocations/allocations.module.js';
+import { ProductionModule } from '../features/production/production.module.js';
 import { AuditModule } from '../features/audit/audit.module.js';
 import { AuthModule } from '../features/auth/auth.module.js';
 import { MicrosoftService } from '../features/auth/microsoft.service.js';
@@ -108,6 +109,7 @@ export async function startIntegrationApp(t: TestContext) {
       }),
       ErrorsModule,
       AuditModule,
+      ProductionModule,
       RateLimitingModule,
       AuthModule,
       HealthModule,

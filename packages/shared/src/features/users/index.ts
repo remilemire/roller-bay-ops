@@ -1,6 +1,21 @@
 import { z } from 'zod';
 
-export const userRoles = ['user', 'admin', 'owner'] as const;
+export const userRoles = ['station', 'user', 'admin', 'owner'] as const;
+
+export const stationSchema = z.enum([
+  'cutting',
+  'assembly',
+  'checking',
+  'shipping',
+]);
+export type Station = z.infer<typeof stationSchema>;
+export const stationAssignmentsSchema = z
+  .array(stationSchema)
+  .max(4)
+  .refine(
+    (values) => new Set(values).size === values.length,
+    'Stations must be unique.',
+  );
 
 export const userRoleSchema = z.enum(userRoles);
 
@@ -114,6 +129,7 @@ export const userSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
   role: userRoleSchema,
+  stations: stationAssignmentsSchema.default([]),
   isActive: z.boolean(),
   email: emailSchema,
   createdAt: z.iso.datetime(),
@@ -149,6 +165,7 @@ export type UpdateUserActivation = z.infer<typeof updateUserActivationSchema>;
 
 export const updateUserRoleSchema = z.strictObject({
   role: userRoleSchema.exclude(['owner']),
+  stations: stationAssignmentsSchema.default([]),
 });
 
 export type UpdateUserRole = z.infer<typeof updateUserRoleSchema>;

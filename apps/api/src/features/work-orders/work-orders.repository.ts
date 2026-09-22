@@ -42,7 +42,8 @@ export type WorkOrderRecord = typeof workOrders.$inferSelect & {
 };
 export type WorkOrderLineRecord = typeof workOrderLines.$inferSelect;
 
-const { allocatedAt, cutAt, shipDate, shippedAt } = workOrders;
+const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
+  workOrders;
 // Each mirrors the presenter's derived status, except the two work queues.
 const statusFilters = {
   open: isNull(shippedAt),
@@ -53,10 +54,25 @@ const statusFilters = {
     isNotNull(allocatedAt),
     isNull(shipDate),
     isNull(cutAt),
+    isNull(assembledAt),
+    isNull(checkedAt),
     isNull(shippedAt),
   ),
-  scheduled: and(isNotNull(shipDate), isNull(cutAt), isNull(shippedAt)),
-  cut: and(isNotNull(cutAt), isNull(shippedAt)),
+  scheduled: and(
+    isNotNull(shipDate),
+    isNull(cutAt),
+    isNull(assembledAt),
+    isNull(checkedAt),
+    isNull(shippedAt),
+  ),
+  cut: and(
+    isNotNull(cutAt),
+    isNull(assembledAt),
+    isNull(checkedAt),
+    isNull(shippedAt),
+  ),
+  assembled: and(isNotNull(assembledAt), isNull(checkedAt), isNull(shippedAt)),
+  checked: and(isNotNull(checkedAt), isNull(shippedAt)),
   shipped: isNotNull(shippedAt),
 };
 
@@ -191,7 +207,12 @@ export class WorkOrdersRepository {
    */
   async stamp(
     id: string,
-    values: Partial<Pick<WorkOrderRecord, 'allocatedAt' | 'cutAt'>>,
+    values: Partial<
+      Pick<
+        WorkOrderRecord,
+        'allocatedAt' | 'cutAt' | 'assembledAt' | 'checkedAt' | 'shippedAt'
+      >
+    >,
   ) {
     await this.db
       .update(workOrders)

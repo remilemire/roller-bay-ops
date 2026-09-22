@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { currentUserSchema } from '@roller-bay/shared/auth';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
 import { UsersService } from '../users/users.service.js';
@@ -70,6 +71,7 @@ export class AuthController {
     response.redirect(this.config.get('WEB_ORIGIN', { infer: true }));
   }
 
+  @Roles('station')
   @Get('me')
   me(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     response.setHeader('Cache-Control', 'no-store');

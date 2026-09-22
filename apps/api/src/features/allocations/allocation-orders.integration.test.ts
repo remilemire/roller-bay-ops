@@ -427,11 +427,12 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       const stamps = await allocationRow(again.id);
       row = await order(target);
       assert.deepEqual(row.allocated_at, stamps.confirmed_at);
-      assert.deepEqual(row.cut_at, stamps.completed_at);
+      assert.equal(row.cut_at, null);
+      assert.ok(stamps.completed_at);
       assert.equal(row.revision, revision);
       assert.equal(
         (await get(`/api/work-orders/${row.id}`).expect(200)).body.status,
-        'cut',
+        'allocated',
       );
 
       // Each allocation event that stamps the order carries the order's
@@ -442,18 +443,13 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
       assert.deepEqual(history.items.map((event) => event.action).sort(), [
         'allocation.cancelled',
-        'allocation.completed',
         'allocation.confirmed',
         'allocation.confirmed',
         'order.scheduled',
         'order.unscheduled',
       ]);
-      const completedEvent = history.items.find(
-        (event) => event.action === 'allocation.completed',
-      )!;
-      assert.deepEqual(
-        completedEvent.changes.map((c) => c.recordType).slice(0, 2),
-        ['allocations', 'work-orders'],
+      assert.ok(
+        !history.items.some((event) => event.action === 'allocation.completed'),
       );
     },
   );

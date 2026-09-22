@@ -6,5 +6,6 @@ import { LocationLevelsModule } from './levels/location-levels.module.js';
 @Module({
   // Register static resource paths before the /locations/:id route.
   imports: [LocationZonesModule, LocationSectionsModule, LocationLevelsModule],
+  exports: [LocationLevelsModule],
 })
 export class LocationsModule {}

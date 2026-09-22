@@ -9,6 +9,7 @@ import { LocationOrderRepository } from '../location-order.repository.js';
 
 @Module({
   imports: [DatabaseModule],
+  exports: [LocationLevelsService],
   controllers: [LocationLevelsController],
   providers: [
     LocationOrderService,

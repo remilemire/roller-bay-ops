@@ -5,6 +5,7 @@ import type {
   UpdateMeasurementUnits,
   UserQuery,
   UserRole,
+  Station,
 } from '@roller-bay/shared/users';
 import { DatabaseService } from '../../database/database.service.js';
 import { users } from './users.table.js';
@@ -115,6 +116,15 @@ export class UsersRepository {
       .from(users)
       .where(eq(users.role, 'owner'));
     return owner;
+  }
+
+  async setStationRole(id: string, role: UserRole, stations: Station[]) {
+    const [row] = await this.db
+      .update(users)
+      .set({ role, stations })
+      .where(eq(users.id, id))
+      .returning();
+    return row!;
   }
 
   setRole(id: string, role: UserRole) {

@@ -1,3 +1,4 @@
+import { ProductionModule } from './features/production/production.module.js';
 import { AuditModule } from './features/audit/audit.module.js';
 import { AllocationsModule } from './features/allocations/allocations.module.js';
 import { StockReceiptsModule } from './features/stock-receipts/stock-receipts.module.js';
@@ -20,6 +21,7 @@ import { ErrorsModule } from './common/errors/errors.module.js';
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     ErrorsModule,
     AuditModule,
+    ProductionModule,
     RedisModule,
     // Middleware runs in import order among modules only AppModule imports.
     // The proxy check comes first so direct requests never spend a rate-limit

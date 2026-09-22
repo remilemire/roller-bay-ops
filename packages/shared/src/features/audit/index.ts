@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { employeeSchema } from '../employees/index.js';
+import {
+  productionCompletionSchema,
+  worksheetSchema,
+} from '../production/index.js';
 import { stockSnapshotSchema } from '../stock-items/index.js';
 import { stockReceiptRecordSchema } from '../stock-receipts/index.js';
 import {
@@ -7,12 +12,21 @@ import {
 } from '../allocations/index.js';
 import { workOrderDetailSchema } from '../work-orders/index.js';
 export const auditRecordTypeSchema = z.enum([
+  'employees',
+  'production',
+  'cutting-worksheets',
   'stock-items',
   'stock-receipts',
   'allocations',
   'work-orders',
 ]);
 export const auditSnapshotSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('employees'), value: employeeSchema }),
+  z.object({
+    type: z.literal('production'),
+    value: productionCompletionSchema,
+  }),
+  z.object({ type: z.literal('cutting-worksheets'), value: worksheetSchema }),
   z.object({ type: z.literal('stock-items'), value: stockSnapshotSchema }),
   z.object({
     type: z.literal('stock-receipts'),

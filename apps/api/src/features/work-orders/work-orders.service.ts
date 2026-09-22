@@ -228,7 +228,6 @@ export class WorkOrdersService {
               },
             ],
           });
-        const { shipped } = input;
         const row = await repository.update(id, {
           shipDate: input.shipDate,
           // Kept through a reschedule: it is when the order went on the
@@ -240,24 +239,13 @@ export class WorkOrdersService {
                 ? null
                 : (previous.scheduledAt ?? new Date()),
           note: input.note,
-          // Marking a shipped order shipped again keeps its original time.
-          shippedAt:
-            shipped === undefined
-              ? undefined
-              : shipped
-                ? (previous.shippedAt ?? new Date())
-                : null,
         });
         const action =
-          shipped !== undefined && shipped !== !!previous.shippedAt
-            ? shipped
-              ? 'order.shipped'
-              : 'order.unshipped'
-            : !previous.shipDate && row.shipDate
-              ? 'order.scheduled'
-              : previous.shipDate && !row.shipDate
-                ? 'order.unscheduled'
-                : 'order.updated';
+          !previous.shipDate && row.shipDate
+            ? 'order.scheduled'
+            : previous.shipDate && !row.shipDate
+              ? 'order.unscheduled'
+              : 'order.updated';
         await this.audit.record(tx, userId, action, [change(previous, row)]);
         return presentWorkOrder(row);
       }),
@@ -352,6 +340,15 @@ export class WorkOrdersService {
    */
   release(tx: DatabaseTransaction, workOrderId: string) {
     return this.restamp(tx, workOrderId, { allocatedAt: null }, (order) => {
+      if (
+        order.cutAt ||
+        order.assembledAt ||
+        order.checkedAt ||
+        order.shippedAt
+      )
+        throw new ConflictException(
+          'Production has been recorded. Resolve the milestones before cancelling the allocation.',
+        );
       if (order.shipDate)
         throw new ConflictException({
           message:
@@ -367,8 +364,15 @@ export class WorkOrdersService {
     });
   }
 
-  markCut(tx: DatabaseTransaction, workOrderId: string, at: Date) {
-    return this.restamp(tx, workOrderId, { cutAt: at });
+  async assertPlanningAllowed(tx: DatabaseTransaction, workOrderId: string) {
+    const order = await new WorkOrdersRepository({ db: tx }).findByIdForUpdate(
+      workOrderId,
+    );
+    if (!order) throw orderNotFound();
+    if (order.cutAt || order.assembledAt || order.checkedAt || order.shippedAt)
+      throw new ConflictException(
+        'Production has been recorded; the fabric plan cannot be changed.',
+      );
   }
 
   private async restamp(

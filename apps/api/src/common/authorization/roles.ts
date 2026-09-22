@@ -1,6 +1,11 @@
 import type { UserRole } from '@roller-bay/shared/users';
 
-const rank: Record<UserRole, number> = { user: 0, admin: 1, owner: 2 };
+const rank: Record<UserRole, number> = {
+  station: -1,
+  user: 0,
+  admin: 1,
+  owner: 2,
+};
 
 export function hasAnyRole(
   role: UserRole,
