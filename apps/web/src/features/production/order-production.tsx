@@ -1,12 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { milestoneCorrectionSchema } from '@roller-bay/shared/production';
 import { useCurrentUser, useCanManage } from '@/features/auth/auth-boundary';
-import { api } from '@/lib/api';
-import { requestKey, finishRequest } from '@/lib/pending-request';
+import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { ChoiceField, TextField } from '@/components/ui/field';
@@ -118,23 +117,13 @@ function Correction({
   const [time, setTime] = useState('');
   const user = useCurrentUser();
   const client = useQueryClient();
-  const scope = `production-correction:${user.id}:${order.id}:${station}:${order.revision}`;
-  const mutation = useMutation({
-    mutationFn: () => {
-      const body = milestoneCorrectionSchema.parse({
-        expectedRevision: order.revision,
-        reason,
-        employeeId: clear ? null : employeeId,
-        completedAt: clear ? null : new Date(time).toISOString(),
-      });
-      return api(
-        `/production/${station}/orders/${order.id}/corrections`,
-        mutationResultSchema,
-        { method: 'POST', body, key: requestKey(scope, body) },
-      );
-    },
+  const scope = `production-correction:${user.id}:${order.id}:${station}`;
+  const mutation = useProductionWrite({
+    scope,
+    path: `/production/${station}/orders/${order.id}/corrections`,
+    inputSchema: milestoneCorrectionSchema,
+    outputSchema: mutationResultSchema,
     onSuccess: async () => {
-      finishRequest(scope);
       await Promise.all([
         client.invalidateQueries({ queryKey: productionKey }),
         client.invalidateQueries({ queryKey: ['work-orders'] }),
@@ -177,13 +166,36 @@ function Correction({
           required
         />
         {mutation.error && <ErrorNotice error={mutation.error} />}
+        {mutation.pending && (
+          <>
+            <p>
+              The previous correction has an uncertain result. Retry its saved
+              employee, time, and reason.
+            </p>
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate(mutation.pending!)}
+            >
+              Retry original correction
+            </Button>
+          </>
+        )}
         <Button
           disabled={
             mutation.isPending ||
+            !!mutation.pending ||
             !reason.trim() ||
             (!clear && (!employeeId || !time))
           }
-          onClick={() => mutation.mutate()}
+          onClick={() =>
+            mutation.mutate({
+              expectedRevision: order.revision,
+              reason,
+              employeeId: clear ? null : employeeId,
+              completedAt: clear ? null : new Date(time).toISOString(),
+            })
+          }
         >
           Save correction
         </Button>

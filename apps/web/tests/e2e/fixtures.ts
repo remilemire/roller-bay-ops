@@ -80,6 +80,10 @@ export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean; stations?: Station[] } = {},
 ) {
+  const worksheetReviewReplays = new Map<
+    string,
+    { body: unknown; result: Worksheet }
+  >();
   const state = {
     stations: options.stations ?? ['cutting'],
     employees: [
@@ -96,6 +100,7 @@ export async function mockApi(
     productionCompletions: [] as ProductionCompletion[],
     worksheets: [] as Worksheet[],
     productionRequests: [] as { path: string; body: unknown }[],
+    worksheetReviewRequests: [] as { key: string; body: unknown }[],
     authenticated: options.signedIn !== false,
     disabled: false,
     catalogColor: structuredClone(color),
@@ -347,6 +352,20 @@ export async function mockApi(
       const sheet = state.worksheets.find((w) => w.id === sheetPath[1])!;
       if (method === 'GET') return send(sheet);
       const body = request.postDataJSON();
+      if (sheetPath[2] === 'review') {
+        const key = request.headers()['idempotency-key'];
+        if (!key || !/^[0-9a-f-]{36}$/i.test(key))
+          return send({ message: 'Idempotency-Key required.' }, 400);
+        state.worksheetReviewRequests.push({ key, body });
+        const previous = worksheetReviewReplays.get(`${sheet.id}:${key}`);
+        if (previous)
+          return JSON.stringify(previous.body) === JSON.stringify(body)
+            ? send(previous.result)
+            : send({ message: 'Request key payload changed.' }, 409);
+        if (sheet.reviewedAt)
+          return send({ message: 'Already reconciled.' }, 409);
+      }
+
       if (body.expectedRevision !== sheet.revision)
         return send(
           { message: 'Worksheet changed; reload before saving.' },
@@ -368,6 +387,11 @@ export async function mockApi(
         sheet.reviewedByUserId = ids.user;
       }
       sheet.revision++;
+      if (sheetPath[2] === 'review')
+        worksheetReviewReplays.set(
+          `${sheet.id}:${request.headers()['idempotency-key']}`,
+          { body, result: structuredClone(sheet) },
+        );
       return send(sheet);
     }
     if (path.endsWith('/history')) return send(paged([], url));

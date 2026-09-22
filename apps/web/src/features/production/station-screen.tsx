@@ -161,14 +161,16 @@ function StationQueue({ station }: { station: Station }) {
                       </Link>
                     </Button>
                   )}
-                  <CompletionAction
-                    station={station}
-                    orderId={order.id}
-                    orderNumber={order.orderNumber}
-                    employeeId={employee.employeeId}
-                    done={!!order[stamp[station]]}
-                    onCompleted={employee.touch}
-                  />
+                  {station !== 'cutting' && (
+                    <CompletionAction
+                      station={station}
+                      orderId={order.id}
+                      orderNumber={order.orderNumber}
+                      employeeId={employee.employeeId}
+                      done={!!order[stamp[station]]}
+                      onCompleted={employee.touch}
+                    />
+                  )}
                 </div>
               </div>
             </section>

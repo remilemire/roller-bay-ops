@@ -5,8 +5,14 @@ import { allocationDetail } from '@/features/allocations/allocations.api';
 import { CompletionEditor } from '@/features/allocations/completion-editor';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { worksheetSchema } from '@roller-bay/shared/production';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import {
+  worksheetSchema,
+  worksheetReviewSchema,
+} from '@roller-bay/shared/production';
+import type { z } from 'zod';
+import { useListParams } from '@/lib/use-list-params';
+import { useProductionWrite } from './use-production-write';
+import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { api } from '@/lib/api';
 import { dateTimeLabel } from '@/lib/format';
@@ -24,7 +30,9 @@ export function CuttingReviewScreen() {
 }
 function ReviewQueue() {
   const query = useQuery(worksheets());
-  const [selected, setSelected] = useState('');
+  const params = useListParams();
+  const selected = params.get('worksheet');
+  const [dirty, setDirty] = useState(false);
   return (
     <div className="stack">
       <PageHeading title="Review cutting results">
@@ -61,7 +69,18 @@ function ReviewQueue() {
                     <td>
                       <Button
                         variant="outline"
-                        onClick={() => setSelected(s.id)}
+                        onClick={() => {
+                          if (s.id === selected) return;
+                          if (
+                            dirty &&
+                            !window.confirm(
+                              'Discard your unsaved cutting results?',
+                            )
+                          )
+                            return;
+                          setDirty(false);
+                          params.set({ worksheet: s.id });
+                        }}
                       >
                         Open
                       </Button>
@@ -76,11 +95,24 @@ function ReviewQueue() {
           </div>
         </section>
       )}
-      {selected && <ReviewWorksheet key={selected} id={selected} />}
+      {selected && (
+        <ReviewWorksheet
+          key={selected}
+          id={selected}
+          onDirtyChange={setDirty}
+        />
+      )}
     </div>
   );
 }
-function ReviewWorksheet({ id }: { id: string }) {
+function ReviewWorksheet({
+  id,
+  onDirtyChange,
+}: {
+  id: string;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const user = useCurrentUser();
   const query = useQuery(worksheetDetail(id));
   const units = useMeasurementUnits();
   const client = useQueryClient();
@@ -102,13 +134,14 @@ function ReviewWorksheet({ id }: { id: string }) {
       }),
     onSuccess: () => client.invalidateQueries({ queryKey: productionKey }),
   });
-  const review = useMutation({
-    mutationFn: () =>
-      api(`/production/cutting/worksheets/${id}/review`, worksheetSchema, {
-        method: 'POST',
-        body: { expectedRevision: query.data!.revision },
-      }),
+  const review = useProductionWrite({
+    scope: `cutting-review:${user.id}:${id}`,
+    path: `/production/cutting/worksheets/${id}/review`,
+    inputSchema: worksheetReviewSchema,
+    outputSchema: worksheetSchema,
     onSuccess: async () => {
+      setResolving(false);
+      onDirtyChange(false);
       await Promise.all([
         client.invalidateQueries({ queryKey: productionKey }),
         client.invalidateQueries({ queryKey: ['allocations'] }),
@@ -117,7 +150,7 @@ function ReviewWorksheet({ id }: { id: string }) {
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
   const sheet = query.data;
   return (
     <section className="stack">
@@ -135,6 +168,21 @@ function ReviewWorksheet({ id }: { id: string }) {
           <p>The cutter has not submitted complete measurements yet.</p>
         )}
         {review.error && <ErrorNotice error={review.error} />}
+        {review.pending && (
+          <>
+            <p>
+              The previous reconciliation has an uncertain result. Retry its
+              saved measurements and reason before making another change.
+            </p>
+            <Button
+              variant="outline"
+              disabled={review.isPending}
+              onClick={() => review.mutate(review.pending!)}
+            >
+              Retry original reconciliation
+            </Button>
+          </>
+        )}
         <p>
           Accepting updates stock and creates retained remnants. It does not
           change production milestones.
@@ -144,9 +192,11 @@ function ReviewWorksheet({ id }: { id: string }) {
             !sheet.submittedAt ||
             !!sheet.reviewedAt ||
             !!sheet.abandonedAt ||
-            review.isPending
+            review.isPending ||
+            !!review.pending ||
+            resolving
           }
-          onClick={() => review.mutate()}
+          onClick={() => review.mutate({ expectedRevision: sheet.revision })}
         >
           {sheet.reviewedAt
             ? 'Inventory reconciled'
@@ -168,7 +218,12 @@ function ReviewWorksheet({ id }: { id: string }) {
                 <Button
                   variant="outline"
                   disabled={
-                    !reason.trim() || abandon.isPending || !!sheet.abandonedAt
+                    !reason.trim() ||
+                    abandon.isPending ||
+                    !!sheet.abandonedAt ||
+                    !!review.pending ||
+                    review.isPending ||
+                    resolving
                   }
                   onClick={() => abandon.mutate()}
                 >
@@ -181,7 +236,10 @@ function ReviewWorksheet({ id }: { id: string }) {
                 disabled={
                   !sheet.submittedAt ||
                   !reason.trim() ||
-                  returnResults.isPending
+                  returnResults.isPending ||
+                  !!review.pending ||
+                  review.isPending ||
+                  resolving
                 }
                 onClick={() => returnResults.mutate()}
               >
@@ -189,7 +247,12 @@ function ReviewWorksheet({ id }: { id: string }) {
               </Button>
               <Button
                 variant="outline"
-                disabled={!sheet.submittedAt || !reason.trim()}
+                disabled={
+                  !sheet.submittedAt ||
+                  !reason.trim() ||
+                  !!review.pending ||
+                  review.isPending
+                }
                 onClick={() => setResolving(true)}
               >
                 Resolve with current measurements
@@ -200,11 +263,15 @@ function ReviewWorksheet({ id }: { id: string }) {
       </section>
       {resolving && (
         <ResolveWorksheet
-          id={id}
           allocationId={sheet.allocationId}
           revision={sheet.revision}
           reason={reason}
-          close={() => setResolving(false)}
+          onDirtyChange={onDirtyChange}
+          submit={(body) => review.mutateAsync(body).then(() => undefined)}
+          close={() => {
+            setResolving(false);
+            onDirtyChange(false);
+          }}
         />
       )}
     </section>
@@ -212,13 +279,15 @@ function ReviewWorksheet({ id }: { id: string }) {
 }
 
 function ResolveWorksheet({
-  id,
   allocationId,
   revision,
   reason,
   close,
+  submit,
+  onDirtyChange,
 }: {
-  id: string;
+  submit: (body: z.infer<typeof worksheetReviewSchema>) => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
   allocationId: string;
   revision: number;
   reason: string;
@@ -226,9 +295,8 @@ function ResolveWorksheet({
 }) {
   const query = useQuery(allocationDetail(allocationId));
   const units = useMeasurementUnits();
-  const client = useQueryClient();
   if (query.isPending) return <Loading />;
-  if (query.error) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
   if (query.data.state !== 'active')
     return <p>This allocation is no longer active.</p>;
   return (
@@ -242,28 +310,16 @@ function ResolveWorksheet({
       <CompletionEditor
         allocation={query.data}
         close={close}
+        onDirtyChange={onDirtyChange}
         worksheet={{
           initialForm: null,
           units,
           resolution: true,
           submit: async (results) => {
-            await api(
-              `/production/cutting/worksheets/${id}/review`,
-              worksheetSchema,
-              {
-                method: 'POST',
-                body: {
-                  expectedRevision: revision,
-                  resolution: { reason, results },
-                },
-              },
-            );
-            await Promise.all([
-              client.invalidateQueries({ queryKey: productionKey }),
-              client.invalidateQueries({ queryKey: ['allocations'] }),
-              client.invalidateQueries({ queryKey: ['stock-items'] }),
-            ]);
-            close();
+            await submit({
+              expectedRevision: revision,
+              resolution: { reason, results },
+            });
           },
         }}
       />

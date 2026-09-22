@@ -1,8 +1,8 @@
 'use client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Station } from '@roller-bay/shared/users';
-import { api } from '@/lib/api';
-import { requestKey, finishRequest } from '@/lib/pending-request';
+import { completionInputSchema } from '@roller-bay/shared/production';
+import { useProductionWrite } from './use-production-write';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
@@ -29,17 +29,12 @@ export function CompletionAction({
   const client = useQueryClient();
   const user = useCurrentUser();
   const scope = `production:${user.id}:${orderId}:${station}`;
-  const mutation = useMutation({
-    mutationFn: () => {
-      const body = { employeeId };
-      return api(
-        `/production/${station}/orders/${orderId}/complete`,
-        mutationResultSchema,
-        { method: 'POST', body, key: requestKey(scope, body) },
-      );
-    },
+  const mutation = useProductionWrite({
+    scope,
+    path: `/production/${station}/orders/${orderId}/complete`,
+    inputSchema: completionInputSchema,
+    outputSchema: mutationResultSchema,
     onSuccess: async () => {
-      finishRequest(scope);
       onCompleted?.();
       await Promise.all([
         client.invalidateQueries({ queryKey: productionKey }),
@@ -50,9 +45,26 @@ export function CompletionAction({
   return (
     <div>
       {mutation.error && <ErrorNotice error={mutation.error} />}
+      {mutation.pending && (
+        <div>
+          <p>
+            The previous completion has an uncertain result. Retry it with its
+            original employee before recording another.
+          </p>
+          <Button
+            variant="outline"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(mutation.pending!)}
+          >
+            Retry original completion
+          </Button>
+        </div>
+      )}
       <Button
-        disabled={!employeeId || done || mutation.isPending}
-        onClick={() => mutation.mutate()}
+        disabled={
+          !employeeId || done || mutation.isPending || !!mutation.pending
+        }
+        onClick={() => mutation.mutate({ employeeId })}
       >
         {done
           ? `${completionLabels[station]} recorded`

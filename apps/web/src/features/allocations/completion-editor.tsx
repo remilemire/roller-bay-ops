@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -45,9 +45,11 @@ export function CompletionEditor({
   allocation,
   close,
   worksheet,
+  onDirtyChange,
 }: {
   allocation: AllocationDetail;
   close: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   worksheet?: {
     initialForm: CompletionForm | null;
     units: MeasurementUnits;
@@ -89,6 +91,9 @@ export function CompletionEditor({
   const [validationError, setValidationError] = useState<unknown>(null);
   const dirty = form.formState.isDirty || !!worksheet?.dirty;
   useUnsavedChanges(dirty);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const fieldName = (issue: ErrorIssue) =>
     completionFieldName(issuePath(issue));
   // Issues with a field of their own show beside it; the rest stay in the

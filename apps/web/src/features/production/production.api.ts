@@ -53,6 +53,7 @@ export const worksheetForOrder = (id: string) => ({
       `/production/cutting/orders/${id}/worksheet`,
       worksheetSchema.nullable(),
     ),
+  refetchInterval: 10000,
 });
 export const worksheetDetail = (id: string) => ({
   queryKey: [...productionKey, 'worksheet', id],

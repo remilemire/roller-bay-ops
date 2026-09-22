@@ -41,7 +41,7 @@ function CuttingOrder({ orderId }: { orderId: string }) {
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
   return (
     <div className="stack station-workspace">
       <PageHeading
@@ -127,7 +127,18 @@ function Worksheet({ initial }: { initial: Worksheet }) {
   const [discardError, setDiscardError] = useState<unknown>(null);
   const [checked, setChecked] = useState(initial.draft?.checkedCuts ?? []);
   const liveUnits = useMeasurementUnits();
-  const [units] = useState(initial.draft?.units ?? liveUnits);
+  const [units, setUnits] = useState(initial.draft?.units ?? liveUnits);
+  const [dirty, setDirty] = useState(false);
+  const checkedDirty =
+    JSON.stringify([...checked].sort()) !==
+    JSON.stringify([...(sheet.draft?.checkedCuts ?? [])].sort());
+  // A clean view follows office returns/reviews. Dirty drafts keep their original revision.
+  if (!dirty && !checkedDirty && initial.revision > sheet.revision) {
+    setSheet(initial);
+    setChecked(initial.draft?.checkedCuts ?? []);
+    setUnits(initial.draft?.units ?? liveUnits);
+    setEditorVersion((value) => value + 1);
+  }
   const client = useQueryClient();
   const refresh = async () => {
     const result = await api(
@@ -136,6 +147,8 @@ function Worksheet({ initial }: { initial: Worksheet }) {
     );
     setSheet(result);
     setChecked(result.draft?.checkedCuts ?? []);
+    setUnits(result.draft?.units ?? liveUnits);
+    setDirty(false);
     setEditorVersion((v) => v + 1);
     setDiscardError(null);
     await client.invalidateQueries({ queryKey: productionKey });
@@ -165,12 +178,11 @@ function Worksheet({ initial }: { initial: Worksheet }) {
       ) : (
         <CompletionEditor
           key={editorVersion}
+          onDirtyChange={setDirty}
           allocation={sheet.snapshot}
           close={() => void refresh().catch(setDiscardError)}
           worksheet={{
-            dirty:
-              JSON.stringify([...checked].sort()) !==
-              JSON.stringify([...(sheet.draft?.checkedCuts ?? [])].sort()),
+            dirty: checkedDirty,
             initialForm:
               sheet.draft?.form ??
               (sheet.results
@@ -204,6 +216,7 @@ function Worksheet({ initial }: { initial: Worksheet }) {
                   },
                 },
               );
+              setDirty(false);
               setSheet(result);
             },
           }}
