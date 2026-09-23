@@ -1,5 +1,10 @@
 'use client';
 import { useState } from 'react';
+import {
+  stockItemSchema,
+  type StockItem,
+} from '@roller-bay/shared/stock-items';
+import { lookupStock, stockKey } from '@/features/stock-items/stock-items.api';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -50,7 +55,7 @@ export function CompletionCorrectionEditor({
         if (!open) close();
       }}
       title="Correct cutting results"
-      description="The original completion stays in history. Only selected outcomes and their retained pieces will change."
+      description="The original completion stays in history. Correct measurements, mark unused rolls, or add rolls actually used. The cutting plan stays unchanged."
     >
       {query.isPending ? (
         <Loading />
@@ -85,6 +90,9 @@ function CompletionCorrectionForm({
       const stock = context.stockItems.find((s) => s.id === item.stockItemId);
       return {
         id: item.stockItemId,
+        stock: stock!,
+        additional: false,
+        unused: false,
         selected: false,
         outcome: item.outcome as string,
         tube: fieldInput(
@@ -117,6 +125,55 @@ function CompletionCorrectionForm({
       };
     }),
   );
+  const [extraId, setExtraId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<unknown>(null);
+  async function addRoll() {
+    setAdding(true);
+    setAddError(null);
+    try {
+      const stock: StockItem = await api(
+        `/stock-items/${extraId}`,
+        stockItemSchema,
+      );
+      if (
+        !original.record.requirements.some(
+          (r) => r.fabricColorId === stock.fabricColorId,
+        )
+      )
+        throw new Error('Select fabric used by this order.');
+      setRows((previous) =>
+        previous.some((r) => r.id === stock.id)
+          ? previous
+          : [
+              ...previous,
+              {
+                id: stock.id,
+                stock,
+                additional: true,
+                unused: false,
+                selected: true,
+                outcome: stock.isRemnant ? 'returned-remnant' : 'returned-roll',
+                tube: fieldInput(
+                  units,
+                  'tubeDiameter',
+                  stock.tubeOuterDiameterMm,
+                ),
+                depth: '',
+                width: fieldInput(units, 'rollWidth', stock.widthMm),
+                length: '',
+                locationId: stock.locationId,
+                pieces: [],
+              },
+            ],
+      );
+      setExtraId('');
+    } catch (error) {
+      setAddError(error);
+    } finally {
+      setAdding(false);
+    }
+  }
   const update = (index: number, patch: Partial<(typeof rows)[number]>) =>
     setRows(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   if (!original.baselineAvailable)
@@ -134,83 +191,103 @@ function CompletionCorrectionForm({
       // The body lists only the selected items, so their indexes are mapped
       // back to the stock item each one came from.
       fieldName={(path) => {
+        const additional = path.match(/^additionalItems\.(\d+)\.(\w+)$/);
+        if (additional) {
+          const row = rows.filter((r) => r.selected && r.additional)[
+            Number(additional[1])
+          ];
+          return row
+            ? `${row.id}.${BODY_FIELDS[additional[2]!] ?? additional[2]}`
+            : null;
+        }
         const [, item, part, piece, key] =
           path.match(
             /^items\.(\d+)\.(outcome|retainedPieces\.(\d+))\.(\w+)$/,
           ) ?? [];
-        const row = rows.filter((r) => r.selected)[Number(item)];
+        const row = rows.filter(
+          (r) => r.selected && !r.unused && !r.additional,
+        )[Number(item)];
         const field = key && (BODY_FIELDS[key] ?? key);
         if (!row || !field) return null;
         return part === 'outcome'
           ? `${row.id}.${field}`
           : `${row.id}.pieces.${piece}.${field}`;
       }}
-      makeBody={() => ({
-        expectedRevision: original.record.revision,
-        stockVersions: original.eligibility.map((e) => ({
-          stockItemId: e.stockItemId,
-          expectedRevision: e.revision,
-        })),
-        items: rows
-          .filter((r) => r.selected)
-          .map((r) => ({
-            outcome: {
-              stockItemId: r.id,
-              expectedRevision: original.eligibility.find(
-                (e) => e.stockItemId === r.id,
-              )!.revision,
-              outcome: r.outcome,
-              scraps: [],
-              ...(r.outcome === 'returned-remnant'
-                ? {
-                    widthMm: fieldValue(units, 'rollWidth', r.width),
-                    explicitLengthMm: fieldValue(units, 'rollLength', r.length),
-                    locationId: r.locationId,
-                  }
-                : {
-                    ...(r.tube.trim()
-                      ? {
-                          tubeOuterDiameterMm: fieldValue(
-                            units,
-                            'tubeDiameter',
-                            r.tube,
-                          ),
-                        }
-                      : {}),
-                    ...(r.outcome === 'returned-roll'
-                      ? {
-                          radialDepthMm: fieldValue(
-                            units,
-                            'radialDepth',
-                            r.depth,
-                          ),
-                          locationId: r.locationId,
-                        }
-                      : {}),
-                  }),
-            },
-            removeRetainedPieceIds: original.effects
-              .filter(
-                (e) =>
-                  !e.before &&
-                  e.sourceStockItemId === r.id &&
-                  !e.after.voidedAt &&
-                  !r.pieces.some((p) => p.id === e.stockItemId),
-              )
-              .map((e) => e.stockItemId),
-            retainedPieces: r.pieces.map((p) => ({
-              ...(p.id ? { id: p.id } : {}),
-              widthMm: fieldValue(units, 'rollWidth', p.width),
-              lengthMm: fieldValue(units, 'rollLength', p.length),
-              locationId: p.locationId,
-            })),
+      makeBody={() => {
+        const selected = rows.filter((r) => r.selected && !r.unused);
+        const results = selected.map((r) => ({
+          outcome: {
+            stockItemId: r.id,
+            expectedRevision: r.stock.revision,
+            outcome: r.outcome,
+            scraps: [],
+            ...(r.outcome === 'returned-remnant'
+              ? {
+                  widthMm: fieldValue(units, 'rollWidth', r.width),
+                  explicitLengthMm: fieldValue(units, 'rollLength', r.length),
+                  locationId: r.locationId,
+                }
+              : {
+                  ...(r.tube.trim()
+                    ? {
+                        tubeOuterDiameterMm: fieldValue(
+                          units,
+                          'tubeDiameter',
+                          r.tube,
+                        ),
+                      }
+                    : {}),
+                  ...(r.outcome === 'returned-roll'
+                    ? {
+                        radialDepthMm: fieldValue(
+                          units,
+                          'radialDepth',
+                          r.depth,
+                        ),
+                        locationId: r.locationId,
+                      }
+                    : {}),
+                }),
+          },
+          removeRetainedPieceIds: original.effects
+            .filter(
+              (e) =>
+                !e.before &&
+                e.sourceStockItemId === r.id &&
+                !e.after.voidedAt &&
+                !r.pieces.some((p) => p.id === e.stockItemId),
+            )
+            .map((e) => e.stockItemId),
+          retainedPieces: r.pieces.map((p) => ({
+            ...(p.id ? { id: p.id } : {}),
+            widthMm: fieldValue(units, 'rollWidth', p.width),
+            lengthMm: fieldValue(units, 'rollLength', p.length),
+            locationId: p.locationId,
           })),
-      })}
+        }));
+        return {
+          expectedRevision: original.record.revision,
+          stockVersions: original.eligibility.map((e) => ({
+            stockItemId: e.stockItemId,
+            expectedRevision: e.revision,
+          })),
+          unusedStockItemIds: rows
+            .filter((r) => r.selected && r.unused)
+            .map((r) => r.id),
+          items: results.filter((_, i) => !selected[i]!.additional),
+          additionalItems: results
+            .filter((_, i) => selected[i]!.additional)
+            .map((r) => ({
+              ...r.outcome,
+              scraps: r.retainedPieces.map((p) => ({ ...p, quantity: 1 })),
+            })),
+        };
+      }}
     >
       {(errors) => (
         <div className="stack">
           {rows.map((row, index) => {
-            const stock = original.stockItems.find((s) => s.id === row.id)!;
+            const stock = row.stock;
             const familyIds = [
               row.id,
               ...original.effects
@@ -237,10 +314,24 @@ function CompletionCorrectionForm({
                         update(index, { selected: e.target.checked })
                       }
                     />
-                    Correct {stock?.fabricColorCode} · {shortId(row.id)}
+                    {row.additional ? 'Add usage for' : 'Correct'}{' '}
+                    {stock.fabricColorCode} · {shortId(row.id)}
                   </label>
                   <Blockers items={eligibility} />
-                  {row.selected && (
+                  {row.selected && !row.additional && (
+                    <label className="correction-check">
+                      <input
+                        type="checkbox"
+                        checked={row.unused}
+                        onChange={(e) =>
+                          update(index, { unused: e.target.checked })
+                        }
+                      />
+                      Mark unused — restore its previous stock record and void
+                      its retained pieces
+                    </label>
+                  )}
+                  {row.selected && !row.unused && (
                     <div className="stack">
                       <ChoiceField
                         label="Corrected outcome"
@@ -395,6 +486,22 @@ function CompletionCorrectionForm({
               </section>
             );
           })}
+          <Lookup
+            label="Additional roll used"
+            value={extraId}
+            onChange={setExtraId}
+            queryKey={[...stockKey, 'additional-usage', units.rollWidth]}
+            load={lookupStock(units.rollWidth)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!extraId || adding || rows.some((r) => r.id === extraId)}
+            onClick={() => void addRoll()}
+          >
+            Add roll used
+          </Button>
+          {addError != null && <ErrorNotice error={addError} />}
         </div>
       )}
     </CorrectionSubmit>

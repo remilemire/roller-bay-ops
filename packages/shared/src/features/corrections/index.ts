@@ -75,10 +75,26 @@ export const completionCorrectionSchema = correctionBaseSchema
             .max(1000),
         }),
       )
-      .min(1)
-      .max(10000),
+      .max(10000)
+      .default([]),
+    additionalItems: z.array(stockCuttingOutcomeSchema).max(1000).default([]),
+    unusedStockItemIds: z.array(uuid).max(1000).default([]),
     stockVersions: z.array(stockVersionSchema).max(11000),
   })
+  .refine(
+    (v) =>
+      v.items.length + v.additionalItems.length + v.unusedStockItemIds.length >
+      0,
+    'Select a result to correct, mark unused, or add.',
+  )
+  .refine((v) => {
+    const ids = [
+      ...v.items.map((i) => i.outcome.stockItemId),
+      ...v.additionalItems.map((i) => i.stockItemId),
+      ...v.unusedStockItemIds,
+    ];
+    return new Set(ids).size === ids.length;
+  }, 'Change each stock item only once.')
   .refine(
     (v) => v.items.every((i) => i.outcome.scraps.length === 0),
     'Use individually identified retained pieces for corrections.',

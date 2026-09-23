@@ -352,3 +352,105 @@ test('historical cutting blockers explain which later allocation needs attention
     page.getByRole('dialog').locator(`a[href="/allocations/${ids.receipt}"]`),
   ).toBeVisible();
 });
+
+test('actual usage can replace an unused planned roll without editing the plan', async ({
+  page,
+}, testInfo) => {
+  const state = await mockApi(page);
+  const extra = {
+    ...stock,
+    id: '90000000-0000-4000-8000-000000000099',
+    revision: 1,
+  };
+  state.allocation = {
+    ...state.allocation,
+    state: 'completed',
+    completedAt: timestamp,
+    revision: 2,
+    completion: {
+      submittedByUserId: ids.user,
+      items: [
+        {
+          stockItemId: stock.id,
+          expectedRevision: 1,
+          outcome: 'returned-roll',
+          tubeOuterDiameterMm: 50,
+          radialDepthMm: 10,
+          locationId: ids.location,
+          scraps: [],
+        },
+      ],
+      createdStockItemIds: [],
+      affectedAllocationIds: [],
+    },
+  };
+  const context = {
+    record: state.allocation,
+    baselineAvailable: true,
+    stockItems: [stock],
+    effects: [
+      {
+        stockItemId: stock.id,
+        sourceStockItemId: null,
+        before: stock,
+        after: stock,
+        calculationThicknessMm: 0.5,
+      },
+    ],
+    eligibility: [
+      { stockItemId: stock.id, revision: stock.revision, blockers: [] },
+    ],
+  };
+  await page.route(
+    `**/api/allocations/${ids.allocation}/correction-context`,
+    (r) => r.fulfill({ json: context }),
+  );
+  await page.route('**/api/stock-items?*', (r) =>
+    r.fulfill({ json: { items: [extra], total: 1, page: 1, pageSize: 25 } }),
+  );
+  await page.route(`**/api/stock-items/${extra.id}`, (r) =>
+    r.fulfill({ json: extra }),
+  );
+  let saved: unknown;
+  await page.route(
+    `**/api/allocations/${ids.allocation}/completion-corrections`,
+    (r) => {
+      saved = completionCorrectionSchema.parse(r.request().postDataJSON());
+      return r.fulfill({ json: { ...result, recordId: ids.allocation } });
+    },
+  );
+  await page.goto(`/allocations/${ids.allocation}`);
+  await page
+    .getByRole('button', { name: 'Correct cutting results', exact: true })
+    .click();
+  await page.getByRole('checkbox', { name: /^Correct / }).check();
+  await page.getByRole('checkbox', { name: /^Mark unused/ }).check();
+  await page.getByRole('combobox', { name: 'Additional roll used' }).click();
+  await page.getByRole('option').first().click();
+  await page
+    .getByRole('button', { name: 'Add roll used', exact: true })
+    .click();
+  await page.getByLabel('Tube outer diameter (mm)', { exact: true }).fill('50');
+  await page.getByLabel('Radial depth (mm)', { exact: true }).fill('8');
+  await page
+    .getByLabel('Reason for correction')
+    .fill('The cutter used the other roll');
+  await page.getByRole('button', { name: 'Review changes' }).click();
+  await expect(
+    page.getByRole('heading', { name: /Mark unused/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /Add actual usage/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath('actual-roll-usage.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Save correction' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(saved).toMatchObject({
+    unusedStockItemIds: [stock.id],
+    additionalItems: [{ stockItemId: extra.id, radialDepthMm: 8 }],
+    items: [],
+  });
+});

@@ -527,13 +527,20 @@ export class AllocationsService {
         const header = await context.allocations.findById(id, true);
         if (!header) throw new NotFoundException('Allocation not found.');
         const audit = this.audit;
+        // Empty new fields must not change retry identity for pre-upgrade requests.
+        const { additionalItems, unusedStockItemIds, ...existingInput } = input;
+        const replayInput = {
+          ...existingInput,
+          ...(additionalItems.length ? { additionalItems } : {}),
+          ...(unusedStockItemIds.length ? { unusedStockItemIds } : {}),
+        };
         const replay = await audit.replay(
           context,
           userId,
           'allocation.correct-completion',
           id,
           key,
-          input,
+          replayInput,
         );
         if (replay.result) return replay.result;
         if (
@@ -548,7 +555,14 @@ export class AllocationsService {
           throw new ConflictException(
             'This older completion lacks a trustworthy stock baseline. Use current-stock adjustments.',
           );
-        const selectedIds = input.items.map((i) => i.outcome.stockItemId);
+        const effective = structuredClone(
+          header.effectiveCompletion ?? header.completion,
+        );
+        const selectedIds = [
+          ...input.items.map((i) => i.outcome.stockItemId),
+          ...input.unusedStockItemIds,
+          ...input.additionalItems.map((i) => i.stockItemId),
+        ];
         if (new Set(selectedIds).size !== selectedIds.length)
           throw new BadRequestException(
             'Correct each cutting result only once.',
@@ -560,9 +574,7 @@ export class AllocationsService {
           const source = baseline.get(item.outcome.stockItemId);
           if (
             !source?.before ||
-            !header.completion!.items.some(
-              (i) => i.stockItemId === source.stockItemId,
-            )
+            !effective.items.some((i) => i.stockItemId === source.stockItemId)
           )
             throw new BadRequestException(
               'Select a source outcome from this allocation.',
@@ -575,14 +587,44 @@ export class AllocationsService {
           );
           return { item, source, pieces };
         });
-        const familyIds = families.flatMap((f) => [
+        const unused = input.unusedStockItemIds.map((id) => {
+          const source = baseline.get(id);
+          if (
+            !source?.before ||
+            !effective.items.some((i) => i.stockItemId === id)
+          )
+            throw new BadRequestException(
+              'Select a recorded source roll to mark unused.',
+            );
+          return {
+            source,
+            pieces: header.stockEffects!.filter(
+              (e) =>
+                !e.before && e.sourceStockItemId === id && !e.after.voidedAt,
+            ),
+          };
+        });
+        const familyIds = [...families, ...unused].flatMap((f) => [
           f.source.stockItemId,
           ...f.pieces.map((p) => p.stockItemId),
         ]);
-        const rows = await this.stockItems.lockForCorrection(
-          context,
-          familyIds,
-        );
+        const additionalIds = input.additionalItems.map((i) => i.stockItemId);
+        if (
+          additionalIds.some((id) =>
+            effective.items.some((i) => i.stockItemId === id),
+          )
+        )
+          throw new BadRequestException(
+            'This roll already has cutting results; correct them instead.',
+          );
+        const rows = await this.stockItems.lockForCorrection(context, [
+          ...familyIds,
+          ...additionalIds,
+        ]);
+        await this.worksheets.assertStockReconciliationAllowed(context, [
+          ...familyIds,
+          ...additionalIds,
+        ]);
         await this.stockItems.requireCorrectionEligible(
           context,
           header.stockEffects,
@@ -593,8 +635,35 @@ export class AllocationsService {
         const current = new Map(rows.map((r) => [r.id, r]));
         const before = await this.detail(context, header);
         const effects: StockEffect[] = [];
-        const effective = structuredClone(
-          header.effectiveCompletion ?? header.completion,
+        const originalDetail = allocationDetailSchema.parse(before);
+        for (const id of additionalIds) {
+          const stock = current.get(id)!;
+          if (
+            !originalDetail.requirements.some(
+              (r) => r.fabricColorId === stock.fabricColorId,
+            )
+          )
+            throw new BadRequestException(
+              'Additional fabric must match a color on the order.',
+            );
+        }
+        // Additional usage is a new observation against current stock, never a
+        // reconstruction of its balance at the original completion time.
+        await this.stockItems.requireCorrectionEligible(
+          context,
+          additionalIds.map((id) => ({
+            calculationThicknessMm: null,
+            stockItemId: id,
+            sourceStockItemId: current.get(id)!.sourceStockItemId,
+            before: current.get(id)!,
+            after: current.get(id)!,
+          })),
+          input.additionalItems.map((i) => ({
+            stockItemId: i.stockItemId,
+            expectedRevision: i.expectedRevision,
+          })),
+          additionalIds,
+          id,
         );
         for (const { item, source, pieces } of families) {
           const sourceBefore = source.before!;
@@ -697,6 +766,46 @@ export class AllocationsService {
             })),
           };
         }
+        for (const { source, pieces } of unused) {
+          const restored = await this.stockItems.applySnapshots(context, [
+            {
+              before: current.get(source.stockItemId)!,
+              value: snapshotWrite(source.before!),
+            },
+            ...pieces.map((p) => ({
+              before: current.get(p.stockItemId)!,
+              value: {
+                ...snapshotWrite(current.get(p.stockItemId)!),
+                voidedAt: new Date(),
+              },
+            })),
+          ]);
+          for (const effect of restored) {
+            effects.push(effect);
+            const original = baseline.get(effect.stockItemId)!;
+            baseline.set(effect.stockItemId, {
+              ...effect,
+              before: original.before,
+              calculationThicknessMm: original.calculationThicknessMm,
+            });
+          }
+          effective.items = effective.items.filter(
+            (i) => i.stockItemId !== source.stockItemId,
+          );
+        }
+        if (input.additionalItems.length) {
+          const added = await this.stockItems.recordCuttingResults(
+            input.additionalItems,
+            context,
+            new Date(),
+          );
+          for (const effect of added) {
+            effects.push(effect);
+            // A roll previously marked unused starts from its newly captured balance.
+            baseline.set(effect.stockItemId, effect);
+          }
+          effective.items.push(...input.additionalItems);
+        }
         if (!effects.length)
           throw new BadRequestException('Provide an actual change.');
         effective.createdStockItemIds = [...baseline.values()]
@@ -707,7 +816,10 @@ export class AllocationsService {
             'A completion supports at most 1,000 retained pieces.',
           );
         effective.affectedAllocationIds =
-          await context.allocations.affectedAllocations(familyIds);
+          await context.allocations.affectedAllocations([
+            ...familyIds,
+            ...additionalIds,
+          ]);
         const saved = await context.allocations.update(id, {
           stockEffects: [...baseline.values()],
           effectiveCompletion: effective,

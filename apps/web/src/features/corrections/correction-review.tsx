@@ -49,6 +49,28 @@ export function CorrectionReview({ value }: { value: unknown }) {
         <p>
           <strong>Reason:</strong> {cutting.data.reason}
         </p>
+        {cutting.data.unusedStockItemIds.map((id) => (
+          <section key={id}>
+            <h4>Mark unused · {stockLink(id)}</h4>
+            <p>
+              Restore the stock record from before this result and void any
+              retained pieces recorded from it.
+            </p>
+          </section>
+        ))}
+        {cutting.data.additionalItems.map((item) => (
+          <section key={item.stockItemId}>
+            <h4>Add actual usage · {stockLink(item.stockItemId)}</h4>
+            <RecordValues
+              referenceLabels={labels}
+              value={Object.fromEntries(
+                Object.entries(item).filter(
+                  ([key]) => !['stockItemId', 'expectedRevision'].includes(key),
+                ),
+              )}
+            />
+          </section>
+        ))}
         {cutting.data.items.map((item) => {
           const removed = item.removeRetainedPieceIds;
           const stockItemId = item.outcome.stockItemId;
