@@ -40,13 +40,13 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
       </div>
       <div className="panel-body stack">
         {query.error && <ErrorNotice error={query.error} />}
-        <dl>
+        <dl className="record-list">
           {stationSchema.options.map((s) => {
             const c = query.data?.find((v) => v.station === s);
             return (
               <div key={s}>
-                <dt>{stationLabels[s]}</dt>
-                <dd>
+                <dt className="detail-label">{stationLabels[s]}</dt>
+                <dd className="detail-value">
                   {c
                     ? `${c.employeeName} (${c.employeeInitials}) · ${dateTimeLabel(c.completedAt)}`
                     : order[stamp[s]]

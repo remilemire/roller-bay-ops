@@ -227,7 +227,7 @@ function CompletionCorrectionForm({
             );
             return (
               <section className="panel" key={row.id}>
-                <div className="panel-body">
+                <div className="panel-body stack">
                   <label className="correction-check">
                     <input
                       type="checkbox"

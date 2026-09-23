@@ -110,7 +110,7 @@ export function CutPlanEditor({
           const error = (name: FieldPath<AllocationForm>) =>
             form.getFieldState(name, form.formState).error?.message;
           return (
-            <div className="plan-cut" key={row.formKey}>
+            <div className="plan-cut stack" key={row.formKey}>
               <div className="form-row-header">
                 <strong>Cut {index + 1}</strong>
                 <div className="inline-actions">
@@ -153,11 +153,7 @@ export function CutPlanEditor({
               </div>
               <hr className="divider" />
               {cut.items.map((assignment, ai) => (
-                <div
-                  className="form-grid"
-                  key={ai}
-                  style={{ marginBottom: 12 }}
-                >
+                <div className="form-grid" key={ai}>
                   <ChoiceField
                     label={`Blind · cut ${index + 1}, position ${ai + 1}`}
                     value={assignment.requirementId}

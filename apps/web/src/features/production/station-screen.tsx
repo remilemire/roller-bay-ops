@@ -218,14 +218,16 @@ function StationQueue({ station }: { station: Station }) {
                     : 'Unscheduled'}
                 </p>
                 {order.note && <p>{order.note}</p>}
-                <div>
-                  {order.completions.map((c) => (
-                    <p key={c.station}>
-                      {completionLabels[c.station]} · {c.employeeName} (
-                      {c.employeeInitials}) · {dateTimeLabel(c.completedAt)}
-                    </p>
-                  ))}
-                </div>
+                {order.completions.length > 0 && (
+                  <div className="record-list">
+                    {order.completions.map((c) => (
+                      <p key={c.station}>
+                        {completionLabels[c.station]} · {c.employeeName} (
+                        {c.employeeInitials}) · {dateTimeLabel(c.completedAt)}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 <div className="inline-actions">
                   {station === 'cutting' && (
                     <Button asChild variant="outline">

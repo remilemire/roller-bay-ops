@@ -160,7 +160,7 @@ function ReviewWorksheet({
         units={sheet.draft?.units ?? units}
         checked={sheet.draft?.checkedCuts ?? []}
       />
-      <section className="panel panel-body">
+      <section className="panel panel-body stack">
         <h3>Submitted measurements</h3>
         {sheet.results ? (
           <RecordValues value={sheet.results.items} />
@@ -300,7 +300,7 @@ function ResolveWorksheet({
   if (query.data.state !== 'active')
     return <p>This allocation is no longer active.</p>;
   return (
-    <section className="panel panel-body">
+    <section className="panel panel-body stack">
       <h3>Resolve inventory discrepancy</h3>
       <p>
         Enter current physical measurements for every source. These explicitly

@@ -34,18 +34,18 @@ export function CorrectionReview({ value }: { value: unknown }) {
   const stock = stockCorrectionSchema.safeParse(value);
   if (stock.success)
     return (
-      <>
+      <div className="stack">
         <p>
           <strong>Reason:</strong> {stock.data.reason}
         </p>
         <h4>Corrected stock values</h4>
         <RecordValues referenceLabels={labels} value={stock.data.changes} />
-      </>
+      </div>
     );
   const cutting = completionCorrectionSchema.safeParse(value);
   if (cutting.success)
     return (
-      <>
+      <div className="stack">
         <p>
           <strong>Reason:</strong> {cutting.data.reason}
         </p>
@@ -94,7 +94,7 @@ export function CorrectionReview({ value }: { value: unknown }) {
             </section>
           );
         })}
-      </>
+      </div>
     );
   const receipt = receiptCorrectionSchema.safeParse(value);
   if (
@@ -104,7 +104,7 @@ export function CorrectionReview({ value }: { value: unknown }) {
     ('operations' in value || 'purchaseOrderNumber' in value)
   )
     return (
-      <>
+      <div className="stack">
         <p>
           <strong>Reason:</strong> {receipt.data.reason}
         </p>
@@ -137,11 +137,11 @@ export function CorrectionReview({ value }: { value: unknown }) {
             )}
           </section>
         ))}
-      </>
+      </div>
     );
   const voiding = stockVoidSchema.safeParse(value);
   return voiding.success ? (
-    <>
+    <div className="stack">
       <p>
         <strong>Reason:</strong> {voiding.data.reason}
       </p>
@@ -149,6 +149,6 @@ export function CorrectionReview({ value }: { value: unknown }) {
         This stock record will be voided and removed from available inventory.
         Its history remains accessible.
       </p>
-    </>
+    </div>
   ) : null;
 }

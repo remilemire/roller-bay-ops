@@ -77,6 +77,8 @@ The allocations list keeps its state tab, search, and page in the URL; with no `
 
 Color, surface, border, and shadow transitions use a short coordinated duration. Reduced-motion preferences disable them; layout is not animated. Glass surfaces fall back to solid surfaces when backdrop filtering is unavailable. The desktop sidebar becomes a touch-accessible navigation dialog on tablet and smaller displays. Forms reflow and tables can scroll horizontally without forcing the page wider. Dialogs use Radix focus handling and Escape dismissal.
 
+Shared spacing lives in `globals.css`: `.stack` separates sections by 24px and owns the gap instead of adding child margins; forms use a 16px field gap. Panel headings, bodies, table cells, and footers share the panel inset (24px, 18px on small screens). Completion records and expandable history rows use the same 24px line height and 10px vertical padding, with a 44px minimum row height. Keep compact calendar/tree layouts distinct from these record lists.
+
 ## Verification
 
 From the repository root, build shared contracts before running the web workspace alone:

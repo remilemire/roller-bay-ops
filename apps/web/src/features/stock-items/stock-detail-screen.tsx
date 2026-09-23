@@ -96,7 +96,7 @@ export function StockDetailScreen({ id }: { id: string }) {
             }
           />
         </div>
-        <div className="panel-body">
+        <div className="panel-body stack">
           <div className="details-grid">
             {details.map(([label, value, help]) => (
               <div key={label}>
@@ -109,7 +109,7 @@ export function StockDetailScreen({ id }: { id: string }) {
             ))}
           </div>
           {item.sourceStockItemId && (
-            <p className="muted" style={{ marginTop: 24 }}>
+            <p className="muted">
               Created from{' '}
               <Link
                 className="text-link"
@@ -119,7 +119,7 @@ export function StockDetailScreen({ id }: { id: string }) {
               </Link>
             </p>
           )}
-          <p className="muted" style={{ marginTop: 24 }}>
+          <p className="muted">
             Remaining roll length is calculated from its measurements.
             Reservations are managed through allocations.
           </p>

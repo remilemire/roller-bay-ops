@@ -55,11 +55,7 @@ export function CuttingInstructions({
               )}
             </p>
             {item.cuts.map((c) => (
-              <label
-                className="panel-body"
-                style={{ display: 'flex', gap: 16, alignItems: 'center' }}
-                key={c.number}
-              >
+              <label className="cutting-check" key={c.number}>
                 <input
                   type="checkbox"
                   aria-label={`Cut ${c.number} done`}

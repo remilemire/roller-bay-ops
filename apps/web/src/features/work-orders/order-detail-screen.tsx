@@ -52,7 +52,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
   });
   const milestone = (value: string | null) => (value ? dateLabel(value) : '—');
   return (
-    <>
+    <div className="stack">
       <PageHeading
         eyebrow="PRODUCTION ORDER"
         title={order.orderNumber}
@@ -95,7 +95,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
         )}
       </PageHeading>
       <section className="panel">
-        <div className="panel-body">
+        <div className="panel-body stack">
           <div className="details-grid">
             {[
               ['Blinds', String(order.quantity)],
@@ -115,7 +115,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
             ))}
           </div>
           {order.allocatedAt && (
-            <p style={{ marginTop: 24 }}>
+            <p>
               <Link
                 className="text-link"
                 href={`/allocations?state=all&search=${order.orderNumber}`}
@@ -158,6 +158,6 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           </Button>
         </div>
       </Dialog>
-    </>
+    </div>
   );
 }

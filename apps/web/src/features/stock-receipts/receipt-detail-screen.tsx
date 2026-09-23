@@ -96,16 +96,17 @@ function ReceiptRecord({
                   </td>
                   <td>{line.voidedAt ? 'Voided' : line.quantity}</td>
                   <td>
-                    {line.stockItemIds.map((stock) => (
-                      <Link
-                        key={stock}
-                        className="text-link"
-                        style={{ marginRight: 10 }}
-                        href={`/stock-items/${stock}`}
-                      >
-                        {shortId(stock)}
-                      </Link>
-                    ))}
+                    <div className="inline-actions">
+                      {line.stockItemIds.map((stock) => (
+                        <Link
+                          key={stock}
+                          className="text-link"
+                          href={`/stock-items/${stock}`}
+                        >
+                          {shortId(stock)}
+                        </Link>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ))}

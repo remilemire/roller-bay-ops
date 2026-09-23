@@ -15,6 +15,12 @@
   --color-destructive: var(--danger);
   --radius-lg: 1rem;
 }
+:root {
+  --section-gap: 24px;
+  --field-gap: 16px;
+  --panel-padding: 24px;
+  --record-padding: 10px;
+}
 * {
   box-sizing: border-box;
 }
@@ -478,7 +484,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 28px;
+  margin-bottom: var(--section-gap);
 }
 .page-heading p {
   margin-top: 8px;
@@ -547,7 +553,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  padding: 22px 24px;
+  padding: var(--panel-padding);
   border-bottom: 1px solid var(--border);
 }
 .panel-heading p {
@@ -556,17 +562,18 @@ textarea {
   margin-top: 3px;
 }
 .panel-body {
-  padding: 24px;
+  padding: var(--panel-padding);
 }
 .stack {
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
-  gap: 22px;
+  gap: var(--section-gap);
 }
 .section-grid {
   display: grid;
   align-items: start;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 22px;
+  gap: var(--section-gap);
 }
 /* A panel that spans both columns. */
 .section-wide {
@@ -633,11 +640,11 @@ th {
   text-transform: uppercase;
   color: var(--muted);
   background: var(--surface-soft);
-  padding: 13px 22px;
+  padding: 12px var(--panel-padding);
   white-space: nowrap;
 }
 td {
-  padding: 16px 22px;
+  padding: 16px var(--panel-padding);
   border-top: 1px solid var(--border);
   font-size: 12px;
   vertical-align: middle;
@@ -770,7 +777,7 @@ td strong {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 22px;
+  padding: 16px var(--panel-padding);
   border-top: 1px solid var(--border);
   font-size: 10px;
   color: var(--muted);
@@ -782,11 +789,14 @@ td strong {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 .field > span,
 .field > label {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
   font-size: 11px;
   font-weight: 550;
   color: var(--foreground);
@@ -811,7 +821,7 @@ td strong {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 17px;
+  gap: var(--field-gap);
 }
 .form-actions {
   display: flex;
@@ -823,7 +833,7 @@ td strong {
 }
 .role-form {
   display: grid;
-  gap: 14px;
+  gap: var(--field-gap);
 }
 .role-description {
   margin: -2px 0 0;
@@ -874,14 +884,20 @@ td strong {
 .form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--field-gap);
   padding: 18px;
   background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 12px;
   margin-bottom: 12px;
 }
+/* Repeated rows need separation from the next row, not extra panel padding. */
+.panel-body > :is(.form-row, .plan-cut):last-child {
+  margin-bottom: 0;
+}
 .form-row-header {
+  gap: var(--field-gap);
+  flex-wrap: wrap;
   grid-column: 1/-1;
   display: flex;
   align-items: center;
@@ -1537,6 +1553,9 @@ td strong {
   margin-top: 6px;
   font-size: 11px;
 }
+.plan-cut.stack {
+  gap: var(--field-gap);
+}
 .plan-cut {
   padding: 18px;
   border: 1px solid var(--border);
@@ -1676,6 +1695,9 @@ td strong {
   }
 }
 @media (max-width: 760px) {
+  :root {
+    --panel-padding: 18px;
+  }
   .section-grid {
     grid-template-columns: 1fr;
   }
@@ -1718,18 +1740,12 @@ td strong {
     grid-template-columns: 1fr;
   }
   .pagination {
-    padding: 14px;
+    padding: 14px var(--panel-padding);
     gap: 8px;
-  }
-  .panel-heading {
-    padding: 18px;
-  }
-  .panel-body {
-    padding: 18px;
   }
   td,
   th {
-    padding: 13px 16px;
+    padding: 12px var(--panel-padding);
   }
   .dialog-content {
     padding: 20px;
@@ -1785,7 +1801,7 @@ td strong {
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 16px 22px;
+  padding: 16px var(--panel-padding);
   border-bottom: 1px solid var(--border);
 }
 .arrival-row:last-child {
@@ -1992,11 +2008,25 @@ td strong {
 }
 
 .history {
-  margin-top: 22px;
+  margin-top: var(--section-gap);
+}
+/* Static completion rows and expandable history use the same rhythm. */
+.record-list > p,
+.record-list > div,
+.history summary {
+  min-height: 44px;
+  padding: var(--record-padding) 0;
+  line-height: 24px;
+  overflow-wrap: anywhere;
 }
 .history summary {
-  padding: 7px 0;
   cursor: pointer;
+}
+.record-list {
+  margin: 0;
+}
+.record-list dd {
+  margin: 0;
 }
 .history details > :not(summary) {
   margin-left: 16px;
@@ -2065,6 +2095,8 @@ td strong {
   gap: 4px;
 }
 .info-tip {
+  min-width: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2097,12 +2129,38 @@ td strong {
   pointer-events: none;
 }
 
-/* Station controls are generous enough for repeated use on an iPad. */
-.station-workspace.stack > .page-heading {
-  margin-bottom: 0;
+/* A stack owns separation; child margins must not add a second gap. */
+.stack
+  > :is(
+    .page-heading,
+    .toolbar,
+    .form-actions,
+    .notice,
+    .history,
+    .form-row,
+    .form-section,
+    .plan-cut,
+    .audit-values,
+    .divider
+  ) {
+  margin-block: 0;
 }
+.inline-actions {
+  flex-wrap: wrap;
+}
+.cutting-check {
+  display: flex;
+  align-items: center;
+  gap: var(--field-gap);
+  min-height: 48px;
+  padding-block: var(--record-padding);
+}
+.cutting-check input {
+  flex-shrink: 0;
+}
+/* Station controls are generous enough for repeated use on an iPad. */
 .station-workspace .button,
-.station-workspace button,
+.station-workspace button:not(.info-tip),
 .station-workspace select,
 .station-workspace input {
   min-height: 48px;

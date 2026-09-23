@@ -216,7 +216,11 @@ export function ReceiptEditor({
         description="Save as you go. Stock is created only when you submit the receipt."
       />
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
+        <fieldset
+          className="stack"
+          disabled={busy}
+          style={{ border: 0, padding: 0, margin: 0 }}
+        >
           <section className="panel">
             <div className="panel-body">
               <TextField
@@ -236,7 +240,7 @@ export function ReceiptEditor({
               />
             </div>
           </section>
-          <section className="panel" style={{ marginTop: 22 }}>
+          <section className="panel">
             <div className="panel-heading">
               <div>
                 <h2>Received fabric</h2>
