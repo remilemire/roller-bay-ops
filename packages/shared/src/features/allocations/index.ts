@@ -201,6 +201,7 @@ export const allocationSummarySchema = z.object({
   updatedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().nullable(),
   cancelledAt: z.iso.datetime().nullable(),
+  releasedAt: z.iso.datetime().nullable().default(null),
 });
 export const allocationCompletionSchema = z.object({
   submittedByUserId: id,

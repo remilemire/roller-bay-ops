@@ -155,6 +155,12 @@ function ReviewWorksheet({
   return (
     <section className="stack">
       <h2>Order {sheet.orderNumber}</h2>
+      {sheet.skippedAt && (
+        <p className="notice">
+          These cutting results were closed without recording measurements.
+          Stock balances were left unchanged.
+        </p>
+      )}
       <CuttingInstructions
         allocation={sheet.snapshot}
         units={sheet.draft?.units ?? units}
@@ -192,6 +198,7 @@ function ReviewWorksheet({
             !sheet.submittedAt ||
             !!sheet.reviewedAt ||
             !!sheet.abandonedAt ||
+            !!sheet.skippedAt ||
             review.isPending ||
             !!review.pending ||
             resolving
@@ -205,7 +212,7 @@ function ReviewWorksheet({
               : 'Accept and reconcile inventory'}
         </Button>
         {review.isSuccess && <p role="status">Inventory reconciled.</p>}
-        {!sheet.reviewedAt && (
+        {!sheet.reviewedAt && !sheet.skippedAt && (
           <>
             <TextField
               label="Reason for returning or resolving results"
@@ -221,6 +228,7 @@ function ReviewWorksheet({
                     !reason.trim() ||
                     abandon.isPending ||
                     !!sheet.abandonedAt ||
+                    !!sheet.skippedAt ||
                     !!review.pending ||
                     review.isPending ||
                     resolving

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ids, mockApi } from './fixtures';
-test('admins schedule, ship, and delete work orders', async ({
+test('admins schedule and ship orders, and delete only unused orders', async ({
   page,
 }, testInfo) => {
   const state = await mockApi(page);
@@ -81,6 +81,14 @@ test('admins schedule, ship, and delete work orders', async ({
     },
   ]);
 
+  await expect(
+    page.getByRole('button', { name: 'Delete', exact: true }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Cancel or release', exact: true }),
+  ).not.toBeVisible();
+  const unused = state.orders.find((o) => o.orderNumber === '104877')!;
+  await page.goto(`/work-orders/${unused.id}`);
   await page.getByRole('button', { name: 'Delete' }).click();
   await page
     .getByRole('dialog')
@@ -89,10 +97,10 @@ test('admins schedule, ship, and delete work orders', async ({
   await expect(page).toHaveURL(/\/work-orders$/);
   expect(state.orderRequests.at(-1)).toEqual({
     method: 'DELETE',
-    body: { expectedRevision: 5 },
+    body: { expectedRevision: unused.revision },
   });
   await page.goto('/work-orders?view=list');
-  await expect(page.getByRole('row', { name: /104801/ })).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /104877/ })).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

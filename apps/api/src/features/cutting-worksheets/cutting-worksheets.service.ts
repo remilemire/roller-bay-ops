@@ -107,7 +107,7 @@ export class CuttingWorksheetsService {
   ) {
     for (const id of stockIds) {
       const pending = await context.cuttingWorksheets.latestForStock(id);
-      if (pending && !pending.reviewedAt)
+      if (pending && !pending.reviewedAt && !pending.skippedAt)
         throw new ConflictException(
           `Review pending cutting results for order ${pending.orderNumber} first.`,
         );
@@ -129,14 +129,19 @@ export class CuttingWorksheetsService {
     const baselines: WorksheetRecord['baselines'] = {};
     for (const stock of stocks) {
       const previous = await context.cuttingWorksheets.latestForStock(stock.id);
-      if (previous && !previous.submittedAt)
+      if (previous && !previous.submittedAt && !previous.skippedAt)
         throw new ConflictException(
           `Finish and submit the cutting results for order ${previous.orderNumber} before using this fabric again.`,
         );
       const outcome = previous?.results?.items.find(
         (i) => i.stockItemId === stock.id,
       );
-      if (previous && !previous.reviewedAt && outcome?.outcome === 'consumed')
+      if (
+        previous &&
+        !previous.reviewedAt &&
+        !previous.skippedAt &&
+        outcome?.outcome === 'consumed'
+      )
         throw new ConflictException(
           'This fabric has been reported consumed. Review its cutting results before continuing.',
         );
@@ -171,8 +176,8 @@ export class CuttingWorksheetsService {
     return this.operation(async (context) => {
       const row = await context.cuttingWorksheets.find(id, true);
       if (!row) throw new NotFoundException('Worksheet not found.');
-      if (row.submittedAt || row.abandonedAt)
-        throw new ConflictException('This sheet is submitted or abandoned.');
+      if (row.submittedAt || row.abandonedAt || row.skippedAt)
+        throw new ConflictException('This sheet is submitted or closed.');
       if (canonicalJson(row.draft) === canonicalJson(input.draft))
         return presentWorksheet(row);
       if (row.revision !== input.expectedRevision)
@@ -189,8 +194,10 @@ export class CuttingWorksheetsService {
     return this.operation(async (context) => {
       const row = await context.cuttingWorksheets.find(id, true);
       if (!row) throw new NotFoundException('Worksheet not found.');
-      if (row.abandonedAt)
-        throw new ConflictException('This sheet was abandoned.');
+      if (row.abandonedAt || row.skippedAt)
+        throw new ConflictException(
+          'This sheet was closed without recording results.',
+        );
       if (row.submittedAt) {
         if (
           canonicalJson(row.results) === canonicalJson(input.results) &&
@@ -250,6 +257,7 @@ export class CuttingWorksheetsService {
       if (!row) throw new NotFoundException('Worksheet not found.');
       if (
         row.abandonedAt ||
+        row.skippedAt ||
         row.reviewedAt ||
         row.revision !== expectedRevision
       )
@@ -291,6 +299,7 @@ export class CuttingWorksheetsService {
   ) {
     if (row.abandonedAt) return presentWorksheet(row);
     if (
+      row.skippedAt ||
       row.revision !== expectedRevision ||
       row.submittedAt ||
       row.reviewedAt ||
@@ -320,6 +329,25 @@ export class CuttingWorksheetsService {
     );
     return result;
   }
+  async skipResults(context: UnitOfWorkContext, row: WorksheetRecord) {
+    if (row.reviewedAt || row.abandonedAt || row.skippedAt)
+      throw new ConflictException('The cutting worksheet is already resolved.');
+    const saved = await context.cuttingWorksheets.update(row.id, {
+      skippedAt: new Date(),
+    });
+    return {
+      recordType: 'cutting-worksheets' as const,
+      recordId: row.id,
+      before: {
+        type: 'cutting-worksheets' as const,
+        value: presentWorksheet(row),
+      },
+      after: {
+        type: 'cutting-worksheets' as const,
+        value: presentWorksheet(saved),
+      },
+    };
+  }
   async prepareReview(
     context: UnitOfWorkContext,
     row: WorksheetRecord,
@@ -329,6 +357,7 @@ export class CuttingWorksheetsService {
   ) {
     if (
       row.abandonedAt ||
+      row.skippedAt ||
       row.revision !== expectedRevision ||
       !row.results ||
       !row.submittedAt
@@ -353,7 +382,11 @@ export class CuttingWorksheetsService {
       const previous = baseline.predecessorId
         ? await context.cuttingWorksheets.find(baseline.predecessorId)
         : null;
-      if (previous && !previous.reviewedAt)
+      if (previous?.skippedAt && !resolution)
+        throw new ConflictException(
+          'Previous cutting results were skipped. Resolve this stock discrepancy using verified measurements.',
+        );
+      if (previous && !previous.reviewedAt && !previous.skippedAt)
         throw new ConflictException(
           `Review order ${previous.orderNumber} first; it used the same fabric earlier.`,
         );

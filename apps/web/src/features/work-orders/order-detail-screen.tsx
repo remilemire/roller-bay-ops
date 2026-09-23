@@ -1,4 +1,5 @@
 'use client';
+import { OrderCancellation } from './order-cancellation';
 import { OrderProduction } from '@/features/production/order-production';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
   const canManage = useCanManage();
   const client = useQueryClient();
   const router = useRouter();
+  const [cancelling, setCancelling] = useState(false);
   const [editing, setEditing] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -63,14 +65,14 @@ function OrderRecord({ order }: { order: WorkOrder }) {
         }
       >
         <Status value={order.status} />
-        {order.status === 'new' && (
+        {!order.allocatedAt && !order.cancelledAt && !order.shippedAt && (
           <Button asChild>
             <Link href={`/allocations/new?workOrder=${order.id}`}>
               Allocate
             </Link>
           </Button>
         )}
-        {canManage && (
+        {canManage && !order.cancelledAt && (
           <>
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit
@@ -82,15 +84,26 @@ function OrderRecord({ order }: { order: WorkOrder }) {
               </Button>
             )}
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                remove.reset();
-                setDeleting(true);
-              }}
-            >
-              Delete
-            </Button>
+            {!order.shippedAt && (
+              <Button variant="outline" onClick={() => setCancelling(true)}>
+                Cancel or release
+              </Button>
+            )}
+            {!order.allocatedAt &&
+              !order.cutAt &&
+              !order.assembledAt &&
+              !order.checkedAt &&
+              !order.shippedAt && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    remove.reset();
+                    setDeleting(true);
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
           </>
         )}
       </PageHeading>
@@ -126,8 +139,17 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           )}
         </div>
       </section>
-      {order.allocatedAt && <OrderProduction order={order} />}
+      {(order.allocatedAt ||
+        order.cutAt ||
+        order.assembledAt ||
+        order.checkedAt) && <OrderProduction order={order} />}
+      {order.cancelledAt && (
+        <p className="notice">Cancelled: {order.cancellationReason}</p>
+      )}
       <History type="work-orders" id={order.id} />
+      {cancelling && (
+        <OrderCancellation id={order.id} close={() => setCancelling(false)} />
+      )}
       {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
       {rescheduling && (
         <OrderReschedule order={order} close={() => setRescheduling(false)} />

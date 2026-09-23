@@ -232,6 +232,13 @@
       "when": 1790077268889,
       "tag": "0032_user_access_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790145903587,
+      "tag": "0033_order_cancellation",
+      "breakpoints": true
     }
   ]
 }

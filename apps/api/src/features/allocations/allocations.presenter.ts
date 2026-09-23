@@ -25,6 +25,7 @@ export function allocationSummary(
     updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
+    releasedAt: row.releasedAt?.toISOString() ?? null,
   };
   return !row.isDraft
     ? allocationSummarySchema.parse(result)

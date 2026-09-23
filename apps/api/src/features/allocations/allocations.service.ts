@@ -227,14 +227,16 @@ export class AllocationsService {
     );
   }
   /**
-   * A draft plans the blinds its order has now, read without the order's
-   * lock: it claims nothing, and confirmation reads them again under it.
+   * Draft writes share the order lock with cancellation. They claim no stock;
+   * confirmation still validates the plan against current inventory.
    */
   private async configureDraft(
     context: UnitOfWorkContext,
     data: AllocationDraftInput,
     settings?: AllocationRecord['settings'],
   ) {
+    const order = await this.orders.requireOrder(context, data.workOrderId);
+    this.orders.assertNotCancelled(order);
     const { lines } = await this.orders.lines(context, data.workOrderId);
     requireOrderLines(lines, data.plan);
     return this.configure(lines, data.plan, settings);
@@ -358,6 +360,37 @@ export class AllocationsService {
         return result;
       }),
     );
+  }
+  /** Explicitly release fabric as part of an order workflow, retaining completed inventory facts. */
+  async releaseForOrder(context: UnitOfWorkContext, id: string) {
+    const header = await context.allocations.findById(id, true);
+    if (!header || header.isDraft || header.cancelledAt || header.releasedAt)
+      throw new ConflictException(
+        'The order allocation changed; refresh before continuing.',
+      );
+    const items = await context.allocations.items(id);
+    await this.stockItems.findForAllocation(context, {
+      stockIds: items.map((i) => i.stockItemId!),
+      lock: true,
+    });
+    const before = allocationDetailSchema.parse(
+      await this.detail(context, header),
+    );
+    const saved = await context.allocations.update(
+      id,
+      header.completedAt
+        ? { releasedAt: new Date() }
+        : { cancelledAt: new Date() },
+    );
+    return {
+      recordType: 'allocations' as const,
+      recordId: id,
+      before: { type: 'allocations' as const, value: before },
+      after: {
+        type: 'allocations' as const,
+        value: allocationDetailSchema.parse(await this.detail(context, saved)),
+      },
+    };
   }
   complete(
     id: string,

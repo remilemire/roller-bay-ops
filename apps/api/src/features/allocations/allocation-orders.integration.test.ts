@@ -161,7 +161,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       assert.equal(refused.status, 409);
       assert.equal(
         refused.body.message,
-        'This order has an allocation. Cancel it before deleting the order.',
+        'Use order cancellation to retain the production history.',
       );
       await post(`${path}/${first.id}/cancel`, { expectedRevision: 2 }).expect(
         200,

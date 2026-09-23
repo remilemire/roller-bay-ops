@@ -55,6 +55,7 @@ export class AllocationsRepository {
         .where(
           and(
             eq(allocations.workOrderId, orderId),
+            isNull(allocations.releasedAt),
             eq(allocations.isDraft, false),
             isNull(allocations.cancelledAt),
           ),

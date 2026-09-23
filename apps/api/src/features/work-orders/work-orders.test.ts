@@ -27,6 +27,8 @@ test('work order status is the furthest step reached', () => {
     assembledAt: null,
     checkedAt: null,
     shippedAt: null,
+    cancelledAt: null,
+    cancellationReason: null,
     updatedAt: at,
     revision: 1,
     deletedAt: null,
@@ -59,6 +61,8 @@ test('work order status is the furthest step reached', () => {
     assembledAt: null,
     checkedAt: null,
     shippedAt: null,
+    cancelledAt: null,
+    cancellationReason: null,
     updatedAt: at.toISOString(),
     revision: 1,
   });

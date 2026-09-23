@@ -57,6 +57,7 @@ export const allocations = pgTable(
     correctedAt: timestamp('corrected_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
   },
   (table) => [
     check(
@@ -83,11 +84,17 @@ export const allocations = pgTable(
     check('allocations_revision_positive', sql`${table.revision} > 0`),
     index('allocations_work_order_id_idx').on(table.workOrderId),
     // An order has at most one live allocation: confirmed and not cancelled,
-    // including once completed. Drafts may share an order.
+    // including once completed, until explicitly released. Drafts may share an order.
     uniqueIndex('allocations_live_work_order_unique')
       .on(table.workOrderId)
-      .where(sql`NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL`),
+      .where(
+        sql`NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL AND ${table.releasedAt} IS NULL`,
+      ),
     index('allocations_created_by_user_id_idx').on(table.createdByUserId),
+    check(
+      'allocations_released_completed',
+      sql`${table.releasedAt} IS NULL OR ${table.completedAt} IS NOT NULL`,
+    ),
     // Non-draft allocations are active until completed or cancelled.
     check(
       'allocations_completion_or_cancellation',

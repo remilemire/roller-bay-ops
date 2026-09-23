@@ -14,19 +14,21 @@ import type {
 export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
   return workOrderSchema.parse({
     ...row,
-    status: row.shippedAt
-      ? 'shipped'
-      : row.checkedAt
-        ? 'checked'
-        : row.assembledAt
-          ? 'assembled'
-          : row.cutAt
-            ? 'cut'
-            : row.shipDate
-              ? 'scheduled'
-              : row.allocatedAt
-                ? 'allocated'
-                : 'new',
+    status: row.cancelledAt
+      ? 'cancelled'
+      : row.shippedAt
+        ? 'shipped'
+        : row.checkedAt
+          ? 'checked'
+          : row.assembledAt
+            ? 'assembled'
+            : row.cutAt
+              ? 'cut'
+              : row.shipDate
+                ? 'scheduled'
+                : row.allocatedAt
+                  ? 'allocated'
+                  : 'new',
     createdAt: row.createdAt.toISOString(),
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     allocatedAt: row.allocatedAt?.toISOString() ?? null,
@@ -34,6 +36,7 @@ export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
     assembledAt: row.assembledAt?.toISOString() ?? null,
     checkedAt: row.checkedAt?.toISOString() ?? null,
     shippedAt: row.shippedAt?.toISOString() ?? null,
+    cancelledAt: row.cancelledAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   });
 }

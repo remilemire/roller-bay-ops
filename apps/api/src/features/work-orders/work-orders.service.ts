@@ -121,6 +121,7 @@ export class WorkOrdersService {
           await context.workOrders.findByIdForUpdate(id),
           input.expectedRevision,
         );
+        this.assertNotCancelled(previous);
         // The allocation's cuts were planned for these blinds.
         if (previous.allocatedAt)
           throw new ConflictException({
@@ -210,6 +211,7 @@ export class WorkOrdersService {
           await context.workOrders.findByIdForUpdate(id),
           input.expectedRevision,
         );
+        this.assertNotCancelled(previous);
         // Fabric is allocated before a date is promised. The database holds
         // the same rule; this answers with the field it concerns.
         if (input.shipDate && !previous.allocatedAt)
@@ -257,9 +259,16 @@ export class WorkOrdersService {
           await context.workOrders.findByIdForUpdate(id),
           revision,
         );
-        if (previous.allocatedAt)
+        this.assertNotCancelled(previous);
+        if (
+          previous.allocatedAt ||
+          previous.cutAt ||
+          previous.assembledAt ||
+          previous.checkedAt ||
+          previous.shippedAt
+        )
           throw new ConflictException(
-            'This order has an allocation. Cancel it before deleting the order.',
+            'Use order cancellation to retain the production history.',
           );
         await context.workOrders.delete(id);
         await this.audit.record(context, userId, 'order.deleted', [
@@ -292,6 +301,7 @@ export class WorkOrdersService {
   async allocate(context: UnitOfWorkContext, workOrderId: string, at: Date) {
     const order = await context.workOrders.findByIdForUpdate(workOrderId);
     if (!order) throw orderNotFound();
+    this.assertNotCancelled(order);
     if (order.allocatedAt) throw orderAlreadyAllocated();
     // The derived status would hide an allocation made after shipping.
     if (order.shippedAt)
@@ -360,7 +370,7 @@ export class WorkOrdersService {
       },
     );
   }
-  async getForProduction(context: UnitOfWorkContext, id: string, lock = true) {
+  async requireOrder(context: UnitOfWorkContext, id: string, lock = true) {
     const order = lock
       ? await context.workOrders.findByIdForUpdate(id)
       : await context.workOrders.findById(id);
@@ -373,20 +383,42 @@ export class WorkOrdersService {
     station: Station,
     at: Date | null,
   ) {
-    const order = await this.getForProduction(context, id);
-    if (!order.allocatedAt)
-      throw new ConflictException(
-        'Allocate fabric before recording production.',
-      );
+    await this.requireOrder(context, id);
     return context.workOrders.setProductionMilestone(id, station, at);
   }
   async assertPlanningAllowed(context: UnitOfWorkContext, workOrderId: string) {
     const order = await context.workOrders.findByIdForUpdate(workOrderId);
     if (!order) throw orderNotFound();
+    this.assertNotCancelled(order);
     if (order.cutAt || order.assembledAt || order.checkedAt || order.shippedAt)
       throw new ConflictException(
         'Production has been recorded; the fabric plan cannot be changed.',
       );
+  }
+  assertNotCancelled(order: WorkOrderRecord) {
+    if (order.cancelledAt)
+      throw new ConflictException('This order is cancelled.');
+  }
+  async applyWorkflow(
+    context: UnitOfWorkContext,
+    order: WorkOrderRecord,
+    action: 'unschedule' | 'release-allocation' | 'cancel-order',
+    reason: string,
+  ) {
+    this.assertNotCancelled(order);
+    if (order.shippedAt)
+      throw new ConflictException(
+        'Shipped orders cannot be cancelled or released.',
+      );
+    const row = await context.workOrders.update(order.id, {
+      shipDate: null,
+      scheduledAt: null,
+      ...(action !== 'unschedule' ? { allocatedAt: null } : {}),
+      ...(action === 'cancel-order'
+        ? { cancelledAt: new Date(), cancellationReason: reason }
+        : {}),
+    });
+    return { row, change: change(order, row) };
   }
   private async restamp(
     context: UnitOfWorkContext,

@@ -331,6 +331,7 @@ export async function mockApi(
         employeeInitials: employee.initials,
         startedAt: timestamp,
         abandonedAt: null,
+        skippedAt: null,
         submittedAt: null,
         reviewedAt: null,
         startedByUserId: ids.user,

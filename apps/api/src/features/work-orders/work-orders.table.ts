@@ -37,6 +37,8 @@ export const workOrders = pgTable(
     // A deleted order is kept: allocations reference its number, which stays
     // unique, so creating that number again restores this row.
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancellationReason: varchar('cancellation_reason', { length: 1000 }),
   },
   (table) => [
     check(
@@ -57,21 +59,16 @@ export const workOrders = pgTable(
       'work_orders_scheduled_at_matches_ship_date',
       sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,
     ),
-    check(
-      'work_orders_production_requires_allocated',
-      sql`(${table.assembledAt} IS NULL AND ${table.checkedAt} IS NULL) OR ${table.allocatedAt} IS NOT NULL`,
-    ),
     check('work_orders_revision_positive', sql`${table.revision} > 0`),
     // Only an order without a live allocation can be deleted.
     check(
       'work_orders_deleted_unallocated',
       sql`${table.deletedAt} IS NULL OR ${table.allocatedAt} IS NULL`,
     ),
-    // allocated_at and cut_at mirror the order's one live allocation, which is
-    // confirmed before it is completed.
+    // Production remains a historical fact after fabric is released.
     check(
-      'work_orders_cut_requires_allocated',
-      sql`${table.cutAt} IS NULL OR ${table.allocatedAt} IS NOT NULL`,
+      'work_orders_cancellation_valid',
+      sql`(${table.cancelledAt} IS NULL AND ${table.cancellationReason} IS NULL) OR (${table.cancelledAt} IS NOT NULL AND ${table.cancellationReason} IS NOT NULL AND ${table.allocatedAt} IS NULL AND ${table.shipDate} IS NULL AND ${table.shippedAt} IS NULL AND ${table.deletedAt} IS NULL)`,
     ),
   ],
 );

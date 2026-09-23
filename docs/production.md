@@ -65,3 +65,9 @@ Repositories are injected. New production/worksheet methods receive the active t
 `production.integration.test.ts` uses disposable PostgreSQL/Redis fixtures and covers restricted production access, assignment checks, Origin checks, active employees, allocation prerequisites, late/skipped stages, timestamps, historical attribution, corrections, concurrent retries, sheet freezing, draft persistence, stock sequencing, double review, abandonment and explicit discrepancy resolution. The full API suite verifies existing routes and workflows too.
 
 `production.spec.ts` exercises station navigation, unscheduled completion, directory maintenance and a digital cutting/review workflow on desktop and tablet. It verifies saved checkmarks and measurements survive reload and Cancel discards unsaved edits. Browser tests use intercepted API responses; they do not prove Microsoft sign-in or physical iPad behavior.
+
+## Cancelled orders and skipped cutting results
+
+The order's **Cancel or release** form coordinates unscheduling, fabric release and order cancellation; see [work orders](work-orders.md#cancellation-and-release-workflow). Production facts remain recorded. Cancelled orders are excluded from station queues and cannot receive new production completions, while admins may still correct historical attribution. Removing a fabric plan can preserve already-recorded milestones without leaving an active allocation.
+
+A worksheet closed with `skipped_at` is neither abandoned nor reviewed. Its saved content remains readable, but it cannot be edited, submitted, returned or reconciled and is excluded from the review queue. New cutting can continue with released stock; dependent worksheet review must explicitly resolve the missing measurement baseline. Skipping never updates stock measurements.

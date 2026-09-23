@@ -59,6 +59,105 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0033 preserves existing production and permits explicit release and cancellation',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate } = await databaseBefore(t, '0033_');
+    const [user, employee, order, allocation, worksheet] = Array.from(
+      { length: 5 },
+      () => randomUUID(),
+    );
+    await client.query(
+      `INSERT INTO users (id,name,email,microsoft_subject_id)
+       VALUES ($1,'Cutter','cutter@example.com','cutter')`,
+      [user],
+    );
+    await client.query(
+      `INSERT INTO employees (id,name,initials) VALUES ($1,'Cutter','C')`,
+      [employee],
+    );
+    await client.query(
+      `INSERT INTO work_orders (id,order_number,allocated_at,cut_at)
+       VALUES ($1,'330001',now(),now())`,
+      [order],
+    );
+    const settings = {
+      edgeTrimMm: 1,
+      minimumRemnantWidthMm: 100,
+      minimumRemnantLengthMm: 100,
+      dropAllowanceMm: 254,
+    };
+    await client.query(
+      `INSERT INTO allocations (id,work_order_id,created_by_user_id,is_draft,confirmed_at,completed_at,settings,completion)
+       VALUES ($1,$2,$3,false,now(),now(),$4,'{"items":[]}')`,
+      [allocation, order, user, settings],
+    );
+    await client.query(
+      `INSERT INTO cutting_worksheets (id,allocation_id,work_order_id,order_number,employee_id,employee_name,employee_initials,started_by_user_id,snapshot,baselines)
+       VALUES ($1,$2,$3,'330001',$4,'Cutter','C',$5,'{}','{}')`,
+      [worksheet, allocation, order, employee, user],
+    );
+    const snapshot = async () => {
+      const rows = await client.query(`
+        SELECT to_jsonb(o) - ARRAY['cancelled_at','cancellation_reason'] AS data FROM work_orders o
+        UNION ALL SELECT to_jsonb(a) - 'released_at' FROM allocations a
+        UNION ALL SELECT to_jsonb(w) - 'skipped_at' FROM cutting_worksheets w`);
+      return rows.rows;
+    };
+    const before = await snapshot();
+    await migrate();
+    assert.deepEqual(await snapshot(), before);
+
+    // The replacement index still prevents a second live plan until release.
+    const anotherPlan = () =>
+      client.query(
+        `INSERT INTO allocations (work_order_id,created_by_user_id,is_draft,confirmed_at,settings)
+       VALUES ($1,$2,false,now(),$3) RETURNING id`,
+        [order, user, settings],
+      );
+    await assert.rejects(anotherPlan(), { code: '23505' });
+    await client.query('UPDATE allocations SET released_at=now() WHERE id=$1', [
+      allocation,
+    ]);
+    const replacement = (await anotherPlan()).rows[0].id;
+    await assert.rejects(
+      client.query('UPDATE allocations SET released_at=now() WHERE id=$1', [
+        replacement,
+      ]),
+      { code: '23514' },
+    );
+    await client.query(
+      'UPDATE allocations SET cancelled_at=now() WHERE id=$1',
+      [replacement],
+    );
+    await assert.rejects(
+      client.query(
+        'UPDATE work_orders SET cancelled_at=now(),allocated_at=NULL WHERE id=$1',
+        [order],
+      ),
+      { code: '23514' },
+    );
+    const cancelled = await client.query(
+      `UPDATE work_orders SET cancelled_at=now(),allocated_at=NULL,cancellation_reason='Customer cancelled'
+       WHERE id=$1 RETURNING cut_at`,
+      [order],
+    );
+    assert.ok(cancelled.rows[0].cut_at);
+    await client.query(
+      'UPDATE cutting_worksheets SET skipped_at=now() WHERE id=$1',
+      [worksheet],
+    );
+    await assert.rejects(
+      client.query(
+        'UPDATE cutting_worksheets SET submitted_at=now(),reviewed_at=now() WHERE id=$1',
+        [worksheet],
+      ),
+      { code: '23514' },
+    );
+  },
+);
+
+test(
   '0032 preserves existing access while making new accounts pending',
   { timeout: 60_000 },
   async (t) => {

@@ -19,6 +19,7 @@ export class CuttingWorksheetsRepository {
           and(
             eq(cuttingWorksheets.allocationId, id),
             isNull(cuttingWorksheets.abandonedAt),
+            isNull(cuttingWorksheets.skippedAt),
           ),
         )
     )[0];
@@ -32,6 +33,7 @@ export class CuttingWorksheetsRepository {
           and(
             eq(cuttingWorksheets.workOrderId, id),
             isNull(cuttingWorksheets.abandonedAt),
+            isNull(cuttingWorksheets.skippedAt),
           ),
         )
         .orderBy(desc(cuttingWorksheets.startedAt))
@@ -45,6 +47,7 @@ export class CuttingWorksheetsRepository {
         and(
           isNull(cuttingWorksheets.reviewedAt),
           isNull(cuttingWorksheets.abandonedAt),
+          isNull(cuttingWorksheets.skippedAt),
         ),
       )
       .orderBy(asc(cuttingWorksheets.sequence));

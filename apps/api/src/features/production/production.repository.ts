@@ -25,6 +25,7 @@ export class ProductionRepository {
     const stamp = workOrders[milestoneTimestampField[station]];
     const where = and(
       isNull(workOrders.deletedAt),
+      isNull(workOrders.cancelledAt),
       isNotNull(workOrders.allocatedAt),
       query.search
         ? ilike(workOrders.orderNumber, `%${query.search}%`)

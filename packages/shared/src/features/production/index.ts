@@ -121,6 +121,7 @@ export const worksheetSchema = z.object({
   employeeInitials: z.string(),
   startedAt: z.iso.datetime(),
   abandonedAt: z.iso.datetime().nullable().default(null),
+  skippedAt: z.iso.datetime().nullable().default(null),
   submittedAt: z.iso.datetime().nullable(),
   reviewedAt: z.iso.datetime().nullable(),
   startedByUserId: z.uuid(),

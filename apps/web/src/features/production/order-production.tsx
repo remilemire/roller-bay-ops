@@ -76,14 +76,16 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
           value={employee.employeeId}
           onChange={employee.selectEmployee}
         />
-        <CompletionAction
-          key={station}
-          station={station}
-          orderId={order.id}
-          orderNumber={order.orderNumber}
-          employeeId={employee.employeeId}
-          done={!!order[stamp[station]]}
-        />
+        {!order.cancelledAt && order.allocatedAt && (
+          <CompletionAction
+            key={station}
+            station={station}
+            orderId={order.id}
+            orderNumber={order.orderNumber}
+            employeeId={employee.employeeId}
+            done={!!order[stamp[station]]}
+          />
+        )}
         {canManage && (
           <Button variant="outline" onClick={() => setCorrect(true)}>
             Correct {completionLabels[station]} record

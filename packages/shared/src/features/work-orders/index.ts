@@ -16,6 +16,7 @@ export const orderStatusSchema = z.enum([
   'assembled',
   'checked',
   'shipped',
+  'cancelled',
 ]);
 
 // Orders ship on weekdays. A date-only string parses as UTC midnight, so this
@@ -112,6 +113,8 @@ export const workOrderSchema = z.object({
   assembledAt: z.iso.datetime().nullable().default(null),
   checkedAt: z.iso.datetime().nullable().default(null),
   shippedAt: z.iso.datetime().nullable(),
+  cancelledAt: z.iso.datetime().nullable().default(null),
+  cancellationReason: z.string().nullable().default(null),
   updatedAt: z.iso.datetime(),
   revision: z.number().int().positive(),
 });
@@ -135,3 +138,35 @@ export type WorkOrderLine = z.infer<typeof workOrderLineSchema>;
 export type SaveWorkOrderLines = z.infer<typeof saveWorkOrderLinesSchema>;
 export type WorkOrderDetail = z.infer<typeof workOrderDetailSchema>;
 export type WorkOrderList = z.infer<typeof workOrderListSchema>;
+
+export const orderWorkflowActionSchema = z.enum([
+  'unschedule',
+  'release-allocation',
+  'cancel-order',
+]);
+export const orderWorkflowSchema = z
+  .strictObject({
+    action: orderWorkflowActionSchema,
+    expectedRevision: revision,
+    allocationId: id.nullable(),
+    expectedAllocationRevision: revision.nullable(),
+    worksheetId: id.nullable(),
+    expectedWorksheetRevision: revision.nullable(),
+    skipCuttingResults: z.boolean().default(false),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .refine(
+    (v) => v.action !== 'unschedule' || !v.skipCuttingResults,
+    'Unscheduling does not skip cutting results.',
+  );
+export const orderWorkflowContextSchema = z.object({
+  order: workOrderSchema,
+  allocation: z
+    .object({ id, revision, completedAt: z.iso.datetime().nullable() })
+    .nullable(),
+  worksheet: z
+    .object({ id, revision, submittedAt: z.iso.datetime().nullable() })
+    .nullable(),
+  outstandingCuttingResults: z.boolean(),
+});
+export type OrderWorkflow = z.infer<typeof orderWorkflowSchema>;

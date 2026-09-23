@@ -53,6 +53,7 @@ const header = (): AllocationRecord => ({
   stockEffects: null,
   completedAt: null,
   cancelledAt: null,
+  releasedAt: null,
 });
 
 test('allocation drafts preserve missing values and reject invalid supplied fields and foreign assignments', () => {

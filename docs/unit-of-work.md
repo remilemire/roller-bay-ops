@@ -43,6 +43,8 @@ await this.unitOfWork.transaction(async (context) => {
 });
 ```
 
+`WorkOrderWorkflowsService` similarly coordinates explicit order cancellation/release requests across work orders, allocations and cutting worksheets. It checks the preview versions under the existing lock order and records one audit event for the entire operation.
+
 The receiving service uses its own repository from the context. It continues to own its business rules: allocations request stock effects from `StockItemsService` and order milestones from `WorkOrdersService`.
 
 Context-taking methods require a context and do not open a second transaction. Allocation completion has two actual callers, so `complete(...)` opens a transaction and delegates to `completeInTransaction(context, ...)`; worksheet review calls the latter within its existing transaction. The raw Drizzle transaction is not part of the context.

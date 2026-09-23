@@ -21,6 +21,7 @@ export const cuttingWorksheets = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     sequence: serial('sequence').notNull(),
     abandonedAt: timestamp('abandoned_at', { withTimezone: true }),
+    skippedAt: timestamp('skipped_at', { withTimezone: true }),
     allocationId: uuid('allocation_id')
       .notNull()
       .references(() => allocations.id, { onDelete: 'restrict' }),
@@ -65,6 +66,10 @@ export const cuttingWorksheets = pgTable(
     uniqueIndex('cutting_worksheets_allocation_unique')
       .on(t.allocationId)
       .where(sql`${t.abandonedAt} IS NULL`),
+    check(
+      'cutting_worksheets_skipped_unreviewed',
+      sql`${t.skippedAt} IS NULL OR (${t.reviewedAt} IS NULL AND ${t.abandonedAt} IS NULL)`,
+    ),
     check('cutting_worksheets_revision_positive', sql`${t.revision}>0`),
     check(
       'cutting_worksheets_review_requires_submission',

@@ -160,6 +160,7 @@ function submittedSheet(state: Awaited<ReturnType<typeof mockApi>>): Worksheet {
     employeeInitials: employee.initials,
     startedAt: '2026-09-16T12:00:00.000Z',
     abandonedAt: null,
+    skippedAt: null,
     submittedAt: '2026-09-16T13:00:00.000Z',
     reviewedAt: null,
     startedByUserId: ids.user,

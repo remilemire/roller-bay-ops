@@ -239,6 +239,7 @@ test('allocation revisions reject stale and terminal-state writes', () => {
     stockEffects: null,
     completedAt: null,
     cancelledAt: null,
+    releasedAt: null,
   };
   assert.equal(requireActiveRevision(row, 2), row);
   assert.throws(() => requireActiveRevision(row, 1), ConflictException);

@@ -330,7 +330,7 @@ it('links an allocated order to attributed production logging', async () => {
   expect(updateOrder).not.toHaveBeenCalled();
 });
 
-it('edits and deletes an order with the revision it shows', async () => {
+it('edits and unschedules an order with the revision it shows', async () => {
   vi.mocked(updateOrder).mockResolvedValue(order);
   vi.mocked(deleteOrder).mockResolvedValue(undefined);
   show(<OrderDetailScreen id={order.id} />);
@@ -375,15 +375,26 @@ it('edits and deletes an order with the revision it shows', async () => {
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-  await user.click(screen.getByRole('button', { name: 'Delete' }));
-  await user.click(
-    within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }),
-  );
-  await waitFor(() => expect(deleteOrder).toHaveBeenCalledWith(order.id, 3));
-  expect(state.push).toHaveBeenCalledWith('/work-orders');
+  expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Cancel or release' }),
+  ).toBeInTheDocument();
 });
 
 it('keeps a refused delete in its dialog', async () => {
+  vi.mocked(orderDetail).mockImplementation((id) =>
+    queryOptions({
+      queryKey: ['work-orders', id],
+      queryFn: async (): Promise<WorkOrderDetail> => ({
+        ...order,
+        allocatedAt: null,
+        shipDate: null,
+        scheduledAt: null,
+        status: 'new' as const,
+        lines: [],
+      }),
+    }),
+  );
   vi.mocked(deleteOrder).mockRejectedValue(
     new ApiError(
       409,

@@ -35,6 +35,7 @@ const allocation: AllocationList['items'][number] = {
   updatedAt: timestamp,
   completedAt: null,
   cancelledAt: null,
+  releasedAt: null,
 };
 beforeEach(() => {
   state.search = '';

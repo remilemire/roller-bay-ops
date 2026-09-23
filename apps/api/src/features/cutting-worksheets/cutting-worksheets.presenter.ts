@@ -8,6 +8,7 @@ export const presentWorksheet = (row: WorksheetRecord) =>
     ...row,
     startedAt: row.startedAt.toISOString(),
     abandonedAt: row.abandonedAt?.toISOString() ?? null,
+    skippedAt: row.skippedAt?.toISOString() ?? null,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
   });

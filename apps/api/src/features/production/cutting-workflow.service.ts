@@ -33,7 +33,8 @@ export class CuttingWorkflowService {
           allocation.id,
         );
         if (existing) return existing;
-        const order = await this.orders.getForProduction(context, orderId);
+        const order = await this.orders.requireOrder(context, orderId);
+        this.orders.assertNotCancelled(order);
         if (!order.allocatedAt)
           throw new ConflictException('Allocate this order before cutting.');
         if (order.cutAt || order.shippedAt)

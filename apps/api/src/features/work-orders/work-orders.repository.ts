@@ -41,7 +41,13 @@ const statusFilters = {
   open: isNull(shippedAt),
   // Allocated, or already cut, and still waiting for a ship date.
   unscheduled: and(isNotNull(allocatedAt), isNull(shipDate), isNull(shippedAt)),
-  new: and(isNull(allocatedAt), isNull(shippedAt)),
+  new: and(
+    isNull(allocatedAt),
+    isNull(cutAt),
+    isNull(assembledAt),
+    isNull(checkedAt),
+    isNull(shippedAt),
+  ),
   allocated: and(
     isNotNull(allocatedAt),
     isNull(shipDate),
@@ -66,6 +72,7 @@ const statusFilters = {
   assembled: and(isNotNull(assembledAt), isNull(checkedAt), isNull(shippedAt)),
   checked: and(isNotNull(checkedAt), isNull(shippedAt)),
   shipped: isNotNull(shippedAt),
+  cancelled: isNotNull(workOrders.cancelledAt),
 };
 // Deleted orders are kept for their number and history; reads leave them out.
 const present = isNull(workOrders.deletedAt);
@@ -81,6 +88,9 @@ export class WorkOrdersRepository {
           )
         : undefined,
       query.status ? statusFilters[query.status] : undefined,
+      query.status && query.status !== 'cancelled'
+        ? isNull(workOrders.cancelledAt)
+        : undefined,
       query.shipDateFrom
         ? gte(workOrders.shipDate, query.shipDateFrom)
         : undefined,
@@ -148,7 +158,16 @@ export class WorkOrdersRepository {
   async update(
     id: string,
     values: Partial<
-      Pick<WorkOrderRecord, 'shipDate' | 'scheduledAt' | 'note' | 'shippedAt'>
+      Pick<
+        WorkOrderRecord,
+        | 'shipDate'
+        | 'scheduledAt'
+        | 'note'
+        | 'shippedAt'
+        | 'allocatedAt'
+        | 'cancelledAt'
+        | 'cancellationReason'
+      >
     >,
   ) {
     await this.db

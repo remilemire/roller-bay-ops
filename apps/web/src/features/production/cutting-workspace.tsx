@@ -149,20 +149,27 @@ function Worksheet({ initial }: { initial: Worksheet }) {
     <>
       <p>
         Started by {sheet.employeeName} ({sheet.employeeInitials}) ·{' '}
-        {sheet.reviewedAt
-          ? 'Inventory reconciled'
-          : sheet.submittedAt
-            ? 'Results awaiting office review'
-            : 'Results in progress'}
+        {sheet.skippedAt
+          ? 'Closed without recording results'
+          : sheet.reviewedAt
+            ? 'Inventory reconciled'
+            : sheet.submittedAt
+              ? 'Results awaiting office review'
+              : 'Results in progress'}
       </p>
       {discardError && <ErrorNotice error={discardError} />}
       <CuttingInstructions
         allocation={sheet.snapshot}
         units={units}
         checked={checked}
-        onCheck={sheet.submittedAt ? undefined : setChecked}
+        onCheck={sheet.submittedAt || sheet.skippedAt ? undefined : setChecked}
       />
-      {sheet.submittedAt ? (
+      {sheet.skippedAt ? (
+        <p className="notice">
+          This worksheet was closed without recording results. Stock balances
+          were left unchanged.
+        </p>
+      ) : sheet.submittedAt ? (
         <section className="panel panel-body stack">
           <h2>Submitted measurements</h2>
           <RecordValues value={sheet.results?.items} />

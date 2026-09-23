@@ -29,6 +29,7 @@ const tabs = [
   { value: 'assembled', label: 'Assembled' },
   { value: 'checked', label: 'Checked' },
   { value: 'shipped', label: 'Shipped' },
+  { value: 'cancelled', label: 'Cancelled' },
   { value: 'all', label: 'All orders' },
 ];
 export function OrderListView({ canManage }: { canManage: boolean }) {

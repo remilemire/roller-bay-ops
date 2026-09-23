@@ -26,7 +26,7 @@ export class ProductionService {
   list(id: string) {
     return productionOperation(() =>
       this.unitOfWork.readOnlyTransaction(async (context) => {
-        await this.orders.getForProduction(context, id, false);
+        await this.orders.requireOrder(context, id, false);
         return (await context.production.completions(id)).map(
           presentCompletion,
         );
@@ -73,7 +73,7 @@ export class ProductionService {
   ) {
     return productionOperation(() =>
       this.unitOfWork.transaction(async (context) => {
-        const order = await this.orders.getForProduction(context, id);
+        const order = await this.orders.requireOrder(context, id);
         const correction = 'reason' in input;
         const scope = `production.${station}.${correction ? 'correct' : 'complete'}`;
         const replay = await this.audit.replay(
@@ -85,7 +85,8 @@ export class ProductionService {
           input,
         );
         if (replay.result) return replay.result;
-        if (!order.allocatedAt)
+        if (!correction) this.orders.assertNotCancelled(order);
+        if (!correction && !order.allocatedAt)
           throw new ConflictException(
             'Allocate fabric before recording production.',
           );
