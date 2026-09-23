@@ -1,5 +1,7 @@
 import type { AuditChange, AuditRecordType } from '@roller-bay/shared/audit';
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm';
+import { allocations } from '../allocations/tables/allocations.table.js';
+import { cuttingWorksheets } from '../cutting-worksheets/cutting-worksheets.table.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { users } from '../users/users.table.js';
 import {
@@ -65,9 +67,39 @@ export class AuditRepository {
       .select({ id: auditChanges.eventId })
       .from(auditChanges)
       .where(
-        and(
-          eq(auditChanges.recordType, recordType),
-          eq(auditChanges.recordId, recordId),
+        or(
+          and(
+            eq(auditChanges.recordType, recordType),
+            eq(auditChanges.recordId, recordId),
+          ),
+          recordType === 'work-orders'
+            ? or(
+                and(
+                  eq(auditChanges.recordType, 'production'),
+                  eq(auditChanges.recordId, recordId),
+                ),
+                and(
+                  eq(auditChanges.recordType, 'allocations'),
+                  inArray(
+                    auditChanges.recordId,
+                    this.db
+                      .select({ id: allocations.id })
+                      .from(allocations)
+                      .where(eq(allocations.workOrderId, recordId)),
+                  ),
+                ),
+                and(
+                  eq(auditChanges.recordType, 'cutting-worksheets'),
+                  inArray(
+                    auditChanges.recordId,
+                    this.db
+                      .select({ id: cuttingWorksheets.id })
+                      .from(cuttingWorksheets)
+                      .where(eq(cuttingWorksheets.workOrderId, recordId)),
+                  ),
+                ),
+              )
+            : undefined,
         ),
       );
     const where = inArray(auditEvents.id, eventIds);

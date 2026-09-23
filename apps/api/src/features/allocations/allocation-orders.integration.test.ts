@@ -435,21 +435,22 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         'allocated',
       );
 
-      // Each allocation event that stamps the order carries the order's
-      // change, so the order's own history explains its milestones. A replan
-      // changes nothing on the order and is not part of it.
+      // The order timeline includes related events even when they do not
+      // change the order's own fields. Multi-record events appear only once.
       const history = historySchema.parse(
         (await get(`/api/work-orders/${row.id}/history`).expect(200)).body,
       );
       assert.deepEqual(history.items.map((event) => event.action).sort(), [
         'allocation.cancelled',
+        'allocation.completed',
         'allocation.confirmed',
         'allocation.confirmed',
+        'allocation.replaced',
         'order.scheduled',
         'order.unscheduled',
       ]);
       assert.ok(
-        !history.items.some((event) => event.action === 'allocation.completed'),
+        history.items.some((event) => event.action === 'allocation.completed'),
       );
     },
   );
