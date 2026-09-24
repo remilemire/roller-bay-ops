@@ -64,6 +64,9 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();
+  await expect(page.getByLabel('Completed by', { exact: true })).toHaveValue(
+    state.employees[0]!.id,
+  );
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   const discard = page.getByRole('button', { name: 'Discard changes' });

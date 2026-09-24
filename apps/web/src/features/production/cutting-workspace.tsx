@@ -40,6 +40,13 @@ function CuttingOrder({
   const query = useQuery(worksheetForOrder(orderId));
   const client = useQueryClient();
   const employee = useEmployeeSelection();
+  // A reopened sheet starts with the cutter who began it, once per sheet, so
+  // refetches never replace someone's own choice.
+  const [seededSheet, setSeededSheet] = useState<string | null>(null);
+  if (query.data && seededSheet !== query.data.id) {
+    setSeededSheet(query.data.id);
+    if (!employee.employeeId) employee.selectEmployee(query.data.employeeId);
+  }
   const start = useMutation({
     mutationFn: () =>
       api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
