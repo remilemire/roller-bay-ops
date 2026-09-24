@@ -17,7 +17,6 @@ export function presentStationOrders(result: {
   items: (WorkOrderRecord & {
     completions: CompletionRecord[];
     hasCuttingWorksheet: boolean;
-    canRecordCutManually: boolean;
   })[];
   total: number;
   page: number;
@@ -28,7 +27,6 @@ export function presentStationOrders(result: {
     items: result.items.map((row) => ({
       ...presentWorkOrder(row),
       hasCuttingWorksheet: row.hasCuttingWorksheet,
-      canRecordCutManually: row.canRecordCutManually,
       completions: row.completions.map(presentCompletion),
     })),
   });

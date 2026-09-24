@@ -13,6 +13,7 @@ import {
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
+import { CompletionAction } from './completion-action';
 import { CuttingInstructions } from './cutting-instructions';
 import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
 import {
@@ -80,7 +81,10 @@ function CuttingOrder({
           onChange={employee.selectEmployees}
         />
         {query.data ? (
-          <CutCompletion sheet={query.data} />
+          <CutCompletion
+            sheet={query.data}
+            employeeIds={employee.employeeIds}
+          />
         ) : (
           <>
             <p>
@@ -110,17 +114,36 @@ function CuttingOrder({
     </div>
   );
 }
-function CutCompletion({ sheet }: { sheet: Worksheet }) {
+function CutCompletion({
+  sheet,
+  employeeIds,
+}: {
+  sheet: Worksheet;
+  employeeIds: string[];
+}) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
   const completed = query.data?.find((c) => c.station === 'cutting');
-  return completed ? (
-    <p>Cut by {employeeNames(completed.employees)}</p>
-  ) : (
-    <p className="muted">
-      Submitting the worksheet records the order as cut and credits the selected
-      employees.
-    </p>
+  return (
+    <>
+      {completed ? (
+        <p>Cut by {employeeNames(completed.employees)}</p>
+      ) : (
+        <p className="muted">
+          Sign off only records completion without submitting measurements.
+          Submitting the worksheet records both the results and completion.
+        </p>
+      )}
+      {query.data && !sheet.skippedAt && (
+        <CompletionAction
+          station="cutting"
+          orderId={sheet.workOrderId}
+          orderNumber={sheet.orderNumber}
+          employeeIds={employeeIds}
+          done={!!completed}
+        />
+      )}
+    </>
   );
 }
 function Worksheet({
@@ -131,7 +154,7 @@ function Worksheet({
   // Keep dirty work pinned through background refetches. Explicit saves advance the revision.
   const [sheet, setSheet] = useState(initial);
   const [editorVersion, setEditorVersion] = useState(0);
-  const [discardError, setDiscardError] = useState<unknown>(null);
+  const [refreshError, setRefreshError] = useState<unknown>(null);
   const [checked, setChecked] = useState(initial.draft?.checkedCuts ?? []);
   const liveUnits = useMeasurementUnits();
   const [units, setUnits] = useState(initial.draft?.units ?? liveUnits);
@@ -157,7 +180,7 @@ function Worksheet({
     setUnits(result.draft?.units ?? liveUnits);
     setDirty(false);
     setEditorVersion((v) => v + 1);
-    setDiscardError(null);
+    setRefreshError(null);
     await client.invalidateQueries({ queryKey: productionKey });
   };
   return (
@@ -172,7 +195,7 @@ function Worksheet({
               ? 'Results awaiting office review'
               : 'Results in progress'}
       </p>
-      {discardError && <ErrorNotice error={discardError} />}
+      {refreshError && <ErrorNotice error={refreshError} />}
       <CuttingInstructions
         allocation={sheet.snapshot}
         units={units}
@@ -194,7 +217,7 @@ function Worksheet({
           key={editorVersion}
           onDirtyChange={setDirty}
           allocation={sheet.snapshot}
-          close={() => void refresh().catch(setDiscardError)}
+          close={() => void refresh().catch(setRefreshError)}
           worksheet={{
             dirty: checkedDirty,
             initialForm:

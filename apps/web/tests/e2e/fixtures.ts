@@ -301,13 +301,6 @@ export async function mockApi(
             )
             .map((o) => ({
               ...o,
-              canRecordCutManually: !state.worksheets.some(
-                (w) =>
-                  w.workOrderId === o.id &&
-                  !w.abandonedAt &&
-                  !w.skippedAt &&
-                  !w.results,
-              ),
               hasCuttingWorksheet: state.worksheets.some(
                 (w) => w.workOrderId === o.id && !w.abandonedAt && !w.skippedAt,
               ),

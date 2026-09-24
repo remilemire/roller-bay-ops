@@ -80,15 +80,6 @@ export class CuttingWorksheetsService {
     if (!row) throw new NotFoundException('Cutting worksheet not found.');
     return row;
   }
-  async assertManualCutAllowed(context: UnitOfWorkContext, orderId: string) {
-    const sheet = await context.cuttingWorksheets.forOrder(orderId);
-    // Retained results prove a prior submission, including sheets returned for
-    // measurement correction. Their cleared milestones can be recorded manually.
-    if (sheet && !sheet.results)
-      throw new ConflictException(
-        'Submit the cutting worksheet to record this order as cut.',
-      );
-  }
   async forAllocation(context: UnitOfWorkContext, id: string) {
     const row = await context.cuttingWorksheets.forAllocation(id);
     return row ? presentWorksheet(row) : null;

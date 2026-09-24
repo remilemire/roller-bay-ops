@@ -71,7 +71,7 @@ export function CompletionAction({
           : mutation.isPending
             ? 'Saving…'
             : station === 'cutting'
-              ? 'Record cut manually'
+              ? 'Sign off only'
               : `Mark ${orderNumber} ${completionLabels[station]}`}
       </Button>
       {mutation.isSuccess && (

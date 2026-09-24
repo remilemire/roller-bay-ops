@@ -63,7 +63,6 @@ export const stationQuerySchema = z
 export const stationOrderSchema = workOrderSchema.extend({
   completions: productionCompletionsSchema,
   hasCuttingWorksheet: z.boolean(),
-  canRecordCutManually: z.boolean(),
 });
 export const stationOrderListSchema = z.object({
   items: z.array(stationOrderSchema),

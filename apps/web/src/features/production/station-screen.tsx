@@ -1,5 +1,7 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
+import { Dialog } from '@/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -222,27 +224,24 @@ function StationQueue({ station }: { station: Station }) {
                     ))}
                   </div>
                 )}
-                <div className="inline-actions">
-                  {station === 'cutting' &&
-                    (order.hasCuttingWorksheet || !order.cutAt) && (
-                      <Button asChild variant="outline">
-                        <Link href={`/stations/cutting/${order.id}`}>
-                          {order.hasCuttingWorksheet
-                            ? 'Open cutting sheet'
-                            : 'Use cutting worksheet'}
-                        </Link>
-                      </Button>
-                    )}
-                  {(station !== 'cutting' || order.canRecordCutManually) && (
-                    <CompletionAction
-                      station={station}
+                {station === 'cutting' ? (
+                  !order.cutAt && (
+                    <CuttingChoice
                       orderId={order.id}
                       orderNumber={order.orderNumber}
+                      hasWorksheet={order.hasCuttingWorksheet}
                       employeeIds={employee.employeeIds}
-                      done={!!order[stamp[station]]}
                     />
-                  )}
-                </div>
+                  )
+                ) : (
+                  <CompletionAction
+                    station={station}
+                    orderId={order.id}
+                    orderNumber={order.orderNumber}
+                    employeeIds={employee.employeeIds}
+                    done={!!order[stamp[station]]}
+                  />
+                )}
               </div>
             </section>
           ))}
@@ -254,5 +253,69 @@ function StationQueue({ station }: { station: Station }) {
         </>
       )}
     </div>
+  );
+}
+
+function CuttingChoice({
+  orderId,
+  orderNumber,
+  hasWorksheet,
+  employeeIds,
+}: {
+  orderId: string;
+  orderNumber: string;
+  hasWorksheet: boolean;
+  employeeIds: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="inline-actions">
+        <Button onClick={() => setOpen(true)}>Record cutting</Button>
+      </div>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`Record cutting · ${orderNumber}`}
+        description="Choose how to record this order's cutting."
+      >
+        <div className="stack">
+          <section className="stack">
+            <h3>Sign off only</h3>
+            <p>
+              Mark the order cut now and credit the selected employees. No
+              measurements are submitted.
+            </p>
+            {!employeeIds.length && (
+              <p className="muted">
+                Close this dialog and select the employees who completed the
+                cutting.
+              </p>
+            )}
+            <CompletionAction
+              station="cutting"
+              orderId={orderId}
+              orderNumber={orderNumber}
+              employeeIds={employeeIds}
+              done={false}
+            />
+          </section>
+          <section className="stack">
+            <h3>Cutting worksheet</h3>
+            <p>
+              Follow cutting instructions and save measurements. Submitting the
+              worksheet also marks the order cut.
+            </p>
+            <div className="inline-actions">
+              <Button asChild variant="outline">
+                <Link href={`/stations/cutting/${orderId}`}>
+                  {hasWorksheet ? 'Continue worksheet' : 'Use worksheet'}
+                </Link>
+              </Button>
+            </div>
+          </section>
+        </div>
+      </Dialog>
+    </>
   );
 }

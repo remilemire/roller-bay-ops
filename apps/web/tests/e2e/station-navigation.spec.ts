@@ -30,7 +30,7 @@ for (const station of stations) {
     ).toHaveCount(0);
     if (station.value === 'cutting') {
       await expect(
-        page.getByRole('link', { name: 'Use cutting worksheet', exact: true }),
+        page.getByRole('button', { name: 'Record cutting', exact: true }),
       ).toBeVisible();
     } else {
       await pickEmployee(page, 'Alex Reed');

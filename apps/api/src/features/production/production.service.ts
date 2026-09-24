@@ -18,7 +18,6 @@ import type {
 } from './production-completions.table.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/index.js';
-import { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
 import { EmployeesService } from '../employees/index.js';
 import type { Employee } from '@roller-bay/shared/employees';
 import { productionOperation } from './production.operation.js';
@@ -45,7 +44,6 @@ export class ProductionService {
     private readonly orders: WorkOrdersService,
     private readonly employees: EmployeesService,
     private readonly audit: AuditService,
-    private readonly worksheets: CuttingWorksheetsService,
   ) {}
   list(id: string) {
     return productionOperation(() =>
@@ -81,8 +79,6 @@ export class ProductionService {
           employeeIds,
         });
         if (replay.result) return replay.result;
-        if (station === 'cutting')
-          await this.worksheets.assertManualCutAllowed(context, id);
         this.orders.assertNotCancelled(order);
         if (!order.allocatedAt)
           throw new ConflictException(
