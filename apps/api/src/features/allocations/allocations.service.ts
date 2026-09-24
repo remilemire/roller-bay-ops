@@ -623,24 +623,63 @@ export class AllocationsService {
       requireActiveRevision(header, input.expectedRevision);
       const allocated = await context.allocations.items(id);
       const ids = allocated.map((item) => item.stockItemId!);
+      const unusedIds = input.unusedStockItemIds ?? [];
+      const usedIds = input.items.map((item) => item.stockItemId);
       if (
-        new Set(input.items.map((item) => item.stockItemId)).size !==
-          input.items.length ||
-        input.items.length !== ids.length ||
-        input.items.some((item) => !ids.includes(item.stockItemId))
+        unusedIds.some((stockId) => !ids.includes(stockId)) ||
+        ids.some(
+          (stockId) =>
+            !usedIds.includes(stockId) && !unusedIds.includes(stockId),
+        )
       )
         throw new BadRequestException(
-          'Provide exactly one cutting result for every allocated stock item.',
+          'Record a result or mark unused for every planned stock item.',
         );
-      // Inventory reconciliation is independent of the cutting milestone.
+      const additionalIds = usedIds.filter((stockId) => !ids.includes(stockId));
+      // Worksheet observations must keep their captured stock baselines.
+      if (worksheetId && (unusedIds.length || additionalIds.length))
+        throw new BadRequestException(
+          'Worksheet results must cover their captured stock items.',
+        );
+      // Lock both released reservations and actual usage together, in stock ID order.
       const now = new Date();
-      await this.stockItems.findForAllocation(context, {
-        stockIds: ids,
+      const stocks = await this.stockItems.findForAllocation(context, {
+        stockIds: [...new Set([...ids, ...usedIds])],
         lock: true,
       });
       if (!worksheetId)
-        await this.worksheets.assertStockReconciliationAllowed(context, ids);
-      const before = await this.details.load(context, header);
+        await this.worksheets.assertStockReconciliationAllowed(
+          context,
+          usedIds,
+        );
+      const before = allocationDetailSchema.parse(
+        await this.details.load(context, header),
+      );
+      const reservations = await context.allocations.reservations(
+        additionalIds,
+        id,
+      );
+      for (const stockId of additionalIds) {
+        const stock = stocks.find((item) => item.id === stockId);
+        if (!stock)
+          throw new NotFoundException('Additional stock item not found.');
+        if (stock.consumedAt || stock.voidedAt)
+          throw new ConflictException(
+            'Additional fabric is consumed or voided.',
+          );
+        if (reservations.has(stockId))
+          throw new ConflictException(
+            'Additional fabric is reserved for another allocation.',
+          );
+        if (
+          !before.requirements.some(
+            (line) => line.fabricColorId === stock.fabricColorId,
+          )
+        )
+          throw new BadRequestException(
+            'Additional fabric must match a color on the order.',
+          );
+      }
       const effects = await this.stockItems.recordCuttingResults(
         input.items,
         context,
@@ -654,6 +693,7 @@ export class AllocationsService {
         completion: {
           submittedByUserId: userId,
           items: input.items,
+          ...(unusedIds.length ? { unusedStockItemIds: unusedIds } : {}),
           createdStockItemIds: effects
             .filter((e) => !e.before)
             .map((e) => e.stockItemId),
@@ -663,7 +703,7 @@ export class AllocationsService {
       // Retire this order's reservations before looking for shortages in the
       // remaining orders; observed measurements are kept even if stock is short.
       const affectedAllocationIds =
-        await context.allocations.affectedAllocations(ids);
+        await context.allocations.affectedAllocations(usedIds);
       saved = await context.allocations.saveCompletionFlags(id, {
         ...saved.completion!,
         affectedAllocationIds,

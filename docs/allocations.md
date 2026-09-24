@@ -118,7 +118,7 @@ Optimization requires `SOLVER_URL` (defaults to `http://127.0.0.1:8001`) and `SO
 
 ### Cutting completion
 
-Completion takes `{ expectedRevision, items }`, with exactly one outcome per allocated stock item. Every item includes `stockItemId`, `expectedRevision` from the current stock response, and optionally `scraps`. A stock timestamp mismatch returns 409 so results cannot silently overwrite a newer measurement.
+Completion takes `{ expectedRevision, items, unusedStockItemIds? }`. For each planned stock item, supply an actual outcome in `items` or explicitly mark it unused. Outcomes can also include additional rolls or remnants actually used; they must match an order fabric color and have no other allocation reservations or pending worksheet use. At least one stock item must have been used. Unused stock measurements and revisions remain unchanged, and completing releases all original reservations. The original cutting plan is preserved; the completion and audit record actual usage and unused IDs. Digital worksheets retain their captured-stock rules. Every used item includes `stockItemId`, `expectedRevision` from the current stock response, and optionally `scraps`. A stock timestamp mismatch returns 409 so results cannot silently overwrite a newer measurement.
 
 - `outcome: "returned-roll"`: positive `radialDepthMm`, `locationId`, and `tubeOuterDiameterMm` if not already known. Depth is the one-sided reading `(outer − tube) / 2`. The current catalog thickness is saved with the measurement and the database calculates remaining length.
 - `outcome: "returned-remnant"`: positive `widthMm`, `explicitLengthMm`, and `locationId`. Width cannot exceed the original width. Roll measurement fields are not accepted.

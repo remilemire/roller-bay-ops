@@ -804,6 +804,7 @@ export async function mockApi(
         completion: {
           submittedByUserId: ids.user,
           items: request.postDataJSON().items,
+          unusedStockItemIds: request.postDataJSON().unusedStockItemIds,
           createdStockItemIds: [],
           affectedAllocationIds: [],
         },

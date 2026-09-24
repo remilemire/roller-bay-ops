@@ -370,6 +370,23 @@ function AllocationRecord({
                 {allocation.completion.createdStockItemIds.length} retained
                 remnants created.
               </p>
+              {!!allocation.completion.unusedStockItemIds?.length && (
+                <div>
+                  <strong>Not used</strong>
+                  <ul>
+                    {allocation.completion.unusedStockItemIds.map((stockId) => (
+                      <li key={stockId}>
+                        <Link
+                          className="text-link"
+                          href={`/stock-items/${stockId}`}
+                        >
+                          {shortId(stockId)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="data-table-wrap">
                 <table aria-label="Effective cutting results">
                   <thead>

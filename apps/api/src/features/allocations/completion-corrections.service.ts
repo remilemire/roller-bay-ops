@@ -276,6 +276,17 @@ export class CompletionCorrectionsService {
             ...familyIds,
             ...additionalIds,
           ]);
+        const unusedIds = [
+          ...new Set([
+            ...(effective.unusedStockItemIds ?? []),
+            ...input.unusedStockItemIds,
+          ]),
+        ].filter(
+          (stockId) =>
+            !effective.items.some((item) => item.stockItemId === stockId),
+        );
+        if (unusedIds.length || effective.unusedStockItemIds)
+          effective.unusedStockItemIds = unusedIds;
         const saved = await context.allocations.update(id, {
           stockEffects: [...baseline.values()],
           effectiveCompletion: effective,

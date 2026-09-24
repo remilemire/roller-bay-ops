@@ -454,3 +454,107 @@ test('catalog editing normalizes color codes and retains thousandth-mm thickness
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(edited).toBeFocused();
 });
+
+test('initial results can replace an unused roll and recover the exact request after reload', async ({
+  page,
+}, testInfo) => {
+  const state = await mockApi(page);
+  const { stock } = await import('../fixtures');
+  const extra = { ...stock, id: ids.receipt, revision: 7 };
+  await page.route('**/api/stock-items?*', (route) =>
+    route.fulfill({
+      json: { items: [extra], total: 1, page: 1, pageSize: 25 },
+    }),
+  );
+  await page.route(`**/api/stock-items/${extra.id}`, (route) =>
+    route.fulfill({ json: extra }),
+  );
+  const attempts: { body: unknown; key: string | undefined }[] = [];
+  await page.route(
+    `**/api/allocations/${ids.allocation}/complete`,
+    async (route) => {
+      attempts.push({
+        body: route.request().postDataJSON(),
+        key: route.request().headers()['idempotency-key'],
+      });
+      if (attempts.length === 1)
+        await route.fulfill({
+          status: 503,
+          json: { message: 'Temporarily unavailable' },
+        });
+      else await route.fallback();
+    },
+  );
+  await page.goto(
+    `/allocations/${ids.allocation}?action=record-cutting-results`,
+  );
+  await page
+    .getByLabel('What happened to this stock item?')
+    .selectOption('unused');
+  await expect(page.getByLabel('Tube outer diameter (mm)')).toHaveCount(0);
+  await page
+    .getByRole('combobox', { name: 'Additional roll used' })
+    .fill('5555');
+  await page
+    .getByRole('listbox', { name: 'Additional roll used' })
+    .getByRole('option')
+    .first()
+    .click();
+  await page
+    .getByRole('button', { name: 'Add roll used', exact: true })
+    .click();
+  await page
+    .getByLabel('What happened to this stock item?')
+    .nth(1)
+    .selectOption('consumed');
+  await page.getByLabel('Tube outer diameter (mm)').fill('50');
+  await page.screenshot({
+    path: testInfo.outputPath('actual-roll-usage.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Review and reconcile' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Planned stock items not used: 1',
+  );
+  await expect(page.getByRole('dialog')).toContainText('(1 additional)');
+  await page.screenshot({
+    path: testInfo.outputPath('actual-roll-review.png'),
+  });
+  await page
+    .getByRole('button', { name: 'Reconcile allocation', exact: true })
+    .click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Temporarily unavailable',
+  );
+  await page.reload();
+  await expect(
+    page.getByLabel('What happened to this stock item?').first(),
+  ).toHaveValue('unused');
+  await expect(
+    page.getByLabel('What happened to this stock item?').nth(1),
+  ).toHaveValue('consumed');
+  await page.getByRole('button', { name: 'Review and reconcile' }).click();
+  await page
+    .getByRole('button', { name: 'Reconcile allocation', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Cutting results recorded' }),
+  ).toBeVisible();
+  await expect(page.getByText('Not used', { exact: true })).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  expect(state.completionRequests[0]).toMatchObject({
+    unusedStockItemIds: [ids.stock],
+    items: [
+      {
+        stockItemId: extra.id,
+        expectedRevision: 7,
+        outcome: 'consumed',
+        tubeOuterDiameterMm: 50,
+      },
+    ],
+  });
+  expect(
+    (state.completionRequests[0] as { items: unknown[] }).items,
+  ).toHaveLength(1);
+});

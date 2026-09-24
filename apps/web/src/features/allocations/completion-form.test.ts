@@ -3,9 +3,10 @@ import {
   defaultMeasurementUnits,
   type MeasurementUnits,
 } from '@roller-bay/shared/users';
-import { allocation, ids } from '../../../tests/fixtures';
+import { allocation, ids, stock } from '../../../tests/fixtures';
 import {
   completionFieldName,
+  completionItemToForm,
   completionFromForm,
   completionToForm,
   completionRecovery,
@@ -109,4 +110,46 @@ it('places completion issues on the field that fixes them', () => {
   // Issues about the whole submission stay in the notice.
   expect(completionFieldName('items')).toBeNull();
   expect(completionFieldName('items.0')).toBeNull();
+});
+
+it('records a last-minute roll substitution and recovers the exact submission', () => {
+  const form = completionToForm(allocation, units);
+  Object.assign(form.items[0]!, {
+    outcome: 'unused',
+    depth: 'old incomplete input',
+  });
+  form.items.push({
+    ...completionItemToForm({ ...stock, id: ids.receipt, revision: 7 }, units),
+    outcome: 'consumed',
+    tube: '50',
+  });
+  const body = completionFromForm(form, allocation.revision, units);
+  expect(body.unusedStockItemIds).toEqual([ids.stock]);
+  expect(body.items).toEqual([
+    {
+      stockItemId: ids.receipt,
+      expectedRevision: 7,
+      outcome: 'consumed',
+      tubeOuterDiameterMm: 50,
+      scraps: [],
+    },
+  ]);
+  expect(
+    completionFromForm(
+      completionRecovery(body, allocation, units),
+      allocation.revision,
+      units,
+    ),
+  ).toEqual(body);
+  expect(completionFieldName('items.0.tubeOuterDiameterMm', form)).toBe(
+    'items.1.tube',
+  );
+});
+
+it('requires actual usage and refuses duplicate or used-and-unused stock IDs', () => {
+  const form = completionToForm(allocation, units);
+  form.items[0]!.outcome = 'unused';
+  expect(() => completionFromForm(form, 1, units)).toThrow();
+  form.items.push({ ...form.items[0]!, outcome: 'consumed', tube: '50' });
+  expect(() => completionFromForm(form, 1, units)).toThrow();
 });

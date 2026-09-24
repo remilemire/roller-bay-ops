@@ -214,6 +214,7 @@ export class CuttingWorksheetsService {
       if (input.draft) this.validateDraft(row, input.draft);
       const ids = row.snapshot.items.map((i) => i.stockItemId);
       if (
+        (input.results.unusedStockItemIds?.length ?? 0) > 0 ||
         input.results.expectedRevision !== row.snapshot.revision ||
         input.results.items.length !== ids.length ||
         new Set(input.results.items.map((i) => i.stockItemId)).size !==

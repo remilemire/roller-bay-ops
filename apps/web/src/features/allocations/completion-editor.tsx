@@ -2,11 +2,14 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import { useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   completeAllocationSchema,
   type AllocationDetail,
 } from '@roller-bay/shared/allocations';
+import { stockItemSchema } from '@roller-bay/shared/stock-items';
+import { lookupStock, stockKey } from '@/features/stock-items';
+import { api } from '@/lib/api';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrentUser } from '@/features/auth';
@@ -31,6 +34,7 @@ import { shortId } from '@/lib/format';
 import { completeAllocation, allocationKey } from './allocations.api';
 import {
   completionFieldName,
+  completionItemToForm,
   completionFormSchema,
   completionFromForm,
   completionToForm,
@@ -87,6 +91,51 @@ export function CompletionEditor({
   });
   const values = useWatch({ control: form.control }) as CompletionForm;
   const client = useQueryClient();
+  const [extraId, setExtraId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<unknown>(null);
+  const additionalIds = values.items
+    .filter(
+      (row) =>
+        !allocation.items.some((item) => item.stockItemId === row.stockItemId),
+    )
+    .map((row) => row.stockItemId);
+  const extraStock = useQuery({
+    queryKey: [...stockKey, 'completion-usage', additionalIds],
+    enabled: additionalIds.length > 0,
+    queryFn: ({ signal }) =>
+      Promise.all(
+        additionalIds.map((id) =>
+          api(`/stock-items/${id}`, stockItemSchema, { signal }),
+        ),
+      ),
+  });
+  const loadingExtraStock = additionalIds.length > 0 && extraStock.isPending;
+  async function addRoll() {
+    setAdding(true);
+    setAddError(null);
+    try {
+      const stock = await api(`/stock-items/${extraId}`, stockItemSchema);
+      if (stock.consumedAt || stock.voidedAt)
+        throw new Error('Select available fabric.');
+      if (
+        !allocation.requirements.some(
+          (line) => line.fabricColorId === stock.fabricColorId,
+        )
+      )
+        throw new Error('Select fabric used by this order.');
+      const items = form.getValues('items');
+      if (!items.some((item) => item.stockItemId === stock.id))
+        form.setValue('items', [...items, completionItemToForm(stock, units)], {
+          shouldDirty: true,
+        });
+      setExtraId('');
+    } catch (error) {
+      setAddError(error);
+    } finally {
+      setAdding(false);
+    }
+  }
   const [confirm, setConfirm] = useState(false);
   const [validationError, setValidationError] = useState<unknown>(null);
   const dirty = form.formState.isDirty || !!worksheet?.dirty;
@@ -95,7 +144,7 @@ export function CompletionEditor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const fieldName = (issue: ErrorIssue) =>
-    completionFieldName(issuePath(issue));
+    completionFieldName(issuePath(issue), form.getValues());
   // Issues with a field of their own show beside it; the rest stay in the
   // notice above the actions.
   const showIssues = (source: unknown) =>
@@ -155,14 +204,45 @@ export function CompletionEditor({
         })}
       >
         <fieldset
-          disabled={mutation.isPending || saveDraft.isPending}
+          disabled={
+            mutation.isPending ||
+            saveDraft.isPending ||
+            adding ||
+            loadingExtraStock
+          }
           style={{ border: 0, margin: 0, padding: 0 }}
         >
           <div className="stack">
             {values.items.map((row, index) => {
-              const stock = allocation.items.find(
+              const planned = allocation.items.find(
                 (i) => i.stockItemId === row.stockItemId,
-              )!.stockItem;
+              );
+              const stock =
+                planned?.stockItem ??
+                extraStock.data?.find((item) => item.id === row.stockItemId);
+              if (!stock)
+                return (
+                  <div key={row.stockItemId}>
+                    <p>Loading additional roll {shortId(row.stockItemId)}…</p>
+                    {!worksheet && extraStock.error && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          form.setValue(
+                            'items',
+                            values.items.filter(
+                              (item) => item.stockItemId !== row.stockItemId,
+                            ),
+                            { shouldDirty: true },
+                          )
+                        }
+                      >
+                        Remove additional roll
+                      </Button>
+                    )}
+                  </div>
+                );
               return (
                 <section className="panel" key={row.stockItemId}>
                   <div className="panel-heading">
@@ -176,6 +256,23 @@ export function CompletionEditor({
                         {stock.locationLabel}
                       </p>
                     </div>
+                    {!planned && !worksheet && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          form.setValue(
+                            'items',
+                            values.items.filter(
+                              (item) => item.stockItemId !== row.stockItemId,
+                            ),
+                            { shouldDirty: true },
+                          )
+                        }
+                      >
+                        Remove additional roll
+                      </Button>
+                    )}
                   </div>
                   <div className="panel-body stack">
                     <ChoiceField
@@ -184,6 +281,9 @@ export function CompletionEditor({
                       onChange={(outcome) => change(index, { ...row, outcome })}
                       error={fieldError(`items.${index}.outcome`)}
                       options={[
+                        ...(!worksheet && planned
+                          ? [{ value: 'unused', label: 'Not used' }]
+                          : []),
                         { value: 'consumed', label: 'Fully consumed' },
                         {
                           value: stock.isRemnant
@@ -195,7 +295,13 @@ export function CompletionEditor({
                         },
                       ]}
                     />
-                    {row.outcome && (
+                    {row.outcome === 'unused' && (
+                      <p>
+                        Stock measurements stay unchanged. Its reservation will
+                        be released.
+                      </p>
+                    )}
+                    {row.outcome && row.outcome !== 'unused' && (
                       <div className="form-grid">
                         {!stock.isRemnant && (
                           <TextField
@@ -261,123 +367,159 @@ export function CompletionEditor({
                         )}
                       </div>
                     )}
-                    <div>
-                      <div className="form-row-header">
-                        <h3>Retained remnants</h3>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
+                    {row.outcome !== 'unused' && (
+                      <div>
+                        <div className="form-row-header">
+                          <h3>Retained remnants</h3>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              change(index, {
+                                ...row,
+                                scraps: [
+                                  ...row.scraps,
+                                  {
+                                    width: '',
+                                    length: '',
+                                    quantity: '',
+                                    locationId: '',
+                                  },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus size={16} />
+                            Add remnant
+                          </Button>
+                        </div>
+                        <p
+                          className="muted"
+                          style={{ fontSize: 11, margin: '8px 0 16px' }}
+                        >
+                          Each retained piece becomes a traceable stock item
+                          linked to this fabric.
+                        </p>
+                        {row.scraps.map((scrap, si) => {
+                          const update = (value: typeof scrap) =>
                             change(index, {
                               ...row,
-                              scraps: [
-                                ...row.scraps,
-                                {
-                                  width: '',
-                                  length: '',
-                                  quantity: '',
-                                  locationId: '',
-                                },
-                              ],
-                            })
-                          }
-                        >
-                          <Plus size={16} />
-                          Add remnant
-                        </Button>
-                      </div>
-                      <p
-                        className="muted"
-                        style={{ fontSize: 11, margin: '8px 0 16px' }}
-                      >
-                        Each retained piece becomes a traceable stock item
-                        linked to this fabric.
-                      </p>
-                      {row.scraps.map((scrap, si) => {
-                        const update = (value: typeof scrap) =>
-                          change(index, {
-                            ...row,
-                            scraps: row.scraps.map((s, i) =>
-                              i === si ? value : s,
-                            ),
-                          });
-                        return (
-                          <div className="form-row" key={si}>
-                            <div className="form-row-header">
-                              <strong>Remnant group {si + 1}</strong>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Remove remnant ${si + 1} from ${shortId(stock.id)}`}
-                                onClick={() =>
-                                  change(index, {
-                                    ...row,
-                                    scraps: row.scraps.filter(
-                                      (_, i) => i !== si,
-                                    ),
-                                  })
-                                }
-                              >
-                                <Trash2 size={16} />
-                              </Button>
-                            </div>
-                            <TextField
-                              label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                              type="number"
-                              value={scrap.width}
-                              onChange={(width) => update({ ...scrap, width })}
-                              error={fieldError(
-                                `items.${index}.scraps.${si}.width`,
-                              )}
-                            />
-                            <TextField
-                              label={`Length (${fieldSuffix(units, 'rollLength')})`}
-                              type="number"
-                              value={scrap.length}
-                              onChange={(length) =>
-                                update({ ...scrap, length })
-                              }
-                              error={fieldError(
-                                `items.${index}.scraps.${si}.length`,
-                              )}
-                            />
-                            <TextField
-                              label="Quantity"
-                              type="number"
-                              value={scrap.quantity}
-                              onChange={(quantity) =>
-                                update({ ...scrap, quantity })
-                              }
-                              error={fieldError(
-                                `items.${index}.scraps.${si}.quantity`,
-                              )}
-                            />
-                            <div className="span-full">
-                              <Lookup
-                                label={`Remnant destination · ${shortId(stock.id)} group ${si + 1}`}
-                                value={scrap.locationId}
-                                onChange={(locationId) =>
-                                  update({ ...scrap, locationId })
+                              scraps: row.scraps.map((s, i) =>
+                                i === si ? value : s,
+                              ),
+                            });
+                          return (
+                            <div className="form-row" key={si}>
+                              <div className="form-row-header">
+                                <strong>Remnant group {si + 1}</strong>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Remove remnant ${si + 1} from ${shortId(stock.id)}`}
+                                  onClick={() =>
+                                    change(index, {
+                                      ...row,
+                                      scraps: row.scraps.filter(
+                                        (_, i) => i !== si,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              </div>
+                              <TextField
+                                label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                                type="number"
+                                value={scrap.width}
+                                onChange={(width) =>
+                                  update({ ...scrap, width })
                                 }
                                 error={fieldError(
-                                  `items.${index}.scraps.${si}.locationId`,
+                                  `items.${index}.scraps.${si}.width`,
                                 )}
-                                queryKey={locationsKey}
-                                load={
-                                  worksheet?.lookupLocations ?? lookupLocations
-                                }
                               />
+                              <TextField
+                                label={`Length (${fieldSuffix(units, 'rollLength')})`}
+                                type="number"
+                                value={scrap.length}
+                                onChange={(length) =>
+                                  update({ ...scrap, length })
+                                }
+                                error={fieldError(
+                                  `items.${index}.scraps.${si}.length`,
+                                )}
+                              />
+                              <TextField
+                                label="Quantity"
+                                type="number"
+                                value={scrap.quantity}
+                                onChange={(quantity) =>
+                                  update({ ...scrap, quantity })
+                                }
+                                error={fieldError(
+                                  `items.${index}.scraps.${si}.quantity`,
+                                )}
+                              />
+                              <div className="span-full">
+                                <Lookup
+                                  label={`Remnant destination · ${shortId(stock.id)} group ${si + 1}`}
+                                  value={scrap.locationId}
+                                  onChange={(locationId) =>
+                                    update({ ...scrap, locationId })
+                                  }
+                                  error={fieldError(
+                                    `items.${index}.scraps.${si}.locationId`,
+                                  )}
+                                  queryKey={locationsKey}
+                                  load={
+                                    worksheet?.lookupLocations ??
+                                    lookupLocations
+                                  }
+                                />
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </section>
               );
             })}
+            {!worksheet && (
+              <section className="panel">
+                <div className="panel-body stack">
+                  <Lookup
+                    label="Additional roll used"
+                    value={extraId}
+                    onChange={setExtraId}
+                    queryKey={[...stockKey, 'completion-add', units.rollWidth]}
+                    load={lookupStock(units.rollWidth)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      !extraId ||
+                      values.items.some((item) => item.stockItemId === extraId)
+                    }
+                    onClick={() => void addRoll()}
+                  >
+                    Add roll used
+                  </Button>
+                  {addError != null && <ErrorNotice error={addError} />}
+                </div>
+              </section>
+            )}
           </div>
+          {extraStock.error && (
+            <ErrorNotice
+              error={extraStock.error}
+              retry={() => void extraStock.refetch()}
+            />
+          )}
           {Boolean(validationError) && (
             <ErrorNotice
               error={validationError}
@@ -409,7 +551,7 @@ export function CompletionEditor({
             >
               Cancel
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={!!extraStock.error}>
               {worksheet && !worksheet.resolution
                 ? 'Review and submit results'
                 : 'Review and reconcile'}
@@ -431,17 +573,42 @@ export function CompletionEditor({
             : 'Stock measurements will be updated, retained remnants created, and this allocation reconciled. This does not change production milestones.'
         }
       >
+        {!worksheet && (
+          <ul>
+            <li>
+              Stock items used:{' '}
+              {values.items.filter((item) => item.outcome !== 'unused').length}{' '}
+              ({additionalIds.length} additional).
+            </li>
+            <li>
+              Planned stock items not used:{' '}
+              {values.items.filter((item) => item.outcome === 'unused').length}.
+              Their measurements stay unchanged.
+            </li>
+            <li>The original cutting plan stays in history.</li>
+          </ul>
+        )}
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
             variant="outline"
-            disabled={mutation.isPending || saveDraft.isPending}
+            disabled={
+              mutation.isPending ||
+              saveDraft.isPending ||
+              adding ||
+              loadingExtraStock
+            }
             onClick={() => setConfirm(false)}
           >
             Go back
           </Button>
           <Button
-            disabled={mutation.isPending || saveDraft.isPending}
+            disabled={
+              mutation.isPending ||
+              saveDraft.isPending ||
+              adding ||
+              loadingExtraStock
+            }
             onClick={() => mutation.mutate(form.getValues())}
           >
             {mutation.isPending

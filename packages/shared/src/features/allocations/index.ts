@@ -153,6 +153,7 @@ export const completeAllocationSchema = z
   .strictObject({
     expectedRevision: revision,
     items: z.array(stockCuttingOutcomeSchema).min(1).max(10000),
+    unusedStockItemIds: z.array(id).max(10000).optional(),
   })
   .refine(
     (value) =>
@@ -162,7 +163,15 @@ export const completeAllocationSchema = z
         0,
       ) <= 1000,
     'A completion may create at most 1,000 retained scraps.',
-  );
+  )
+  .refine((value) => {
+    const ids = [
+      ...value.items.map((item) => item.stockItemId),
+      ...(value.unusedStockItemIds ?? []),
+    ];
+    return ids.length <= 10000 && new Set(ids).size === ids.length;
+  }, 'Each stock item must be recorded once, either used or unused.');
+
 // Legacy timestamp submissions may only replay an already committed completion.
 export const completeAllocationRequestSchema = z.union([
   completeAllocationSchema,
@@ -206,6 +215,7 @@ export const allocationSummarySchema = z.object({
 });
 export const allocationCompletionSchema = z.object({
   submittedByUserId: id,
+  unusedStockItemIds: z.array(id).optional(),
   items: z.array(recordedStockCuttingOutcomeSchema),
   createdStockItemIds: z.array(id),
   affectedAllocationIds: z.array(id),
