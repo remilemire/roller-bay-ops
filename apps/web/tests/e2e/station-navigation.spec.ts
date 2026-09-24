@@ -23,7 +23,7 @@ for (const station of stations) {
       page.getByRole('heading', { name: `${station.label} station` }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Change station', exact: true }),
+      page.getByRole('link', { name: 'Change station', exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole('navigation', { name: 'Stations', exact: true }),
@@ -85,9 +85,9 @@ test('accounts with several stations choose one before working', async ({
   ).toBeVisible();
 });
 
-test('changing stations requires confirmation and resets attribution and filters', async ({
+test('changing stations returns to the station choices and resets attribution and filters', async ({
   page,
-}, info) => {
+}) => {
   const state = await mockApi(page, {
     role: 'production',
     stations: ['shipping', 'assembly'],
@@ -95,35 +95,11 @@ test('changing stations requires confirmation and resets attribution and filters
   await page.goto('/stations?station=shipping&view=all&search=104801');
   const employee = page.getByLabel('Completed by', { exact: true });
   await employee.selectOption(state.employees[0]!.id);
+  await page.getByRole('link', { name: 'Change station', exact: true }).click();
+  await expect(page).toHaveURL(/\/stations$/);
   await page
-    .getByRole('button', { name: 'Change station', exact: true })
-    .click();
-  const dialog = page.getByRole('dialog', { name: 'Change station' });
-  await expect(
-    dialog.getByRole('button', { name: 'Switch station', exact: true }),
-  ).toBeDisabled();
-  await expect(
-    dialog.getByLabel('Switch to station').locator('option'),
-  ).toHaveText(['Choose station', 'Assembly']);
-  await dialog.getByLabel('Switch to station').selectOption('assembly');
-  await expect(
-    dialog.getByText('New completions will be recorded as assembled.'),
-  ).toBeVisible();
-  await expect(page).toHaveURL(/station=shipping/);
-  await page.screenshot({
-    path: info.outputPath('change-station.png'),
-    fullPage: true,
-  });
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(employee).toHaveValue(state.employees[0]!.id);
-  await expect(page.getByLabel('Find order')).toHaveValue('104801');
-  await page
-    .getByRole('button', { name: 'Change station', exact: true })
-    .click();
-  await expect(dialog.getByLabel('Switch to station')).toHaveValue('');
-  await dialog.getByLabel('Switch to station').selectOption('assembly');
-  await dialog
-    .getByRole('button', { name: 'Switch to Assembly', exact: true })
+    .getByRole('navigation', { name: 'Choose station' })
+    .getByRole('link', { name: /^Assembly/ })
     .click();
   await expect(
     page.getByRole('heading', { name: 'Assembly station' }),
