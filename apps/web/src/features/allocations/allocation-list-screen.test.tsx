@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   QueryClient,
@@ -10,9 +10,7 @@ import type { ReactNode } from 'react';
 import type { AllocationList } from '@roller-bay/shared/allocations';
 import { ids, timestamp } from '../../../tests/fixtures';
 import { AllocationListScreen } from './allocation-list-screen';
-import { allocationList, cancelAllocation } from './allocations.api';
-
-vi.mock('@/features/auth/auth-boundary', () => ({ useCanManage: () => false }));
+import { allocationList } from './allocations.api';
 
 const state = vi.hoisted(() => ({ search: '', replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -23,7 +21,6 @@ vi.mock('next/navigation', () => ({
 vi.mock('./allocations.api', async (original) => ({
   ...(await original<typeof import('./allocations.api')>()),
   allocationList: vi.fn(),
-  cancelAllocation: vi.fn(),
 }));
 const allocation: AllocationList['items'][number] = {
   id: ids.allocation,
@@ -42,7 +39,6 @@ const allocation: AllocationList['items'][number] = {
 beforeEach(() => {
   state.search = '';
   state.replace.mockReset();
-  vi.mocked(cancelAllocation).mockReset();
   vi.mocked(allocationList)
     .mockReset()
     .mockImplementation((filters = {}) =>
@@ -97,32 +93,22 @@ it('asks the API for every state on the All orders tab', async () => {
   });
 });
 
-it('cancels an active allocation at the listed revision after confirmation', async () => {
-  vi.mocked(cancelAllocation).mockRejectedValueOnce(
-    new Error('Stale revision'),
-  );
+it('links active allocations directly to recording cutting results', async () => {
   show(<AllocationListScreen />);
-  const user = userEvent.setup();
-  await user.click(
-    await screen.findByRole('button', { name: 'Cancel allocation 104801' }),
+  expect(
+    await screen.findByRole('link', {
+      name: 'Record cutting results for allocation 104801',
+    }),
+  ).toHaveAttribute(
+    'href',
+    `/allocations/${ids.allocation}?action=record-cutting-results`,
   );
-  expect(cancelAllocation).not.toHaveBeenCalled();
-  const dialog = screen.getByRole('dialog', {
-    name: 'Cancel allocation 104801?',
-  });
-  await user.click(
-    within(dialog).getByRole('button', { name: 'Cancel allocation' }),
-  );
-  expect(cancelAllocation).toHaveBeenLastCalledWith(ids.allocation, 2);
-  // A refusal stays in the dialog rather than closing it.
-  expect(await within(dialog).findByRole('alert')).toBeVisible();
-  await user.click(
-    within(dialog).getByRole('button', { name: 'Keep allocation' }),
-  );
-  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: /Cancel allocation/ }),
+  ).toBeNull();
 });
 
-it('offers no cancel action once an allocation is finished', async () => {
+it('offers no recording action once an allocation is finished', async () => {
   vi.mocked(allocationList).mockImplementation((filters = {}) =>
     queryOptions({
       queryKey: ['allocations', 'list', filters],
@@ -138,6 +124,6 @@ it('offers no cancel action once an allocation is finished', async () => {
   await screen.findByText('104801');
   expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   expect(
-    screen.queryByRole('button', { name: /Cancel allocation/ }),
+    screen.queryByRole('link', { name: /Record cutting results/ }),
   ).toBeNull();
 });

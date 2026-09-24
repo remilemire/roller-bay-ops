@@ -1,18 +1,8 @@
 'use client';
-import { useCanManage } from '@/features/auth/auth-boundary';
-import { AllocationCancellation } from './allocation-cancellation';
 import Link from 'next/link';
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Plus, Scissors } from 'lucide-react';
-import { useState } from 'react';
-import type { AllocationList } from '@roller-bay/shared/allocations';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
 import {
   Empty,
   ErrorNotice,
@@ -24,13 +14,7 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
 import { dateLabel, shortId } from '@/lib/format';
-import {
-  allocationKey,
-  allocationList,
-  cancelAllocation,
-} from './allocations.api';
-
-type AllocationRow = AllocationList['items'][number];
+import { allocationList } from './allocations.api';
 
 // Allocations open on the work in hand; `all` adds drafts and finished work.
 const tabs = [
@@ -41,7 +25,6 @@ const tabs = [
   { value: 'all', label: 'All orders' },
 ];
 export function AllocationListScreen() {
-  const canManage = useCanManage();
   const params = useListParams();
   const state = tabs.some((tab) => tab.value === params.get('state'))
     ? params.get('state')
@@ -55,27 +38,6 @@ export function AllocationListScreen() {
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
   });
-  // Pin the row the dialog opened on; the revision the employee saw is the one
-  // the cancellation is checked against.
-  const [cancelling, setCancelling] = useState<AllocationRow | null>(null);
-  const client = useQueryClient();
-  const cancelMutation = useMutation({
-    mutationFn: (item: AllocationRow) =>
-      cancelAllocation(item.id, item.revision),
-    onSuccess: async () => {
-      setCancelling(null);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: allocationKey }),
-        client.invalidateQueries({ queryKey: ['stock-items'] }),
-        // Cancelling releases fabric and preserves any existing ship date.
-        client.invalidateQueries({ queryKey: ['work-orders'] }),
-      ]);
-    },
-  });
-  const closeCancel = () => {
-    setCancelling(null);
-    cancelMutation.reset();
-  };
   return (
     <>
       <PageHeading title="Allocations">
@@ -153,18 +115,14 @@ export function AllocationListScreen() {
                       />
                     </td>
                     <td>
-                      {(item.state === 'active' ||
-                        (canManage &&
-                          item.state === 'completed' &&
-                          !item.releasedAt)) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          // Every row has this button; name the order it acts on.
-                          aria-label={`Cancel allocation ${item.orderNumber ?? shortId(item.id)}`}
-                          onClick={() => setCancelling(item)}
-                        >
-                          Cancel allocation
+                      {item.state === 'active' && (
+                        <Button asChild variant="ghost" size="sm">
+                          <Link
+                            href={`/allocations/${item.id}?action=record-cutting-results`}
+                            aria-label={`Record cutting results for allocation ${item.orderNumber ?? shortId(item.id)}`}
+                          >
+                            Record cutting results
+                          </Link>
                         </Button>
                       )}
                     </td>
@@ -182,37 +140,6 @@ export function AllocationListScreen() {
           />
         )}
       </section>
-      {cancelling && canManage && (
-        <AllocationCancellation id={cancelling.id} close={closeCancel} />
-      )}
-      <Dialog
-        open={!!cancelling && !canManage}
-        onOpenChange={(open) => !open && closeCancel()}
-        title={
-          cancelling
-            ? `Cancel allocation ${cancelling.orderNumber ?? shortId(cancelling.id)}?`
-            : 'Cancel allocation?'
-        }
-        description="Fabric reservations will be released. The work order and any existing ship date will remain. Stock measurements stay unchanged."
-      >
-        {cancelMutation.error && <ErrorNotice error={cancelMutation.error} />}
-        <div className="form-actions">
-          <Button
-            variant="outline"
-            onClick={closeCancel}
-            disabled={cancelMutation.isPending}
-          >
-            Keep allocation
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => cancelling && cancelMutation.mutate(cancelling)}
-            disabled={cancelMutation.isPending}
-          >
-            Cancel allocation
-          </Button>
-        </div>
-      </Dialog>
     </>
   );
 }

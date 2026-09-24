@@ -201,8 +201,10 @@ test('cutting completion preserves the stock revision and sends tube measurement
   page,
 }) => {
   const state = await mockApi(page);
-  await page.goto(`/allocations/${ids.allocation}`);
-  await page.getByRole('button', { name: 'Record cutting results' }).click();
+  await page.goto('/allocations');
+  await page
+    .getByRole('link', { name: 'Record cutting results for allocation 104801' })
+    .click();
   await page
     .getByLabel('What happened to this stock item?')
     .selectOption('consumed');

@@ -4,6 +4,7 @@ import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { CompletionCorrectionEditor } from './completion-correction-editor';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { z } from 'zod';
 import {
@@ -32,7 +33,13 @@ import {
 } from './allocations.api';
 import { AllocationEditor } from './allocation-editor';
 import { CompletionEditor } from './completion-editor';
-export function AllocationDetailScreen({ id }: { id: string }) {
+export function AllocationDetailScreen({
+  id,
+  recordResults = false,
+}: {
+  id: string;
+  recordResults?: boolean;
+}) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
@@ -41,16 +48,24 @@ export function AllocationDetailScreen({ id }: { id: string }) {
       {query.error && (
         <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       )}
-      <AllocationRecord key={id} allocation={query.data} />
+      <AllocationRecord
+        key={`${id}:${recordResults}`}
+        allocation={query.data}
+        recordResults={recordResults}
+      />
     </>
   );
 }
 function AllocationRecord({
   allocation,
+  recordResults,
 }: {
   allocation: z.infer<typeof allocationRecordSchema>;
+  recordResults: boolean;
 }) {
   const id = allocation.id;
+  const router = useRouter();
+  const openResults = recordResults && allocation.state === 'active';
   const admin = useCanManage();
   const [correcting, setCorrecting] = useState(false);
   const units = useMeasurementUnits();
@@ -61,9 +76,11 @@ function AllocationRecord({
   // Pin the record used to begin editing; refetches must not silently advance
   // the revision against which the employee's changes will be checked.
   const [editingRecord, setEditingRecord] = useState<AllocationDetail | null>(
-    null,
+    openResults ? allocation : null,
   );
-  const [mode, setMode] = useState<'read' | 'edit' | 'complete'>('read');
+  const [mode, setMode] = useState<'read' | 'edit' | 'complete'>(
+    openResults ? 'complete' : 'read',
+  );
   const [cancel, setCancel] = useState(false);
   const client = useQueryClient();
   const cancelMutation = useMutation({
@@ -73,7 +90,7 @@ function AllocationRecord({
       await Promise.all([
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
-        // Cancelling returns the scheduled order to `scheduled`.
+        // The order retains its date but now needs fabric.
         client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
     },
@@ -93,7 +110,10 @@ function AllocationRecord({
     return (
       <CompletionEditor
         allocation={editingRecord}
-        close={() => setMode('read')}
+        close={() => {
+          setMode('read');
+          if (recordResults) router.replace(`/allocations/${id}`);
+        }}
       />
     );
   if (allocation.state === 'draft') return <Loading />;
@@ -113,33 +133,41 @@ function AllocationRecord({
             </Link>
           </Button>
         )}
+        {allocation.state === 'active' && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setEditingRecord(allocation);
+              setMode('edit');
+            }}
+          >
+            <Pencil size={16} />
+            Edit plan
+          </Button>
+        )}
+        {(allocation.state === 'active' ||
+          (admin &&
+            allocation.state === 'completed' &&
+            !allocation.releasedAt)) && (
+          <Button variant="outline" onClick={() => setCancel(true)}>
+            Cancel allocation
+          </Button>
+        )}
         {admin && allocation.state === 'completed' && (
           <Button onClick={() => setCorrecting(true)}>
             Correct cutting results
           </Button>
         )}
         {allocation.state === 'active' && (
-          <>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingRecord(allocation);
-                setMode('edit');
-              }}
-            >
-              <Pencil size={16} />
-              Edit plan
-            </Button>
-            <Button
-              onClick={() => {
-                setEditingRecord(allocation);
-                setMode('complete');
-              }}
-            >
-              <Check size={16} />
-              Record cutting results
-            </Button>
-          </>
+          <Button
+            onClick={() => {
+              setEditingRecord(allocation);
+              setMode('complete');
+            }}
+          >
+            <Check size={16} />
+            Record cutting results
+          </Button>
         )}
       </PageHeading>
       {allocation.correctedAt && (
@@ -456,16 +484,6 @@ function AllocationRecord({
               )}
             </div>
           </section>
-        )}
-        {(allocation.state === 'active' ||
-          (admin &&
-            allocation.state === 'completed' &&
-            !allocation.releasedAt)) && (
-          <div className="form-actions">
-            <Button variant="ghost" onClick={() => setCancel(true)}>
-              Cancel allocation
-            </Button>
-          </div>
         )}
       </div>
       <History type="allocations" id={id} />

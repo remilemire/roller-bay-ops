@@ -207,9 +207,13 @@ test('allocation cancellation keeps the date, flags the order, and leaves unsche
     });
   });
   await page.goto(`/allocations/${ids.allocation}`);
-  await page
-    .getByRole('button', { name: 'Cancel allocation', exact: true })
-    .click();
+  const cancelAllocation = page.locator('.page-heading').getByRole('button', {
+    name: 'Cancel allocation',
+    exact: true,
+  });
+  await expect(cancelAllocation).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('allocation-header.png') });
+  await cancelAllocation.click();
   await expect(page.getByText(/Its ship date stays/)).toBeVisible();
   await page
     .getByLabel('Reason', { exact: true })
