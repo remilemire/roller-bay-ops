@@ -950,10 +950,17 @@ td strong {
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  min-width: 0;
   padding: 14px 16px;
   border-radius: 10px;
   font-size: 12px;
   margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.notice-action {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 .notice-error {
   background: var(--danger-soft);
@@ -968,7 +975,11 @@ td strong {
   color: var(--warning);
 }
 .notice > svg {
+  flex: none;
   margin-top: 1px;
+}
+.notice > div {
+  min-width: 0;
 }
 .notice-details {
   margin: 6px 0 0;
@@ -1157,6 +1168,16 @@ td strong {
   display: grid;
   justify-items: start;
   gap: var(--record-padding);
+}
+.station-workspace .inline-actions:has(> .action-group) {
+  align-items: flex-start;
+}
+.station-workspace .inline-actions > .action-group {
+  min-width: 0;
+  max-width: min(100%, 36rem);
+}
+.station-workspace .inline-actions > .action-group > .button {
+  grid-row: 1;
 }
 .combobox {
   position: relative;

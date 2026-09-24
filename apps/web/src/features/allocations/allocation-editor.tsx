@@ -478,7 +478,7 @@ export function AllocationEditor({
             between the request and its result. It sits outside the fieldset
             so a running generation can still be cancelled. */}
         {planning.isPending ? (
-          <div className="notice notice-info" role="status">
+          <div className="notice notice-info notice-action" role="status">
             <span>
               {planning.variables === 'optimize'
                 ? 'Generating a cutting plan…'
