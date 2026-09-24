@@ -1829,20 +1829,21 @@ td strong {
 .arrival-row > svg {
   color: var(--muted);
 }
+.sheet {
+  max-width: 980px;
+  margin-inline: auto;
+}
 .sheet h3 {
   font-size: 13px;
   margin-bottom: 8px;
 }
 .sheet-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 18px 56px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 24px;
 }
 .sheet-fields > .grow {
-  flex: 1;
-  min-width: 240px;
-  max-width: 480px;
+  min-width: 0;
 }
 .sheet-blinds {
   display: flex;
@@ -1905,6 +1906,19 @@ td strong {
 }
 .sheet-expected {
   margin-bottom: 8px;
+}
+@media screen and (max-width: 760px) {
+  .sheet-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sheet-fields > .grow {
+    grid-column: 1 / -1;
+  }
+}
+@media screen and (max-width: 480px) {
+  .sheet-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @page {
   margin: 12mm;
