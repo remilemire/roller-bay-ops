@@ -76,11 +76,14 @@ function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
 
 // The mocked order that has no allocation yet.
 export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
-/** The "Completed by" checkbox for an employee, by name, within `within`. */
-export const employeeOption = (within: Page | Locator, name: string) =>
-  within
-    .getByRole('group', { name: 'Completed by' })
-    .getByRole('checkbox', { name: new RegExp(`^${name} —`) });
+/** Adds an employee to "Completed by" through its search box, within `within`. */
+export async function pickEmployee(within: Page | Locator, name: string) {
+  await within.getByRole('combobox', { name: 'Completed by' }).click();
+  await within.getByRole('option', { name: new RegExp(`^${name} —`) }).click();
+}
+/** The chip of a selected employee, by its remove control. */
+export const selectedEmployee = (within: Page | Locator, name: string) =>
+  within.getByRole('button', { name: `Remove ${name}` });
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean; stations?: Station[] } = {},

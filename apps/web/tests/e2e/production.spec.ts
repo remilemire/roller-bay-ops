@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Worksheet } from '@roller-bay/shared/production';
-import { mockApi, ids, employeeOption } from './fixtures';
+import { mockApi, ids, pickEmployee, selectedEmployee } from './fixtures';
 test('station login, whole-order attribution, and employee directory', async ({
   page,
 }) => {
@@ -20,7 +20,7 @@ test('station login, whole-order attribution, and employee directory', async ({
   await expect(
     page.getByRole('button', { name: 'Mark 104801 assembled' }),
   ).toBeDisabled();
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
   await expect(page.getByText(/assembled · Alex Reed/)).toBeVisible();
@@ -42,7 +42,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   await page.getByLabel('Cut 1 done').check();
   await page
@@ -60,7 +60,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();
-  await expect(employeeOption(page, 'Alex Reed')).toBeChecked();
+  await expect(selectedEmployee(page, 'Alex Reed')).toBeVisible();
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   const discard = page.getByRole('button', { name: 'Discard changes' });
@@ -217,11 +217,11 @@ test('completion rejection permits another employee and a lost response can be r
     },
   );
   await page.goto('/stations');
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await expect(page.getByText('Employee is inactive.')).toBeVisible();
-  await employeeOption(page, 'Alex Reed').uncheck();
-  await employeeOption(page, 'Robin Park').check();
+  await selectedEmployee(page, 'Alex Reed').click();
+  await pickEmployee(page, 'Robin Park');
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await expect(
     page.getByRole('button', { name: 'Retry original completion' }),
@@ -409,7 +409,7 @@ test('a rejected correction can be edited and resubmitted with a new request key
     .getByRole('button', { name: 'Correct cut record', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
-  await employeeOption(dialog, 'Alex Reed').check();
+  await pickEmployee(dialog, 'Alex Reed');
   await page.getByLabel('Actual completion time').fill('2040-01-01T12:00');
   await page.getByLabel('Reason', { exact: true }).fill('Corrected date');
   await page.getByRole('button', { name: 'Save correction' }).click();

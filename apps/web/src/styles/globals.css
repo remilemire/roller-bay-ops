@@ -875,42 +875,42 @@ td strong {
   accent-color: var(--primary);
   flex: 0 0 auto;
 }
-/* Employees credited with a completion; options are generous for an iPad. */
-.employee-picker {
+/* Employees credited with a completion: a search box adds them, chips list them. */
+.employee-selection {
+  display: grid;
+  gap: 10px;
   min-width: 0;
+}
+.employee-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
   padding: 0;
-  border: 0;
+  list-style: none;
 }
-.employee-picker legend {
-  margin-bottom: 9px;
-  padding: 0;
-  font-size: 11px;
-  font-weight: 600;
-}
-.employee-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-}
-.employee-picker-option {
-  display: flex;
+.employee-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 9px 12px;
+  gap: 4px;
+  min-height: 36px;
+  padding: 4px 6px 4px 12px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--surface-soft);
   font-size: 13px;
-  cursor: pointer;
 }
-.employee-picker-option input {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--primary);
-  flex: 0 0 auto;
+.employee-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.employee-chip-remove:hover {
+  color: var(--primary);
 }
 .form-section {
   margin-bottom: 24px;
@@ -2261,7 +2261,7 @@ td strong {
 }
 /* Station controls are generous enough for repeated use on an iPad. */
 .station-workspace .button,
-.station-workspace button:not(.info-tip),
+.station-workspace button:not(.info-tip):not(.employee-chip-remove),
 .station-workspace select,
 .station-workspace input {
   min-height: 48px;

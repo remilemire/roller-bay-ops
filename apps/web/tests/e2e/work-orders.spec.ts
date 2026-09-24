@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ids, mockApi, employeeOption } from './fixtures';
+import { ids, mockApi, pickEmployee } from './fixtures';
 test('admins schedule and ship orders, and delete only unused orders', async ({
   page,
 }, testInfo) => {
@@ -64,7 +64,7 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     .click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
   await page.getByLabel('Station', { exact: true }).selectOption('shipping');
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await expect(
     page.getByRole('button', { name: 'Shipped recorded', exact: true }),
@@ -110,7 +110,7 @@ test('order rows open attributed station logging', async ({ page }) => {
   await page.goto('/work-orders?view=list');
   await page.getByRole('link', { name: 'Record production' }).click();
   await expect(page).toHaveURL(/stations\?station=shipping&search=104801/);
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await expect(page.getByText(/shipped · Alex Reed/)).toBeVisible();
   expect(state.orders.find((o) => o.id === ids.order)!.cutAt).toBeNull();

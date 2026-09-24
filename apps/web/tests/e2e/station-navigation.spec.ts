@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mockApi, employeeOption } from './fixtures';
+import { mockApi, pickEmployee, selectedEmployee } from './fixtures';
 
 const stations = [
   { value: 'cutting', label: 'Cutting', action: 'cut' },
@@ -33,7 +33,7 @@ for (const station of stations) {
         page.getByRole('link', { name: 'Open cutting sheet' }),
       ).toBeVisible();
     } else {
-      await employeeOption(page, 'Alex Reed').check();
+      await pickEmployee(page, 'Alex Reed');
       await page
         .getByRole('button', {
           name: `Mark 104801 ${station.action}`,
@@ -66,9 +66,9 @@ test('accounts with several stations choose one before working', async ({
     /^Assembly.*in queue$/,
     /^Shipping.*in queue$/,
   ]);
-  await expect(page.getByRole('group', { name: 'Completed by' })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('combobox', { name: 'Completed by' }),
+  ).toHaveCount(0);
   // Cards count only assigned stations' queues.
   expect([...new Set(queues)].sort()).toEqual([
     '/api/production/assembly/orders',
@@ -93,8 +93,7 @@ test('changing stations returns to the station choices and resets attribution an
     stations: ['shipping', 'assembly'],
   });
   await page.goto('/stations?station=shipping&view=all&search=104801');
-  const employee = employeeOption(page, 'Alex Reed');
-  await employee.check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('link', { name: 'Change station', exact: true }).click();
   await expect(page).toHaveURL(/\/stations$/);
   await page
@@ -104,7 +103,7 @@ test('changing stations returns to the station choices and resets attribution an
   await expect(
     page.getByRole('heading', { name: 'Assembly station' }),
   ).toBeVisible();
-  await expect(employee).not.toBeChecked();
+  await expect(selectedEmployee(page, 'Alex Reed')).toHaveCount(0);
   await expect(page.getByLabel('Find order')).toHaveValue('');
   await expect(
     page.getByRole('button', { name: 'Work queue', exact: true }),
@@ -112,7 +111,7 @@ test('changing stations returns to the station choices and resets attribution an
   await expect(
     page.getByRole('button', { name: 'Mark 104801 assembled', exact: true }),
   ).toBeDisabled();
-  await employee.check();
+  await pickEmployee(page, 'Alex Reed');
   await page
     .getByRole('button', { name: 'Mark 104801 assembled', exact: true })
     .click();
@@ -130,7 +129,9 @@ test('station layout uses the same content width as other workspace pages', asyn
     await page.setViewportSize({ width: 1920, height: 1080 });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/stations?station=checking');
-  await expect(page.getByRole('group', { name: 'Completed by' })).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Completed by' }),
+  ).toBeVisible();
   const stationWidth = (await page.locator('.station-workspace').boundingBox())!
     .width;
   await page.screenshot({

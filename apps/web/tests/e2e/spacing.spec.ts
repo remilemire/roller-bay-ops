@@ -1,5 +1,5 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { mockApi, ids, employeeOption } from './fixtures';
+import { mockApi, ids, pickEmployee } from './fixtures';
 
 async function boxes(rows: Locator) {
   return rows.evaluateAll((elements) =>
@@ -122,7 +122,7 @@ test('help icons keep measurement labels aligned in station forms', async ({
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await employeeOption(page, 'Alex Reed').check();
+  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   await page
     .getByLabel('What happened to this stock item?')
