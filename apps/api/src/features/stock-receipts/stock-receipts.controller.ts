@@ -32,11 +32,15 @@ import {
   type StockReceiptQuery,
 } from '@roller-bay/shared/stock-receipts';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
+import { ReceiptCorrectionsService } from './receipt-corrections.service.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
 
 @Controller('stock-receipts')
 export class StockReceiptsController {
-  constructor(private readonly service: StockReceiptsService) {}
+  constructor(
+    private readonly service: StockReceiptsService,
+    private readonly corrections: ReceiptCorrectionsService,
+  ) {}
 
   @Post('drafts')
   createDraft(
@@ -108,7 +112,7 @@ export class StockReceiptsController {
   @Get(':id/correction-context')
   @Roles('admin')
   correctionContext(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.correctionContext(id);
+    return this.corrections.context(id);
   }
   @Post(':id/corrections')
   @Roles('admin')
@@ -120,7 +124,7 @@ export class StockReceiptsController {
     @Headers('idempotency-key') key: string,
     @Req() request: Request,
   ) {
-    return this.service.correct(
+    return this.corrections.correct(
       id,
       input,
       request.currentUser!.id,

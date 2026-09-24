@@ -4,6 +4,8 @@ import { DatabaseService } from '../../database/database.service.js';
 import { UnitOfWorkModule } from '../../unit-of-work/unit-of-work.module.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { StockItemsModule } from '../stock-items/stock-items.module.js';
+import { ReceiptCorrectionsService } from './receipt-corrections.service.js';
+import { StockReceiptDetailsService } from './stock-receipt-details.service.js';
 import { StockReceiptsController } from './stock-receipts.controller.js';
 import { StockReceiptsRepository } from './stock-receipts.repository.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
@@ -17,7 +19,9 @@ import { StockReceiptsService } from './stock-receipts.service.js';
       useFactory: (database: DatabaseService) =>
         new StockReceiptsRepository(database.db),
     },
+    StockReceiptDetailsService,
     StockReceiptsService,
+    ReceiptCorrectionsService,
   ],
 })
 export class StockReceiptsModule {}
