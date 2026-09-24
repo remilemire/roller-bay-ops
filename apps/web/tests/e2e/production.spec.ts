@@ -53,7 +53,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
     .getByRole('button', { name: 'Mark 104801 cut', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'cut recorded', exact: true }),
+    page.getByRole('button', { name: 'Cut recorded', exact: true }),
   ).toBeVisible();
   expect(state.completionRequests).toHaveLength(0);
   await page

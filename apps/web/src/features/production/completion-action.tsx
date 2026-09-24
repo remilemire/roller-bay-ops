@@ -64,7 +64,7 @@ export function CompletionAction({
         onClick={() => mutation.mutate({ employeeId })}
       >
         {done
-          ? `${completionLabels[station]} recorded`
+          ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`
           : mutation.isPending
             ? 'Saving…'
             : `Mark ${orderNumber} ${completionLabels[station]}`}
