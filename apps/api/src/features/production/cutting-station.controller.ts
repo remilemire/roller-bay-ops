@@ -11,6 +11,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
 import {
   locationQuerySchema,
@@ -18,7 +19,7 @@ import {
 } from '@roller-bay/shared/locations';
 import { LocationLevelsService } from '../locations/index.js';
 import type { z } from 'zod';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import {
   completionInputSchema,
   worksheetSaveSchema,
@@ -50,12 +51,17 @@ export class CuttingStationController {
   @Get('worksheets') @Roles('admin') list() {
     return this.service.list();
   }
-  @Get('orders/:id/worksheet') forOrder(
+  @Get('orders/:id/worksheet') async forOrder(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     requireStation(req.currentUser!, 'cutting');
-    return this.service.findForOrder(id);
+    const sheet = await this.service.findForOrder(id);
+    // Nest sends a null result as an empty 200 body, which is not JSON, so an
+    // order without a live sheet says so with 204 instead.
+    if (!sheet) res.status(204);
+    return sheet;
   }
   @Post('orders/:id/worksheet') begin(
     @Param('id', new ParseUUIDPipe()) id: string,

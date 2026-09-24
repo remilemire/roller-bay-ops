@@ -48,11 +48,12 @@ export const mutationResultSchema = z.object({
 });
 export const worksheetForOrder = (id: string) => ({
   queryKey: [...productionKey, 'worksheet-order', id],
+  // 204 means the order has no live sheet; queries cannot hold undefined.
   queryFn: () =>
     api(
       `/production/cutting/orders/${id}/worksheet`,
-      worksheetSchema.nullable(),
-    ),
+      worksheetSchema.optional(),
+    ).then((sheet) => sheet ?? null),
   refetchInterval: 10000,
 });
 export const worksheetDetail = (id: string) => ({

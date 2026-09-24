@@ -41,7 +41,7 @@ All paths below have the `/api` prefix. Mutations require the configured Origin.
 | `GET /production/orders/:id/completions`             | Effective employee attribution; assigned production account or staff                              |
 | `POST /production/:station/orders/:id/complete`      | Whole-order completion with `employeeId`; UUID `Idempotency-Key`                                  |
 | `POST /production/:station/orders/:id/corrections`   | Admin correction with employee/time (or both null), reason, revision and UUID key                 |
-| `GET, POST /production/cutting/orders/:id/worksheet` | Read or begin a saved sheet; cutting access                                                       |
+| `GET, POST /production/cutting/orders/:id/worksheet` | Read or begin a saved sheet; GET returns 204 when the order has no live sheet; cutting access     |
 | `GET /production/cutting/worksheets/:id`             | Read saved sheet; cutting access                                                                  |
 | `PUT /production/cutting/worksheets/:id/draft`       | Save partial form and checkmarks with expected revision; cutting access                           |
 | `POST /production/cutting/worksheets/:id/submit`     | Submit measurements and optional current draft with expected revision; cutting access             |

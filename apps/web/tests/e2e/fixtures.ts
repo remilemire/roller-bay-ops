@@ -316,7 +316,7 @@ export async function mockApi(
       const existing = state.worksheets.find(
         (w) => w.workOrderId === orderWorksheet[1],
       );
-      if (method === 'GET') return send(existing ?? null);
+      if (method === 'GET') return existing ? send(existing) : send(null, 204);
       if (existing) return send(existing);
       const body = request.postDataJSON();
       const employee = state.employees.find((e) => e.id === body.employeeId)!;

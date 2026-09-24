@@ -245,8 +245,18 @@ test(
           post(`/api/production/cutting/orders/${id}/worksheet`, {
             employeeId: other.id,
           });
+        const current = (id: string) =>
+          get(`/api/production/cutting/orders/${id}/worksheet`);
+        // No live sheet is an explicit 204; a bare null would be an empty 200.
+        assert.equal((await current(first.workOrderId).expect(204)).text, '');
         const sheet = worksheetSchema.parse(
           (await begin(first.workOrderId).expect(201)).body,
+        );
+        assert.equal(
+          worksheetSchema.parse(
+            (await current(first.workOrderId).expect(200)).body,
+          ).id,
+          sheet.id,
         );
         assert.equal(
           (await begin(first.workOrderId).expect(201)).body.id,
@@ -434,6 +444,9 @@ test(
           expectedRevision: sheet.revision,
           reason: 'Wrong order selected; no fabric cut',
         }).expect(201);
+        await get(
+          `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
+        ).expect(204);
         const fresh = (await begin().expect(201)).body;
         assert.notEqual(fresh.id, sheet.id);
         const stock = allocation.items[0]!.stockItemId;
