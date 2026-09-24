@@ -93,12 +93,12 @@ test(
         }).expect(403);
         await post(
           `/api/production/shipping/orders/${order.workOrderId}/complete`,
-          { employeeId: employee.id },
+          { employeeIds: [employee.id] },
         ).expect(403);
         await request(server)
           .post(`/api/production/assembly/orders/${order.workOrderId}/complete`)
           .set('Cookie', cookie)
-          .send({ employeeId: employee.id })
+          .send({ employeeIds: [employee.id] })
           .expect(403);
         await role('production', []);
         await get('/api/production/assembly/orders').expect(403);
@@ -111,8 +111,8 @@ test(
         const path = `/api/production/assembly/orders/${order.workOrderId}/complete`;
         const key = randomUUID();
         const replies = await Promise.all([
-          post(path, { employeeId: employee.id }, key),
-          post(path, { employeeId: employee.id }, key),
+          post(path, { employeeIds: [employee.id] }, key),
+          post(path, { employeeIds: [employee.id] }, key),
         ]);
         assert.deepEqual(
           replies.map((r) => r.status),
@@ -124,12 +124,17 @@ test(
             `/api/production/orders/${order.workOrderId}/completions`,
           ).expect(200)
         ).body;
-        assert.equal(completion.employeeId, employee.id);
+        assert.deepEqual(completion.employees, [
+          {
+            employeeId: employee.id,
+            employeeName: 'Alex Reed',
+            employeeInitials: 'AR',
+          },
+        ]);
         assert.equal(completion.recordedByUserId, userId);
-        assert.equal(completion.employeeName, 'Alex Reed');
-        await post(path, { employeeId: other.id }, key).expect(409);
-        await post(path, { employeeId: other.id }).expect(409);
-        await post(path, { employeeId: employee.id }).expect(201);
+        await post(path, { employeeIds: [other.id] }, key).expect(409);
+        await post(path, { employeeIds: [other.id] }).expect(409);
+        await post(path, { employeeIds: [employee.id] }).expect(201);
         const row = await fixtures.workOrder(order.workOrderId);
         assert.equal(row.cut_at, null);
         assert.equal(row.ship_date, null);
@@ -137,7 +142,7 @@ test(
         const unallocated = await fixtures.createWorkOrder('999001');
         await post(
           `/api/production/assembly/orders/${unallocated.id}/complete`,
-          { employeeId: employee.id },
+          { employeeIds: [employee.id] },
         ).expect(409);
         await role('admin');
         const saved = (
@@ -160,11 +165,11 @@ test(
         }).expect(400);
         await post(
           `/api/production/shipping/orders/${order.workOrderId}/complete`,
-          { employeeId: other.id },
+          { employeeIds: [other.id] },
         ).expect(201);
         await post(
           `/api/production/cutting/orders/${order.workOrderId}/complete`,
-          { employeeId: employee.id },
+          { employeeIds: [employee.id] },
         ).expect(201);
         assert.equal(
           (await get(`/api/work-orders/${order.workOrderId}`).expect(200)).body
@@ -202,7 +207,7 @@ test(
         ).body;
         const correction = {
           expectedRevision: current.revision,
-          employeeId: other.id,
+          employeeIds: [other.id],
           completedAt: new Date(Date.now() - 60_000).toISOString(),
           reason: 'Wrong initials selected',
         };
@@ -226,12 +231,152 @@ test(
         )!.after!;
         assert.equal(credited.type, 'production');
         if (credited.type === 'production')
-          assert.equal(credited.value.employeeName, 'Alex Reed');
+          assert.equal(credited.value.employees[0]!.employeeName, 'Alex Reed');
         const fresh = await create(await input(await seed()));
         await post(
           `/api/production/cutting/orders/${fresh.workOrderId}/complete`,
-          { employeeId: employee.id },
+          { employeeIds: [employee.id] },
         ).expect(409);
+      },
+    );
+    await t.test(
+      'several employees share a milestone and only the same set repeats safely',
+      async () => {
+        await role('admin');
+        const third = (
+          await post('/api/employees', {
+            name: 'Sam Lee',
+            initials: 'SL',
+          }).expect(201)
+        ).body;
+        const fresh = await create(await input(await seed()));
+        const path = `/api/production/checking/orders/${fresh.workOrderId}/complete`;
+        await post(path, { employeeIds: [] }).expect(400);
+        await post(path, { employeeIds: [other.id, other.id] }).expect(400);
+        await post(path, { employeeIds: [other.id, randomUUID()] }).expect(409);
+        // The first subtest deactivated Alex; the refusal names the person.
+        assert.match(
+          (
+            await post(path, { employeeIds: [other.id, employee.id] }).expect(
+              409,
+            )
+          ).body.message,
+          /Alex Renamed is no longer active/,
+        );
+        const key = randomUUID();
+        const first = (
+          await post(path, { employeeIds: [third.id, other.id] }, key).expect(
+            201,
+          )
+        ).body;
+        // The same key with the ids in another order is the same request.
+        assert.deepEqual(
+          (
+            await post(path, { employeeIds: [other.id, third.id] }, key).expect(
+              201,
+            )
+          ).body,
+          first,
+        );
+        const [completion] = (
+          await get(
+            `/api/production/orders/${fresh.workOrderId}/completions`,
+          ).expect(200)
+        ).body;
+        assert.deepEqual(
+          completion.employees.map(
+            (e: { employeeName: string }) => e.employeeName,
+          ),
+          ['Avery Ross', 'Sam Lee'],
+        );
+        await post(path, { employeeIds: [other.id, third.id] }).expect(201);
+        await post(path, { employeeIds: [other.id] }).expect(409);
+        await post(path, {
+          employeeIds: [other.id, third.id, randomUUID()],
+        }).expect(409);
+        const current = (
+          await get(`/api/work-orders/${fresh.workOrderId}`).expect(200)
+        ).body;
+        await post(
+          `/api/production/checking/orders/${fresh.workOrderId}/corrections`,
+          {
+            expectedRevision: current.revision,
+            employeeIds: [third.id],
+            completedAt: completion.completedAt,
+            reason: 'Avery worked on another order',
+          },
+        ).expect(201);
+        const history = historySchema.parse(
+          (
+            await get(`/api/work-orders/${fresh.workOrderId}/history`).expect(
+              200,
+            )
+          ).body,
+        );
+        assert.ok(
+          history.items.some(
+            (e) => e.action === 'order.checking.completion-confirmed',
+          ),
+        );
+        const corrected = history.items
+          .find((e) => e.action === 'order.checking.corrected')!
+          .changes.find((c) => c.recordType === 'production')!;
+        assert.equal(
+          corrected.before?.type === 'production' &&
+            corrected.before.value.employees.length,
+          2,
+        );
+        assert.deepEqual(
+          corrected.after?.type === 'production' &&
+            corrected.after.value.employees.map((e) => e.employeeId),
+          [third.id],
+        );
+        // Snapshots recorded before milestones could credit several employees
+        // still read as one-employee lists.
+        const legacy = await pool.query(
+          `INSERT INTO audit_events (actor_id,actor_name,action) VALUES ($1,'Legacy','order.assembly.completed') RETURNING id`,
+          [userId],
+        );
+        await pool.query(
+          `INSERT INTO audit_changes (event_id,position,record_type,record_id,before,after) VALUES ($1,0,'production',$2,NULL,$3)`,
+          [
+            legacy.rows[0].id,
+            fresh.workOrderId,
+            {
+              type: 'production',
+              value: {
+                workOrderId: fresh.workOrderId,
+                station: 'assembly',
+                employeeId: other.id,
+                employeeName: 'Avery Ross',
+                employeeInitials: 'AR',
+                completedAt: completion.completedAt,
+                recordedAt: completion.completedAt,
+                recordedByUserId: userId,
+              },
+            },
+          ],
+        );
+        const replayed = historySchema
+          .parse(
+            (
+              await get(`/api/work-orders/${fresh.workOrderId}/history`).expect(
+                200,
+              )
+            ).body,
+          )
+          .items.find((e) => e.action === 'order.assembly.completed')!
+          .changes[0]!.after!;
+        assert.deepEqual(
+          replayed.type === 'production' && replayed.value.employees,
+          [
+            {
+              employeeId: other.id,
+              employeeName: 'Avery Ross',
+              employeeInitials: 'AR',
+            },
+          ],
+        );
       },
     );
     await t.test(
@@ -299,7 +444,7 @@ test(
           draft: { ...draft, checkedCuts: [] },
         }).expect(409);
         const cutPath = `/api/production/cutting/orders/${first.workOrderId}/complete`;
-        await post(cutPath, { employeeId: other.id }).expect(201);
+        await post(cutPath, { employeeIds: [other.id] }).expect(201);
         const cutAt = (await fixtures.workOrder(first.workOrderId)).cut_at;
         const results = {
           expectedRevision: first.revision,
@@ -506,10 +651,10 @@ test(
         await role('admin');
         const fresh = await create(await input(await seed()));
         const path = `/api/production/checking/orders/${fresh.workOrderId}/complete`;
-        await post(path, { employeeId: other.id }).expect(201);
+        await post(path, { employeeIds: [other.id] }).expect(201);
         const key = randomUUID();
         const duplicate = (
-          await post(path, { employeeId: other.id }, key).expect(201)
+          await post(path, { employeeIds: [other.id] }, key).expect(201)
         ).body;
         const current = (
           await get(`/api/work-orders/${fresh.workOrderId}`).expect(200)
@@ -518,13 +663,13 @@ test(
           `/api/production/checking/orders/${fresh.workOrderId}/corrections`,
           {
             expectedRevision: current.revision,
-            employeeId: null,
+            employeeIds: null,
             completedAt: null,
             reason: 'Wrong order scanned',
           },
         ).expect(201);
         assert.deepEqual(
-          (await post(path, { employeeId: other.id }, key).expect(201)).body,
+          (await post(path, { employeeIds: [other.id] }, key).expect(201)).body,
           duplicate,
         );
         assert.equal(
@@ -792,7 +937,7 @@ test(
           },
         );
         try {
-          await post(path, { employeeId: other.id }, key).expect(503);
+          await post(path, { employeeIds: [other.id] }, key).expect(503);
         } finally {
           failure.mock.restore();
         }
@@ -807,7 +952,7 @@ test(
           ).body.length,
           0,
         );
-        await post(path, { employeeId: other.id }, key).expect(201);
+        await post(path, { employeeIds: [other.id] }, key).expect(201);
         assert.ok(
           (await fixtures.workOrder(allocation.workOrderId)).checked_at,
         );

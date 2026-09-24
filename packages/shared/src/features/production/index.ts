@@ -5,24 +5,39 @@ import {
   completeAllocationSchema,
 } from '../allocations/index.js';
 import { workOrderSchema } from '../work-orders/index.js';
-export const completionInputSchema = z.strictObject({ employeeId: z.uuid() });
+export const completionEmployeeSchema = z.object({
+  employeeId: z.uuid(),
+  employeeName: z.string(),
+  employeeInitials: z.string(),
+});
+// Attribution is a set: sorted ids keep replay hashes and retry keys
+// independent of the order employees were chosen in.
+const employeeIdsSchema = z
+  .array(z.uuid())
+  .min(1)
+  .max(20)
+  .refine((ids) => new Set(ids).size === ids.length, 'List each employee once.')
+  .transform((ids) => [...ids].sort());
+export const completionInputSchema = z.strictObject({
+  employeeIds: employeeIdsSchema,
+});
+// A cutting sheet is begun by one cutter.
+export const worksheetBeginSchema = z.strictObject({ employeeId: z.uuid() });
 export const milestoneCorrectionSchema = z
   .strictObject({
     expectedRevision: z.number().int().positive(),
-    employeeId: z.uuid().nullable(),
+    employeeIds: employeeIdsSchema.nullable(),
     completedAt: z.iso.datetime().nullable(),
     reason: z.string().trim().min(1).max(1000),
   })
   .refine(
-    (v) => (v.employeeId === null) === (v.completedAt === null),
-    'Supply both employee and completion time, or clear both.',
+    (v) => (v.employeeIds === null) === (v.completedAt === null),
+    'Supply employees and completion time, or clear both.',
   );
 export const productionCompletionSchema = z.object({
   workOrderId: z.uuid(),
   station: stationSchema,
-  employeeId: z.uuid(),
-  employeeName: z.string(),
-  employeeInitials: z.string(),
+  employees: z.array(completionEmployeeSchema).min(1),
   completedAt: z.iso.datetime(),
   recordedAt: z.iso.datetime(),
   recordedByUserId: z.uuid(),
@@ -135,6 +150,7 @@ export const worksheetListSchema = z.array(
   worksheetSchema.omit({ snapshot: true, draft: true, results: true }),
 );
 export type ProductionCompletion = z.infer<typeof productionCompletionSchema>;
+export type CompletionInput = z.infer<typeof completionInputSchema>;
 export type StationQuery = z.infer<typeof stationQuerySchema>;
 export type Worksheet = z.infer<typeof worksheetSchema>;
 export type CuttingDraft = z.infer<typeof cuttingDraftSchema>;

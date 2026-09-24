@@ -19,11 +19,24 @@ import type {
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/index.js';
 import { EmployeesService } from '../employees/index.js';
+import type { Employee } from '@roller-bay/shared/employees';
 import { productionOperation } from './production.operation.js';
 import {
   presentCompletion,
   presentStationOrders,
 } from './production.presenter.js';
+const credited = ({ id, name, initials }: Employee) => ({
+  employeeId: id,
+  employeeName: name,
+  employeeInitials: initials,
+});
+// Attribution is a set; the input schema already sorts the requested ids.
+const sameEmployees = (completion: CompletionRecord, employeeIds: string[]) =>
+  completion.employees.length === employeeIds.length &&
+  completion.employees
+    .map((e) => e.employeeId)
+    .sort()
+    .every((id, i) => id === employeeIds[i]);
 @Injectable()
 export class ProductionService {
   constructor(
@@ -54,7 +67,7 @@ export class ProductionService {
   complete(
     id: string,
     station: Station,
-    employeeId: string,
+    employeeIds: string[],
     actor: string,
     key: string,
   ) {
@@ -63,7 +76,7 @@ export class ProductionService {
         const order = await this.orders.requireOrder(context, id);
         const scope = `production.${station}.complete`;
         const replay = await this.audit.replay(context, actor, scope, id, key, {
-          employeeId,
+          employeeIds,
         });
         if (replay.result) return replay.result;
         this.orders.assertNotCancelled(order);
@@ -77,7 +90,7 @@ export class ProductionService {
         let eventId: string;
         let revision = order.revision;
         if (order[milestoneTimestampField[station]]) {
-          if (!before || before.employeeId !== employeeId)
+          if (!before || !sameEmployees(before, employeeIds))
             throw new ConflictException(
               'Completion already recorded. An admin can correct its attribution.',
             );
@@ -87,9 +100,9 @@ export class ProductionService {
             actor,
           );
         } else {
-          const employee = await this.employees.requireActive(
+          const people = await this.employees.requireActiveMany(
             context,
-            employeeId,
+            employeeIds,
           );
           const now = new Date();
           const saved = await this.saveMilestone(
@@ -98,9 +111,7 @@ export class ProductionService {
             station,
             before,
             {
-              employeeId: employee.id,
-              employeeName: employee.name,
-              employeeInitials: employee.initials,
+              employees: people.map(credited),
               completedAt: now,
               recordedAt: now,
               recordedByUserId: actor,
@@ -160,8 +171,8 @@ export class ProductionService {
         const before = (await context.production.completions(id)).find(
           (r) => r.station === station,
         );
-        const employee = input.employeeId
-          ? await this.employees.requireActive(context, input.employeeId)
+        const people = input.employeeIds
+          ? await this.employees.requireActiveMany(context, input.employeeIds)
           : null;
         const now = new Date();
         const completedAt = input.completedAt
@@ -172,11 +183,9 @@ export class ProductionService {
             'Completion time cannot be in the future.',
           );
         const next =
-          employee && completedAt
+          people && completedAt
             ? {
-                employeeId: employee.id,
-                employeeName: employee.name,
-                employeeInitials: employee.initials,
+                employees: people.map(credited),
                 completedAt,
                 recordedAt: now,
                 recordedByUserId: actor,

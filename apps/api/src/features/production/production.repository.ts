@@ -16,8 +16,14 @@ import {
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
-import type { CompletionValues } from './production-completions.table.js';
-import { productionCompletions } from './production-completions.table.js';
+import type {
+  CompletionRecord,
+  CompletionValues,
+} from './production-completions.table.js';
+import {
+  productionCompletionEmployees,
+  productionCompletions,
+} from './production-completions.table.js';
 export class ProductionRepository {
   constructor(private readonly db: DatabaseExecutor) {}
   async list(station: Station, query: StationQuery) {
@@ -51,15 +57,17 @@ export class ProductionRepository {
       .from(workOrders)
       .where(where);
     const completions = rows.length
-      ? await this.db
-          .select()
-          .from(productionCompletions)
-          .where(
-            inArray(
-              productionCompletions.workOrderId,
-              rows.map((row) => row.id),
+      ? await this.withEmployees(
+          await this.db
+            .select()
+            .from(productionCompletions)
+            .where(
+              inArray(
+                productionCompletions.workOrderId,
+                rows.map((row) => row.id),
+              ),
             ),
-          )
+        )
       : [];
     const items = rows.map((row) => ({
       ...row,
@@ -67,29 +75,75 @@ export class ProductionRepository {
     }));
     return { items, total: total!.total, page: query.page, pageSize: 25 };
   }
-  completions(orderId: string) {
-    return this.db
-      .select()
-      .from(productionCompletions)
-      .where(eq(productionCompletions.workOrderId, orderId));
+  async completions(orderId: string) {
+    return this.withEmployees(
+      await this.db
+        .select()
+        .from(productionCompletions)
+        .where(eq(productionCompletions.workOrderId, orderId)),
+    );
+  }
+  private async withEmployees(
+    rows: (typeof productionCompletions.$inferSelect)[],
+  ): Promise<CompletionRecord[]> {
+    const people = rows.length
+      ? await this.db
+          .select()
+          .from(productionCompletionEmployees)
+          .where(
+            inArray(
+              productionCompletionEmployees.workOrderId,
+              rows.map((row) => row.workOrderId),
+            ),
+          )
+          .orderBy(
+            asc(productionCompletionEmployees.employeeName),
+            asc(productionCompletionEmployees.employeeId),
+          )
+      : [];
+    return rows.map((row) => ({
+      ...row,
+      employees: people
+        .filter(
+          (p) => p.workOrderId === row.workOrderId && p.station === row.station,
+        )
+        .map(({ employeeId, employeeName, employeeInitials }) => ({
+          employeeId,
+          employeeName,
+          employeeInitials,
+        })),
+    }));
   }
   async save(
     workOrderId: string,
     station: Station,
     values: CompletionValues | null,
   ) {
-    if (values)
+    if (values) {
+      const { employees, ...milestone } = values;
       await this.db
         .insert(productionCompletions)
-        .values({ ...values, workOrderId, station })
+        .values({ ...milestone, workOrderId, station })
         .onConflictDoUpdate({
           target: [
             productionCompletions.workOrderId,
             productionCompletions.station,
           ],
-          set: values,
+          set: milestone,
         });
-    else
+      await this.db
+        .delete(productionCompletionEmployees)
+        .where(
+          and(
+            eq(productionCompletionEmployees.workOrderId, workOrderId),
+            eq(productionCompletionEmployees.station, station),
+          ),
+        );
+      await this.db
+        .insert(productionCompletionEmployees)
+        .values(employees.map((e) => ({ ...e, workOrderId, station })));
+    } else
+      // The cascade removes the credited employees.
       await this.db
         .delete(productionCompletions)
         .where(

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { employeeSchema } from '../employees/index.js';
 import {
+  completionEmployeeSchema,
   productionCompletionSchema,
   worksheetSchema,
 } from '../production/index.js';
@@ -20,11 +21,22 @@ export const auditRecordTypeSchema = z.enum([
   'allocations',
   'work-orders',
 ]);
+// Snapshots recorded while a completion credited exactly one employee.
+const legacyProductionSnapshotSchema = productionCompletionSchema
+  .omit({ employees: true })
+  .extend(completionEmployeeSchema.shape)
+  .transform(({ employeeId, employeeName, employeeInitials, ...rest }) => ({
+    ...rest,
+    employees: [{ employeeId, employeeName, employeeInitials }],
+  }));
 export const auditSnapshotSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('employees'), value: employeeSchema }),
   z.object({
     type: z.literal('production'),
-    value: productionCompletionSchema,
+    value: z.union([
+      productionCompletionSchema,
+      legacyProductionSnapshotSchema,
+    ]),
   }),
   z.object({ type: z.literal('cutting-worksheets'), value: worksheetSchema }),
   z.object({ type: z.literal('stock-items'), value: stockSnapshotSchema }),

@@ -129,7 +129,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         plan: planInput.plan,
       }).expect(409);
       await post(`/api/production/assembly/orders/${saved.id}/complete`, {
-        employeeId: employee.id,
+        employeeIds: [employee.id],
       }).expect(409);
       const history = (
         await get(`/api/work-orders/${saved.id}/history`).expect(200)
@@ -149,7 +149,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const a = await create(await input(stockId));
       const sheet = await begin(a.workOrderId);
       await post(`/api/production/cutting/orders/${a.workOrderId}/complete`, {
-        employeeId: employee.id,
+        employeeIds: [employee.id],
       }).expect(201);
       const cutAt = (await read(a.workOrderId)).cutAt;
       const before = (
@@ -215,7 +215,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const stockId = await seed();
       const a = await create(await input(stockId));
       await post(`/api/production/cutting/orders/${a.workOrderId}/complete`, {
-        employeeId: employee.id,
+        employeeIds: [employee.id],
       }).expect(201);
       await post(
         `/api/allocations/${a.id}/complete`,
@@ -340,7 +340,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
   await t.test('shipped orders and non-admins cannot cancel', async () => {
     const a = await create(await input(await seed()));
     await post(`/api/production/shipping/orders/${a.workOrderId}/complete`, {
-      employeeId: employee.id,
+      employeeIds: [employee.id],
     }).expect(201);
     const body = await command(a.workOrderId);
     await cancel(a.workOrderId, body).expect(409);
@@ -356,15 +356,19 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
     async () => {
       const a = await create(await input(await seed()));
       const path = `/api/production/assembly/orders/${a.workOrderId}`;
-      await post(`${path}/complete`, { employeeId: employee.id }).expect(201);
+      await post(`${path}/complete`, { employeeIds: [employee.id] }).expect(
+        201,
+      );
       await cancel(a.workOrderId, await command(a.workOrderId, true)).expect(
         200,
       );
       const cancelled = await read(a.workOrderId);
-      await post(`${path}/complete`, { employeeId: employee.id }).expect(409);
+      await post(`${path}/complete`, { employeeIds: [employee.id] }).expect(
+        409,
+      );
       const correction = {
         expectedRevision: cancelled.revision,
-        employeeId: employee.id,
+        employeeIds: [employee.id],
         completedAt: new Date(Date.now() - 60_000).toISOString(),
         reason: 'Correct the recorded assembly time',
       };
@@ -383,7 +387,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       assert.equal(corrected.status, 'cancelled');
       await post(`${path}/corrections`, {
         expectedRevision: corrected.revision,
-        employeeId: null,
+        employeeIds: null,
         completedAt: null,
         reason: 'Assembly was attributed to the wrong order',
       }).expect(201);

@@ -4,6 +4,7 @@ import {
   varchar,
   timestamp,
   primaryKey,
+  foreignKey,
   index,
   check,
 } from 'drizzle-orm/pg-core';
@@ -19,11 +20,6 @@ export const productionCompletions = pgTable(
       .notNull()
       .references(() => workOrders.id, { onDelete: 'restrict' }),
     station: varchar('station', { length: 16 }).$type<Station>().notNull(),
-    employeeId: uuid('employee_id')
-      .notNull()
-      .references(() => employees.id, { onDelete: 'restrict' }),
-    employeeName: varchar('employee_name', { length: 120 }).notNull(),
-    employeeInitials: varchar('employee_initials', { length: 12 }).notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
     recordedAt: timestamp('recorded_at', { withTimezone: true })
       .notNull()
@@ -45,7 +41,43 @@ export const productionCompletions = pgTable(
   ],
 );
 
-export type CompletionRecord = typeof productionCompletions.$inferSelect;
+// Every employee credited with a milestone; names and initials are copied so
+// history survives renames. Explicit constraint names stay under Postgres's
+// 63-character limit.
+export const productionCompletionEmployees = pgTable(
+  'production_completion_employees',
+  {
+    workOrderId: uuid('work_order_id').notNull(),
+    station: varchar('station', { length: 16 }).$type<Station>().notNull(),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    employeeName: varchar('employee_name', { length: 120 }).notNull(),
+    employeeInitials: varchar('employee_initials', { length: 12 }).notNull(),
+  },
+  (t) => [
+    primaryKey({
+      name: 'production_completion_employees_pk',
+      columns: [t.workOrderId, t.station, t.employeeId],
+    }),
+    foreignKey({
+      name: 'production_completion_employees_completion_fk',
+      columns: [t.workOrderId, t.station],
+      foreignColumns: [
+        productionCompletions.workOrderId,
+        productionCompletions.station,
+      ],
+    }).onDelete('cascade'),
+  ],
+);
+
+export type CompletionEmployee = Pick<
+  typeof productionCompletionEmployees.$inferSelect,
+  'employeeId' | 'employeeName' | 'employeeInitials'
+>;
+export type CompletionRecord = typeof productionCompletions.$inferSelect & {
+  employees: CompletionEmployee[];
+};
 export type CompletionValues = Omit<
   CompletionRecord,
   'workOrderId' | 'station'

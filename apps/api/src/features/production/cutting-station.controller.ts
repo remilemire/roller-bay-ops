@@ -21,7 +21,7 @@ import { LocationLevelsService } from '../locations/index.js';
 import type { z } from 'zod';
 import type { Request, Response } from 'express';
 import {
-  completionInputSchema,
+  worksheetBeginSchema,
   worksheetSaveSchema,
   worksheetSubmitSchema,
   worksheetReviewSchema,
@@ -65,7 +65,7 @@ export class CuttingStationController {
   }
   @Post('orders/:id/worksheet') begin(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(completionInputSchema))
+    @Body(new ZodValidationPipe(worksheetBeginSchema))
     body: { employeeId: string },
     @Req() req: Request,
   ) {

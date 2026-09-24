@@ -64,6 +64,76 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0035 moves each credited employee to its own row and drops the single columns',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0035_');
+    const [user, employee, order] = Array.from({ length: 3 }, () =>
+      randomUUID(),
+    );
+    await client.query(
+      `INSERT INTO users (id,name,email,microsoft_subject_id)
+       VALUES ($1,'Checker','checker@example.com','checker')`,
+      [user],
+    );
+    await client.query(
+      `INSERT INTO employees (id,name,initials) VALUES ($1,'Checker','CK')`,
+      [employee],
+    );
+    await client.query(
+      `INSERT INTO work_orders (id,order_number,allocated_at,checked_at)
+       VALUES ($1,'350001',now(),now())`,
+      [order],
+    );
+    await client.query(
+      `INSERT INTO production_completions (work_order_id,station,employee_id,employee_name,employee_initials,completed_at,recorded_by_user_id)
+       VALUES ($1,'checking',$2,'Checker at the time','CT',now(),$3)`,
+      [order, employee, user],
+    );
+    await migrate();
+    const columns = await client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='production_completions'`,
+    );
+    assert.ok(
+      !columns.rows.some((r) => String(r.column_name).startsWith('employee_')),
+    );
+    const credited = await client.query(
+      `SELECT employee_id,employee_name,employee_initials FROM production_completion_employees WHERE work_order_id=$1 AND station='checking'`,
+      [order],
+    );
+    assert.deepEqual(credited.rows, [
+      {
+        employee_id: employee,
+        employee_name: 'Checker at the time',
+        employee_initials: 'CT',
+      },
+    ]);
+    await assert.rejects(
+      client.query(
+        `INSERT INTO production_completion_employees (work_order_id,station,employee_id,employee_name,employee_initials)
+         VALUES ($1,'checking',$2,'Nobody','NB')`,
+        [order, randomUUID()],
+      ),
+      { code: '23503' },
+    );
+    await client.query(
+      `DELETE FROM production_completions WHERE work_order_id=$1`,
+      [order],
+    );
+    assert.equal(
+      (
+        await client.query(
+          `SELECT count(*)::int AS n FROM production_completion_employees WHERE work_order_id=$1`,
+          [order],
+        )
+      ).rows[0].n,
+      0,
+    );
+    await migrateRest();
+  },
+);
+
+test(
   '0034 preserves scheduled dates when fabric is released',
   { timeout: 60_000 },
   async (t) => {

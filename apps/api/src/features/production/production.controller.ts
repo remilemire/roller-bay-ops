@@ -14,6 +14,7 @@ import {
   completionInputSchema,
   milestoneCorrectionSchema,
   stationQuerySchema,
+  type CompletionInput,
   type MilestoneCorrection,
   type StationQuery,
 } from '@roller-bay/shared/production';
@@ -54,7 +55,7 @@ export class ProductionController {
     @Param('station', new ZodValidationPipe(stationSchema)) station: Station,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(completionInputSchema))
-    body: { employeeId: string },
+    body: CompletionInput,
     @Headers('idempotency-key') rawKey: string,
     @Req() req: Request,
   ) {
@@ -62,7 +63,7 @@ export class ProductionController {
     return this.production.complete(
       id,
       station,
-      body.employeeId,
+      body.employeeIds,
       req.currentUser!.id,
       new ZodValidationPipe(correctionKeySchema).transform(rawKey),
     );

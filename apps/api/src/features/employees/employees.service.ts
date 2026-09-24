@@ -25,6 +25,17 @@ export class EmployeesService {
       throw new ConflictException('Choose an active employee.');
     return presentEmployee(row);
   }
+  /** Resolves every id, in the requested order, or rejects the whole list. */
+  async requireActiveMany(context: UnitOfWorkContext, ids: string[]) {
+    const rows = await context.employees.findMany(ids, true);
+    return ids.map((id) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new ConflictException('Choose active employees.');
+      if (!row.isActive)
+        throw new ConflictException(`${row.name} is no longer active.`);
+      return presentEmployee(row);
+    });
+  }
   async list(activeOnly = false) {
     return (await this.repository.list(activeOnly)).map(presentEmployee);
   }
