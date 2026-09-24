@@ -2280,9 +2280,7 @@ td strong {
   color: var(--primary);
   transform: translateX(3px);
 }
-/* Station controls are generous enough for repeated use on an iPad. */
-.station-workspace .button,
-.station-workspace button:not(.tab):not(.info-tip):not(.employee-chip-remove),
+/* Keep station entry fields comfortable for repeated tablet input. */
 .station-workspace select,
 .station-workspace input {
   min-height: 48px;

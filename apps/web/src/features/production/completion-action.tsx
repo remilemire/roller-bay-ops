@@ -65,23 +65,25 @@ export function CompletionAction({
           </Button>
         </div>
       )}
-      <Button
-        disabled={
-          !employeeIds.length ||
-          done ||
-          mutation.isPending ||
-          !!mutation.pending
-        }
-        onClick={() => mutation.mutate({ employeeIds })}
-      >
-        {done
-          ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`
-          : mutation.isPending
-            ? 'Saving…'
-            : station === 'cutting'
-              ? 'Sign off only'
-              : 'Record completion'}
-      </Button>
+      <div className="inline-actions">
+        <Button
+          disabled={
+            !employeeIds.length ||
+            done ||
+            mutation.isPending ||
+            !!mutation.pending
+          }
+          onClick={() => mutation.mutate({ employeeIds })}
+        >
+          {done
+            ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`
+            : mutation.isPending
+              ? 'Saving…'
+              : station === 'cutting'
+                ? 'Sign off only'
+                : 'Record completion'}
+        </Button>
+      </div>
       {mutation.isSuccess && (
         <p role="status">
           Order {orderNumber} {completionLabels[station]} recorded.
@@ -92,22 +94,24 @@ export function CompletionAction({
   if (inline) return form;
   return (
     <>
-      <Button
-        disabled={done && !mutation.pending}
-        onClick={() => {
-          setEmployeeIds([]);
-          mutation.reset();
-          setOpen(true);
-        }}
-      >
-        {mutation.pending
-          ? 'Retry original completion'
-          : done
-            ? `${completionLabels[station]} recorded`
-            : station === 'cutting'
-              ? 'Sign off only'
-              : `Mark ${orderNumber} ${completionLabels[station]}`}
-      </Button>
+      <div className="inline-actions">
+        <Button
+          disabled={done && !mutation.pending}
+          onClick={() => {
+            setEmployeeIds([]);
+            mutation.reset();
+            setOpen(true);
+          }}
+        >
+          {mutation.pending
+            ? 'Retry original completion'
+            : done
+              ? `${completionLabels[station]} recorded`
+              : station === 'cutting'
+                ? 'Sign off only'
+                : `Mark ${orderNumber} ${completionLabels[station]}`}
+        </Button>
+      </div>
       <Dialog
         open={open}
         onOpenChange={setOpen}

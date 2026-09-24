@@ -200,3 +200,48 @@ test('station search and views use the shared list toolbar', async ({
     toolbar.getByRole('button', { name: 'Completed today' }),
   ).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('station actions and completion forms use consistent compact buttons', async ({
+  page,
+}, info) => {
+  await mockApi(page);
+  await page.goto('/stock-receipts');
+  const standard = page.getByRole('link', { name: 'New receipt', exact: true });
+  await expect(standard).toBeVisible();
+  const standardHeight = (await standard.boundingBox())!.height;
+  for (const station of stations) {
+    await page.goto(`/stations?station=${station.value}`);
+    const trigger = page.getByRole('button', {
+      name:
+        station.value === 'cutting'
+          ? 'Record cutting'
+          : `Mark 104801 ${station.action}`,
+      exact: true,
+    });
+    await expect(trigger).toBeVisible();
+    const triggerBox = (await trigger.boundingBox())!;
+    expect(triggerBox.height).toBe(standardHeight);
+    expect(triggerBox.width).toBeLessThan(300);
+    await trigger.click();
+    const dialog = page.getByRole('dialog');
+    const submit = dialog.getByRole('button', {
+      name: station.value === 'cutting' ? 'Sign off only' : 'Record completion',
+      exact: true,
+    });
+    await expect(submit).toBeVisible();
+    const submitBox = (await submit.boundingBox())!;
+    expect(submitBox.height).toBe(standardHeight);
+    expect(submitBox.width).toBeLessThan(300);
+    if (station.value === 'cutting') {
+      const worksheet = dialog.getByRole('link', {
+        name: 'Use worksheet',
+        exact: true,
+      });
+      expect((await worksheet.boundingBox())!.height).toBe(standardHeight);
+    }
+    await page.screenshot({
+      path: info.outputPath(`${station.value}-completion-buttons.png`),
+    });
+    await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  }
+});
