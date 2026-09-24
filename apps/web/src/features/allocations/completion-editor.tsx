@@ -538,19 +538,35 @@ export function CompletionEditor({
                 Save progress
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (
-                  !dirty ||
-                  window.confirm('Discard your unsaved cutting results?')
-                )
-                  close();
-              }}
-            >
-              Cancel
-            </Button>
+            {worksheet?.saveDraft ? (
+              // A station sheet stays on the page, so there is nothing to
+              // close: this only reverts to the saved progress.
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!dirty}
+                onClick={() => {
+                  if (window.confirm('Discard your unsaved cutting results?'))
+                    close();
+                }}
+              >
+                Discard changes
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (
+                    !dirty ||
+                    window.confirm('Discard your unsaved cutting results?')
+                  )
+                    close();
+                }}
+              >
+                Cancel
+              </Button>
+            )}
             <Button type="submit" disabled={!!extraStock.error}>
               {worksheet && !worksheet.resolution
                 ? 'Review and submit results'

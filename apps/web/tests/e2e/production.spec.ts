@@ -66,12 +66,15 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.reload();
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
+  const discard = page.getByRole('button', { name: 'Discard changes' });
+  await expect(discard).toBeDisabled();
   await page.getByLabel('Cut 1 done').uncheck();
   await page.getByLabel('Radial depth (mm)').fill('99');
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await discard.click();
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
+  await expect(discard).toBeDisabled();
   await page.screenshot({
     path: testInfo.outputPath('digital-cutting-sheet.png'),
     fullPage: true,
@@ -278,7 +281,7 @@ test('clean cutter follows office returns while background refresh preserves dir
   await refreshed;
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('99');
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('20');
 });
 

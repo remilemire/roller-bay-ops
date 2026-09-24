@@ -64,7 +64,7 @@ Repositories are injected. New production/worksheet methods receive the active t
 
 `production.integration.test.ts` uses disposable PostgreSQL/Redis fixtures and covers restricted production access, assignment checks, Origin checks, active employees, allocation prerequisites, late/skipped stages, timestamps, historical attribution, corrections, concurrent retries, sheet freezing, draft persistence, stock sequencing, double review, abandonment and explicit discrepancy resolution. The full API suite verifies existing routes and workflows too.
 
-`production.spec.ts` exercises station navigation, unscheduled completion, directory maintenance and a digital cutting/review workflow on desktop and tablet. It verifies saved checkmarks and measurements survive reload and Cancel discards unsaved edits. Browser tests use intercepted API responses; they do not prove Microsoft sign-in or physical iPad behavior.
+`production.spec.ts` exercises station navigation, unscheduled completion, directory maintenance and a digital cutting/review workflow on desktop and tablet. It verifies saved checkmarks and measurements survive reload and unsaved edits can be discarded. Browser tests use intercepted API responses; they do not prove Microsoft sign-in or physical iPad behavior.
 
 ## Cancelled orders and skipped cutting results
 
