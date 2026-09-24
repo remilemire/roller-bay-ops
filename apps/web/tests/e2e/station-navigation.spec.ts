@@ -64,9 +64,16 @@ test('accounts with several stations choose one before working', async ({
   // An unassigned station asks again instead of opening another one.
   await page.goto('/stations?station=cutting');
   const choices = page.getByRole('navigation', { name: 'Choose station' });
-  await expect(choices.getByRole('link')).toHaveText(['Assembly', 'Shipping']);
+  await expect(choices.getByRole('link')).toHaveText([
+    /^Assembly.*in queue$/,
+    /^Shipping.*in queue$/,
+  ]);
   await expect(page.getByLabel('Completed by', { exact: true })).toHaveCount(0);
-  expect(queues).toHaveLength(0);
+  // Cards count only assigned stations' queues.
+  expect([...new Set(queues)].sort()).toEqual([
+    '/api/production/assembly/orders',
+    '/api/production/shipping/orders',
+  ]);
   await page.screenshot({
     path: info.outputPath('station-choices.png'),
     fullPage: true,
@@ -76,7 +83,6 @@ test('accounts with several stations choose one before working', async ({
   await expect(
     page.getByRole('heading', { name: 'Shipping station' }),
   ).toBeVisible();
-  await expect.poll(() => queues).toContain('/api/production/shipping/orders');
 });
 
 test('changing stations requires confirmation and resets attribution and filters', async ({

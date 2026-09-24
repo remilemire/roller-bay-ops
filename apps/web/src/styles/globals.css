@@ -2166,16 +2166,47 @@ td strong {
 }
 .station-choices {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  /* Four across on desktop, two by two on a tablet; fewer stations fill the row. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: var(--field-gap);
 }
 .station-choice {
   display: flex;
   align-items: center;
+  gap: var(--field-gap);
   min-height: 96px;
-  padding: var(--panel-padding);
+  padding: 20px 22px;
+}
+.station-choice .stat-icon {
+  display: flex;
+  padding: 10px;
+}
+.station-choice-text {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.station-choice-name {
   font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.station-choice-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.station-choice-arrow {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition:
+    transform 150ms ease,
+    color 150ms ease;
+}
+.station-choice:hover .station-choice-arrow,
+.station-choice:focus-visible .station-choice-arrow {
+  color: var(--primary);
+  transform: translateX(3px);
 }
 /* Station controls are generous enough for repeated use on an iPad. */
 .station-workspace .button,

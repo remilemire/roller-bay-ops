@@ -2,10 +2,18 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  ArrowRight,
+  ClipboardCheck,
+  Scissors,
+  Truck,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useListParams } from '@/lib/use-list-params';
-import { calendarDateLabel, dateTimeLabel } from '@/lib/format';
+import { calendarDateLabel, count, dateTimeLabel } from '@/lib/format';
 import { ChoiceField, TextField } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -63,13 +71,7 @@ export function StationsScreen() {
           {stationSchema.options
             .filter((value) => allowed.includes(value))
             .map((value) => (
-              <Link
-                key={value}
-                href={`/stations?station=${value}`}
-                className="panel station-choice"
-              >
-                {stationLabels[value]}
-              </Link>
+              <StationChoice key={value} station={value} />
             ))}
         </nav>
       </div>
@@ -91,6 +93,43 @@ export function StationsScreen() {
       </PageHeading>
       <StationQueue key={station} station={station} />
     </div>
+  );
+}
+const stationIcons: Record<Station, LucideIcon> = {
+  cutting: Scissors,
+  assembly: Wrench,
+  checking: ClipboardCheck,
+  shipping: Truck,
+};
+function StationChoice({ station }: { station: Station }) {
+  // The same first page the station opens with, so choosing it is instant.
+  const queue = useQuery(
+    productionOrders(station, { search: '', page: 1, view: 'queue' }),
+  );
+  const Icon = stationIcons[station];
+  const total = queue.data?.total;
+  return (
+    <Link
+      href={`/stations?station=${station}`}
+      className="panel station-choice"
+    >
+      <span className="stat-icon">
+        <Icon size={20} />
+      </span>
+      <span className="station-choice-text">
+        <span className="station-choice-name">{stationLabels[station]}</span>
+        <span className="station-choice-note">
+          {queue.error
+            ? 'Queue unavailable'
+            : total === undefined
+              ? 'Loading queue…'
+              : total === 0
+                ? 'Queue clear'
+                : `${count(total)} ${total === 1 ? 'order' : 'orders'} in queue`}
+        </span>
+      </span>
+      <ArrowRight size={17} className="station-choice-arrow" />
+    </Link>
   );
 }
 function StationSwitcher({
