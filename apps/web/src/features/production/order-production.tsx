@@ -47,7 +47,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             return (
               <div key={s}>
                 <dt className="detail-label">{stationLabels[s]}</dt>
-                <dd className="detail-value milestone-value">
+                <dd className="detail-value inline-actions">
                   <span>
                     {c
                       ? `${employeeNames(c.employees)} · ${dateTimeLabel(c.completedAt)}`
@@ -59,7 +59,6 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="milestone-correct"
                       aria-label={`Correct ${completionLabels[s]} record`}
                       onClick={() => setCorrecting(s)}
                     >
