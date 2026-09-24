@@ -348,15 +348,6 @@ it('sends an order with no allocation to be planned, whoever is signed in', asyn
   );
 });
 
-it('links an allocated order to attributed production logging', async () => {
-  state.search = 'view=list';
-  show(<WorkOrdersScreen />);
-  expect(
-    await screen.findByRole('link', { name: 'Record production' }),
-  ).toHaveAttribute('href', '/stations?station=shipping&search=104801');
-  expect(updateOrder).not.toHaveBeenCalled();
-});
-
 it('edits and unschedules an order with the revision it shows', async () => {
   vi.mocked(updateOrder).mockResolvedValue(order);
   vi.mocked(deleteOrder).mockResolvedValue(undefined);

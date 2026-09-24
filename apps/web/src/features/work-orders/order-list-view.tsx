@@ -131,33 +131,20 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                               </Link>
                             </Button>
                           )}
-                        {canManage && (
-                          <>
-                            {/* A retained date can be cleared without fabric. */}
-                            {(order.allocatedAt || order.shipDate) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                aria-label={`${!order.allocatedAt ? 'Unschedule' : order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
-                                onClick={() => setRescheduling(order)}
-                              >
-                                {!order.allocatedAt
-                                  ? 'Unschedule'
-                                  : order.shipDate
-                                    ? 'Reschedule'
-                                    : 'Schedule'}
-                              </Button>
-                            )}
-                            {order.allocatedAt && (
-                              <Button asChild variant="ghost" size="sm">
-                                <Link
-                                  href={`/stations?station=shipping&search=${order.orderNumber}`}
-                                >
-                                  Record production
-                                </Link>
-                              </Button>
-                            )}
-                          </>
+                        {/* A retained date can be cleared without fabric. */}
+                        {canManage && (order.allocatedAt || order.shipDate) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${!order.allocatedAt ? 'Unschedule' : order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
+                            onClick={() => setRescheduling(order)}
+                          >
+                            {!order.allocatedAt
+                              ? 'Unschedule'
+                              : order.shipDate
+                                ? 'Reschedule'
+                                : 'Schedule'}
+                          </Button>
                         )}
                       </div>
                     </td>
