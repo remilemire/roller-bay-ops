@@ -30,7 +30,6 @@ import {
   completionLabels,
   employeeNames,
 } from './production.api';
-import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
 import { CompletionAction } from './completion-action';
 export function StationsScreen() {
   const user = useCurrentUser();
@@ -130,7 +129,6 @@ function StationChoice({ station }: { station: Station }) {
 }
 function StationQueue({ station }: { station: Station }) {
   const params = useListParams();
-  const employee = useEmployeeSelection();
   const view =
     params.get('view') === 'completed'
       ? 'completed'
@@ -161,10 +159,6 @@ function StationQueue({ station }: { station: Station }) {
     <div className="stack">
       <section className="panel panel-body stack">
         <div className="form-grid">
-          <EmployeeSelection
-            value={employee.employeeIds}
-            onChange={employee.selectEmployees}
-          />
           <TextField
             label="Find order"
             inputMode="numeric"
@@ -230,7 +224,6 @@ function StationQueue({ station }: { station: Station }) {
                       orderId={order.id}
                       orderNumber={order.orderNumber}
                       hasWorksheet={order.hasCuttingWorksheet}
-                      employeeIds={employee.employeeIds}
                     />
                   )
                 ) : (
@@ -238,7 +231,6 @@ function StationQueue({ station }: { station: Station }) {
                     station={station}
                     orderId={order.id}
                     orderNumber={order.orderNumber}
-                    employeeIds={employee.employeeIds}
                     done={!!order[stamp[station]]}
                   />
                 )}
@@ -260,12 +252,10 @@ function CuttingChoice({
   orderId,
   orderNumber,
   hasWorksheet,
-  employeeIds,
 }: {
   orderId: string;
   orderNumber: string;
   hasWorksheet: boolean;
-  employeeIds: string[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -286,17 +276,11 @@ function CuttingChoice({
               Mark the order cut now and credit the selected employees. No
               measurements are submitted.
             </p>
-            {!employeeIds.length && (
-              <p className="muted">
-                Close this dialog and select the employees who completed the
-                cutting.
-              </p>
-            )}
             <CompletionAction
               station="cutting"
               orderId={orderId}
               orderNumber={orderNumber}
-              employeeIds={employeeIds}
+              inline
               done={false}
             />
           </section>

@@ -33,13 +33,14 @@ for (const station of stations) {
         page.getByRole('button', { name: 'Record cutting', exact: true }),
       ).toBeVisible();
     } else {
-      await pickEmployee(page, 'Alex Reed');
       await page
         .getByRole('button', {
           name: `Mark 104801 ${station.action}`,
           exact: true,
         })
         .click();
+      await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
+      await page.getByRole('button', { name: 'Record completion' }).click();
       expect(state.productionRequests.at(-1)?.path).toContain(
         `/production/${station.value}/orders/`,
       );
@@ -93,7 +94,9 @@ test('changing stations returns to the station choices and resets attribution an
     stations: ['shipping', 'assembly'],
   });
   await page.goto('/stations?station=shipping&view=all&search=104801');
+  await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await pickEmployee(page, 'Alex Reed');
+  await page.getByRole('button', { name: 'Close dialog' }).click();
   await page.getByRole('link', { name: 'Change station', exact: true }).click();
   await expect(page).toHaveURL(/\/stations$/);
   await page
@@ -108,13 +111,15 @@ test('changing stations returns to the station choices and resets attribution an
   await expect(
     page.getByRole('button', { name: 'Work queue', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
-  await expect(
-    page.getByRole('button', { name: 'Mark 104801 assembled', exact: true }),
-  ).toBeDisabled();
-  await pickEmployee(page, 'Alex Reed');
   await page
     .getByRole('button', { name: 'Mark 104801 assembled', exact: true })
     .click();
+  await expect(selectedEmployee(page, 'Alex Reed')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Record completion' }),
+  ).toBeDisabled();
+  await pickEmployee(page, 'Alex Reed');
+  await page.getByRole('button', { name: 'Record completion' }).click();
   expect(state.productionRequests).toHaveLength(1);
   expect(state.productionRequests[0]!.path).toContain(
     '/production/assembly/orders/',
@@ -131,7 +136,7 @@ test('station layout uses the same content width as other workspace pages', asyn
   await page.goto('/stations?station=checking');
   await expect(
     page.getByRole('combobox', { name: 'Completed by' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   const stationWidth = (await page.locator('.station-workspace').boundingBox())!
     .width;
   await page.screenshot({

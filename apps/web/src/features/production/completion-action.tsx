@@ -1,4 +1,7 @@
 'use client';
+import { useState } from 'react';
+import { Dialog } from '@/components/ui/dialog';
+import { EmployeeSelection } from './employee-selection';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Station } from '@roller-bay/shared/users';
 import { completionInputSchema } from '@roller-bay/shared/production';
@@ -15,15 +18,17 @@ export function CompletionAction({
   station,
   orderId,
   orderNumber,
-  employeeIds,
+  inline = false,
   done,
 }: {
   station: Station;
   orderId: string;
   orderNumber: string;
-  employeeIds: string[];
+  inline?: boolean;
   done: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const client = useQueryClient();
   const user = useCurrentUser();
   const scope = `production:${user.id}:${orderId}:${station}`;
@@ -37,10 +42,13 @@ export function CompletionAction({
         client.invalidateQueries({ queryKey: productionKey }),
         client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
+      setOpen(false);
+      setEmployeeIds([]);
     },
   });
-  return (
-    <div className="action-group">
+  const form = (
+    <div className="stack">
+      <EmployeeSelection value={employeeIds} onChange={setEmployeeIds} />
       {mutation.error && <ErrorNotice error={mutation.error} />}
       {mutation.pending && (
         <div className="action-group">
@@ -72,7 +80,7 @@ export function CompletionAction({
             ? 'Saving…'
             : station === 'cutting'
               ? 'Sign off only'
-              : `Mark ${orderNumber} ${completionLabels[station]}`}
+              : 'Record completion'}
       </Button>
       {mutation.isSuccess && (
         <p role="status">
@@ -80,5 +88,34 @@ export function CompletionAction({
         </p>
       )}
     </div>
+  );
+  if (inline) return form;
+  return (
+    <>
+      <Button
+        disabled={done && !mutation.pending}
+        onClick={() => {
+          setEmployeeIds([]);
+          mutation.reset();
+          setOpen(true);
+        }}
+      >
+        {mutation.pending
+          ? 'Retry original completion'
+          : done
+            ? `${completionLabels[station]} recorded`
+            : station === 'cutting'
+              ? 'Sign off only'
+              : `Mark ${orderNumber} ${completionLabels[station]}`}
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`Mark ${orderNumber} ${completionLabels[station]}`}
+        description="Select everyone who completed this work."
+      >
+        {form}
+      </Dialog>
+    </>
   );
 }

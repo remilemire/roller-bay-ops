@@ -77,8 +77,12 @@ function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
 // The mocked order that has no allocation yet.
 export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
 /** Adds an employee to "Completed by" through its search box, within `within`. */
-export async function pickEmployee(within: Page | Locator, name: string) {
-  await within.getByRole('combobox', { name: 'Completed by' }).click();
+export async function pickEmployee(
+  within: Page | Locator,
+  name: string,
+  label = 'Completed by',
+) {
+  await within.getByRole('combobox', { name: label }).click();
   await within.getByRole('option', { name: new RegExp(`^${name} —`) }).click();
 }
 /** The chip of a selected employee, by its remove control. */

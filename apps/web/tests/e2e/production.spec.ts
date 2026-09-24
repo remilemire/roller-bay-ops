@@ -18,10 +18,14 @@ test('station login, whole-order attribution, and employee directory', async ({
   ).toBeVisible();
   await expect(page.getByText(/Unscheduled/)).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Mark 104801 assembled' }),
+    page.getByRole('combobox', { name: 'Completed by' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Record completion' }),
   ).toBeDisabled();
   await pickEmployee(page, 'Alex Reed');
-  await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  await page.getByRole('button', { name: 'Record completion' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
   await expect(page.getByText(/assembled · Alex Reed/)).toBeVisible();
   expect(state.orders[0]!.cutAt).toBeNull();
@@ -42,8 +46,9 @@ test('worksheet submission records cutting and sends measurements for office rev
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
+  await pickEmployee(page, 'Alex Reed', 'Started by');
+  await page.getByRole('button', { name: 'Start worksheet' }).click();
   await page.getByLabel('Cut 1 done').check();
   await expect(
     page.getByRole('button', { name: 'Sign off only' }),
@@ -58,7 +63,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();
-  await expect(selectedEmployee(page, 'Alex Reed')).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Completed by' }),
+  ).toHaveCount(0);
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   await expect(
@@ -69,6 +76,10 @@ test('worksheet submission records cutting and sends measurements for office rev
     fullPage: true,
   });
   await page.getByRole('button', { name: 'Review and submit results' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Submit results', exact: true }),
+  ).toBeDisabled();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
@@ -98,6 +109,10 @@ test('worksheet submission records cutting and sends measurements for office rev
   await page.reload();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('12');
   await page.getByRole('button', { name: 'Review and submit results' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Submit results', exact: true }),
+  ).toBeDisabled();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
@@ -213,17 +228,22 @@ test('completion rejection permits another employee and a lost response can be r
     },
   );
   await page.goto('/stations');
-  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  await pickEmployee(page, 'Alex Reed');
+  await page.getByRole('button', { name: 'Record completion' }).click();
   await expect(page.getByText('Employee is inactive.')).toBeVisible();
   await selectedEmployee(page, 'Alex Reed').click();
   await pickEmployee(page, 'Robin Park');
-  await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  await page.getByRole('button', { name: 'Record completion' }).click();
   await expect(
     page.getByRole('button', { name: 'Retry original completion' }),
   ).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Retry original completion' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Retry original completion' })
+    .click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
   await expect(page.getByText(/assembled · Robin Park/)).toBeVisible();
   expect(attempts[2]).toEqual(attempts[1]);
@@ -437,11 +457,7 @@ test('cutting station offers manual completion without starting a worksheet', as
   await expect(page.getByRole('link', { name: 'Use worksheet' })).toBeVisible();
   const manual = page.getByRole('button', { name: 'Sign off only' });
   await expect(manual).toBeDisabled();
-  await page.getByRole('button', { name: 'Close dialog' }).click();
-  await pickEmployee(page, 'Alex Reed');
-  await page
-    .getByRole('button', { name: 'Record cutting', exact: true })
-    .click();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await expect(
     page.getByText(
       'Mark the order cut now and credit the selected employees. No measurements are submitted.',
@@ -466,10 +482,10 @@ test('a cleared cut can be recorded manually while keeping the previous workshee
   state.worksheets.push(sheet);
   state.orders[0]!.cutAt = null;
   await page.goto('/stations');
-  await pickEmployee(page, 'Alex Reed');
   await page
     .getByRole('button', { name: 'Record cutting', exact: true })
     .click();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await expect(
     page.getByRole('link', { name: 'Continue worksheet' }),
   ).toBeVisible();
@@ -498,8 +514,9 @@ test('a started worksheet can be signed manually and resumed without losing save
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
+  await pickEmployee(page, 'Alex Reed', 'Started by');
+  await page.getByRole('button', { name: 'Start worksheet' }).click();
   await page.getByLabel('Cut 1 done').check();
   await page
     .getByLabel('What happened to this stock item?')
@@ -509,6 +526,11 @@ test('a started worksheet can be signed manually and resumed without losing save
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.getByRole('button', { name: 'Sign off only' }).click();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Sign off only' })
+    .click();
   await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
   const completion = structuredClone(state.productionCompletions);
   expect(state.worksheets[0]!.submittedAt).toBeNull();
@@ -524,9 +546,48 @@ test('a started worksheet can be signed manually and resumed without losing save
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   await page.getByRole('button', { name: 'Review and submit results' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Submit results', exact: true }),
+  ).toBeDisabled();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
   expect(state.productionCompletions).toEqual(completion);
+});
+
+test('completion attribution belongs to the selected order and cancelled forms do not record work', async ({
+  page,
+}) => {
+  const state = await mockApi(page, {
+    role: 'production',
+    stations: ['assembly'],
+  });
+  state.orders.push({
+    ...state.orders[0]!,
+    id: 'abababab-abab-4bab-8bab-abababababab',
+    orderNumber: '104802',
+  });
+  await page.goto('/stations');
+  await expect(
+    page.getByRole('combobox', { name: 'Completed by' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  expect(state.productionRequests).toHaveLength(0);
+  await page.getByRole('button', { name: 'Mark 104802 assembled' }).click();
+  await expect(selectedEmployee(page, 'Alex Reed')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Record completion' }),
+  ).toBeDisabled();
+  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
+  await page.getByRole('button', { name: 'Record completion' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(state.productionRequests).toHaveLength(1);
+  expect(state.productionRequests[0]!.path).toContain(
+    'abababab-abab-4bab-8bab-abababababab',
+  );
+  expect(state.orders[0]!.assembledAt).toBeNull();
 });

@@ -2,7 +2,11 @@
 import Link from 'next/link';
 import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { worksheetSchema, type Worksheet } from '@roller-bay/shared/production';
+import {
+  worksheetSchema,
+  type Worksheet,
+  type WorksheetSubmit,
+} from '@roller-bay/shared/production';
 import { api } from '@/lib/api';
 import { useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
@@ -15,7 +19,8 @@ import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
 import { CompletionAction } from './completion-action';
 import { CuttingInstructions } from './cutting-instructions';
-import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
+import { EmployeeSelection } from './employee-selection';
+import { Dialog } from '@/components/ui/dialog';
 import {
   worksheetForOrder,
   productionKey,
@@ -40,18 +45,9 @@ function CuttingOrder({
 }: { orderId: string } & Editor) {
   const query = useQuery(worksheetForOrder(orderId));
   const client = useQueryClient();
-  const employee = useEmployeeSelection();
-  // A reopened sheet starts with the cutter who began it, once per sheet, so
-  // refetches never replace someone's own choice.
-  const [seededSheet, setSeededSheet] = useState<string | null>(null);
-  if (query.data && seededSheet !== query.data.id) {
-    setSeededSheet(query.data.id);
-    if (!employee.employeeIds.length)
-      employee.selectEmployees([query.data.employeeId]);
-  }
-  // One cutter begins a sheet; the cut milestone may credit several.
-  const starter =
-    employee.employeeIds.length === 1 ? employee.employeeIds[0] : undefined;
+  const [beginOpen, setBeginOpen] = useState(false);
+  const [starterIds, setStarterIds] = useState<string[]>([]);
+  const starter = starterIds.length === 1 ? starterIds[0] : undefined;
   const start = useMutation({
     mutationFn: () =>
       api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
@@ -60,6 +56,7 @@ function CuttingOrder({
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: productionKey });
+      setBeginOpen(false);
     },
   });
   if (query.isPending) return <Loading />;
@@ -76,30 +73,47 @@ function CuttingOrder({
         </Button>
       </PageHeading>
       <section className="panel panel-body stack">
-        <EmployeeSelection
-          value={employee.employeeIds}
-          onChange={employee.selectEmployees}
-        />
         {query.data ? (
-          <CutCompletion
-            sheet={query.data}
-            employeeIds={employee.employeeIds}
-          />
+          <CutCompletion sheet={query.data} />
         ) : (
           <>
             <p>
-              Choose the one cutter who begins the sheet. Beginning saves the
-              current plan and prevents changes while it is being cut.
+              Beginning saves the current plan and prevents changes while it is
+              being cut.
             </p>
             <div className="action-group">
               <Button
-                disabled={!starter || start.isPending}
-                onClick={() => start.mutate()}
+                onClick={() => {
+                  setStarterIds([]);
+                  setBeginOpen(true);
+                }}
               >
                 Begin cutting
               </Button>
-              {start.error && <ErrorNotice error={start.error} />}
             </div>
+            <Dialog
+              open={beginOpen}
+              onOpenChange={setBeginOpen}
+              title="Begin cutting"
+              description="Choose the cutter who is starting this worksheet. Completion is recorded separately when you sign off or submit results."
+            >
+              <div className="stack">
+                <EmployeeSelection
+                  label="Started by"
+                  value={starterIds}
+                  onChange={setStarterIds}
+                />
+                {start.error && <ErrorNotice error={start.error} />}
+                <div className="form-actions">
+                  <Button
+                    disabled={!starter || start.isPending}
+                    onClick={() => start.mutate()}
+                  >
+                    Start worksheet
+                  </Button>
+                </div>
+              </div>
+            </Dialog>
           </>
         )}
       </section>
@@ -107,20 +121,13 @@ function CuttingOrder({
         <Worksheet
           key={query.data.id}
           initial={query.data}
-          employeeIds={employee.employeeIds}
           completionEditor={completionEditor}
         />
       )}
     </div>
   );
 }
-function CutCompletion({
-  sheet,
-  employeeIds,
-}: {
-  sheet: Worksheet;
-  employeeIds: string[];
-}) {
+function CutCompletion({ sheet }: { sheet: Worksheet }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
   const completed = query.data?.find((c) => c.station === 'cutting');
@@ -139,7 +146,6 @@ function CutCompletion({
           station="cutting"
           orderId={sheet.workOrderId}
           orderNumber={sheet.orderNumber}
-          employeeIds={employeeIds}
           done={!!completed}
         />
       )}
@@ -148,11 +154,11 @@ function CutCompletion({
 }
 function Worksheet({
   initial,
-  employeeIds,
   completionEditor: CompletionEditor,
-}: { initial: Worksheet; employeeIds: string[] } & Editor) {
+}: { initial: Worksheet } & Editor) {
   // Keep dirty work pinned through background refetches. Explicit saves advance the revision.
   const [sheet, setSheet] = useState(initial);
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [editorVersion, setEditorVersion] = useState(0);
   const [refreshError, setRefreshError] = useState<unknown>(null);
   const [checked, setChecked] = useState(initial.draft?.checkedCuts ?? []);
@@ -219,6 +225,13 @@ function Worksheet({
           allocation={sheet.snapshot}
           close={() => void refresh().catch(setRefreshError)}
           worksheet={{
+            confirmationFields: (
+              <EmployeeSelection
+                value={employeeIds}
+                onChange={setEmployeeIds}
+              />
+            ),
+            submissionDisabled: employeeIds.length === 0,
             dirty: checkedDirty,
             initialForm:
               sheet.draft?.form ??
@@ -256,7 +269,7 @@ function Worksheet({
                     employeeIds,
                     results,
                     draft: { form, units, checkedCuts: checked },
-                  },
+                  } satisfies WorksheetSubmit,
                 },
               );
               setDirty(false);

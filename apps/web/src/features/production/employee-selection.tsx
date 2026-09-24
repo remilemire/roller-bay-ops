@@ -1,15 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { productionEmployees, productionKey } from './production.api';
-export function useEmployeeSelection() {
-  // In memory: logout, reload, or a station change clears attribution.
-  const [employeeIds, selectEmployees] = useState<string[]>([]);
-  return { employeeIds, selectEmployees };
-}
 const optionLabel = (e: { name: string; initials: string }) =>
   `${e.name} — ${e.initials}`;
 /**
@@ -19,7 +14,9 @@ const optionLabel = (e: { name: string; initials: string }) =>
 export function EmployeeSelection({
   value,
   onChange,
+  label = 'Completed by',
 }: {
+  label?: string;
   value: string[];
   onChange: (ids: string[]) => void;
 }) {
@@ -37,7 +34,7 @@ export function EmployeeSelection({
   return (
     <div className="employee-selection">
       <Lookup
-        label="Completed by"
+        label={label}
         value=""
         onChange={(id) => {
           if (id && !value.includes(id)) onChange([...value, id]);

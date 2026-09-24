@@ -1,5 +1,10 @@
 'use client';
-import { useEffect, useState, type ComponentProps } from 'react';
+import {
+  useEffect,
+  useState,
+  type ReactNode,
+  type ComponentProps,
+} from 'react';
 import { useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -53,6 +58,8 @@ export type CompletionEditorProps = {
     lookupLocations: ComponentProps<typeof Lookup>['load'];
     saveDraft?: (form: CompletionForm) => Promise<void>;
     resolution?: boolean;
+    confirmationFields?: ReactNode;
+    submissionDisabled?: boolean;
     dirty?: boolean;
     submit: (
       body: ReturnType<typeof completionFromForm>,
@@ -575,7 +582,7 @@ export function CompletionEditor({
         }
         description={
           worksheet && !worksheet.resolution
-            ? 'The office will review these measurements before updating inventory. This does not mark the order cut.'
+            ? 'Submitting records cutting completion unless already recorded. The office reviews measurements before updating inventory.'
             : 'Stock measurements will be updated, retained remnants created, and this allocation reconciled. This does not change production milestones.'
         }
       >
@@ -594,6 +601,7 @@ export function CompletionEditor({
             <li>The original cutting plan stays in history.</li>
           </ul>
         )}
+        {worksheet?.confirmationFields}
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
@@ -610,6 +618,7 @@ export function CompletionEditor({
           </Button>
           <Button
             disabled={
+              worksheet?.submissionDisabled ||
               mutation.isPending ||
               saveDraft.isPending ||
               adding ||
