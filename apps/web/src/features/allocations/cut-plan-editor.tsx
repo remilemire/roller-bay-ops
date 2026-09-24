@@ -12,7 +12,7 @@ import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { fieldSuffix } from '@/lib/measurements';
 import { type AllocationForm } from './allocation-form';
-import { stockKey, lookupStock } from '@/features/stock-items/stock-items.api';
+import { stockKey, lookupStock } from '@/features/stock-items';
 
 export function CutPlanEditor({
   form,

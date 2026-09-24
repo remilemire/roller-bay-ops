@@ -1,5 +1,5 @@
 'use client';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useCurrentUser } from '@/features/auth';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
 import { PageHeading, Status } from '@/components/ui/feedback';
 import { ColorThemePicker } from './color-theme-picker';

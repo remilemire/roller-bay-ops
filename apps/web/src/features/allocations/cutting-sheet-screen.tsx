@@ -11,8 +11,8 @@ import type {
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice, Loading, PageHeading } from '@/components/ui/feedback';
-import { stockLocationLabel } from '@/features/stock-items/stock-location';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { stockLocationLabel } from '@/features/stock-items';
+import { useMeasurementUnits } from '@/features/users';
 import { dateLabel, shortId } from '@/lib/format';
 import { fieldAmount, fieldLabel, fieldSuffix } from '@/lib/measurements';
 import { useHydrated } from '@/lib/use-hydrated';

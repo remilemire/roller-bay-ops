@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 import { user } from '../../../tests/fixtures';
-import { sessionKey } from '@/features/auth/auth.queries';
+import { sessionKey } from '@/features/auth';
 import { MeasurementUnitsPanel } from './measurement-units-panel';
 
 const json = (body: unknown, status = 200) =>

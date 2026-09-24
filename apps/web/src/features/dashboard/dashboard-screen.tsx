@@ -12,11 +12,10 @@ import {
   Plus,
   ArrowRight,
 } from 'lucide-react';
-import { stockList } from '@/features/stock-items/stock-items.api';
-import { receiptList } from '@/features/stock-receipts/stock-receipts.api';
-import { allocationList } from '@/features/allocations/allocations.api';
-import { orderTotals } from '@/features/work-orders/order-totals';
-import { orderList, orderRange } from '@/features/work-orders/work-orders.api';
+import { stockList } from '@/features/stock-items';
+import { receiptList } from '@/features/stock-receipts';
+import { allocationList } from '@/features/allocations';
+import { orderTotals, orderList, orderRange } from '@/features/work-orders';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,

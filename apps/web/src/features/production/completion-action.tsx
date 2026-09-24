@@ -5,7 +5,7 @@ import { completionInputSchema } from '@roller-bay/shared/production';
 import { useProductionWrite } from './use-production-write';
 import { Button } from '@/components/ui/button';
 import { ErrorNotice } from '@/components/ui/feedback';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useCurrentUser } from '@/features/auth';
 import {
   completionLabels,
   mutationResultSchema,

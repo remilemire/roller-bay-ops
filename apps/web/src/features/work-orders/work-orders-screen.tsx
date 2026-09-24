@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import { useCanManage } from '@/features/auth';
 import { Button } from '@/components/ui/button';
 import { PageHeading } from '@/components/ui/feedback';
 import { useListParams } from '@/lib/use-list-params';

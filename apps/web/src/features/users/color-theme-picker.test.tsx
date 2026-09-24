@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { user } from '../../../tests/fixtures';
-import { sessionKey } from '@/features/auth/auth.queries';
+import { sessionKey } from '@/features/auth';
 import { colorThemeScript, colorThemeStorageKey } from '@/lib/color-themes';
 import { AccountColorTheme } from './account-color-theme';
 import { ColorThemePicker } from './color-theme-picker';

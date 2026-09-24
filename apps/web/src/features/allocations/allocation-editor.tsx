@@ -27,10 +27,10 @@ import {
   orderDetail,
   saveOrderLines,
   workOrdersKey,
-} from '@/features/work-orders/work-orders.api';
-import { stockKey } from '@/features/stock-items/stock-items.api';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+} from '@/features/work-orders';
+import { stockKey } from '@/features/stock-items';
+import { useCurrentUser } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import {
   pendingPayload,
   requestKey,

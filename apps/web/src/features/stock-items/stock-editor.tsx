@@ -7,15 +7,9 @@ import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice } from '@/components/ui/feedback';
-import {
-  lookupColors,
-  catalogKey,
-} from '@/features/fabric-catalog/catalog.api';
-import {
-  lookupLocations,
-  locationsKey,
-} from '@/features/locations/locations.api';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { lookupColors, catalogKey } from '@/features/fabric-catalog';
+import { lookupLocations, locationsKey } from '@/features/locations';
+import { useMeasurementUnits } from '@/features/users';
 import { fieldSuffix, fieldValue, measurementHelp } from '@/lib/measurements';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
 import { issuePath } from '@/lib/errors';

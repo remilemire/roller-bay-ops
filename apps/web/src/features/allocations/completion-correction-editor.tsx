@@ -4,7 +4,7 @@ import {
   stockItemSchema,
   type StockItem,
 } from '@roller-bay/shared/stock-items';
-import { lookupStock, stockKey } from '@/features/stock-items/stock-items.api';
+import { lookupStock, stockKey } from '@/features/stock-items';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -17,12 +17,9 @@ import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { Loading, ErrorNotice } from '@/components/ui/feedback';
-import {
-  lookupLocations,
-  locationsKey,
-} from '@/features/locations/locations.api';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { lookupLocations, locationsKey } from '@/features/locations';
+import { useMeasurementUnits } from '@/features/users';
+import { useCurrentUser } from '@/features/auth';
 import {
   fieldInput,
   fieldValue,

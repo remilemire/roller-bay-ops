@@ -53,7 +53,7 @@ import {
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import { useCanManage } from '@/features/auth';
 import {
   locationsKey,
   listLocations,

@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
-import { useCanManage } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCanManage } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,

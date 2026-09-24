@@ -1,7 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { sessionQuery } from '@/features/auth/auth.queries';
+import { sessionQuery } from '@/features/auth';
 import { applyColorTheme } from '@/lib/color-themes';
 
 /**

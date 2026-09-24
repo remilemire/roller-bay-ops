@@ -1,8 +1,8 @@
 'use client';
 import type { AllocationDetail } from '@roller-bay/shared/allocations';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
-import { cuttingSheetItems } from '@/features/allocations/cutting-sheet';
-import { stockLocationLabel } from '@/features/stock-items/stock-location';
+import { cuttingSheetItems } from '@/features/allocations';
+import { stockLocationLabel } from '@/features/stock-items';
 import { fieldLabel } from '@/lib/measurements';
 import { shortId } from '@/lib/format';
 export function CuttingInstructions({

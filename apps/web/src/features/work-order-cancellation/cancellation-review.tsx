@@ -11,7 +11,7 @@ import { correctionResultSchema } from '@roller-bay/shared/corrections';
 import type { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
 import { useIdempotentWrite } from '@/lib/use-idempotent-write';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { useCurrentUser } from '@/features/auth';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';

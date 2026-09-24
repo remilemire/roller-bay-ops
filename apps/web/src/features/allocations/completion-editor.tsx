@@ -9,13 +9,10 @@ import {
 } from '@roller-bay/shared/allocations';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { Plus, Trash2 } from 'lucide-react';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCurrentUser } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import { fieldSuffix, measurementHelp } from '@/lib/measurements';
-import {
-  locationsKey,
-  lookupLocations,
-} from '@/features/locations/locations.api';
+import { locationsKey, lookupLocations } from '@/features/locations';
 import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';

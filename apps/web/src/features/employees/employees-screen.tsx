@@ -8,8 +8,8 @@ import {
   type Employee,
 } from '@roller-bay/shared/employees';
 import { api } from '@/lib/api';
-import { useCanManage } from '@/features/auth/auth-boundary';
-import { listUsers } from '@/features/users/users.api';
+import { useCanManage } from '@/features/auth';
+import { listUsers } from '@/features/users';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';

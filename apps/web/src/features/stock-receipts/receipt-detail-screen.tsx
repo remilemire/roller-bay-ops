@@ -1,5 +1,5 @@
 'use client';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import { useCanManage } from '@/features/auth';
 import { Button } from '@/components/ui/button';
 import { ReceiptCorrectionEditor } from './receipt-correction-editor';
 import Link from 'next/link';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/feedback';
 import { dateLabel, shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useMeasurementUnits } from '@/features/users';
 /** `history` is the receipt's audit history, composed by the route. */
 export function ReceiptDetailScreen({
   id,

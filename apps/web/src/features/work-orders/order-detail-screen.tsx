@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import { useCanManage } from '@/features/auth';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import {

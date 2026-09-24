@@ -4,10 +4,12 @@ import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { worksheetSchema, type Worksheet } from '@roller-bay/shared/production';
 import { api } from '@/lib/api';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { completionRecovery } from '@/features/allocations/completion-form';
-import type { CompletionEditorProps } from '@/features/allocations/completion-editor';
+import { useCurrentUser } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
+import {
+  completionRecovery,
+  type CompletionEditorProps,
+} from '@/features/allocations';
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';

@@ -2,8 +2,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { ErrorNotice } from '@/components/ui/feedback';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import { sessionKey } from '@/features/auth/auth.queries';
+import { useCurrentUser, sessionKey } from '@/features/auth';
 import { colorThemes } from '@/lib/color-themes';
 import { updateColorTheme } from './users.api';
 

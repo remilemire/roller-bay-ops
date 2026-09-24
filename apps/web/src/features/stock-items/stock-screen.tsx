@@ -16,8 +16,8 @@ import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
 import { shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
-import { useCanManage } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCanManage } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import { stockList } from './stock-items.api';
 import { StockEditor } from './stock-editor';
 export function StockScreen() {

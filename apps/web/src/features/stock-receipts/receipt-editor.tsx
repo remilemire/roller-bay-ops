@@ -17,16 +17,10 @@ import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
-import {
-  catalogKey,
-  lookupColors,
-} from '@/features/fabric-catalog/catalog.api';
-import {
-  locationsKey,
-  lookupLocations,
-} from '@/features/locations/locations.api';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { catalogKey, lookupColors } from '@/features/fabric-catalog';
+import { locationsKey, lookupLocations } from '@/features/locations';
+import { useCurrentUser } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import { fieldSuffix } from '@/lib/measurements';
 import {
   pendingPayload,

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
-import { useCurrentUser, useCanManage } from '@/features/auth/auth-boundary';
+import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useListParams } from '@/lib/use-list-params';
 import { calendarDateLabel, dateTimeLabel } from '@/lib/format';
 import { ChoiceField, TextField } from '@/components/ui/field';

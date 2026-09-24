@@ -1,5 +1,5 @@
 'use client';
-import { useCanManage } from '@/features/auth/auth-boundary';
+import { useCanManage } from '@/features/auth';
 import { CompletionCorrectionEditor } from './completion-correction-editor';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -22,8 +22,8 @@ import {
 import { dateLabel, shortId } from '@/lib/format';
 import { InfoTip } from '@/components/ui/info-tip';
 import { fieldLabel, measurementHelp } from '@/lib/measurements';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { stockLocationLabel } from '@/features/stock-items/stock-location';
+import { useMeasurementUnits } from '@/features/users';
+import { stockLocationLabel } from '@/features/stock-items';
 import {
   allocationDetail,
   cancelAllocation,

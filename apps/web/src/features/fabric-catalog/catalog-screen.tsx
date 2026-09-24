@@ -33,8 +33,8 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import styles from '@/components/ui/tree.module.css';
 import { useListParams } from '@/lib/use-list-params';
-import { useCanManage } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCanManage } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
 import { issuePath } from '@/lib/errors';
 import { showFieldIssues } from '@/lib/field-issues';

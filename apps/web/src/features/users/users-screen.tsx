@@ -26,8 +26,7 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { dateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
-import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
-import { sessionKey } from '@/features/auth/auth.queries';
+import { useCanManage, useCurrentUser, sessionKey } from '@/features/auth';
 import {
   listUsers,
   setUserActivation,

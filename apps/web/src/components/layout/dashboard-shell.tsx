@@ -18,8 +18,12 @@ import {
   Users,
 } from 'lucide-react';
 import { api, noContent } from '@/lib/api';
-import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
-import { clearPrivateData, sessionKey } from '@/features/auth/auth.queries';
+import {
+  useCanManage,
+  useCurrentUser,
+  clearPrivateData,
+  sessionKey,
+} from '@/features/auth';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';

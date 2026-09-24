@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/input';
-import { sessionKey } from '@/features/auth/auth.queries';
+import { sessionKey } from '@/features/auth';
 import { helpFor, unitNames } from '@/lib/measurements';
 import { useMeasurementUnits } from './use-measurement-units';
 import { updateMeasurementUnits } from './users.api';

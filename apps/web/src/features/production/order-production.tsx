@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import { milestoneCorrectionSchema } from '@roller-bay/shared/production';
-import { useCurrentUser, useCanManage } from '@/features/auth/auth-boundary';
+import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
 import { FACILITY_TIME_ZONE, facilityTimeToIso } from '@/lib/facility-time';

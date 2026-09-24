@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { TextField } from '@/components/ui/field';
-import { allocationDetail } from '@/features/allocations/allocations.api';
-import type { CompletionEditorProps } from '@/features/allocations/completion-editor';
+import {
+  allocationDetail,
+  type CompletionEditorProps,
+} from '@/features/allocations';
 import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,8 +14,8 @@ import {
 import type { z } from 'zod';
 import { useListParams } from '@/lib/use-list-params';
 import { useProductionWrite } from './use-production-write';
-import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCanManage, useCurrentUser } from '@/features/auth';
+import { useMeasurementUnits } from '@/features/users';
 import { api } from '@/lib/api';
 import { dateTimeLabel } from '@/lib/format';
 import { RecordValues } from '@/components/records/record-values';

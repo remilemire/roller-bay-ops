@@ -12,16 +12,10 @@ import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { Loading, ErrorNotice } from '@/components/ui/feedback';
-import {
-  lookupColors,
-  catalogKey,
-} from '@/features/fabric-catalog/catalog.api';
-import {
-  lookupLocations,
-  locationsKey,
-} from '@/features/locations/locations.api';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
+import { lookupColors, catalogKey } from '@/features/fabric-catalog';
+import { lookupLocations, locationsKey } from '@/features/locations';
+import { useMeasurementUnits } from '@/features/users';
+import { useCurrentUser } from '@/features/auth';
 import { fieldInput, fieldValue, fieldSuffix } from '@/lib/measurements';
 import { shortId } from '@/lib/format';
 import { CorrectionSubmit } from '@/components/corrections/correction-submit';

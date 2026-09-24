@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { historySchema, type AuditRecordType } from '@roller-bay/shared/audit';
 import { api } from '@/lib/api';
 import { dateTimeLabel, shortId } from '@/lib/format';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useMeasurementUnits } from '@/features/users';
 import { Loading, ErrorNotice, Pagination } from '@/components/ui/feedback';
 import { RecordValues } from '@/components/records/record-values';
 function AuditTime({ value }: { value: string }) {

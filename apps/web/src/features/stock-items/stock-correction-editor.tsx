@@ -8,12 +8,9 @@ import {
 import { Dialog } from '@/components/ui/dialog';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
-import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
-import {
-  locationsKey,
-  lookupLocations,
-} from '@/features/locations/locations.api';
+import { useMeasurementUnits } from '@/features/users';
+import { useCurrentUser } from '@/features/auth';
+import { locationsKey, lookupLocations } from '@/features/locations';
 import {
   fieldInput,
   fieldValue,

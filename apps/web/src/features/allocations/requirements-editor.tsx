@@ -7,10 +7,7 @@ import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { fieldSuffix, measurementHelp } from '@/lib/measurements';
 import { type AllocationForm, emptyRequirement } from './allocation-form';
-import {
-  catalogKey,
-  lookupColors,
-} from '@/features/fabric-catalog/catalog.api';
+import { catalogKey, lookupColors } from '@/features/fabric-catalog';
 
 /** The work order's blinds. They are the order's record, saved by `actions`. */
 export function RequirementsEditor({
