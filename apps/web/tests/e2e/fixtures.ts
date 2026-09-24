@@ -3,7 +3,7 @@ import type {
   Worksheet,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   allocationDraftSchema,
   allocationDetailSchema,
@@ -76,6 +76,11 @@ function draftData(input: AllocationDraftInput, lines: WorkOrderLine[]) {
 
 // The mocked order that has no allocation yet.
 export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
+/** The "Completed by" checkbox for an employee, by name, within `within`. */
+export const employeeOption = (within: Page | Locator, name: string) =>
+  within
+    .getByRole('group', { name: 'Completed by' })
+    .getByRole('checkbox', { name: new RegExp(`^${name} —`) });
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean; stations?: Station[] } = {},
@@ -273,17 +278,21 @@ export async function mockApi(
     if (productionComplete) {
       const station = productionComplete[1] as Station;
       const id = productionComplete[2];
-      const body = request.postDataJSON();
-      const employee = state.employees.find((e) => e.id === body.employeeId)!;
+      const body = request.postDataJSON() as { employeeIds: string[] };
       const order = state.orders.find((o) => o.id === id)!;
       state.productionRequests.push({ path, body });
       const completedAt = new Date().toISOString();
       state.productionCompletions.push({
         workOrderId: order.id,
         station,
-        employeeId: employee.id,
-        employeeName: employee.name,
-        employeeInitials: employee.initials,
+        employees: body.employeeIds.map((employeeId) => {
+          const employee = state.employees.find((e) => e.id === employeeId)!;
+          return {
+            employeeId,
+            employeeName: employee.name,
+            employeeInitials: employee.initials,
+          };
+        }),
         completedAt,
         recordedAt: completedAt,
         recordedByUserId: ids.user,

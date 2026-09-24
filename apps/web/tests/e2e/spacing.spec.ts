@@ -1,5 +1,5 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { mockApi, ids } from './fixtures';
+import { mockApi, ids, employeeOption } from './fixtures';
 
 async function boxes(rows: Locator) {
   return rows.evaluateAll((elements) =>
@@ -19,9 +19,13 @@ test('record rows share spacing and detail cards remain separated', async ({
     state.productionCompletions.push({
       workOrderId: ids.order,
       station,
-      employeeId: state.employees[0]!.id,
-      employeeName: 'Alex Reed',
-      employeeInitials: 'AR',
+      employees: [
+        {
+          employeeId: state.employees[0]!.id,
+          employeeName: 'Alex Reed',
+          employeeInitials: 'AR',
+        },
+      ],
       completedAt: timestamp,
       recordedAt: timestamp,
       recordedByUserId: ids.user,
@@ -113,14 +117,12 @@ test('record rows share spacing and detail cards remain separated', async ({
 test('help icons keep measurement labels aligned in station forms', async ({
   page,
 }, testInfo) => {
-  const state = await mockApi(page, {
+  await mockApi(page, {
     role: 'production',
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   await page
     .getByLabel('What happened to this stock item?')

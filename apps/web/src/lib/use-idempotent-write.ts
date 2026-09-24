@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
@@ -26,8 +26,16 @@ export function useIdempotentWrite<Input, Output>({
 }) {
   const hydrated = useHydrated();
   const [, refreshPending] = useState(0);
-  const saved = hydrated ? inputSchema.safeParse(pendingPayload(scope)) : null;
+  const stored = hydrated ? pendingPayload(scope) : undefined;
+  const saved = stored === undefined ? null : inputSchema.safeParse(stored);
   const pending = saved?.success ? saved.data : null;
+  // A saved payload this version can no longer send cannot be retried, and
+  // keeping it would refuse every new request in the scope. Nothing rendered
+  // depends on it, so no re-render is needed.
+  const stale = saved?.success === false;
+  useEffect(() => {
+    if (stale) finishRequest(scope);
+  }, [stale, scope]);
   const mutation = useMutation({
     mutationFn: async (body: Input) => {
       body = inputSchema.parse(body);

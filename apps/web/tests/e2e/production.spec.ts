@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Worksheet } from '@roller-bay/shared/production';
-import { mockApi, ids } from './fixtures';
+import { mockApi, ids, employeeOption } from './fixtures';
 test('station login, whole-order attribution, and employee directory', async ({
   page,
 }) => {
@@ -20,9 +20,7 @@ test('station login, whole-order attribution, and employee directory', async ({
   await expect(
     page.getByRole('button', { name: 'Mark 104801 assembled' }),
   ).toBeDisabled();
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
   await expect(page.getByText(/assembled · Alex Reed/)).toBeVisible();
@@ -44,9 +42,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   await page.getByLabel('Cut 1 done').check();
   await page
@@ -64,9 +60,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Completed by', { exact: true })).toHaveValue(
-    state.employees[0]!.id,
-  );
+  await expect(employeeOption(page, 'Alex Reed')).toBeChecked();
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   const discard = page.getByRole('button', { name: 'Discard changes' });
@@ -223,14 +217,11 @@ test('completion rejection permits another employee and a lost response can be r
     },
   );
   await page.goto('/stations');
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await expect(page.getByText('Employee is inactive.')).toBeVisible();
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[1]!.id);
+  await employeeOption(page, 'Alex Reed').uncheck();
+  await employeeOption(page, 'Robin Park').check();
   await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
   await expect(
     page.getByRole('button', { name: 'Retry original completion' }),
@@ -392,7 +383,7 @@ test('reconciliation retries the original keyed resolution after reload even whe
 test('a rejected correction can be edited and resubmitted with a new request key', async ({
   page,
 }) => {
-  const state = await mockApi(page);
+  await mockApi(page);
   const attempts: { key: string | undefined; body: { completedAt: string } }[] =
     [];
   await page.route(
@@ -415,11 +406,10 @@ test('a rejected correction can be edited and resubmitted with a new request key
   );
   await page.goto(`/work-orders/${ids.order}`);
   await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
-  await page
     .getByRole('button', { name: 'Correct cut record', exact: true })
     .click();
+  const dialog = page.getByRole('dialog');
+  await employeeOption(dialog, 'Alex Reed').check();
   await page.getByLabel('Actual completion time').fill('2040-01-01T12:00');
   await page.getByLabel('Reason', { exact: true }).fill('Corrected date');
   await page.getByRole('button', { name: 'Save correction' }).click();

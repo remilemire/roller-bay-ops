@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ids, mockApi } from './fixtures';
+import { ids, mockApi, employeeOption } from './fixtures';
 test('admins schedule and ship orders, and delete only unused orders', async ({
   page,
 }, testInfo) => {
@@ -64,9 +64,7 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     .click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
   await page.getByLabel('Station', { exact: true }).selectOption('shipping');
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await expect(
     page.getByRole('button', { name: 'Shipped recorded', exact: true }),
@@ -77,7 +75,7 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
   expect(state.productionRequests).toEqual([
     {
       path: `/production/shipping/orders/${ids.order}/complete`,
-      body: { employeeId: state.employees[0]!.id },
+      body: { employeeIds: [state.employees[0]!.id] },
     },
   ]);
 
@@ -112,9 +110,7 @@ test('order rows open attributed station logging', async ({ page }) => {
   await page.goto('/work-orders?view=list');
   await page.getByRole('link', { name: 'Record production' }).click();
   await expect(page).toHaveURL(/stations\?station=shipping&search=104801/);
-  await page
-    .getByLabel('Completed by', { exact: true })
-    .selectOption(state.employees[0]!.id);
+  await employeeOption(page, 'Alex Reed').check();
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
   await expect(page.getByText(/shipped · Alex Reed/)).toBeVisible();
   expect(state.orders.find((o) => o.id === ids.order)!.cutAt).toBeNull();

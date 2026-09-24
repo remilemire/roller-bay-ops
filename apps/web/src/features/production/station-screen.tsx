@@ -26,6 +26,7 @@ import {
   productionOrders,
   stationLabels,
   completionLabels,
+  employeeNames,
 } from './production.api';
 import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
 import { CompletionAction } from './completion-action';
@@ -159,8 +160,8 @@ function StationQueue({ station }: { station: Station }) {
       <section className="panel panel-body stack">
         <div className="form-grid">
           <EmployeeSelection
-            value={employee.employeeId}
-            onChange={employee.selectEmployee}
+            value={employee.employeeIds}
+            onChange={employee.selectEmployees}
           />
           <TextField
             label="Find order"
@@ -214,8 +215,9 @@ function StationQueue({ station }: { station: Station }) {
                   <div className="record-list">
                     {order.completions.map((c) => (
                       <p key={c.station}>
-                        {completionLabels[c.station]} · {c.employeeName} (
-                        {c.employeeInitials}) · {dateTimeLabel(c.completedAt)}
+                        {completionLabels[c.station]} ·{' '}
+                        {employeeNames(c.employees)} ·{' '}
+                        {dateTimeLabel(c.completedAt)}
                       </p>
                     ))}
                   </div>
@@ -233,7 +235,7 @@ function StationQueue({ station }: { station: Station }) {
                       station={station}
                       orderId={order.id}
                       orderNumber={order.orderNumber}
-                      employeeId={employee.employeeId}
+                      employeeIds={employee.employeeIds}
                       done={!!order[stamp[station]]}
                     />
                   )}

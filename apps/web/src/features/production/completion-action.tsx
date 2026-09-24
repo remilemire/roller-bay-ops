@@ -15,13 +15,13 @@ export function CompletionAction({
   station,
   orderId,
   orderNumber,
-  employeeId,
+  employeeIds,
   done,
 }: {
   station: Station;
   orderId: string;
   orderNumber: string;
-  employeeId: string;
+  employeeIds: string[];
   done: boolean;
 }) {
   const client = useQueryClient();
@@ -46,7 +46,7 @@ export function CompletionAction({
         <div className="action-group">
           <p>
             The previous completion has an uncertain result. Retry it with its
-            original employee before recording another.
+            original employees before recording another.
           </p>
           <Button
             variant="outline"
@@ -59,9 +59,12 @@ export function CompletionAction({
       )}
       <Button
         disabled={
-          !employeeId || done || mutation.isPending || !!mutation.pending
+          !employeeIds.length ||
+          done ||
+          mutation.isPending ||
+          !!mutation.pending
         }
-        onClick={() => mutation.mutate({ employeeId })}
+        onClick={() => mutation.mutate({ employeeIds })}
       >
         {done
           ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`

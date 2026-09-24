@@ -23,6 +23,11 @@ export const completionLabels: Record<Station, string> = {
   checking: 'checked',
   shipping: 'shipped',
 };
+/** "Alex Reed (AR), Sam Lee (SL)" for a completion's credited employees. */
+export const employeeNames = (
+  employees: { employeeName: string; employeeInitials: string }[],
+) =>
+  employees.map((e) => `${e.employeeName} (${e.employeeInitials})`).join(', ');
 export const productionEmployees = () => ({
   queryKey: [...productionKey, 'employees'],
   queryFn: () => api('/production/employees', employeeListSchema),

@@ -3,7 +3,10 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
-import { milestoneCorrectionSchema } from '@roller-bay/shared/production';
+import {
+  milestoneCorrectionSchema,
+  type ProductionCompletion,
+} from '@roller-bay/shared/production';
 import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
@@ -20,6 +23,7 @@ import {
   stationLabels,
   productionKey,
   mutationResultSchema,
+  employeeNames,
 } from './production.api';
 export function OrderProduction({ order }: { order: WorkOrder }) {
   const query = useQuery(completions(order.id));
@@ -48,7 +52,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
                 <dt className="detail-label">{stationLabels[s]}</dt>
                 <dd className="detail-value">
                   {c
-                    ? `${c.employeeName} (${c.employeeInitials}) · ${dateTimeLabel(c.completedAt)}`
+                    ? `${employeeNames(c.employees)} · ${dateTimeLabel(c.completedAt)}`
                     : order[stamp[s]]
                       ? `${dateTimeLabel(order[stamp[s]]!)} · Legacy record; employee not recorded`
                       : 'Not recorded'}
@@ -64,7 +68,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             const next = stationSchema.safeParse(s);
             if (next.success) {
               setStation(next.data);
-              employee.selectEmployee('');
+              employee.selectEmployees([]);
             }
           }}
           options={stationSchema.options.map((s) => ({
@@ -73,8 +77,8 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
           }))}
         />
         <EmployeeSelection
-          value={employee.employeeId}
-          onChange={employee.selectEmployee}
+          value={employee.employeeIds}
+          onChange={employee.selectEmployees}
         />
         {!order.cancelledAt && order.allocatedAt && (
           <CompletionAction
@@ -82,7 +86,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             station={station}
             orderId={order.id}
             orderNumber={order.orderNumber}
-            employeeId={employee.employeeId}
+            employeeIds={employee.employeeIds}
             done={!!order[stamp[station]]}
           />
         )}
@@ -95,7 +99,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
           <Correction
             order={order}
             station={station}
-            employeeId={employee.employeeId}
+            current={query.data?.find((c) => c.station === station)}
             close={() => setCorrect(false)}
           />
         )}
@@ -106,14 +110,19 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
 function Correction({
   order,
   station,
-  employeeId,
+  current,
   close,
 }: {
   order: WorkOrder;
   station: Station;
-  employeeId: string;
+  current: ProductionCompletion | undefined;
   close: () => void;
 }) {
+  // The dialog starts from the recorded attribution so an admin adds or
+  // removes people rather than re-entering everyone.
+  const [employeeIds, setEmployeeIds] = useState(
+    () => current?.employees.map((e) => e.employeeId) ?? [],
+  );
   const [reason, setReason] = useState('');
   const [clear, setClear] = useState(false);
   const [time, setTime] = useState('');
@@ -153,7 +162,7 @@ function Correction({
         </label>
         {!clear && (
           <>
-            <p>The selected employee will receive the corrected attribution.</p>
+            <EmployeeSelection value={employeeIds} onChange={setEmployeeIds} />
             <TextField
               label={`Actual completion time (${FACILITY_TIME_ZONE})`}
               type="datetime-local"
@@ -177,7 +186,7 @@ function Correction({
           <>
             <p>
               The previous correction has an uncertain result. Retry its saved
-              employee, time, and reason.
+              employees, time, and reason.
             </p>
             <Button
               variant="outline"
@@ -193,14 +202,14 @@ function Correction({
             mutation.isPending ||
             !!mutation.pending ||
             !reason.trim() ||
-            (!clear && (!employeeId || !time))
+            (!clear && (!employeeIds.length || !time))
           }
           onClick={() => {
             try {
               mutation.mutate({
                 expectedRevision: order.revision,
                 reason,
-                employeeId: clear ? null : employeeId,
+                employeeIds: clear ? null : employeeIds,
                 completedAt: clear ? null : facilityTimeToIso(time),
               });
             } catch (error) {

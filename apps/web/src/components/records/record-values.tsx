@@ -49,6 +49,10 @@ const labels: Record<string, string> = {
   stockItemId: 'Stock item',
   isUsed: 'Previously used',
   isRemnant: 'Remnant',
+  employees: 'Completed by',
+  employeeId: 'Employee',
+  employeeName: 'Name',
+  employeeInitials: 'Initials',
 };
 /** Renders an audit or submitted record's values with field labels and units. */
 export function RecordValues({

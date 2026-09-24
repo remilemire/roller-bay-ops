@@ -97,3 +97,22 @@ it('retains timeout responses because their commit outcome is uncertain', async 
   });
   expect(pendingPayload(scope)).toEqual(original);
 });
+it('discards a saved payload the current input contract cannot retry', async () => {
+  sessionStorage.setItem(
+    'roller-bay:pending:' + scope,
+    JSON.stringify({
+      key: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      payload: JSON.stringify({ worker: 'Alex' }),
+    }),
+  );
+  vi.mocked(api).mockResolvedValueOnce({ ok: true });
+  const { result } = mount();
+  expect(result.current.pending).toBeNull();
+  await act(async () => {
+    await result.current.mutateAsync(original);
+  });
+  expect(api).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(api).mock.calls[0]![2]!.key).not.toBe(
+    '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  );
+});

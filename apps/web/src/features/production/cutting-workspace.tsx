@@ -20,6 +20,7 @@ import {
   worksheetForOrder,
   productionKey,
   completions,
+  employeeNames,
   lookupCuttingLocations,
 } from './production.api';
 /** Allocations' results form, composed by the route. */
@@ -45,13 +46,17 @@ function CuttingOrder({
   const [seededSheet, setSeededSheet] = useState<string | null>(null);
   if (query.data && seededSheet !== query.data.id) {
     setSeededSheet(query.data.id);
-    if (!employee.employeeId) employee.selectEmployee(query.data.employeeId);
+    if (!employee.employeeIds.length)
+      employee.selectEmployees([query.data.employeeId]);
   }
+  // One cutter begins a sheet; the cut milestone may credit several.
+  const starter =
+    employee.employeeIds.length === 1 ? employee.employeeIds[0] : undefined;
   const start = useMutation({
     mutationFn: () =>
       api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
         method: 'POST',
-        body: { employeeId: employee.employeeId },
+        body: { employeeId: starter },
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: productionKey });
@@ -72,20 +77,23 @@ function CuttingOrder({
       </PageHeading>
       <section className="panel panel-body stack">
         <EmployeeSelection
-          value={employee.employeeId}
-          onChange={employee.selectEmployee}
+          value={employee.employeeIds}
+          onChange={employee.selectEmployees}
         />
         {query.data ? (
-          <CutCompletion sheet={query.data} employeeId={employee.employeeId} />
+          <CutCompletion
+            sheet={query.data}
+            employeeIds={employee.employeeIds}
+          />
         ) : (
           <>
             <p>
-              Beginning saves the current plan and prevents changes while it is
-              being cut.
+              Choose the one cutter who begins the sheet. Beginning saves the
+              current plan and prevents changes while it is being cut.
             </p>
             <div className="action-group">
               <Button
-                disabled={!employee.employeeId || start.isPending}
+                disabled={!starter || start.isPending}
                 onClick={() => start.mutate()}
               >
                 Begin cutting
@@ -107,10 +115,10 @@ function CuttingOrder({
 }
 function CutCompletion({
   sheet,
-  employeeId,
+  employeeIds,
 }: {
   sheet: Worksheet;
-  employeeId: string;
+  employeeIds: string[];
 }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
@@ -118,9 +126,7 @@ function CutCompletion({
   return (
     <>
       {completed ? (
-        <p>
-          Cut by {completed.employeeName} ({completed.employeeInitials})
-        </p>
+        <p>Cut by {employeeNames(completed.employees)}</p>
       ) : (
         <p className="muted">
           Record completion when the whole order is cut. Measurements can be
@@ -132,7 +138,7 @@ function CutCompletion({
           station="cutting"
           orderId={sheet.workOrderId}
           orderNumber={sheet.orderNumber}
-          employeeId={employeeId}
+          employeeIds={employeeIds}
           done={!!completed}
         />
       )}
