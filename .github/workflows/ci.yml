@@ -26,6 +26,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
+      - run: npm run check:boundaries
       # Type-aware lint rules read the shared package's built types.
       - run: npm run build --workspace=@roller-bay/shared
       - run: npx turbo run lint typecheck --filter='!@roller-bay/solver'

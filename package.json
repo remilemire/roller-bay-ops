@@ -21,6 +21,7 @@
     "test:integration": "npm run test:integration --workspace=@roller-bay/api",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
     "services:up": "docker compose up -d --wait",
     "services:down": "docker compose stop",
     "db:up": "docker compose up -d --wait postgres",

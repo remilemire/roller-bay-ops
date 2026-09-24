@@ -22,6 +22,17 @@ Roller Bay Ops tracks physical fabric rolls and remnants, receiving, storage loc
 - `apps/solver` is a standalone Python service for generic mathematical models. Provider implementations, including OR-Tools, belong there. The backend's `src/solver` wrapper remains independent of fabric rules; cutting validation and model construction belong in allocations. Python uses snake_case with aliases at camelCase wire boundaries.
 - A folder grouping or controller route prefix is not automatically a facade. Introduce coordinating interfaces only when a concrete consumer needs them.
 
+## Feature boundaries
+
+Each feature owns its state mutations and implementation details; see [feature boundaries](docs/feature-boundaries.md) for entry points, exceptions and the check.
+
+- Cross-feature imports use the owning feature's explicitly exported public API: `index.ts`, and in the API also `tables.ts` and, for tests, `testing/index.ts`. Deep imports into another feature are prohibited unless documented as an architectural exception.
+- Pure domain contracts, types, validators, calculators, and lookup/query APIs may be exposed for cross-feature use. Presenters, controllers, repository internals, screens and editors are private by default.
+- Repositories may read tables owned by other features when required for feature-owned queries, but mutate only their own feature's tables. Mutations and domain effects in another feature go through that feature's service using explicit named operations.
+- Cross-feature workflows are coordinated by the service that owns the workflow and propagate the current unit of work explicitly.
+- UI composition involving multiple features belongs in the route layer, not in feature-to-feature UI dependencies.
+- Feature dependency cycles are prohibited. Extract shared concepts upward rather than resolving them with circular imports. `npm run check:boundaries` enforces these rules in CI.
+
 ## Domain boundaries
 
 - A fabric **color** is the company's unique fabric identifier, not simply a visual color. Keep the manufacturer → material → color hierarchy and the established feature names: `fabric-catalog`, `locations`, `stock-items`, `stock-receipts`, `work-orders`, and `allocations`.
@@ -54,6 +65,7 @@ npm run typecheck --workspace=@roller-bay/web
 npm run lint --workspace=@roller-bay/web
 npm test --workspace=@roller-bay/web
 npm run build --workspace=@roller-bay/web
+npm run check:boundaries
 ```
 
 - `npm test --workspace=@roller-bay/api` runs unit tests only; `*.integration.test.ts` and `*.live-solver.test.ts` run through their own scripts and fail, never skip, when their services are missing. No suite reads a `.env` file: test modules build their configuration inline with `ignoreEnvFile: true`.

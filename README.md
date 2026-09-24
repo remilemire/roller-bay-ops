@@ -123,6 +123,7 @@ Development conventions and contribution instructions are maintained in [AGENTS.
 | `npm run test:integration`                  | Run database/Redis integration suites against the services     |
 | `npm run format`                            | Format source and configuration                                |
 | `npm run format:check`                      | Check formatting without changing files                        |
+| `npm run check:boundaries`                  | Check feature boundaries and import cycles                     |
 | `npm run services:up`                       | Start PostgreSQL and Redis and wait until healthy              |
 | `npm run services:down`                     | Stop PostgreSQL and Redis and preserve data                    |
 | `npm run db:up`                             | Start local PostgreSQL and wait until healthy                  |
