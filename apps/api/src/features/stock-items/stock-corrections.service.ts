@@ -18,6 +18,7 @@ import { snapshotWrite, stockSnapshot } from './stock-items.audit.js';
 import { cuttingWrite, retainedPieceWrite } from './stock-items.cutting.js';
 import { stockItemsOperation } from './stock-items.operation.js';
 import type { StockItemWrite } from './stock-items.repository.js';
+import type { ReceiveRollLine } from './stock-items.service.js';
 type RecordedStockUsage = { source: StockEffect; pieces: StockEffect[] };
 /**
  * The stock side of corrections to recorded workflows: receipts and cutting
@@ -159,6 +160,33 @@ export class StockCorrectionsService {
       });
     }
     return effects;
+  }
+  /**
+   * Voids the rolls a receipt correction removes (`line: null`) and gives the
+   * others the corrected line's fabric, size and location.
+   */
+  reviseReceivedRolls(
+    context: UnitOfWorkContext,
+    rolls: {
+      before: StockSnapshot;
+      line: Omit<ReceiveRollLine, 'stockReceiptItemId' | 'quantity'> | null;
+    }[],
+  ) {
+    return this.applySnapshots(
+      context,
+      rolls.map(({ before, line }) => ({
+        before,
+        value: line
+          ? {
+              ...before,
+              fabricColorId: line.fabricColorId,
+              widthMm: line.widthMm,
+              initialLengthMm: line.initialLengthMm,
+              locationId: line.locationId,
+            }
+          : { ...before, voidedAt: new Date().toISOString() },
+      })),
+    );
   }
   /**
    * Rewrites one recorded cutting outcome from the source's pre-completion

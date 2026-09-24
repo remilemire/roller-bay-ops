@@ -365,18 +365,17 @@ export class StockReceiptsService {
             input.stockVersions,
             affectedIds,
           );
-          for (const stock of stocks) {
-            if (!affectedIds.includes(stock.id)) continue;
-            const current = locked.get(stock.id)!;
-            const value = removeIds.includes(stock.id)
-              ? { ...current, voidedAt: new Date().toISOString() }
-              : { ...current, ...data!, quantity: undefined };
-            effects.push(
-              ...(await this.stockCorrections.applySnapshots(context, [
-                { before: current, value },
-              ])),
-            );
-          }
+          effects.push(
+            ...(await this.stockCorrections.reviseReceivedRolls(
+              context,
+              stocks
+                .filter((stock) => affectedIds.includes(stock.id))
+                .map((stock) => ({
+                  before: locked.get(stock.id)!,
+                  line: removeIds.includes(stock.id) ? null : data!,
+                })),
+            )),
+          );
           if (data) {
             if (data.quantity > stocks.length)
               effects.push(
