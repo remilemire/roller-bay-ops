@@ -117,10 +117,22 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     ),
   ).toBe(true);
 });
-test('order rows open attributed station logging', async ({ page }) => {
+test('work orders reach attributed shipping through station navigation', async ({
+  page,
+}, testInfo) => {
   const state = await mockApi(page);
   await page.goto('/work-orders?view=list');
-  await page.getByRole('link', { name: 'Record production' }).click();
+  await expect(
+    page.getByRole('link', { name: 'Record production' }),
+  ).toHaveCount(0);
+  if (testInfo.project.name === 'tablet')
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('link', { name: 'Stations', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Choose station' })
+    .getByRole('link', { name: /^Shipping/ })
+    .click();
+  await page.getByLabel('Find order').fill('104801');
   await expect(page).toHaveURL(/stations\?station=shipping&search=104801/);
   await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
