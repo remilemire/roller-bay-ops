@@ -399,26 +399,48 @@ export class WorkOrdersService {
     if (order.cancelledAt)
       throw new ConflictException('This order is cancelled.');
   }
-  async applyWorkflow(
+  // The coordinator supplies a locked order and owns allocation/worksheet changes.
+  async unschedule(context: UnitOfWorkContext, order: WorkOrderRecord) {
+    this.assertCanStopWork(order);
+    const row = await context.workOrders.update(order.id, {
+      shipDate: null,
+      scheduledAt: null,
+    });
+    return { row, change: change(order, row) };
+  }
+  async recordAllocationRelease(
     context: UnitOfWorkContext,
     order: WorkOrderRecord,
-    action: 'unschedule' | 'release-allocation' | 'cancel-order',
+  ) {
+    this.assertCanStopWork(order);
+    const row = await context.workOrders.update(order.id, {
+      shipDate: null,
+      scheduledAt: null,
+      allocatedAt: null,
+    });
+    return { row, change: change(order, row) };
+  }
+  async cancel(
+    context: UnitOfWorkContext,
+    order: WorkOrderRecord,
     reason: string,
   ) {
+    this.assertCanStopWork(order);
+    const row = await context.workOrders.update(order.id, {
+      shipDate: null,
+      scheduledAt: null,
+      allocatedAt: null,
+      cancelledAt: new Date(),
+      cancellationReason: reason,
+    });
+    return { row, change: change(order, row) };
+  }
+  private assertCanStopWork(order: WorkOrderRecord) {
     this.assertNotCancelled(order);
     if (order.shippedAt)
       throw new ConflictException(
         'Shipped orders cannot be cancelled or released.',
       );
-    const row = await context.workOrders.update(order.id, {
-      shipDate: null,
-      scheduledAt: null,
-      ...(action !== 'unschedule' ? { allocatedAt: null } : {}),
-      ...(action === 'cancel-order'
-        ? { cancelledAt: new Date(), cancellationReason: reason }
-        : {}),
-    });
-    return { row, change: change(order, row) };
   }
   private async restamp(
     context: UnitOfWorkContext,

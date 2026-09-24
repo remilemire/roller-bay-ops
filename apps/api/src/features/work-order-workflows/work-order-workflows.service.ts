@@ -72,7 +72,7 @@ export class WorkOrderWorkflowsService {
         // racing a preview that had no allocation, without inverting that order.
         const initial = await context.allocations.liveForOrder(id);
         const allocation = initial
-          ? await this.allocations.lockForWorksheet(context, initial.id)
+          ? await this.allocations.lockAllocation(context, initial.id)
           : null;
         const order = await this.orders.requireOrder(context, id);
         const replay = await this.audit.replay(
@@ -134,25 +134,31 @@ export class WorkOrderWorkflowsService {
         const changes: AuditChange[] = [];
         if (input.action !== 'unschedule') {
           if (sheet)
-            changes.push(await this.worksheets.skipResults(context, sheet));
+            changes.push(
+              await this.worksheets.closeWithoutReconciliation(context, sheet),
+            );
           if (allocation)
             changes.push(
               await this.allocations.releaseForOrder(context, allocation.id),
             );
         }
-        const result = await this.orders.applyWorkflow(
-          context,
-          order,
-          input.action,
-          input.reason,
-        );
+        let result: Awaited<ReturnType<WorkOrdersService['unschedule']>>;
+        let action: string;
+        switch (input.action) {
+          case 'unschedule':
+            result = await this.orders.unschedule(context, order);
+            action = 'order.unscheduled';
+            break;
+          case 'release-allocation':
+            result = await this.orders.recordAllocationRelease(context, order);
+            action = 'order.allocation-released';
+            break;
+          case 'cancel-order':
+            result = await this.orders.cancel(context, order, input.reason);
+            action = 'order.cancelled';
+            break;
+        }
         changes.unshift(result.change);
-        const action =
-          input.action === 'cancel-order'
-            ? 'order.cancelled'
-            : input.action === 'release-allocation'
-              ? 'order.allocation-released'
-              : 'order.unscheduled';
         // The action explicitly preserves the acknowledged stock-accounting gap,
         // including paper cutting with no worksheet to carry a skipped timestamp.
         const eventId = await this.audit.record(

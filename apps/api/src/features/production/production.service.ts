@@ -4,6 +4,13 @@ import {
   type StationQuery,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
+import type { AuditChange } from '@roller-bay/shared/audit';
+import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
+import type { WorkOrderRecord } from '../work-orders/work-orders.repository.js';
+import type {
+  CompletionRecord,
+  CompletionValues,
+} from './production-completions.table.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/audit.service.js';
 import { EmployeesService } from '../employees/employees.service.js';
@@ -49,7 +56,79 @@ export class ProductionService {
     actor: string,
     key: string,
   ) {
-    return this.write(id, station, { employeeId }, actor, key);
+    return productionOperation(() =>
+      this.unitOfWork.transaction(async (context) => {
+        const order = await this.orders.requireOrder(context, id);
+        const scope = `production.${station}.complete`;
+        const replay = await this.audit.replay(context, actor, scope, id, key, {
+          employeeId,
+        });
+        if (replay.result) return replay.result;
+        this.orders.assertNotCancelled(order);
+        if (!order.allocatedAt)
+          throw new ConflictException(
+            'Allocate fabric before recording production.',
+          );
+        const before = (await context.production.completions(id)).find(
+          (r) => r.station === station,
+        );
+        let eventId: string;
+        let revision = order.revision;
+        if (order[milestoneTimestampField[station]]) {
+          if (!before || before.employeeId !== employeeId)
+            throw new ConflictException(
+              'Completion already recorded. An admin can correct its attribution.',
+            );
+          eventId = await this.confirmExistingCompletion(
+            context,
+            before,
+            actor,
+          );
+        } else {
+          const employee = await this.employees.requireActive(
+            context,
+            employeeId,
+          );
+          const now = new Date();
+          const saved = await this.saveMilestone(
+            context,
+            order,
+            station,
+            before,
+            {
+              employeeId: employee.id,
+              employeeName: employee.name,
+              employeeInitials: employee.initials,
+              completedAt: now,
+              recordedAt: now,
+              recordedByUserId: actor,
+            },
+          );
+          revision = saved.revision;
+          eventId = await this.audit.record(
+            context,
+            actor,
+            `order.${station}.completed`,
+            saved.changes,
+          );
+        }
+        return this.audit.remember(
+          context,
+          actor,
+          scope,
+          id,
+          key,
+          replay.requestHash,
+          {
+            eventId,
+            recordId: id,
+            revision,
+            affectedAllocationIds: [],
+            createdStockItemIds: [],
+          },
+        );
+      }),
+    );
   }
   correct(
     id: string,
@@ -58,24 +137,10 @@ export class ProductionService {
     actor: string,
     key: string,
   ) {
-    return this.write(id, station, input, actor, key);
-  }
-  private write(
-    id: string,
-    station: Station,
-    input:
-      | {
-          employeeId: string;
-        }
-      | MilestoneCorrection,
-    actor: string,
-    key: string,
-  ) {
     return productionOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         const order = await this.orders.requireOrder(context, id);
-        const correction = 'reason' in input;
-        const scope = `production.${station}.${correction ? 'correct' : 'complete'}`;
+        const scope = `production.${station}.correct`;
         const replay = await this.audit.replay(
           context,
           actor,
@@ -85,67 +150,21 @@ export class ProductionService {
           input,
         );
         if (replay.result) return replay.result;
-        if (!correction) this.orders.assertNotCancelled(order);
-        if (!correction && !order.allocatedAt)
-          throw new ConflictException(
-            'Allocate fabric before recording production.',
-          );
-        if (correction && input.expectedRevision !== order.revision)
+        // Historical facts remain correctable after cancellation or fabric release.
+        if (input.expectedRevision !== order.revision)
           throw new ConflictException(
             'Order changed; refresh before correcting.',
           );
         const before = (await context.production.completions(id)).find(
           (r) => r.station === station,
         );
-        if (!correction && order[milestoneTimestampField[station]]) {
-          if (!before || before.employeeId !== input.employeeId)
-            throw new ConflictException(
-              'Completion already recorded. An admin can correct its attribution.',
-            );
-          // A distinct confirmation leaves the milestone intact, but records its
-          // acknowledgement so that this key remains safe after later corrections.
-          const snapshot = {
-            type: 'production' as const,
-            value: presentCompletion(before),
-          };
-          const eventId = await this.audit.record(
-            context,
-            actor,
-            `order.${station}.completion-confirmed`,
-            [
-              {
-                recordType: 'production',
-                recordId: id,
-                before: snapshot,
-                after: snapshot,
-              },
-            ],
-          );
-          return this.audit.remember(
-            context,
-            actor,
-            scope,
-            id,
-            key,
-            replay.requestHash,
-            {
-              eventId,
-              recordId: id,
-              revision: order.revision,
-              affectedAllocationIds: [],
-              createdStockItemIds: [],
-            },
-          );
-        }
         const employee = input.employeeId
           ? await this.employees.requireActive(context, input.employeeId)
           : null;
         const now = new Date();
-        const completedAt = correction
-          ? input.completedAt
-            ? new Date(input.completedAt)
-            : null
-          : now;
+        const completedAt = input.completedAt
+          ? new Date(input.completedAt)
+          : null;
         if (completedAt && completedAt > now)
           throw new ConflictException(
             'Completion time cannot be in the future.',
@@ -161,43 +180,19 @@ export class ProductionService {
                 recordedByUserId: actor,
               }
             : null;
-        await context.production.save(id, station, next);
-        const after = await this.orders.recordProductionMilestone(
+        const saved = await this.saveMilestone(
           context,
-          id,
+          order,
           station,
-          completedAt,
+          before,
+          next,
         );
         const eventId = await this.audit.record(
           context,
           actor,
-          `order.${station}.${correction ? 'corrected' : 'completed'}`,
-          [
-            {
-              recordType: 'work-orders',
-              recordId: id,
-              before: { type: 'work-orders', value: presentWorkOrder(order) },
-              after: { type: 'work-orders', value: presentWorkOrder(after!) },
-            },
-            {
-              recordType: 'production',
-              recordId: id,
-              before: before
-                ? { type: 'production', value: presentCompletion(before) }
-                : null,
-              after: next
-                ? {
-                    type: 'production',
-                    value: presentCompletion({
-                      ...next,
-                      workOrderId: id,
-                      station,
-                    }),
-                  }
-                : null,
-            },
-          ],
-          correction ? input.reason : null,
+          `order.${station}.corrected`,
+          saved.changes,
+          input.reason,
         );
         return this.audit.remember(
           context,
@@ -209,12 +204,78 @@ export class ProductionService {
           {
             eventId,
             recordId: id,
-            revision: after!.revision,
+            revision: saved.revision,
             affectedAllocationIds: [],
             createdStockItemIds: [],
           },
         );
       }),
     );
+  }
+  private confirmExistingCompletion(
+    context: UnitOfWorkContext,
+    completion: CompletionRecord,
+    actor: string,
+  ) {
+    // A distinct confirmation records an acknowledgement, so its retry remains
+    // safe even if an admin later clears or corrects the original milestone.
+    const snapshot = {
+      type: 'production' as const,
+      value: presentCompletion(completion),
+    };
+    return this.audit.record(
+      context,
+      actor,
+      `order.${completion.station}.completion-confirmed`,
+      [
+        {
+          recordType: 'production',
+          recordId: completion.workOrderId,
+          before: snapshot,
+          after: snapshot,
+        },
+      ],
+    );
+  }
+  private async saveMilestone(
+    context: UnitOfWorkContext,
+    order: WorkOrderRecord,
+    station: Station,
+    before: CompletionRecord | undefined,
+    next: CompletionValues | null,
+  ) {
+    await context.production.save(order.id, station, next);
+    const after = await this.orders.recordProductionMilestone(
+      context,
+      order.id,
+      station,
+      next?.completedAt ?? null,
+    );
+    const changes: AuditChange[] = [
+      {
+        recordType: 'work-orders',
+        recordId: order.id,
+        before: { type: 'work-orders', value: presentWorkOrder(order) },
+        after: { type: 'work-orders', value: presentWorkOrder(after!) },
+      },
+      {
+        recordType: 'production',
+        recordId: order.id,
+        before: before
+          ? { type: 'production', value: presentCompletion(before) }
+          : null,
+        after: next
+          ? {
+              type: 'production',
+              value: presentCompletion({
+                ...next,
+                workOrderId: order.id,
+                station,
+              }),
+            }
+          : null,
+      },
+    ];
+    return { revision: after!.revision, changes };
   }
 }

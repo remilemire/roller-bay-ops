@@ -281,6 +281,46 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
     await fixtures.setUserRole(userId, 'admin');
   });
   await t.test(
+    'cancelled orders reject new production but retain explicit historical corrections',
+    async () => {
+      const a = await create(await input(await seed()));
+      const path = `/api/production/assembly/orders/${a.workOrderId}`;
+      await post(`${path}/complete`, { employeeId: employee.id }).expect(201);
+      await cancel(
+        a.workOrderId,
+        await command(a.workOrderId, 'cancel-order', true),
+      ).expect(200);
+      const cancelled = await read(a.workOrderId);
+      await post(`${path}/complete`, { employeeId: employee.id }).expect(409);
+      const correction = {
+        expectedRevision: cancelled.revision,
+        employeeId: employee.id,
+        completedAt: new Date(Date.now() - 60_000).toISOString(),
+        reason: 'Correct the recorded assembly time',
+      };
+      const key = randomUUID();
+      const first = await post(`${path}/corrections`, correction, key).expect(
+        201,
+      );
+      assert.deepEqual(
+        (await post(`${path}/corrections`, correction, key).expect(201)).body,
+        first.body,
+      );
+      await post(`${path}/corrections`, correction).expect(409);
+      const corrected = await read(a.workOrderId);
+      assert.equal(corrected.assembledAt, correction.completedAt);
+      assert.equal(corrected.cancelledAt, cancelled.cancelledAt);
+      assert.equal(corrected.status, 'cancelled');
+      await post(`${path}/corrections`, {
+        expectedRevision: corrected.revision,
+        employeeId: null,
+        completedAt: null,
+        reason: 'Assembly was attributed to the wrong order',
+      }).expect(201);
+      assert.equal((await read(a.workOrderId)).assembledAt, null);
+    },
+  );
+  await t.test(
     'stale previews and audit failures roll back all effects',
     async () => {
       const stockId = await seed();

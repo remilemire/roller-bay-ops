@@ -67,7 +67,7 @@ export class CuttingWorkflowService {
       this.unitOfWork.transaction(async (context) => {
         const initial = await this.worksheets.requireRecord(context, id);
         if (initial.abandonedAt) return presentWorksheet(initial);
-        await this.allocations.lockForWorksheet(context, initial.allocationId);
+        await this.allocations.lockAllocation(context, initial.allocationId);
         await this.orders.assertPlanningAllowed(context, initial.workOrderId);
         const row = await this.worksheets.requireRecord(context, id, true);
         await this.stock.findForAllocation(context, {
@@ -94,7 +94,7 @@ export class CuttingWorkflowService {
     return worksheetOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         const initial = await this.worksheets.requireRecord(context, id);
-        await this.allocations.lockForWorksheet(context, initial.allocationId);
+        await this.allocations.lockAllocation(context, initial.allocationId);
         const row = await this.worksheets.requireRecord(context, id, true);
         const scope = 'cutting.review';
         const replay = await this.audit.replay(context, actor, scope, id, key, {

@@ -2,7 +2,10 @@ import {
   completionCorrectionContextSchema,
   type CompletionCorrection,
 } from '@roller-bay/shared/corrections';
-import type { StockEffect } from '@roller-bay/shared/stock-items';
+import type {
+  StockEffect,
+  StockSnapshot,
+} from '@roller-bay/shared/stock-items';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService, canonicalJson } from '../audit/audit.service.js';
@@ -35,6 +38,7 @@ import {
   allocationDraftSchema,
   completeAllocationSchema,
   createAllocationSchema,
+  type AllocationDetail,
   type AllocationDraftInput,
   type AllocationQuery,
   type CompleteAllocationRequest,
@@ -59,6 +63,7 @@ import {
   planCutLengths,
   type ConfiguredAllocationPlan,
 } from './cutting-rules.service.js';
+type RecordedStockUsage = { source: StockEffect; pieces: StockEffect[] };
 type Line = Awaited<ReturnType<WorkOrdersService['linesById']>>[number];
 type Plan = {
   cuts: {
@@ -502,7 +507,7 @@ export class AllocationsService {
       return result;
     });
   }
-  async lockForWorksheet(context: UnitOfWorkContext, id: string) {
+  async lockAllocation(context: UnitOfWorkContext, id: string) {
     const row = await context.allocations.findById(id, true);
     if (!row) throw new NotFoundException('Allocation not found.');
     return row;
@@ -511,7 +516,7 @@ export class AllocationsService {
     const row = await context.allocations.liveForOrder(orderId);
     if (!row)
       throw new ConflictException('Allocate this order before cutting.');
-    return this.lockForWorksheet(context, row.id);
+    return this.lockAllocation(context, row.id);
   }
   async worksheetSnapshot(context: UnitOfWorkContext, id: string) {
     const header = await context.allocations.findById(id, true);
@@ -668,112 +673,20 @@ export class AllocationsService {
         const current = new Map(rows.map((r) => [r.id, r]));
         const before = await this.detail(context, header);
         const effects: StockEffect[] = [];
-        const originalDetail = allocationDetailSchema.parse(before);
-        for (const id of additionalIds) {
-          const stock = current.get(id)!;
-          if (
-            !originalDetail.requirements.some(
-              (r) => r.fabricColorId === stock.fabricColorId,
-            )
-          )
-            throw new BadRequestException(
-              'Additional fabric must match a color on the order.',
-            );
-        }
-        // Additional usage is a new observation against current stock, never a
-        // reconstruction of its balance at the original completion time.
-        await this.stockItems.requireCorrectionEligible(
+        await this.assertAdditionalStockUsageAllowed(
           context,
-          additionalIds.map((id) => ({
-            calculationThicknessMm: null,
-            stockItemId: id,
-            sourceStockItemId: current.get(id)!.sourceStockItemId,
-            before: current.get(id)!,
-            after: current.get(id)!,
-          })),
-          input.additionalItems.map((i) => ({
-            stockItemId: i.stockItemId,
-            expectedRevision: i.expectedRevision,
-          })),
-          additionalIds,
           id,
+          input.additionalItems,
+          allocationDetailSchema.parse(before).requirements,
+          current,
         );
-        for (const { item, source, pieces } of families) {
-          const sourceBefore = source.before!;
-          const actual = current.get(source.stockItemId)!;
-          if (item.outcome.expectedRevision !== actual.revision)
-            throw new ConflictException(
-              'Stock changed; refresh before correcting.',
-            );
-          if (
-            item.outcome.outcome === 'returned-roll' &&
-            !source.calculationThicknessMm
-          )
-            throw new ConflictException(
-              'The original thickness snapshot is unavailable. Use a current-stock adjustment.',
-            );
-          const write = cuttingWrite(
-            sourceBefore,
-            item.outcome,
-            header.completedAt,
-            source.calculationThicknessMm?.toFixed(3) ?? null,
-          );
-          const selectedPieceIds = item.retainedPieces.flatMap((p) =>
-            p.id ? [p.id] : [],
-          );
-          if (
-            new Set(selectedPieceIds).size !== selectedPieceIds.length ||
-            selectedPieceIds.some(
-              (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
-            )
-          )
-            throw new BadRequestException(
-              'Select distinct retained pieces from this source outcome.',
-            );
-          const identifiedPieceIds = [
-            ...selectedPieceIds,
-            ...item.removeRetainedPieceIds,
-          ];
-          if (
-            new Set(identifiedPieceIds).size !== identifiedPieceIds.length ||
-            identifiedPieceIds.some(
-              (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
-            ) ||
-            pieces.some(
-              (piece) => !identifiedPieceIds.includes(piece.stockItemId),
-            )
-          )
-            throw new BadRequestException(
-              'Keep or explicitly select every existing retained piece for voiding.',
-            );
-          const pending: Parameters<StockItemsService['applySnapshots']>[1] =
-            [];
-          if (
-            canonicalJson({ ...snapshotWrite(actual), ...write }) !==
-            canonicalJson(snapshotWrite(actual))
-          )
-            pending.push({ before: actual, value: write });
-          for (const piece of pieces)
-            if (item.removeRetainedPieceIds.includes(piece.stockItemId)) {
-              const previous = current.get(piece.stockItemId)!;
-              pending.push({
-                before: previous,
-                value: { ...previous, voidedAt: new Date().toISOString() },
-              });
-            }
-          for (const piece of item.retainedPieces) {
-            const value = retainedPieceWrite(sourceBefore, piece);
-            const previous = piece.id ? current.get(piece.id)! : null;
-            if (
-              !previous ||
-              canonicalJson({ ...snapshotWrite(previous), ...value }) !==
-                canonicalJson(snapshotWrite(previous))
-            )
-              pending.push({ before: previous, value });
-          }
-          const applied = await this.stockItems.applySnapshots(
+        for (const family of families) {
+          const { item, source } = family;
+          const applied = await this.correctRecordedStockUsage(
             context,
-            pending,
+            family,
+            current,
+            header.completedAt,
           );
           effects.push(...applied);
           for (const e of applied) {
@@ -799,20 +712,13 @@ export class AllocationsService {
             })),
           };
         }
-        for (const { source, pieces } of unused) {
-          const restored = await this.stockItems.applySnapshots(context, [
-            {
-              before: current.get(source.stockItemId)!,
-              value: snapshotWrite(source.before!),
-            },
-            ...pieces.map((p) => ({
-              before: current.get(p.stockItemId)!,
-              value: {
-                ...snapshotWrite(current.get(p.stockItemId)!),
-                voidedAt: new Date(),
-              },
-            })),
-          ]);
+        for (const usage of unused) {
+          const { source } = usage;
+          const restored = await this.restoreUnusedStock(
+            context,
+            usage,
+            current,
+          );
           for (const effect of restored) {
             effects.push(effect);
             const original = baseline.get(effect.stockItemId)!;
@@ -892,6 +798,138 @@ export class AllocationsService {
           },
         );
       }),
+    );
+  }
+  private async correctRecordedStockUsage(
+    context: UnitOfWorkContext,
+    {
+      item,
+      source,
+      pieces,
+    }: RecordedStockUsage & { item: CompletionCorrection['items'][number] },
+    current: ReadonlyMap<string, StockSnapshot>,
+    completedAt: Date,
+  ) {
+    const sourceBefore = source.before!;
+    const actual = current.get(source.stockItemId)!;
+    if (item.outcome.expectedRevision !== actual.revision)
+      throw new ConflictException('Stock changed; refresh before correcting.');
+    if (
+      item.outcome.outcome === 'returned-roll' &&
+      !source.calculationThicknessMm
+    )
+      throw new ConflictException(
+        'The original thickness snapshot is unavailable. Use a current-stock adjustment.',
+      );
+    const write = cuttingWrite(
+      sourceBefore,
+      item.outcome,
+      completedAt,
+      source.calculationThicknessMm?.toFixed(3) ?? null,
+    );
+    const selectedPieceIds = item.retainedPieces.flatMap((p) =>
+      p.id ? [p.id] : [],
+    );
+    if (
+      new Set(selectedPieceIds).size !== selectedPieceIds.length ||
+      selectedPieceIds.some(
+        (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
+      )
+    )
+      throw new BadRequestException(
+        'Select distinct retained pieces from this source outcome.',
+      );
+    const identifiedPieceIds = [
+      ...selectedPieceIds,
+      ...item.removeRetainedPieceIds,
+    ];
+    if (
+      new Set(identifiedPieceIds).size !== identifiedPieceIds.length ||
+      identifiedPieceIds.some(
+        (pieceId) => !pieces.some((p) => p.stockItemId === pieceId),
+      ) ||
+      pieces.some((piece) => !identifiedPieceIds.includes(piece.stockItemId))
+    )
+      throw new BadRequestException(
+        'Keep or explicitly select every existing retained piece for voiding.',
+      );
+    const pending: Parameters<StockItemsService['applySnapshots']>[1] = [];
+    if (
+      canonicalJson({ ...snapshotWrite(actual), ...write }) !==
+      canonicalJson(snapshotWrite(actual))
+    )
+      pending.push({ before: actual, value: write });
+    for (const piece of pieces)
+      if (item.removeRetainedPieceIds.includes(piece.stockItemId)) {
+        const previous = current.get(piece.stockItemId)!;
+        pending.push({
+          before: previous,
+          value: { ...previous, voidedAt: new Date().toISOString() },
+        });
+      }
+    for (const piece of item.retainedPieces) {
+      const value = retainedPieceWrite(sourceBefore, piece);
+      const previous = piece.id ? current.get(piece.id)! : null;
+      if (
+        !previous ||
+        canonicalJson({ ...snapshotWrite(previous), ...value }) !==
+          canonicalJson(snapshotWrite(previous))
+      )
+        pending.push({ before: previous, value });
+    }
+    return this.stockItems.applySnapshots(context, pending);
+  }
+  private restoreUnusedStock(
+    context: UnitOfWorkContext,
+    { source, pieces }: RecordedStockUsage,
+    current: ReadonlyMap<string, StockSnapshot>,
+  ) {
+    return this.stockItems.applySnapshots(context, [
+      {
+        before: current.get(source.stockItemId)!,
+        value: snapshotWrite(source.before!),
+      },
+      ...pieces.map((p) => ({
+        before: current.get(p.stockItemId)!,
+        value: {
+          ...snapshotWrite(current.get(p.stockItemId)!),
+          voidedAt: new Date(),
+        },
+      })),
+    ]);
+  }
+  private async assertAdditionalStockUsageAllowed(
+    context: UnitOfWorkContext,
+    allocationId: string,
+    items: CompletionCorrection['additionalItems'],
+    requirements: AllocationDetail['requirements'],
+    current: ReadonlyMap<string, StockSnapshot>,
+  ) {
+    const additionalIds = items.map((item) => item.stockItemId);
+    for (const id of additionalIds) {
+      const stock = current.get(id)!;
+      if (!requirements.some((r) => r.fabricColorId === stock.fabricColorId))
+        throw new BadRequestException(
+          'Additional fabric must match a color on the order.',
+        );
+    }
+    // Additional usage is a new observation against current stock, never a
+    // reconstruction of its balance at the original completion time.
+    await this.stockItems.requireCorrectionEligible(
+      context,
+      additionalIds.map((id) => ({
+        calculationThicknessMm: null,
+        stockItemId: id,
+        sourceStockItemId: current.get(id)!.sourceStockItemId,
+        before: current.get(id)!,
+        after: current.get(id)!,
+      })),
+      items.map((i) => ({
+        stockItemId: i.stockItemId,
+        expectedRevision: i.expectedRevision,
+      })),
+      additionalIds,
+      allocationId,
     );
   }
   list(query: AllocationQuery) {

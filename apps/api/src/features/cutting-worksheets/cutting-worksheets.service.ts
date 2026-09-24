@@ -329,7 +329,10 @@ export class CuttingWorksheetsService {
     );
     return result;
   }
-  async skipResults(context: UnitOfWorkContext, row: WorksheetRecord) {
+  async closeWithoutReconciliation(
+    context: UnitOfWorkContext,
+    row: WorksheetRecord,
+  ) {
     if (row.reviewedAt || row.abandonedAt || row.skippedAt)
       throw new ConflictException('The cutting worksheet is already resolved.');
     const saved = await context.cuttingWorksheets.update(row.id, {
