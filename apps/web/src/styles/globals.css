@@ -2164,6 +2164,19 @@ td strong {
 .cutting-check input {
   flex-shrink: 0;
 }
+.station-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--field-gap);
+}
+.station-choice {
+  display: flex;
+  align-items: center;
+  min-height: 96px;
+  padding: var(--panel-padding);
+  font-size: 18px;
+  font-weight: 600;
+}
 /* Station controls are generous enough for repeated use on an iPad. */
 .station-workspace .button,
 .station-workspace button:not(.info-tip),

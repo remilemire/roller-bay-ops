@@ -30,14 +30,49 @@ export function StationsScreen() {
   const allowed =
     user.role === 'production' ? user.stations : stationSchema.options;
   const parsed = stationSchema.safeParse(params.get('station'));
+  // Completions are credited to the open station, so accounts with a choice
+  // pick one explicitly; an unassigned or unknown station asks again.
   const station =
-    parsed.success && allowed.includes(parsed.data) ? parsed.data : allowed[0];
-  if (!station)
+    parsed.success && allowed.includes(parsed.data)
+      ? parsed.data
+      : allowed.length === 1
+        ? allowed[0]
+        : undefined;
+  const manage = canManage && (
+    <>
+      <Button asChild variant="outline">
+        <Link href="/stations/employees">Manage employees</Link>
+      </Button>
+      <Button asChild variant="outline">
+        <Link href="/stations/review">Review cutting results</Link>
+      </Button>
+    </>
+  );
+  if (!allowed.length)
     return (
       <>
         <PageHeading title="Stations" />
         <p>An admin must assign this account to a station in Users.</p>
       </>
+    );
+  if (!station)
+    return (
+      <div className="station-workspace">
+        <PageHeading title="Stations">{manage}</PageHeading>
+        <nav className="station-choices" aria-label="Choose station">
+          {stationSchema.options
+            .filter((value) => allowed.includes(value))
+            .map((value) => (
+              <Link
+                key={value}
+                href={`/stations?station=${value}`}
+                className="panel station-choice"
+              >
+                {stationLabels[value]}
+              </Link>
+            ))}
+        </nav>
+      </div>
     );
   return (
     <div className="station-workspace">
@@ -52,16 +87,7 @@ export function StationsScreen() {
             }
           />
         )}
-        {canManage && (
-          <>
-            <Button asChild variant="outline">
-              <Link href="/stations/employees">Manage employees</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/stations/review">Review cutting results</Link>
-            </Button>
-          </>
-        )}
+        {manage}
       </PageHeading>
       <StationQueue key={station} station={station} />
     </div>

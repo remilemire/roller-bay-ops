@@ -49,6 +49,36 @@ for (const station of stations) {
   });
 }
 
+test('accounts with several stations choose one before working', async ({
+  page,
+}, info) => {
+  await mockApi(page, {
+    role: 'production',
+    stations: ['shipping', 'assembly'],
+  });
+  const queues: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/\/production\/\w+\/orders$/.test(path)) queues.push(path);
+  });
+  // An unassigned station asks again instead of opening another one.
+  await page.goto('/stations?station=cutting');
+  const choices = page.getByRole('navigation', { name: 'Choose station' });
+  await expect(choices.getByRole('link')).toHaveText(['Assembly', 'Shipping']);
+  await expect(page.getByLabel('Completed by', { exact: true })).toHaveCount(0);
+  expect(queues).toHaveLength(0);
+  await page.screenshot({
+    path: info.outputPath('station-choices.png'),
+    fullPage: true,
+  });
+  await choices.getByRole('link', { name: 'Shipping' }).click();
+  await expect(page).toHaveURL(/station=shipping/);
+  await expect(
+    page.getByRole('heading', { name: 'Shipping station' }),
+  ).toBeVisible();
+  await expect.poll(() => queues).toContain('/api/production/shipping/orders');
+});
+
 test('changing stations requires confirmation and resets attribution and filters', async ({
   page,
 }, info) => {

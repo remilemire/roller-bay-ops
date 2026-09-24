@@ -50,7 +50,7 @@ test('record rows share spacing and detail cards remain separated', async ({
   await page.addInitScript(() =>
     localStorage.setItem('roller-bay-theme', 'dark'),
   );
-  await page.goto('/stations');
+  await page.goto('/stations?station=cutting');
   await expect(page.locator('.record-list > p')).toHaveCount(2);
   const completions = await boxes(page.locator('.record-list > p'));
   expect(completions[0]!.height).toBe(44);
