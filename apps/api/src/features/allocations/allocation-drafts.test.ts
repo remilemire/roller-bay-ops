@@ -15,6 +15,7 @@ import { test } from 'node:test';
 import { stubUnitOfWork } from '../../testing/unit-of-work.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
+import type { StockCorrectionsService } from '../stock-items/stock-corrections.service.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import {
@@ -165,6 +166,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     {} as CuttingWorksheetsService,
     {} as AuditService,
     stock as unknown as StockItemsService,
+    {} as StockCorrectionsService,
     new CuttingRulesService(
       new ConfigService({
         CUTTING_EDGE_TRIM_MM: 1,

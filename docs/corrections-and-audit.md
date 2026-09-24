@@ -55,7 +55,7 @@ The corrected result is reconstructed from the captured pre-completion measureme
 
 ## Audit and transactions
 
-Services pass the authenticated actor and the current transaction to an injected `AuditService`. The audit service owns attribution, snapshot validation and retry/conflict rules; its repository owns database queries. No audit write opens an independent transaction. Receipt/allocation services coordinate workflows; stock-items performs stock writes. Operations lock the workflow header, then affected stock in sorted ID order. Reservation checks run after stock locks without acquiring unrelated allocation-header locks.
+Services pass the authenticated actor and the current transaction to an injected `AuditService`. The audit service owns attribution, snapshot validation and retry/conflict rules; its repository owns database queries. No audit write opens an independent transaction. Receipt/allocation services coordinate workflows; stock-items performs stock writes. Its `StockCorrectionsService` holds the stock side of corrections that receipts and allocations share: eligibility, locks and snapshot writes. Operations lock the workflow header, then affected stock in sorted ID order. Reservation checks run after stock locks without acquiring unrelated allocation-header locks.
 
 Audit storage exposes insertion and reading only, with no HTTP mutation endpoints. Events preserve the actor's name at the time, reason, public before/after snapshots and related record IDs. Actor email, credentials, request hashes and private profile attributes are never included. Failed changes and successful idempotent replays produce no extra audit events.
 

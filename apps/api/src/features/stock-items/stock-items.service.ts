@@ -1,19 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
-import type {
-  CorrectionEligibility,
-  StockCorrection,
-} from '@roller-bay/shared/corrections';
+import type { StockCorrection } from '@roller-bay/shared/corrections';
 import type {
   StockCuttingOutcome,
   StockEffect,
-  StockSnapshot,
 } from '@roller-bay/shared/stock-items';
 import {
   createStockItemSchema,
@@ -24,17 +18,14 @@ import {
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService, canonicalJson } from '../audit/audit.service.js';
+import { StockCorrectionsService } from './stock-corrections.service.js';
 import {
   snapshotWrite,
   stockChanges,
   stockSnapshot,
 } from './stock-items.audit.js';
 import { recordCuttingResults } from './stock-items.cutting.js';
-import {
-  InvalidStockItemError,
-  StockItemInUseError,
-  StockItemReferenceNotFoundError,
-} from './stock-items.errors.js';
+import { stockItemsOperation } from './stock-items.operation.js';
 import { stockItemsQuery } from './stock-items.persistence.js';
 import {
   StockItemsRepository,
@@ -57,9 +48,10 @@ export class StockItemsService {
     private readonly unitOfWork: UnitOfWork,
     private readonly repository: StockItemsRepository,
     private readonly audit: AuditService,
+    private readonly corrections: StockCorrectionsService,
   ) {}
   list(query: StockItemQuery) {
-    return this.operation(async () => {
+    return stockItemsOperation(async () => {
       const result = await this.unitOfWork.readOnlyTransaction(
         async (context) => context.stockItems.list(query),
       );
@@ -72,12 +64,12 @@ export class StockItemsService {
     });
   }
   findById(id: string) {
-    return this.operation(async () =>
+    return stockItemsOperation(async () =>
       this.toPublic(await this.repository.findById(id)),
     );
   }
   create(input: CreateStockItem, userId: string) {
-    return this.operation(() =>
+    return stockItemsOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         if (input.sourceStockItemId) {
           const source = await context.stockItems.findByIdForUpdate(
@@ -120,7 +112,7 @@ export class StockItemsService {
   }
   correct(id: string, request: StockCorrection, userId: string, key: string) {
     const input = request.changes;
-    return this.operation(() =>
+    return stockItemsOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         // Validate the merged state under a row lock so partial updates cannot lose
         // another admin's measurement or undo their consumption/location change.
@@ -209,7 +201,7 @@ export class StockItemsService {
   }
   /** Expand quantities into physical identities within the receipt's transaction. */
   receiveRolls(lines: ReceiveRollLine[], context: UnitOfWorkContext) {
-    return this.operation(async () => {
+    return stockItemsOperation(async () => {
       if (
         !lines.length ||
         lines.reduce((total, line) => total + line.quantity, 0) > 1000
@@ -242,7 +234,7 @@ export class StockItemsService {
     });
   }
   findByStockReceiptItemIds(ids: string[], context: UnitOfWorkContext) {
-    return this.operation(async () =>
+    return stockItemsOperation(async () =>
       (await context.stockItems.findByStockReceiptItemIds(ids)).map((row) =>
         this.toPublic(row),
       ),
@@ -256,7 +248,7 @@ export class StockItemsService {
       lock?: boolean;
     },
   ) {
-    return this.operation(async () => {
+    return stockItemsOperation(async () => {
       const rows = await context.stockItems.findForAllocation(filter);
       if (rows.length > 10000)
         throw new BadRequestException(
@@ -274,7 +266,7 @@ export class StockItemsService {
     context: UnitOfWorkContext,
     now: Date,
   ) {
-    return this.operation(async () => {
+    return stockItemsOperation(async () => {
       const repository = context.stockItems;
       const previous = await repository.lockRows(
         outcomes.map((o) => o.stockItemId),
@@ -297,141 +289,6 @@ export class StockItemsService {
       return effects;
     });
   }
-  async lockForCorrection(context: UnitOfWorkContext, ids: string[]) {
-    const repository = context.stockItems;
-    return this.operation(async () =>
-      (await repository.lockRows(ids)).map(stockSnapshot),
-    );
-  }
-  async eligibility(
-    context: UnitOfWorkContext,
-    effects: StockEffect[],
-    ids: string[],
-    excludeAllocationId?: string,
-  ): Promise<CorrectionEligibility[]> {
-    const repository = context.stockItems;
-    const refs = await repository.allocationReferences(ids);
-    const children = await repository.descendants(ids);
-    const baseline = new Map(effects.map((e) => [e.stockItemId, e]));
-    const results: CorrectionEligibility[] = [];
-    for (const id of ids) {
-      const row = await repository.findById(id);
-      if (!row) throw new NotFoundException('Stock item not found.');
-      const blockers: CorrectionEligibility['blockers'] = [];
-      const add = (
-        code: CorrectionEligibility['blockers'][number]['code'],
-        message: string,
-        allocationIds: string[] = [],
-        stockItemIds: string[] = [],
-      ) => blockers.push({ code, message, allocationIds, stockItemIds });
-      const effect = baseline.get(id);
-      if (!effect)
-        add(
-          'legacy',
-          'No trustworthy historical stock baseline exists. Use a current-stock adjustment.',
-        );
-      else if (effect.after.revision !== row.revision)
-        add(
-          'changed',
-          'Stock changed after this workflow. Use a current-stock adjustment.',
-        );
-      if (row.voidedAt) add('voided', 'This stock record is voided.');
-      const active = refs
-        .filter((r) => r.stockItemId === id && !r.completedAt)
-        .map((r) => r.allocationId);
-      const completed = refs
-        .filter(
-          (r) =>
-            r.stockItemId === id &&
-            r.completedAt &&
-            r.allocationId !== excludeAllocationId &&
-            (!effect ||
-              r.completedAt.getTime() >
-                new Date(effect.after.updatedAt).getTime()),
-        )
-        .map((r) => r.allocationId);
-      const downstream = children
-        .filter((r) => r.sourceStockItemId === id && !baseline.has(r.id))
-        .map((r) => r.id);
-      if (active.length)
-        add(
-          'reserved',
-          'Release or reassign reservations before correcting.',
-          active,
-        );
-      if (completed.length || downstream.length)
-        add(
-          'downstream',
-          'Later production or retained pieces depend on this stock.',
-          completed,
-          downstream,
-        );
-      results.push({ stockItemId: id, revision: row.revision, blockers });
-    }
-    return results;
-  }
-  async requireCorrectionEligible(
-    context: UnitOfWorkContext,
-    effects: StockEffect[],
-    versions: {
-      stockItemId: string;
-      expectedRevision: number;
-    }[],
-    ids: string[],
-    excludeAllocationId?: string,
-  ) {
-    const expected = new Map(
-      versions.map((v) => [v.stockItemId, v.expectedRevision]),
-    );
-    if (expected.size !== versions.length)
-      throw new BadRequestException('Duplicate stock revision.');
-    const eligibility = await this.eligibility(
-      context,
-      effects,
-      ids,
-      excludeAllocationId,
-    );
-    for (const item of eligibility) {
-      if (item.blockers.length)
-        throw new ConflictException({
-          message: 'Some stock cannot be corrected.',
-          issues: item.blockers.map((b) => ({
-            code: b.code,
-            path: `stock.${item.stockItemId}`,
-            message: b.message,
-          })),
-        });
-      if (expected.get(item.stockItemId) !== item.revision)
-        throw new ConflictException(
-          'Stock changed; refresh before correcting.',
-        );
-    }
-  }
-  async applySnapshots(
-    context: UnitOfWorkContext,
-    changes: {
-      before: StockSnapshot | null;
-      value: StockSnapshot | StockItemWrite;
-    }[],
-  ): Promise<StockEffect[]> {
-    const repository = context.stockItems;
-    const effects: StockEffect[] = [];
-    for (const change of changes) {
-      const write =
-        'id' in change.value ? snapshotWrite(change.value) : change.value;
-      const id = change.before?.id ?? (await repository.create(write));
-      if (change.before) await repository.update(id, write);
-      const after = stockSnapshot((await repository.findById(id))!);
-      effects.push({
-        calculationThicknessMm: null,
-        stockItemId: id,
-        sourceStockItemId: after.sourceStockItemId,
-        before: change.before,
-        after,
-      });
-    }
-    return effects;
-  }
   void(
     id: string,
     input: {
@@ -441,7 +298,7 @@ export class StockItemsService {
     userId: string,
     key: string,
   ) {
-    return this.operation(() =>
+    return stockItemsOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         const row = await context.stockItems.findByIdForUpdate(id);
         if (!row) throw new NotFoundException('Stock item not found.');
@@ -472,7 +329,7 @@ export class StockItemsService {
             'Reserved stock or stock with downstream use cannot be voided.',
           );
         const before = stockSnapshot(row);
-        const effects = await this.applySnapshots(context, [
+        const effects = await this.corrections.applySnapshots(context, [
           { before, value: { ...before, voidedAt: new Date().toISOString() } },
         ]);
         const eventId = await audit.record(
@@ -543,21 +400,5 @@ export class StockItemsService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     });
-  }
-  private async operation<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await stockItemsQuery(operation);
-    } catch (error) {
-      if (error instanceof HttpException) throw error;
-      if (error instanceof StockItemReferenceNotFoundError)
-        throw new NotFoundException(error.message, { cause: error });
-      if (error instanceof StockItemInUseError)
-        throw new ConflictException(error.message, { cause: error });
-      if (error instanceof InvalidStockItemError)
-        throw new BadRequestException(error.message, { cause: error });
-      throw new ServiceUnavailableException('Stock storage is unavailable.', {
-        cause: error,
-      });
-    }
   }
 }

@@ -54,6 +54,7 @@ import {
   type ReplaceAllocation,
 } from '@roller-bay/shared/allocations';
 import { createHash } from 'node:crypto';
+import { StockCorrectionsService } from '../stock-items/stock-corrections.service.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
@@ -119,6 +120,7 @@ export class AllocationsService {
     private readonly worksheets: CuttingWorksheetsService,
     private readonly audit: AuditService,
     private readonly stockItems: StockItemsService,
+    private readonly stockCorrections: StockCorrectionsService,
     private readonly cuttingRules: CuttingRulesService,
     private readonly orders: WorkOrdersService,
   ) {}
@@ -737,7 +739,7 @@ export class AllocationsService {
           stockItems: await this.stockItems.findForAllocation(context, {
             stockIds: ids,
           }),
-          eligibility: await this.stockItems.eligibility(
+          eligibility: await this.stockCorrections.eligibility(
             context,
             effects,
             ids,
@@ -848,7 +850,7 @@ export class AllocationsService {
           throw new BadRequestException(
             'This roll already has cutting results; correct them instead.',
           );
-        const rows = await this.stockItems.lockForCorrection(context, [
+        const rows = await this.stockCorrections.lockForCorrection(context, [
           ...familyIds,
           ...additionalIds,
         ]);
@@ -856,7 +858,7 @@ export class AllocationsService {
           ...familyIds,
           ...additionalIds,
         ]);
-        await this.stockItems.requireCorrectionEligible(
+        await this.stockCorrections.requireCorrectionEligible(
           context,
           header.stockEffects,
           input.stockVersions,
@@ -1046,7 +1048,8 @@ export class AllocationsService {
       throw new BadRequestException(
         'Keep or explicitly select every existing retained piece for voiding.',
       );
-    const pending: Parameters<StockItemsService['applySnapshots']>[1] = [];
+    const pending: Parameters<StockCorrectionsService['applySnapshots']>[1] =
+      [];
     if (
       canonicalJson({ ...snapshotWrite(actual), ...write }) !==
       canonicalJson(snapshotWrite(actual))
@@ -1070,14 +1073,14 @@ export class AllocationsService {
       )
         pending.push({ before: previous, value });
     }
-    return this.stockItems.applySnapshots(context, pending);
+    return this.stockCorrections.applySnapshots(context, pending);
   }
   private restoreUnusedStock(
     context: UnitOfWorkContext,
     { source, pieces }: RecordedStockUsage,
     current: ReadonlyMap<string, StockSnapshot>,
   ) {
-    return this.stockItems.applySnapshots(context, [
+    return this.stockCorrections.applySnapshots(context, [
       {
         before: current.get(source.stockItemId)!,
         value: snapshotWrite(source.before!),
@@ -1108,7 +1111,7 @@ export class AllocationsService {
     }
     // Additional usage is a new observation against current stock, never a
     // reconstruction of its balance at the original completion time.
-    await this.stockItems.requireCorrectionEligible(
+    await this.stockCorrections.requireCorrectionEligible(
       context,
       additionalIds.map((id) => ({
         calculationThicknessMm: null,

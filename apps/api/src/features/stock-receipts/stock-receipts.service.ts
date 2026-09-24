@@ -27,6 +27,7 @@ import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/audit.service.js';
 import { stockChanges } from '../stock-items/stock-items.audit.js';
+import { StockCorrectionsService } from '../stock-items/stock-corrections.service.js';
 import { StockItemsService } from '../stock-items/stock-items.service.js';
 import {
   InvalidStockReceiptError,
@@ -46,6 +47,7 @@ export class StockReceiptsService {
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditService,
     private readonly stockItems: StockItemsService,
+    private readonly stockCorrections: StockCorrectionsService,
   ) {}
   create(input: CreateStockReceipt, userId: string, key: string) {
     return this.createRecord(
@@ -232,7 +234,7 @@ export class StockReceiptsService {
         return receiptCorrectionContextSchema.parse({
           record,
           baselineAvailable: header.stockEffects !== null,
-          eligibility: await this.stockItems.eligibility(
+          eligibility: await this.stockCorrections.eligibility(
             context,
             header.stockEffects ?? [],
             ids,
@@ -290,7 +292,10 @@ export class StockReceiptsService {
         });
         const locked = new Map(
           (
-            await this.stockItems.lockForCorrection(context, affectedStockIds)
+            await this.stockCorrections.lockForCorrection(
+              context,
+              affectedStockIds,
+            )
           ).map((stock) => [stock.id, stock]),
         );
         const effects: StockEffect[] = [];
@@ -354,7 +359,7 @@ export class StockReceiptsService {
           const affectedIds = dimensionsChanged
             ? stocks.map((r) => r.id)
             : removeIds;
-          await this.stockItems.requireCorrectionEligible(
+          await this.stockCorrections.requireCorrectionEligible(
             context,
             header.stockEffects ?? [],
             input.stockVersions,
@@ -367,7 +372,7 @@ export class StockReceiptsService {
               ? { ...current, voidedAt: new Date().toISOString() }
               : { ...current, ...data!, quantity: undefined };
             effects.push(
-              ...(await this.stockItems.applySnapshots(context, [
+              ...(await this.stockCorrections.applySnapshots(context, [
                 { before: current, value },
               ])),
             );

@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { stubUnitOfWork } from '../../testing/unit-of-work.js';
 import { AuditService } from '../audit/audit.service.js';
+import type { StockCorrectionsService } from '../stock-items/stock-corrections.service.js';
 import type { StockItemsService } from '../stock-items/stock-items.service.js';
 import { StockReceiptConflictError } from './stock-receipts.errors.js';
 import { stockReceiptsQuery } from './stock-receipts.persistence.js';
@@ -124,6 +125,7 @@ test('incomplete saved receipt submission never reaches stock creation or confir
     stubUnitOfWork({ stockReceipts: repository }),
     {} as AuditService,
     stock as unknown as StockItemsService,
+    {} as StockCorrectionsService,
   );
   await assert.rejects(
     service.submitDraft(header.id, 1, randomUUID()),
