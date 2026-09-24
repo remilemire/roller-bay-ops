@@ -12,11 +12,10 @@ import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
 import { FACILITY_TIME_ZONE, facilityTimeToIso } from '@/lib/facility-time';
 import { Button } from '@/components/ui/button';
-import { ChoiceField, TextField } from '@/components/ui/field';
+import { TextField } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
-import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
-import { CompletionAction } from './completion-action';
+import { EmployeeSelection } from './employee-selection';
 import {
   completions,
   completionLabels,
@@ -28,9 +27,7 @@ import {
 export function OrderProduction({ order }: { order: WorkOrder }) {
   const query = useQuery(completions(order.id));
   const canManage = useCanManage();
-  const [station, setStation] = useState<Station>('cutting');
-  const [correct, setCorrect] = useState(false);
-  const employee = useEmployeeSelection();
+  const [correcting, setCorrecting] = useState<Station | null>(null);
   const stamp = {
     cutting: 'cutAt',
     assembly: 'assembledAt',
@@ -50,57 +47,36 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             return (
               <div key={s}>
                 <dt className="detail-label">{stationLabels[s]}</dt>
-                <dd className="detail-value">
-                  {c
-                    ? `${employeeNames(c.employees)} · ${dateTimeLabel(c.completedAt)}`
-                    : order[stamp[s]]
-                      ? `${dateTimeLabel(order[stamp[s]]!)} · Legacy record; employee not recorded`
-                      : 'Not recorded'}
+                <dd className="detail-value milestone-value">
+                  <span>
+                    {c
+                      ? `${employeeNames(c.employees)} · ${dateTimeLabel(c.completedAt)}`
+                      : order[stamp[s]]
+                        ? `${dateTimeLabel(order[stamp[s]]!)} · Legacy record; employee not recorded`
+                        : 'Not recorded'}
+                  </span>
+                  {canManage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="milestone-correct"
+                      aria-label={`Correct ${completionLabels[s]} record`}
+                      onClick={() => setCorrecting(s)}
+                    >
+                      Correct
+                    </Button>
+                  )}
                 </dd>
               </div>
             );
           })}
         </dl>
-        <ChoiceField
-          label="Station"
-          value={station}
-          onChange={(s) => {
-            const next = stationSchema.safeParse(s);
-            if (next.success) {
-              setStation(next.data);
-              employee.selectEmployees([]);
-            }
-          }}
-          options={stationSchema.options.map((s) => ({
-            value: s,
-            label: stationLabels[s],
-          }))}
-        />
-        <EmployeeSelection
-          value={employee.employeeIds}
-          onChange={employee.selectEmployees}
-        />
-        {!order.cancelledAt && order.allocatedAt && (
-          <CompletionAction
-            key={station}
-            station={station}
-            orderId={order.id}
-            orderNumber={order.orderNumber}
-            employeeIds={employee.employeeIds}
-            done={!!order[stamp[station]]}
-          />
-        )}
-        {canManage && (
-          <Button variant="outline" onClick={() => setCorrect(true)}>
-            Correct {completionLabels[station]} record
-          </Button>
-        )}
-        {correct && (
+        {correcting && (
           <Correction
             order={order}
-            station={station}
-            current={query.data?.find((c) => c.station === station)}
-            close={() => setCorrect(false)}
+            station={correcting}
+            current={query.data?.find((c) => c.station === correcting)}
+            close={() => setCorrecting(null)}
           />
         )}
       </div>

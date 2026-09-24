@@ -1142,6 +1142,22 @@ td strong {
   font-size: 14px;
   overflow-wrap: anywhere;
 }
+.milestone-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* An aside to the record, not a call to action; it reads on hover or focus. */
+.milestone-correct {
+  min-height: 28px;
+  padding: 3px 8px;
+  color: var(--muted);
+}
+.milestone-correct:hover,
+.milestone-correct:focus-visible {
+  color: var(--foreground);
+  background: var(--surface-soft);
+}
 .divider {
   border: 0;
   border-top: 1px solid var(--border);

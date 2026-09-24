@@ -63,19 +63,31 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     .getByRole('button', { name: 'Reschedule', exact: true })
     .click();
   await expect(page.getByText('Ships Tue, Oct 6, 2026')).toBeVisible();
-  await page.getByLabel('Station', { exact: true }).selectOption('shipping');
-  await pickEmployee(page, 'Alex Reed');
-  await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Shipped recorded', exact: true }),
-  ).toBeVisible();
   expect(state.orderRequests).toEqual([
     { method: 'PATCH', body: { expectedRevision: 3, shipDate: '2026-10-06' } },
   ]);
+  // Milestones are recorded at the stations; an admin corrects them here.
+  await page
+    .getByRole('button', { name: 'Correct shipped record', exact: true })
+    .click();
+  const correction = page.getByRole('dialog', { name: /Correct shipped/ });
+  await pickEmployee(correction, 'Alex Reed');
+  await correction
+    .getByLabel('Actual completion time')
+    .fill('2026-10-06T09:00');
+  await correction
+    .getByLabel('Reason', { exact: true })
+    .fill('Shipped without a station');
+  await correction.getByRole('button', { name: 'Save correction' }).click();
+  await expect(correction).toHaveCount(0);
+  await expect(page.getByText(/^Alex Reed \(AR\) · /)).toBeVisible();
   expect(state.productionRequests).toEqual([
     {
-      path: `/production/shipping/orders/${ids.order}/complete`,
-      body: { employeeIds: [state.employees[0]!.id] },
+      path: `/production/shipping/orders/${ids.order}/corrections`,
+      body: expect.objectContaining({
+        employeeIds: [state.employees[0]!.id],
+        reason: 'Shipped without a station',
+      }),
     },
   ]);
 

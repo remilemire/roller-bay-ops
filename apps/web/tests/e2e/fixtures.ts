@@ -84,6 +84,40 @@ export async function pickEmployee(within: Page | Locator, name: string) {
 /** The chip of a selected employee, by its remove control. */
 export const selectedEmployee = (within: Page | Locator, name: string) =>
   within.getByRole('button', { name: `Remove ${name}` });
+/** Sets a milestone time on the order and derives its status. */
+function stampMilestone(
+  order: {
+    cutAt: string | null;
+    assembledAt: string | null;
+    checkedAt: string | null;
+    shippedAt: string | null;
+    shipDate: string | null;
+    revision: number;
+    status: string;
+  },
+  station: Station,
+  at: string | null,
+) {
+  const field = {
+    cutting: 'cutAt',
+    assembly: 'assembledAt',
+    checking: 'checkedAt',
+    shipping: 'shippedAt',
+  } as const;
+  order[field[station]] = at;
+  order.revision++;
+  order.status = order.shippedAt
+    ? 'shipped'
+    : order.checkedAt
+      ? 'checked'
+      : order.assembledAt
+        ? 'assembled'
+        : order.cutAt
+          ? 'cut'
+          : order.shipDate
+            ? 'scheduled'
+            : 'allocated';
+}
 export async function mockApi(
   page: Page,
   options: { role?: string; signedIn?: boolean; stations?: Station[] } = {},
@@ -300,25 +334,41 @@ export async function mockApi(
         recordedAt: completedAt,
         recordedByUserId: ids.user,
       });
-      const field = {
-        cutting: 'cutAt',
-        assembly: 'assembledAt',
-        checking: 'checkedAt',
-        shipping: 'shippedAt',
-      } as const;
-      order[field[station]] = completedAt;
-      order.revision++;
-      order.status = order.shippedAt
-        ? 'shipped'
-        : order.checkedAt
-          ? 'checked'
-          : order.assembledAt
-            ? 'assembled'
-            : order.cutAt
-              ? 'cut'
-              : order.shipDate
-                ? 'scheduled'
-                : 'allocated';
+      stampMilestone(order, station, completedAt);
+      return send({ recordId: order.id, revision: order.revision }, 201);
+    }
+    const productionCorrection = path.match(
+      /^\/production\/(cutting|assembly|checking|shipping)\/orders\/([^/]+)\/corrections$/,
+    );
+    if (productionCorrection) {
+      const station = productionCorrection[1] as Station;
+      const order = state.orders.find((o) => o.id === productionCorrection[2])!;
+      const body = request.postDataJSON() as {
+        employeeIds: string[] | null;
+        completedAt: string | null;
+        reason: string;
+      };
+      state.productionRequests.push({ path, body });
+      state.productionCompletions = state.productionCompletions.filter(
+        (c) => !(c.workOrderId === order.id && c.station === station),
+      );
+      if (body.employeeIds && body.completedAt)
+        state.productionCompletions.push({
+          workOrderId: order.id,
+          station,
+          employees: body.employeeIds.map((employeeId) => {
+            const employee = state.employees.find((e) => e.id === employeeId)!;
+            return {
+              employeeId,
+              employeeName: employee.name,
+              employeeInitials: employee.initials,
+            };
+          }),
+          completedAt: body.completedAt,
+          recordedAt: new Date().toISOString(),
+          recordedByUserId: ids.user,
+        });
+      stampMilestone(order, station, body.completedAt);
       return send({ recordId: order.id, revision: order.revision }, 201);
     }
     const orderWorksheet = path.match(

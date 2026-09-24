@@ -26,7 +26,7 @@ The station requires a connection. Saved progress survives reload; unsaved edits
 
 ## Corrections and historical data
 
-The order detail's production panel shows milestone times and employee attribution. Admins can correct the credited employees and time, starting from the recorded attribution, or clear an erroneous milestone, with an expected revision and reason. Later milestones remain unchanged. Completions and corrections use UUID idempotency keys and audit events in the same transaction as the effective order change.
+Milestones are recorded at the stations. The order detail's production panel shows milestone times and employee attribution, and each milestone offers admins a correction: they can correct the credited employees and time, starting from the recorded attribution, or clear an erroneous milestone, with an expected revision and reason. Later milestones remain unchanged. Completions and corrections use UUID idempotency keys and audit events in the same transaction as the effective order change.
 
 Migrations 0030 and 0031 preserve existing records and timestamps. Historical cutting and shipping timestamps remain visible without invented employee attribution. New assembled/checked timestamps start empty, employees and worksheets start empty, and existing accounts retain their roles. Migration 0035 moves each completion's credited employee into `production_completion_employees`, one row per employee, and drops the single-employee columns; audit snapshots written before it are read as one-employee lists. Inventory reconciliation no longer stamps an order as cut. Shipping is recorded through production, not the work-order PATCH endpoint.
 
