@@ -196,6 +196,7 @@ test('unit of work over PostgreSQL', { timeout: 60_000 }, async (t) => {
       const pool = new Pool({
         connectionString: h.config.DATABASE_URL,
         max: 1,
+        idleTimeoutMillis: 0,
       });
       st.after(() => endPool(pool));
       const db = drizzle(pool);

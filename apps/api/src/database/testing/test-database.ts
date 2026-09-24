@@ -41,7 +41,11 @@ export async function createTestDatabase(
   const target = new URL(adminUrl);
   target.pathname = `/${name}`;
   if (!migrated) return { url: target.href, drop };
-  const pool = new Pool({ connectionString: target.href, max: 1 });
+  const pool = new Pool({
+    connectionString: target.href,
+    max: 1,
+    idleTimeoutMillis: 0,
+  });
   try {
     await migrate(drizzle(pool), { migrationsFolder });
   } catch (error) {
@@ -59,6 +63,10 @@ export async function createTestDatabase(
  * close, so a forced drop straight after it can terminate a closing
  * connection; the pool reports that as an 'error' event, which crashes the
  * test process when nothing listens.
+ *
+ * Give `pool` `idleTimeoutMillis: 0`: the count taken here is exact only when
+ * nothing but `end()` closes a connection, and an idle timeout could close one
+ * just before it.
  */
 export async function endPool(pool: Pool) {
   let open = pool.totalCount;

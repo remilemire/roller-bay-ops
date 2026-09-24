@@ -68,7 +68,10 @@ export async function startIntegrationApp(t: TestContext) {
     if (started.pool) await endPool(started.pool);
     await database.drop();
   });
-  const pool = new Pool({ connectionString: database.url });
+  const pool = new Pool({
+    connectionString: database.url,
+    idleTimeoutMillis: 0,
+  });
   started.pool = pool;
   const config = environmentSchema.parse({
     NODE_ENV: 'test',

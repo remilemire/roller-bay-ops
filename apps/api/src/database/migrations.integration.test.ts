@@ -30,7 +30,11 @@ async function databaseBefore(t: TestContext, prefix: string) {
   const database = await createTestDatabase(testDatabaseUrl, {
     migrated: false,
   });
-  const pool = new Pool({ connectionString: database.url, max: 1 });
+  const pool = new Pool({
+    connectionString: database.url,
+    max: 1,
+    idleTimeoutMillis: 0,
+  });
   const client = await pool.connect();
   // In this order: the pool waits for its client, the drop for the pool.
   t.after(async () => {
