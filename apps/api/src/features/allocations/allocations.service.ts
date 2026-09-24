@@ -379,7 +379,7 @@ export class AllocationsService {
       ? await context.allocations.findById(live.id)
       : null;
     const worksheet = allocation
-      ? await context.cuttingWorksheets.forAllocation(allocation.id)
+      ? await this.worksheets.forAllocation(context, allocation.id)
       : null;
     return orderCancellationContextSchema.parse({
       order: presentWorkOrder(order),
@@ -395,7 +395,7 @@ export class AllocationsService {
           ? {
               id: worksheet.id,
               revision: worksheet.revision,
-              submittedAt: worksheet.submittedAt?.toISOString() ?? null,
+              submittedAt: worksheet.submittedAt,
             }
           : null,
       outstandingCuttingResults:
@@ -440,7 +440,7 @@ export class AllocationsService {
         'Shipped orders cannot be cancelled or released.',
       );
     const found = allocation
-      ? await context.cuttingWorksheets.forAllocation(allocation.id)
+      ? await this.worksheets.forAllocation(context, allocation.id)
       : null;
     const sheet =
       found && !found.reviewedAt
