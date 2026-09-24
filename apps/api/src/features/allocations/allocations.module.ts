@@ -10,10 +10,12 @@ import { AuditModule } from '../audit/audit.module.js';
 import { CuttingWorksheetsModule } from '../cutting-worksheets/cutting-worksheets.module.js';
 import { StockItemsModule } from '../stock-items/stock-items.module.js';
 import { WorkOrdersModule } from '../work-orders/work-orders.module.js';
+import { AllocationDetailsService } from './allocation-details.service.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
 import { AllocationsController } from './allocations.controller.js';
 import { AllocationsRepository } from './allocations.repository.js';
 import { AllocationsService } from './allocations.service.js';
+import { CompletionCorrectionsService } from './completion-corrections.service.js';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 @Module({
@@ -46,8 +48,10 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
       useFactory: (database: DatabaseService) =>
         new AllocationsRepository(database.db),
     },
+    AllocationDetailsService,
     AllocationsService,
     AllocationPlanningService,
+    CompletionCorrectionsService,
     {
       provide: CuttingPlanOptimizer,
       inject: [SolverClient],

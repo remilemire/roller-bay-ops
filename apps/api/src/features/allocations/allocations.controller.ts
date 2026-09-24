@@ -46,12 +46,14 @@ import {
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { AllocationsService } from './allocations.service.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
+import { CompletionCorrectionsService } from './completion-corrections.service.js';
 
 @Controller('allocations')
 export class AllocationsController {
   constructor(
     private readonly service: AllocationsService,
     private readonly planning: AllocationPlanningService,
+    private readonly corrections: CompletionCorrectionsService,
   ) {}
 
   @Post('drafts')
@@ -110,7 +112,7 @@ export class AllocationsController {
   @Get(':id/correction-context')
   @Roles('admin')
   correctionContext(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.service.correctionContext(id);
+    return this.corrections.context(id);
   }
   @Post(':id/completion-corrections')
   @Roles('admin')
@@ -122,7 +124,7 @@ export class AllocationsController {
     @Headers('idempotency-key') key: string,
     @Req() request: Request,
   ) {
-    return this.service.correctCompletion(
+    return this.corrections.correct(
       id,
       input,
       request.currentUser!.id,
