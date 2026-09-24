@@ -9,6 +9,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { TextField, ChoiceField } from '@/components/ui/field';
 import { Lookup } from '@/components/ui/lookup';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCurrentUser } from '@/features/auth/auth-boundary';
 import {
   locationsKey,
   lookupLocations,
@@ -19,7 +20,7 @@ import {
   fieldSuffix,
   measurementHelp,
 } from '@/lib/measurements';
-import { CorrectionSubmit } from '@/features/corrections/correction-submit';
+import { CorrectionSubmit } from '@/components/corrections/correction-submit';
 // Request-body change keys and the form fields that edit them.
 const CHANGE_FIELDS: Record<string, string> = {
   widthMm: 'width',
@@ -41,6 +42,7 @@ export function StockCorrectionEditor({
   voiding?: boolean;
 }) {
   const [item] = useState(initialItem);
+  const user = useCurrentUser();
   const live = useMeasurementUnits();
   const [units] = useState(live);
   const [original] = useState(item);
@@ -76,6 +78,8 @@ export function StockCorrectionEditor({
       }
     >
       <CorrectionSubmit
+        userId={user.id}
+        units={units}
         endpoint={`/stock-items/${item.id}/${voiding ? 'void' : 'corrections'}`}
         schema={voiding ? stockVoidSchema : stockCorrectionSchema}
         close={close}

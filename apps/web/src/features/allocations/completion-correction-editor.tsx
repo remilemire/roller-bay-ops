@@ -22,6 +22,7 @@ import {
   locationsKey,
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCurrentUser } from '@/features/auth/auth-boundary';
 import {
   fieldInput,
   fieldValue,
@@ -29,8 +30,8 @@ import {
   measurementHelp,
 } from '@/lib/measurements';
 import { shortId } from '@/lib/format';
-import { CorrectionSubmit } from '@/features/corrections/correction-submit';
-import { Blockers } from '@/features/corrections/blockers';
+import { CorrectionSubmit } from '@/components/corrections/correction-submit';
+import { Blockers } from '@/components/corrections/blockers';
 type Context = z.infer<typeof completionCorrectionContextSchema>;
 export function CompletionCorrectionEditor({
   id,
@@ -83,6 +84,7 @@ function CompletionCorrectionForm({
   close: () => void;
 }) {
   const [original] = useState(context);
+  const user = useCurrentUser();
   const live = useMeasurementUnits();
   const [units] = useState(live);
   const [rows, setRows] = useState(
@@ -185,6 +187,8 @@ function CompletionCorrectionForm({
     );
   return (
     <CorrectionSubmit
+      userId={user.id}
+      units={units}
       endpoint={`/allocations/${context.record.id}/completion-corrections`}
       schema={completionCorrectionSchema}
       close={close}

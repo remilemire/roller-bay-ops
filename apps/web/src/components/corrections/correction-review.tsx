@@ -7,14 +7,21 @@ import {
   receiptCorrectionSchema,
   completionCorrectionSchema,
 } from '@roller-bay/shared/corrections';
-import { RecordValues } from '@/features/audit/history';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
+import { RecordValues } from '@/components/records/record-values';
 import { shortId } from '@/lib/format';
 const stockLink = (id: string) => (
   <Link className="text-link" href={`/stock-items/${id}`}>
     {shortId(id)}
   </Link>
 );
-export function CorrectionReview({ value }: { value: unknown }) {
+export function CorrectionReview({
+  value,
+  units,
+}: {
+  value: unknown;
+  units: MeasurementUnits;
+}) {
   const client = useQueryClient();
   // Lookup labels are already loaded by the form. Keep the ID as a fallback.
   const options = z.object({
@@ -39,7 +46,11 @@ export function CorrectionReview({ value }: { value: unknown }) {
           <strong>Reason:</strong> {stock.data.reason}
         </p>
         <h4>Corrected stock values</h4>
-        <RecordValues referenceLabels={labels} value={stock.data.changes} />
+        <RecordValues
+          units={units}
+          referenceLabels={labels}
+          value={stock.data.changes}
+        />
       </div>
     );
   const cutting = completionCorrectionSchema.safeParse(value);
@@ -62,6 +73,7 @@ export function CorrectionReview({ value }: { value: unknown }) {
           <section key={item.stockItemId}>
             <h4>Add actual usage · {stockLink(item.stockItemId)}</h4>
             <RecordValues
+              units={units}
               referenceLabels={labels}
               value={Object.fromEntries(
                 Object.entries(item).filter(
@@ -83,7 +95,11 @@ export function CorrectionReview({ value }: { value: unknown }) {
           return (
             <section className="stack" key={stockItemId}>
               <h4>Cutting result · {stockLink(stockItemId)}</h4>
-              <RecordValues referenceLabels={labels} value={outcome} />
+              <RecordValues
+                units={units}
+                referenceLabels={labels}
+                value={outcome}
+              />
               {item.retainedPieces.map((piece, index) => (
                 <div key={piece.id ?? index}>
                   <strong>
@@ -94,6 +110,7 @@ export function CorrectionReview({ value }: { value: unknown }) {
                     )}
                   </strong>
                   <RecordValues
+                    units={units}
                     referenceLabels={labels}
                     value={{
                       widthMm: piece.widthMm,
@@ -145,7 +162,11 @@ export function CorrectionReview({ value }: { value: unknown }) {
                   : `Correct receipt line ${shortId(op.lineId)}`}
             </h4>
             {op.action !== 'remove' && (
-              <RecordValues referenceLabels={labels} value={op.data} />
+              <RecordValues
+                units={units}
+                referenceLabels={labels}
+                value={op.data}
+              />
             )}
             {op.action === 'update' && !!op.removeStockItemIds.length && (
               <div>

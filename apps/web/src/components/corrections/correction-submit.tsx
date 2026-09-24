@@ -3,13 +3,13 @@ import { useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { correctionResultSchema } from '@roller-bay/shared/corrections';
+import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { api, ApiError } from '@/lib/api';
 import {
   pendingPayload,
   requestKey,
   finishRequest,
 } from '@/lib/pending-request';
-import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { CorrectionReview } from './correction-review';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,8 @@ export function CorrectionSubmit({
   fieldName,
   children,
   close,
+  userId,
+  units,
 }: {
   endpoint: string;
   schema: z.ZodType;
@@ -40,9 +42,12 @@ export function CorrectionSubmit({
   fieldName?: (path: string) => string | null;
   children: ReactNode | ((errors: CorrectionFieldErrors) => ReactNode);
   close: () => void;
+  /** Scopes a pending submission to the signed-in user. */
+  userId: string;
+  /** The units the form was opened with, so the review reads like the form. */
+  units: MeasurementUnits;
 }) {
-  const user = useCurrentUser();
-  const scope = `correction:${user.id}:${endpoint}`;
+  const scope = `correction:${userId}:${endpoint}`;
   const [reason, setReason] = useState('');
   const [review, setReview] = useState<unknown>(null);
   const [error, setError] = useState<unknown>(null);
@@ -155,7 +160,7 @@ export function CorrectionSubmit({
       {review !== null && (
         <section>
           <h3>Review correction</h3>
-          <CorrectionReview value={review} />
+          <CorrectionReview value={review} units={units} />
         </section>
       )}
       <div className="form-actions">

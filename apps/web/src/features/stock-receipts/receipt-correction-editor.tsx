@@ -21,10 +21,11 @@ import {
   locationsKey,
 } from '@/features/locations/locations.api';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
+import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { fieldInput, fieldValue, fieldSuffix } from '@/lib/measurements';
 import { shortId } from '@/lib/format';
-import { CorrectionSubmit } from '@/features/corrections/correction-submit';
-import { Blockers } from '@/features/corrections/blockers';
+import { CorrectionSubmit } from '@/components/corrections/correction-submit';
+import { Blockers } from '@/components/corrections/blockers';
 type Context = z.infer<typeof receiptCorrectionContextSchema>;
 export function ReceiptCorrectionEditor({
   id,
@@ -77,6 +78,7 @@ function ReceiptCorrectionForm({
   close: () => void;
 }) {
   const [original] = useState(context);
+  const user = useCurrentUser();
   const live = useMeasurementUnits();
   const [units] = useState(live);
   const [number, setNumber] = useState(context.record.purchaseOrderNumber);
@@ -99,6 +101,8 @@ function ReceiptCorrectionForm({
     setLines(lines.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   return (
     <CorrectionSubmit
+      userId={user.id}
+      units={units}
       endpoint={`/stock-receipts/${context.record.id}/corrections`}
       schema={receiptCorrectionSchema}
       close={close}

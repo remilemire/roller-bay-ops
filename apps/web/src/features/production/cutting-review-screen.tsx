@@ -16,7 +16,7 @@ import { useCanManage, useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { api } from '@/lib/api';
 import { dateTimeLabel } from '@/lib/format';
-import { RecordValues } from '@/features/audit/history';
+import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, ErrorNotice, Loading } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
@@ -169,7 +169,7 @@ function ReviewWorksheet({
       <section className="panel panel-body stack">
         <h3>Submitted measurements</h3>
         {sheet.results ? (
-          <RecordValues value={sheet.results.items} />
+          <RecordValues units={units} value={sheet.results.items} />
         ) : (
           <p>The cutter has not submitted complete measurements yet.</p>
         )}

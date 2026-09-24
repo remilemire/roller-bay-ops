@@ -10,6 +10,8 @@ The Next.js App Router app in `apps/web` provides the operational workspace. It 
 | `features/`                    | Domain screens, API operations, query keys, form conversion, and tests.                                               |
 | `components/ui/`               | Locally owned shadcn-style primitives using Radix, CVA, and Tailwind, adapted to the workspace theme.                 |
 | `components/layout/`           | Dashboard shell, navigation, account menu, and theme control.                                                         |
+| `components/records/`          | Record value rendering shared by history, correction reviews and submitted cutting results.                           |
+| `components/corrections/`      | Correction review-and-submit flow and blocker lists shared by the stock, receipt and completion correction editors.   |
 | `lib/`                         | Credentialed HTTP client, error descriptions, query defaults, formatting, measurement conversion, and pending keys.   |
 | `styles/`                      | Semantic light/dark tokens in `theme.css`; shared layout, components, responsive styles, and motion in `globals.css`. |
 

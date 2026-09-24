@@ -8,7 +8,7 @@ import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { completionRecovery } from '@/features/allocations/completion-form';
 import { CompletionEditor } from '@/features/allocations/completion-editor';
-import { RecordValues } from '@/features/audit/history';
+import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
@@ -172,7 +172,7 @@ function Worksheet({ initial }: { initial: Worksheet }) {
       ) : sheet.submittedAt ? (
         <section className="panel panel-body stack">
           <h2>Submitted measurements</h2>
-          <RecordValues value={sheet.results?.items} />
+          <RecordValues units={liveUnits} value={sheet.results?.items} />
         </section>
       ) : (
         <CompletionEditor
