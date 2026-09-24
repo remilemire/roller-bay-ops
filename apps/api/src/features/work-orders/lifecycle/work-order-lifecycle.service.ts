@@ -4,16 +4,16 @@ import {
   type OrderWorkflow,
 } from '@roller-bay/shared/work-orders';
 import type { AuditChange } from '@roller-bay/shared/audit';
-import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
-import { workOrdersOperation } from '../work-orders/work-orders.operation.js';
-import { AllocationsService } from '../allocations/allocations.service.js';
-import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
+import { UnitOfWork } from '../../../unit-of-work/unit-of-work.js';
+import { AuditService } from '../../audit/audit.service.js';
+import { WorkOrdersService } from '../work-orders.service.js';
+import { presentWorkOrder } from '../work-orders.presenter.js';
+import { workOrdersOperation } from '../work-orders.operation.js';
+import { AllocationsService } from '../../allocations/allocations.service.js';
+import { CuttingWorksheetsService } from '../../cutting-worksheets/cutting-worksheets.service.js';
 
 @Injectable()
-export class WorkOrderWorkflowsService {
+export class WorkOrderLifecycleService {
   constructor(
     private readonly uow: UnitOfWork,
     private readonly orders: WorkOrdersService,

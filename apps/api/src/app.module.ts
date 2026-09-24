@@ -1,4 +1,4 @@
-import { WorkOrderWorkflowsModule } from './features/work-order-workflows/work-order-workflows.module.js';
+import { WorkOrderLifecycleModule } from './features/work-orders/lifecycle/work-order-lifecycle.module.js';
 import { ProductionModule } from './features/production/production.module.js';
 import { AuditModule } from './features/audit/audit.module.js';
 import { AllocationsModule } from './features/allocations/allocations.module.js';
@@ -36,7 +36,7 @@ import { ErrorsModule } from './common/errors/errors.module.js';
     StockItemsModule,
     StockReceiptsModule,
     WorkOrdersModule,
-    WorkOrderWorkflowsModule,
+    WorkOrderLifecycleModule,
     AllocationsModule,
   ],
 })

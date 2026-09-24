@@ -1,4 +1,4 @@
-import { WorkOrderWorkflowsModule } from '../features/work-order-workflows/work-order-workflows.module.js';
+import { WorkOrderLifecycleModule } from '../features/work-orders/lifecycle/work-order-lifecycle.module.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -119,7 +119,7 @@ export async function startIntegrationApp(t: TestContext) {
       StockItemsModule,
       StockReceiptsModule,
       WorkOrdersModule,
-      WorkOrderWorkflowsModule,
+      WorkOrderLifecycleModule,
       AllocationsModule,
     ],
   })

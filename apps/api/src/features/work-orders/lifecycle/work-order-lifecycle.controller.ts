@@ -15,13 +15,13 @@ import {
   type OrderWorkflow,
 } from '@roller-bay/shared/work-orders';
 import { correctionKeySchema } from '@roller-bay/shared/corrections';
-import { Roles } from '../../common/decorators/roles.decorator.js';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
-import { WorkOrderWorkflowsService } from './work-order-workflows.service.js';
+import { Roles } from '../../../common/decorators/roles.decorator.js';
+import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe.js';
+import { WorkOrderLifecycleService } from './work-order-lifecycle.service.js';
 @Controller('work-orders')
 @Roles('admin')
-export class WorkOrderWorkflowsController {
-  constructor(private readonly service: WorkOrderWorkflowsService) {}
+export class WorkOrderLifecycleController {
+  constructor(private readonly service: WorkOrderLifecycleService) {}
   @Get(':id/cancellation-context')
   context(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.service.context(id);
