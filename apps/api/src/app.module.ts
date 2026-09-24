@@ -1,4 +1,4 @@
-import { WorkOrderCancellationModule } from './features/work-orders/cancellation/work-order-cancellation.module.js';
+import { WorkOrderCancellationModule } from './features/work-order-cancellation/work-order-cancellation.module.js';
 import { ProductionModule } from './features/production/production.module.js';
 import { AuditModule } from './features/audit/audit.module.js';
 import { AllocationsModule } from './features/allocations/allocations.module.js';

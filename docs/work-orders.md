@@ -120,6 +120,6 @@ When cutting has started or production has been recorded without inventory recon
 
 The cancellation dialog preserves input on conflicts, reloads current details, resets the skip acknowledgement and requires another review. Unknown network outcomes keep the original request and key for retry. A permanent refresh button is not part of the normal form.
 
-`WorkOrderCancellationService` exists because allocations already depend on core work orders. Its separate module coordinates whole-order cancellation without a dependency cycle. Allocation cancellation owns worksheet closure and fabric release in `AllocationsService`; scheduling remains an order date operation. Both cancellation paths retain allocation → order → worksheet → sorted-stock locking and one transaction for state, audit and idempotency.
+`WorkOrderCancellationService` exists because allocations already depend on core work orders. It lives in its own `work-order-cancellation` feature, which depends on both, so whole-order cancellation is coordinated without a dependency cycle. Allocation cancellation owns worksheet closure and fabric release in `AllocationsService`; scheduling remains an order date operation. Both cancellation paths retain allocation → order → worksheet → sorted-stock locking and one transaction for state, audit and idempotency.
 
 Migration 0034 removes the state-wide `ship_date`/allocation constraint: a retained promise without fabric is now valid. Scheduling eligibility remains enforced under the order lock in the service. Existing dates and records are not rewritten.

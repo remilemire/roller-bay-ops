@@ -1,4 +1,4 @@
-import { WorkOrderCancellationModule } from '../features/work-orders/cancellation/work-order-cancellation.module.js';
+import { WorkOrderCancellationModule } from '../features/work-order-cancellation/work-order-cancellation.module.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';

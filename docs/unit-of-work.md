@@ -43,7 +43,7 @@ await this.unitOfWork.transaction(async (context) => {
 });
 ```
 
-`WorkOrderCancellationService` coordinates only whole-order cancellation: allocation release, worksheet closure and the order update share one transaction and one audit event. It lives under `features/work-orders/cancellation` in a separate module imported by the application. Allocations already depend on core work orders, so importing allocation cancellation into `WorkOrdersModule` would create a cycle. Allocation cancellation itself belongs to `AllocationsService`; scheduling uses the order's date update.
+`WorkOrderCancellationService` coordinates only whole-order cancellation: allocation release, worksheet closure and the order update share one transaction and one audit event. It is its own feature, `features/work-order-cancellation`, above both work orders and allocations: allocations already depend on work orders, so coordinating from inside work orders would make the two features depend on each other. Allocation cancellation itself belongs to `AllocationsService`; scheduling uses the order's date update.
 
 The receiving service uses its own repository from the context. It continues to own its business rules: allocations request stock effects from `StockItemsService` and order milestones from `WorkOrdersService`.
 

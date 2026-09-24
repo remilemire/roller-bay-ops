@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import request from 'supertest';
-import { AuditService } from '../../audit/audit.service.js';
-import { startAllocationsApp } from '../../allocations/testing/allocations-app.js';
+import { AuditService } from '../audit/audit.service.js';
+import { startAllocationsApp } from '../allocations/testing/allocations-app.js';
 
 test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
   const {
