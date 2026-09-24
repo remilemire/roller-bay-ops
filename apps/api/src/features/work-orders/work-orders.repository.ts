@@ -43,6 +43,7 @@ const statusFilters = {
   unscheduled: and(isNotNull(allocatedAt), isNull(shipDate), isNull(shippedAt)),
   new: and(
     isNull(allocatedAt),
+    isNull(shipDate),
     isNull(cutAt),
     isNull(assembledAt),
     isNull(checkedAt),

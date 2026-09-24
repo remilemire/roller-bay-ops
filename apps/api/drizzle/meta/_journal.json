@@ -239,6 +239,13 @@
       "when": 1790145903587,
       "tag": "0033_order_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790227840016,
+      "tag": "0034_preserve_schedule_after_allocation_release",
+      "breakpoints": true
     }
   ]
 }

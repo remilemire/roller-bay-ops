@@ -262,6 +262,7 @@ export class WorkOrdersService {
         this.assertNotCancelled(previous);
         if (
           previous.allocatedAt ||
+          previous.shipDate ||
           previous.cutAt ||
           previous.assembledAt ||
           previous.checkedAt ||
@@ -336,9 +337,8 @@ export class WorkOrdersService {
     };
   }
   /**
-   * The order's allocation was cancelled. Refused while the order has a ship
-   * date: a date needs an allocation, and clearing it here would change the
-   * schedule from a request that never named it.
+   * The guarded allocation-cancel route releases the allocation stamp while
+   * retaining the promised date. Recorded production still requires review.
    */
   release(context: UnitOfWorkContext, workOrderId: string) {
     return this.restamp(
@@ -355,18 +355,6 @@ export class WorkOrdersService {
           throw new ConflictException(
             'Production has been recorded. Resolve the milestones before cancelling the allocation.',
           );
-        if (order.shipDate)
-          throw new ConflictException({
-            message:
-              'This order has a ship date. Clear it before cancelling its allocation.',
-            issues: [
-              {
-                code: 'order_scheduled',
-                path: ['workOrderId'],
-                message: 'Has a ship date.',
-              },
-            ],
-          });
       },
     );
   }
@@ -399,23 +387,13 @@ export class WorkOrdersService {
     if (order.cancelledAt)
       throw new ConflictException('This order is cancelled.');
   }
-  // The coordinator supplies a locked order and owns allocation/worksheet changes.
-  async unschedule(context: UnitOfWorkContext, order: WorkOrderRecord) {
-    this.assertCanStopWork(order);
-    const row = await context.workOrders.update(order.id, {
-      shipDate: null,
-      scheduledAt: null,
-    });
-    return { row, change: change(order, row) };
-  }
+  // Cancellation callers hold the order lock and own the related allocation changes.
   async recordAllocationRelease(
     context: UnitOfWorkContext,
     order: WorkOrderRecord,
   ) {
     this.assertCanStopWork(order);
     const row = await context.workOrders.update(order.id, {
-      shipDate: null,
-      scheduledAt: null,
       allocatedAt: null,
     });
     return { row, change: change(order, row) };

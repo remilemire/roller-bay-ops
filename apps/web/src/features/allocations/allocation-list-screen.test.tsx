@@ -12,6 +12,8 @@ import { ids, timestamp } from '../../../tests/fixtures';
 import { AllocationListScreen } from './allocation-list-screen';
 import { allocationList, cancelAllocation } from './allocations.api';
 
+vi.mock('@/features/auth/auth-boundary', () => ({ useCanManage: () => false }));
+
 const state = vi.hoisted(() => ({ search: '', replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(state.search),

@@ -43,7 +43,7 @@ export function OrderReschedule({
       onOpenChange={(open) => {
         if (!open && !mutation.isPending) close();
       }}
-      title={`${opened.shipDate ? 'Reschedule' : 'Schedule'} order ${opened.orderNumber}`}
+      title={`${!opened.allocatedAt ? 'Unschedule' : opened.shipDate ? 'Reschedule' : 'Schedule'} order ${opened.orderNumber}`}
     >
       <form
         onSubmit={(event) => {
@@ -51,17 +51,24 @@ export function OrderReschedule({
           mutation.mutate(shipDate);
         }}
       >
-        <DateField
-          label="Ship date"
-          value={shipDate}
-          onChange={(day) => {
-            setShipDate(day);
-            mutation.reset();
-          }}
-          error={fieldIssues(mutation.error, fieldName).shipDate}
-          weekdaysOnly
-          defaultOpen
-        />
+        {opened.allocatedAt ? (
+          <DateField
+            label="Ship date"
+            value={shipDate}
+            onChange={(day) => {
+              setShipDate(day);
+              mutation.reset();
+            }}
+            error={fieldIssues(mutation.error, fieldName).shipDate}
+            weekdaysOnly
+            defaultOpen
+          />
+        ) : (
+          <p>
+            This order needs a fabric allocation. You can keep its existing date
+            or remove it from the schedule.
+          </p>
+        )}
         {mutation.error && (
           <ErrorNotice
             error={mutation.error}
@@ -84,21 +91,23 @@ export function OrderReschedule({
               onClick={() => mutation.mutate(null)}
               disabled={mutation.isPending}
             >
-              Clear date
+              Unschedule
             </Button>
           )}
-          <Button
-            type="submit"
-            disabled={
-              mutation.isPending || !shipDate || shipDate === opened.shipDate
-            }
-          >
-            {mutation.isPending
-              ? 'Saving…'
-              : opened.shipDate
-                ? 'Reschedule'
-                : 'Schedule'}
-          </Button>
+          {opened.allocatedAt && (
+            <Button
+              type="submit"
+              disabled={
+                mutation.isPending || !shipDate || shipDate === opened.shipDate
+              }
+            >
+              {mutation.isPending
+                ? 'Saving…'
+                : opened.shipDate
+                  ? 'Reschedule'
+                  : 'Schedule'}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

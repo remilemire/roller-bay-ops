@@ -1,4 +1,5 @@
 'use client';
+import { AllocationWarning } from './allocation-warning';
 import { OrderCancellation } from './order-cancellation';
 import { OrderProduction } from '@/features/production/order-production';
 import Link from 'next/link';
@@ -78,18 +79,23 @@ function OrderRecord({ order }: { order: WorkOrder }) {
               Edit
             </Button>
             {/* A date follows the allocation. */}
-            {order.allocatedAt && (
+            {(order.allocatedAt || order.shipDate) && (
               <Button variant="outline" onClick={() => setRescheduling(true)}>
-                {order.shipDate ? 'Reschedule' : 'Schedule'}
+                {!order.allocatedAt
+                  ? 'Unschedule'
+                  : order.shipDate
+                    ? 'Reschedule'
+                    : 'Schedule'}
               </Button>
             )}
 
             {!order.shippedAt && (
               <Button variant="outline" onClick={() => setCancelling(true)}>
-                Cancel or release
+                Cancel work order
               </Button>
             )}
             {!order.allocatedAt &&
+              !order.shipDate &&
               !order.cutAt &&
               !order.assembledAt &&
               !order.checkedAt &&
@@ -107,6 +113,7 @@ function OrderRecord({ order }: { order: WorkOrder }) {
           </>
         )}
       </PageHeading>
+      <AllocationWarning order={order} />
       <section className="panel">
         <div className="panel-body stack">
           <div className="details-grid">

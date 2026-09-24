@@ -50,11 +50,8 @@ export const workOrders = pgTable(
       'work_orders_ship_date_weekday',
       sql`EXTRACT(ISODOW FROM ${table.shipDate}) < 6`,
     ),
-    // Fabric is allocated, to see what is on hand, before a date is promised.
-    check(
-      'work_orders_ship_date_requires_allocation',
-      sql`${table.shipDate} IS NULL OR ${table.allocatedAt} IS NOT NULL`,
-    ),
+    // Allocation is required when scheduling, but may later be released.
+    // Scheduling eligibility is checked under the order lock in the service.
     check(
       'work_orders_scheduled_at_matches_ship_date',
       sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,

@@ -1,4 +1,5 @@
 'use client';
+import { AllocationCancellation } from './allocation-cancellation';
 import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { CompletionCorrectionEditor } from './completion-correction-editor';
@@ -456,7 +457,10 @@ function AllocationRecord({
             </div>
           </section>
         )}
-        {allocation.state === 'active' && (
+        {(allocation.state === 'active' ||
+          (admin &&
+            allocation.state === 'completed' &&
+            !allocation.releasedAt)) && (
           <div className="form-actions">
             <Button variant="ghost" onClick={() => setCancel(true)}>
               Cancel allocation
@@ -465,11 +469,14 @@ function AllocationRecord({
         )}
       </div>
       <History type="allocations" id={id} />
+      {cancel && admin && (
+        <AllocationCancellation id={id} close={() => setCancel(false)} />
+      )}
       <Dialog
-        open={cancel}
+        open={cancel && !admin}
         onOpenChange={setCancel}
         title="Cancel this allocation?"
-        description="The order stays in history and its reservations are released. No stock measurements are changed."
+        description="Fabric reservations will be released. The work order and any existing ship date will remain. Stock measurements stay unchanged."
       >
         {cancelMutation.error && <ErrorNotice error={cancelMutation.error} />}
         <div className="form-actions">

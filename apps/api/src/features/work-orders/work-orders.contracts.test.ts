@@ -161,11 +161,10 @@ test('work order queries accept each status and the two queue filters', () => {
   });
 });
 
-test('order workflow requests require reviewed revisions, a reason and an explicit skip choice', async () => {
-  const { orderWorkflowSchema } =
+test('order cancellation requests require reviewed revisions, a reason and an explicit skip choice', async () => {
+  const { orderCancellationSchema } =
     await import('@roller-bay/shared/work-orders');
   const base = {
-    action: 'cancel-order',
     expectedRevision: 1,
     allocationId: null,
     expectedAllocationRevision: null,
@@ -173,15 +172,15 @@ test('order workflow requests require reviewed revisions, a reason and an explic
     expectedWorksheetRevision: null,
     reason: ' Stop this job ',
   };
-  const parsed = orderWorkflowSchema.parse(base);
+  const parsed = orderCancellationSchema.parse(base);
   assert.equal(parsed.reason, 'Stop this job');
   assert.equal(parsed.skipCuttingResults, false);
   assert.equal(
-    orderWorkflowSchema.safeParse({ ...base, reason: '' }).success,
+    orderCancellationSchema.safeParse({ ...base, reason: '' }).success,
     false,
   );
   assert.equal(
-    orderWorkflowSchema.safeParse({
+    orderCancellationSchema.safeParse({
       ...base,
       action: 'unschedule',
       skipCuttingResults: true,
@@ -189,7 +188,7 @@ test('order workflow requests require reviewed revisions, a reason and an explic
     false,
   );
   assert.equal(
-    orderWorkflowSchema.safeParse({ ...base, expectedRevision: 0 }).success,
+    orderCancellationSchema.safeParse({ ...base, expectedRevision: 0 }).success,
     false,
   );
 });

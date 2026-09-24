@@ -364,7 +364,7 @@ it('edits and unschedules an order with the revision it shows', async () => {
   await user.click(
     within(screen.getByRole('dialog', { name: /Reschedule order/ })).getByRole(
       'button',
-      { name: 'Clear date' },
+      { name: 'Unschedule' },
     ),
   );
   await waitFor(() =>
@@ -377,7 +377,7 @@ it('edits and unschedules an order with the revision it shows', async () => {
 
   expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   expect(
-    screen.getByRole('button', { name: 'Cancel or release' }),
+    screen.getByRole('button', { name: 'Cancel work order' }),
   ).toBeInTheDocument();
 });
 

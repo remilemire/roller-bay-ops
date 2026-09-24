@@ -1,4 +1,5 @@
 'use client';
+import { AllocationWarning } from './allocation-warning';
 import Link from 'next/link';
 import {
   DndContext,
@@ -526,6 +527,7 @@ function OrderCard({
             </Link>
           )}
           <Status value={order.status} />
+          <AllocationWarning order={order} />
         </div>
         <small>
           {blindCount(order.quantity)}

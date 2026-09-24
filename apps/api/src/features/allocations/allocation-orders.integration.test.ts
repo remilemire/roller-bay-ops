@@ -308,7 +308,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   );
 
   await t.test(
-    'confirming, cancelling, and completing an allocation stamp its order, which keeps its allocation while it has a ship date',
+    'confirming, cancelling, and completing an allocation stamp its order, without removing its existing ship date',
     async () => {
       const order = (id: string) => fixtures.workOrder(id);
       const allocationRow = async (id: string) =>
@@ -366,8 +366,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         { code: 'order_shipped', path: ['workOrderId'] },
       ]);
 
-      // An order with a ship date keeps its allocation: cancelling is refused
-      // rather than quietly taking the order off the schedule.
+      // Allocation cancellation keeps the existing date. New dates still require fabric.
       const schedule = (shipDate: string | null) =>
         asAdmin(async () => {
           const current = await order(target);
@@ -378,13 +377,6 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       const shipDate = async () =>
         (await get(`/api/work-orders/${target}`).expect(200)).body.shipDate;
       await schedule('2026-10-09');
-      const refused = await post(`${path}/${allocation.id}/cancel`, {
-        expectedRevision: allocation.revision,
-      }).expect(409);
-      assert.deepEqual(issue(refused), [
-        { code: 'order_scheduled', path: ['workOrderId'] },
-      ]);
-      assert.ok((await order(target)).allocated_at);
       // Re-planning in place releases nothing, so it keeps the date.
       const replanned = allocationDetailSchema.parse(
         (
@@ -395,14 +387,14 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         ).body,
       );
       assert.equal(await shipDate(), '2026-10-09');
-      await schedule(null);
 
-      // Cancelling returns the order to new, free to allocate again with the
-      // same blinds.
+      // Cancelling releases fabric without losing the promised date.
       await post(`${path}/${replanned.id}/cancel`, {
         expectedRevision: replanned.revision,
       }).expect(200);
       assert.equal((await order(target)).allocated_at, null);
+      assert.equal(await shipDate(), '2026-10-09');
+      await schedule(null);
       await post(`${path}/${replanned.id}/cancel`, {
         expectedRevision: replanned.revision,
       }).expect(200);

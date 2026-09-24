@@ -1,0 +1,1 @@
+ALTER TABLE "work_orders" DROP CONSTRAINT "work_orders_ship_date_requires_allocation";

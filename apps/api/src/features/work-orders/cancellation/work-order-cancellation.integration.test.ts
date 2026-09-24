@@ -31,14 +31,9 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
   ).body;
   const context = async (id: string) =>
     (await get(`/api/work-orders/${id}/cancellation-context`).expect(200)).body;
-  const command = async (
-    id: string,
-    action = 'cancel-order',
-    skipCuttingResults = false,
-  ) => {
+  const command = async (id: string, skipCuttingResults = false) => {
     const c = await context(id);
     return {
-      action,
       reason: 'Customer changed requirements',
       expectedRevision: c.order.revision,
       allocationId: c.allocation?.id ?? null,
@@ -84,7 +79,15 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         .set('Origin', origin)
         .send({ expectedRevision: order.revision, shipDate: '2026-10-02' })
         .expect(200);
-      await cancel(order.id, await command(order.id, 'unschedule')).expect(200);
+      await request(server)
+        .patch(`/api/work-orders/${order.id}`)
+        .set('Cookie', cookie)
+        .set('Origin', origin)
+        .send({
+          expectedRevision: (await read(order.id)).revision,
+          shipDate: null,
+        })
+        .expect(200);
       assert.ok((await read(order.id)).allocatedAt);
       const body = await command(order.id);
       const key = randomUUID();
@@ -155,10 +158,9 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         ])
       ).rows[0];
       await cancel(a.workOrderId, await command(a.workOrderId)).expect(409);
-      await cancel(
-        a.workOrderId,
-        await command(a.workOrderId, 'cancel-order', true),
-      ).expect(200);
+      await cancel(a.workOrderId, await command(a.workOrderId, true)).expect(
+        200,
+      );
       assert.equal((await read(a.workOrderId)).cutAt, cutAt);
       assert.deepEqual(
         (
@@ -224,9 +226,9 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
           stockId,
         ])
       ).rows[0];
-      await cancel(
-        a.workOrderId,
-        await command(a.workOrderId, 'release-allocation'),
+      await post(
+        `/api/allocations/${a.id}/cancellation`,
+        await command(a.workOrderId),
       ).expect(200);
       const saved = (await get(`/api/allocations/${a.id}`).expect(200)).body;
       assert.equal(saved.state, 'completed');
@@ -266,6 +268,75 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       }).expect(201);
     },
   );
+  await t.test(
+    'allocation cancellation keeps the date and releases reservations; order cancellation clears both',
+    async () => {
+      const a = await create(await input(await seed()));
+      const patch = (body: object) =>
+        request(server)
+          .patch(`/api/work-orders/${a.workOrderId}`)
+          .set('Cookie', cookie)
+          .set('Origin', origin)
+          .send(body);
+      await patch({
+        expectedRevision: (await read(a.workOrderId)).revision,
+        shipDate: '2026-10-02',
+      }).expect(200);
+      const scheduled = await read(a.workOrderId);
+      const preview = (
+        await get(`/api/allocations/${a.id}/cancellation-context`).expect(200)
+      ).body;
+      assert.equal(preview.order.shipDate, scheduled.shipDate);
+      const body = await command(a.workOrderId);
+      const key = randomUUID();
+      const cancelled = await post(
+        `/api/allocations/${a.id}/cancellation`,
+        body,
+        key,
+      ).expect(200);
+      assert.deepEqual(
+        (
+          await post(`/api/allocations/${a.id}/cancellation`, body, key).expect(
+            200,
+          )
+        ).body,
+        cancelled.body,
+      );
+      await post(
+        `/api/allocations/${a.id}/cancellation`,
+        { ...body, reason: 'Different' },
+        key,
+      ).expect(409);
+      const released = await read(a.workOrderId);
+      assert.equal(released.shipDate, scheduled.shipDate);
+      assert.equal(released.scheduledAt, scheduled.scheduledAt);
+      assert.equal(released.allocatedAt, null);
+      assert.equal(released.cancelledAt, null);
+      assert.equal(released.status, 'scheduled');
+      assert.equal(
+        (
+          await get(
+            `/api/work-orders?status=new&search=${released.orderNumber}`,
+          ).expect(200)
+        ).body.total,
+        0,
+      );
+      await patch({
+        expectedRevision: released.revision,
+        shipDate: '2026-10-05',
+      }).expect(409);
+      await patch({
+        expectedRevision: released.revision,
+        note: 'Awaiting fabric',
+      }).expect(200);
+      await cancel(a.workOrderId, await command(a.workOrderId)).expect(200);
+      const stopped = await read(a.workOrderId);
+      assert.equal(stopped.shipDate, null);
+      assert.equal(stopped.scheduledAt, null);
+      assert.equal(stopped.allocatedAt, null);
+      assert.equal(stopped.status, 'cancelled');
+    },
+  );
   await t.test('shipped orders and non-admins cannot cancel', async () => {
     const a = await create(await input(await seed()));
     await post(`/api/production/shipping/orders/${a.workOrderId}/complete`, {
@@ -286,10 +357,9 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const a = await create(await input(await seed()));
       const path = `/api/production/assembly/orders/${a.workOrderId}`;
       await post(`${path}/complete`, { employeeId: employee.id }).expect(201);
-      await cancel(
-        a.workOrderId,
-        await command(a.workOrderId, 'cancel-order', true),
-      ).expect(200);
+      await cancel(a.workOrderId, await command(a.workOrderId, true)).expect(
+        200,
+      );
       const cancelled = await read(a.workOrderId);
       await post(`${path}/complete`, { employeeId: employee.id }).expect(409);
       const correction = {
@@ -328,7 +398,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const stale = await command(a.workOrderId);
       const sheet = await begin(a.workOrderId);
       await cancel(a.workOrderId, stale).expect(409);
-      const body = await command(a.workOrderId, 'cancel-order', true);
+      const body = await command(a.workOrderId, true);
       const audit = t.mock.method(app.get(AuditService), 'record', async () => {
         throw new Error('Audit unavailable');
       });

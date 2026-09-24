@@ -59,6 +59,39 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0034 preserves scheduled dates when fabric is released',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate } = await databaseBefore(t, '0034_');
+    const seeded =
+      await client.query(`INSERT INTO work_orders (order_number, ship_date, scheduled_at, allocated_at)
+    VALUES ('340001','2026-10-02',now(),now()) RETURNING *`);
+    const before = seeded.rows[0];
+    await migrate();
+    assert.deepEqual(
+      (await client.query('SELECT * FROM work_orders WHERE id=$1', [before.id]))
+        .rows[0],
+      before,
+    );
+    const released = (
+      await client.query(
+        'UPDATE work_orders SET allocated_at=NULL WHERE id=$1 RETURNING *',
+        [before.id],
+      )
+    ).rows[0];
+    assert.deepEqual(released.ship_date, before.ship_date);
+    assert.deepEqual(released.scheduled_at, before.scheduled_at);
+    await assert.rejects(
+      client.query(
+        "UPDATE work_orders SET cancelled_at=now(),cancellation_reason='stop' WHERE id=$1",
+        [before.id],
+      ),
+      { code: '23514' },
+    );
+  },
+);
+
+test(
   '0033 preserves existing production and permits explicit release and cancellation',
   { timeout: 60_000 },
   async (t) => {

@@ -85,7 +85,7 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     page.getByRole('button', { name: 'Delete', exact: true }),
   ).not.toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Cancel or release', exact: true }),
+    page.getByRole('button', { name: 'Cancel work order', exact: true }),
   ).not.toBeVisible();
   const unused = state.orders.find((o) => o.orderNumber === '104877')!;
   await page.goto(`/work-orders/${unused.id}`);
@@ -237,7 +237,7 @@ test('admins reschedule an order from its list row', async ({ page }) => {
   await expect(row).toContainText('Wed, Oct 7, 2026');
   // Clearing the date takes it off the schedule; it stays allocated.
   await page.getByRole('button', { name: 'Reschedule order 104801' }).click();
-  await dialog.getByRole('button', { name: 'Clear date' }).click();
+  await dialog.getByRole('button', { name: 'Unschedule' }).click();
   await expect(row).toContainText('allocated');
   await expect(
     page.getByRole('button', { name: 'Schedule order 104801' }),

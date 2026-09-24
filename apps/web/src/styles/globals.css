@@ -2175,3 +2175,52 @@ td strong {
   background: var(--primary-soft);
   color: var(--primary);
 }
+
+.cancellation-form {
+  display: grid;
+  gap: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.cancellation-consequences {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+  margin: 0;
+  list-style: disc;
+}
+.cancellation-consequences li {
+  list-style: disc;
+}
+.cancellation-warning,
+.cancellation-message {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--warning-soft);
+  color: var(--foreground);
+}
+.cancellation-warning {
+  display: grid;
+  gap: 12px;
+}
+.cancellation-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.cancellation-check input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+.allocation-warning {
+  display: block;
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 600;
+}

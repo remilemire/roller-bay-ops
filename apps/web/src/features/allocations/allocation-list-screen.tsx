@@ -1,4 +1,6 @@
 'use client';
+import { useCanManage } from '@/features/auth/auth-boundary';
+import { AllocationCancellation } from './allocation-cancellation';
 import Link from 'next/link';
 import {
   keepPreviousData,
@@ -39,6 +41,7 @@ const tabs = [
   { value: 'all', label: 'All orders' },
 ];
 export function AllocationListScreen() {
+  const canManage = useCanManage();
   const params = useListParams();
   const state = tabs.some((tab) => tab.value === params.get('state'))
     ? params.get('state')
@@ -64,7 +67,7 @@ export function AllocationListScreen() {
       await Promise.all([
         client.invalidateQueries({ queryKey: allocationKey }),
         client.invalidateQueries({ queryKey: ['stock-items'] }),
-        // Cancelling returns the order to `new`.
+        // Cancelling releases fabric and preserves any existing ship date.
         client.invalidateQueries({ queryKey: ['work-orders'] }),
       ]);
     },
@@ -150,7 +153,10 @@ export function AllocationListScreen() {
                       />
                     </td>
                     <td>
-                      {item.state === 'active' && (
+                      {(item.state === 'active' ||
+                        (canManage &&
+                          item.state === 'completed' &&
+                          !item.releasedAt)) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -176,15 +182,18 @@ export function AllocationListScreen() {
           />
         )}
       </section>
+      {cancelling && canManage && (
+        <AllocationCancellation id={cancelling.id} close={closeCancel} />
+      )}
       <Dialog
-        open={!!cancelling}
+        open={!!cancelling && !canManage}
         onOpenChange={(open) => !open && closeCancel()}
         title={
           cancelling
             ? `Cancel allocation ${cancelling.orderNumber ?? shortId(cancelling.id)}?`
             : 'Cancel allocation?'
         }
-        description="The order stays in history and its reservations are released. No stock measurements are changed."
+        description="Fabric reservations will be released. The work order and any existing ship date will remain. Stock measurements stay unchanged."
       >
         {cancelMutation.error && <ErrorNotice error={cancelMutation.error} />}
         <div className="form-actions">

@@ -1,4 +1,5 @@
 'use client';
+import { AllocationWarning } from './allocation-warning';
 import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
@@ -111,33 +112,40 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                     <td>{order.quantity}</td>
                     <td>
                       <Status value={order.status} />
+                      <AllocationWarning order={order} />
                     </td>
                     <td>{order.note}</td>
                     <td>
                       <div className="inline-actions">
                         {/* Planning fabric is open to everyone; the rest of
                             an order's changes are an admin's. */}
-                        {order.status === 'new' && (
-                          <Button asChild variant="ghost" size="sm">
-                            <Link
-                              href={`/allocations/new?workOrder=${order.id}`}
-                              aria-label={`Allocate order ${order.orderNumber}`}
-                            >
-                              Allocate
-                            </Link>
-                          </Button>
-                        )}
+                        {!order.allocatedAt &&
+                          !order.cancelledAt &&
+                          !order.shippedAt && (
+                            <Button asChild variant="ghost" size="sm">
+                              <Link
+                                href={`/allocations/new?workOrder=${order.id}`}
+                                aria-label={`Allocate order ${order.orderNumber}`}
+                              >
+                                Allocate
+                              </Link>
+                            </Button>
+                          )}
                         {canManage && (
                           <>
-                            {/* A date follows the allocation. */}
-                            {order.allocatedAt && (
+                            {/* A retained date can be cleared without fabric. */}
+                            {(order.allocatedAt || order.shipDate) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                aria-label={`${order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
+                                aria-label={`${!order.allocatedAt ? 'Unschedule' : order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
                                 onClick={() => setRescheduling(order)}
                               >
-                                {order.shipDate ? 'Reschedule' : 'Schedule'}
+                                {!order.allocatedAt
+                                  ? 'Unschedule'
+                                  : order.shipDate
+                                    ? 'Reschedule'
+                                    : 'Schedule'}
                               </Button>
                             )}
                             {order.allocatedAt && (

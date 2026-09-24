@@ -25,6 +25,8 @@ import {
   allocationIdempotencyKeySchema,
   allocationQuerySchema,
   cancelAllocationSchema,
+  allocationCancellationSchema,
+  type AllocationCancellation,
   completeAllocationRequestSchema,
   createAllocationSchema,
   createAllocationDraftSchema,
@@ -186,6 +188,28 @@ export class AllocationsController {
     @Req() request: Request,
   ) {
     return this.service.replace(id, input, request.currentUser!.id);
+  }
+  @Get(':id/cancellation-context')
+  @Roles('admin')
+  cancellationContext(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.cancellationContext(id);
+  }
+  @Post(':id/cancellation')
+  @Roles('admin')
+  @HttpCode(200)
+  cancelReviewed(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(allocationCancellationSchema))
+    input: AllocationCancellation,
+    @Headers('idempotency-key') key: string,
+    @Req() request: Request,
+  ) {
+    return this.service.cancelReviewed(
+      id,
+      input,
+      request.currentUser!.id,
+      new ZodValidationPipe(correctionKeySchema).transform(key),
+    );
   }
   @Post(':id/cancel')
   @HttpCode(200)

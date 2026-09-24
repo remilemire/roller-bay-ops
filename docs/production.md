@@ -68,6 +68,6 @@ Repositories are injected. New production/worksheet methods receive the active t
 
 ## Cancelled orders and skipped cutting results
 
-The order's **Cancel or release** form coordinates unscheduling, fabric release and order cancellation; see [work orders](work-orders.md#cancellation-and-release-workflow). Production facts remain recorded. Cancelled orders are excluded from station queues and cannot receive new production completions, while admins may still correct historical attribution. Removing a fabric plan can preserve already-recorded milestones without leaving an active allocation.
+Order cancellation, allocation cancellation and unscheduling have separate controls; see [work orders](work-orders.md#cancellation-and-scheduling-actions). Production facts remain recorded. Cancelled orders are excluded from station queues and cannot receive new production completions, while admins may still correct historical attribution. Removing a fabric plan can preserve already-recorded milestones without leaving an active allocation.
 
 A worksheet closed with `skipped_at` is neither abandoned nor reviewed. Its saved content remains readable, but it cannot be edited, submitted, returned or reconciled and is excluded from the review queue. New cutting can continue with released stock; dependent worksheet review must explicitly resolve the missing measurement baseline. Skipping never updates stock measurements.

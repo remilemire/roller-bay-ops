@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { orderCancellationSchema } from '../work-orders/index.js';
 import {
   stockItemSchema,
   stockCuttingOutcomeSchema,
@@ -407,4 +408,13 @@ export type AllocationList = z.infer<typeof allocationListSchema>;
 export type AllocationValidation = z.infer<typeof allocationValidationSchema>;
 export type AllocationOptimization = z.infer<
   typeof allocationOptimizationSchema
+>;
+
+// Releasing an allocation reviews the affected order and outstanding worksheet.
+export const allocationCancellationSchema = orderCancellationSchema.extend({
+  allocationId: id,
+  expectedAllocationRevision: z.number().int().positive(),
+});
+export type AllocationCancellation = z.infer<
+  typeof allocationCancellationSchema
 >;

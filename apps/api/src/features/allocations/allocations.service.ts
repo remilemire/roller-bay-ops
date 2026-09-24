@@ -1,4 +1,11 @@
 import {
+  orderCancellationContextSchema,
+  type OrderCancellation,
+} from '@roller-bay/shared/work-orders';
+import type { AuditChange } from '@roller-bay/shared/audit';
+import type { WorkOrderRecord } from '../work-orders/work-orders.repository.js';
+import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
+import {
   completionCorrectionContextSchema,
   type CompletionCorrection,
 } from '@roller-bay/shared/corrections';
@@ -39,6 +46,7 @@ import {
   completeAllocationSchema,
   createAllocationSchema,
   type AllocationDetail,
+  type AllocationCancellation,
   type AllocationDraftInput,
   type AllocationQuery,
   type CompleteAllocationRequest,
@@ -366,8 +374,193 @@ export class AllocationsService {
       }),
     );
   }
-  /** Explicitly release fabric as part of an order workflow, retaining completed inventory facts. */
-  async releaseForOrder(context: UnitOfWorkContext, id: string) {
+  cancellationContext(id: string) {
+    return allocationOperation(() =>
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        const allocation = await context.allocations.findById(id);
+        if (!allocation) throw new NotFoundException('Allocation not found.');
+        const preview = await this.cancellationContextForOrder(
+          context,
+          allocation.workOrderId,
+        );
+        if (preview.allocation?.id !== id)
+          throw new ConflictException(
+            'This allocation has already been cancelled or released.',
+          );
+        return preview;
+      }),
+    );
+  }
+  async cancellationContextForOrder(
+    context: UnitOfWorkContext,
+    orderId: string,
+  ) {
+    const order = await this.orders.requireOrder(context, orderId, false);
+    const live = await context.allocations.liveForOrder(orderId);
+    const allocation = live
+      ? await context.allocations.findById(live.id)
+      : null;
+    const worksheet = allocation
+      ? await context.cuttingWorksheets.forAllocation(allocation.id)
+      : null;
+    return orderCancellationContextSchema.parse({
+      order: presentWorkOrder(order),
+      allocation: allocation
+        ? {
+            id: allocation.id,
+            revision: allocation.revision,
+            completedAt: allocation.completedAt?.toISOString() ?? null,
+          }
+        : null,
+      worksheet:
+        worksheet && !worksheet.reviewedAt
+          ? {
+              id: worksheet.id,
+              revision: worksheet.revision,
+              submittedAt: worksheet.submittedAt?.toISOString() ?? null,
+            }
+          : null,
+      outstandingCuttingResults:
+        !!allocation &&
+        !allocation.completedAt &&
+        !!(worksheet || order.cutAt || order.assembledAt || order.checkedAt),
+    });
+  }
+  async lockOrderForCancellation(context: UnitOfWorkContext, orderId: string) {
+    // Allocation -> order matches confirmation and cutting. Recheck the live
+    // association after locking the order, including previews with no allocation.
+    const initial = await context.allocations.liveForOrder(orderId);
+    const allocation = initial
+      ? await this.lockAllocation(context, initial.id)
+      : null;
+    const order = await this.orders.requireOrder(context, orderId);
+
+    const live = await context.allocations.liveForOrder(orderId);
+    if ((initial?.id ?? null) !== (live?.id ?? null))
+      throw new ConflictException(
+        'The allocation changed. Review cancellation again.',
+      );
+    return { order, allocation };
+  }
+  async cancelForOrder(
+    context: UnitOfWorkContext,
+    order: WorkOrderRecord,
+    allocation: AllocationRecord | null,
+    input: OrderCancellation,
+  ) {
+    if (
+      order.revision !== input.expectedRevision ||
+      (allocation?.id ?? null) !== input.allocationId ||
+      (allocation?.revision ?? null) !== input.expectedAllocationRevision
+    )
+      throw new ConflictException(
+        'The order or allocation changed. Review cancellation again.',
+      );
+    this.orders.assertNotCancelled(order);
+    if (order.shippedAt)
+      throw new ConflictException(
+        'Shipped orders cannot be cancelled or released.',
+      );
+    const found = allocation
+      ? await context.cuttingWorksheets.forAllocation(allocation.id)
+      : null;
+    const sheet =
+      found && !found.reviewedAt
+        ? await this.worksheets.requireRecord(context, found.id, true)
+        : null;
+    if (
+      (sheet?.id ?? null) !== input.worksheetId ||
+      (sheet?.revision ?? null) !== input.expectedWorksheetRevision
+    )
+      throw new ConflictException(
+        'Cutting results changed. Refresh the cancellation form.',
+      );
+
+    const outstanding =
+      !!allocation &&
+      !allocation.completedAt &&
+      !!(sheet || order.cutAt || order.assembledAt || order.checkedAt);
+    if (outstanding && !input.skipCuttingResults)
+      throw new ConflictException(
+        'Resolve outstanding cutting results or explicitly continue without recording them.',
+      );
+    const changes: AuditChange[] = [];
+    if (sheet)
+      changes.push(
+        await this.worksheets.closeWithoutReconciliation(context, sheet),
+      );
+    if (allocation)
+      changes.push(await this.releaseAllocation(context, allocation.id));
+    return { changes, skippedResults: outstanding };
+  }
+  cancelReviewed(
+    id: string,
+    input: AllocationCancellation,
+    actor: string,
+    key: string,
+  ) {
+    return allocationOperation(() =>
+      this.unitOfWork.transaction(async (context) => {
+        const initial = await context.allocations.findById(id);
+        if (!initial) throw new NotFoundException('Allocation not found.');
+        const { order, allocation } = await this.lockOrderForCancellation(
+          context,
+          initial.workOrderId,
+        );
+        const scope = 'allocation.cancel-reviewed';
+        const replay = await this.audit.replay(
+          context,
+          actor,
+          scope,
+          id,
+          key,
+          input,
+        );
+        if (replay.result) return replay.result;
+        if (input.allocationId !== id)
+          throw new ConflictException(
+            'The allocation changed. Review cancellation again.',
+          );
+        const { changes, skippedResults } = await this.cancelForOrder(
+          context,
+          order,
+          allocation,
+          input,
+        );
+        const result = await this.orders.recordAllocationRelease(
+          context,
+          order,
+        );
+        changes.unshift(result.change);
+        const eventId = await this.audit.record(
+          context,
+          actor,
+          skippedResults
+            ? 'allocation.cancelled.results-skipped'
+            : 'allocation.cancelled',
+          changes,
+          input.reason,
+        );
+        return this.audit.remember(
+          context,
+          actor,
+          scope,
+          id,
+          key,
+          replay.requestHash,
+          {
+            eventId,
+            recordId: id,
+            revision: (await context.allocations.findById(id))!.revision,
+            affectedAllocationIds: [id],
+            createdStockItemIds: [],
+          },
+        );
+      }),
+    );
+  }
+  /** Completed allocations leave the live slot without reversing their stock effects. */
+  private async releaseAllocation(context: UnitOfWorkContext, id: string) {
     const header = await context.allocations.findById(id, true);
     if (!header || header.isDraft || header.cancelledAt || header.releasedAt)
       throw new ConflictException(

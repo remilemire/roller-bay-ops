@@ -77,7 +77,7 @@ apps/
       stock-items/              # Physical rolls/remnants and admin CRUD
       stock-receipts/            # Receipts, drafts, and idempotent submission
       work-orders/              # Production orders, ship dates, and milestones
-        lifecycle/              # Reviewed cancellation and fabric release
+        cancellation/           # Atomic order cancellation across features
       allocations/              # Cutting plans, reservations, and completion
       audit/                    # Stock and workflow change history
     src/solver/                 # Generic HTTP client for the Python solver

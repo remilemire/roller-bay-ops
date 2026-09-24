@@ -6,8 +6,8 @@ export const orderNumberSchema = z
   .string()
   .trim()
   .regex(/^\d{6}$/, 'Must be 6 digits.');
-// Furthest step reached; derived, never stored. Fabric is allocated before an
-// order is given a ship date, so `scheduled` follows `allocated`.
+// Furthest step reached; derived, never stored. A promised date survives
+// allocation cancellation, with missing fabric flagged separately.
 export const orderStatusSchema = z.enum([
   'new',
   'allocated',
@@ -139,27 +139,16 @@ export type SaveWorkOrderLines = z.infer<typeof saveWorkOrderLinesSchema>;
 export type WorkOrderDetail = z.infer<typeof workOrderDetailSchema>;
 export type WorkOrderList = z.infer<typeof workOrderListSchema>;
 
-export const orderWorkflowActionSchema = z.enum([
-  'unschedule',
-  'release-allocation',
-  'cancel-order',
-]);
-export const orderWorkflowSchema = z
-  .strictObject({
-    action: orderWorkflowActionSchema,
-    expectedRevision: revision,
-    allocationId: id.nullable(),
-    expectedAllocationRevision: revision.nullable(),
-    worksheetId: id.nullable(),
-    expectedWorksheetRevision: revision.nullable(),
-    skipCuttingResults: z.boolean().default(false),
-    reason: z.string().trim().min(1).max(1000),
-  })
-  .refine(
-    (v) => v.action !== 'unschedule' || !v.skipCuttingResults,
-    'Unscheduling does not skip cutting results.',
-  );
-export const orderWorkflowContextSchema = z.object({
+export const orderCancellationSchema = z.strictObject({
+  expectedRevision: revision,
+  allocationId: id.nullable(),
+  expectedAllocationRevision: revision.nullable(),
+  worksheetId: id.nullable(),
+  expectedWorksheetRevision: revision.nullable(),
+  skipCuttingResults: z.boolean().default(false),
+  reason: z.string().trim().min(1).max(1000),
+});
+export const orderCancellationContextSchema = z.object({
   order: workOrderSchema,
   allocation: z
     .object({ id, revision, completedAt: z.iso.datetime().nullable() })
@@ -169,4 +158,4 @@ export const orderWorkflowContextSchema = z.object({
     .nullable(),
   outstandingCuttingResults: z.boolean(),
 });
-export type OrderWorkflow = z.infer<typeof orderWorkflowSchema>;
+export type OrderCancellation = z.infer<typeof orderCancellationSchema>;

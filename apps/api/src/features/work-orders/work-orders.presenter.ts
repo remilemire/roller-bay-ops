@@ -9,8 +9,8 @@ import type {
   WorkOrderRecord,
 } from './work-orders.repository.js';
 
-// The status is the furthest step reached; it is never stored. A ship date
-// can only follow an allocation, so `scheduled` outranks `allocated`.
+// The status is the furthest step reached; it is never stored. A promised
+// date survives fabric release, so `scheduled` can have no current allocation.
 export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
   return workOrderSchema.parse({
     ...row,

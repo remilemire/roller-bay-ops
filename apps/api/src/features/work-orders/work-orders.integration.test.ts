@@ -158,17 +158,6 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
           message: 'Allocate fabric first.',
         },
       ]);
-      // The database holds the same rule for writes that bypass the API.
-      await assert.rejects(
-        pool.query(
-          `UPDATE work_orders SET ship_date='2026-10-09', scheduled_at=now() WHERE id=$1`,
-          [order.id],
-        ),
-        {
-          code: '23514',
-          constraint: 'work_orders_ship_date_requires_allocation',
-        },
-      );
       // Allocating is the allocation suites' subject; this order only needs
       // to have been allocated.
       await pool.query(

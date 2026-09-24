@@ -1,4 +1,5 @@
 'use client';
+import { AllocationWarning } from './allocation-warning';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ErrorNotice, Loading } from '@/components/ui/feedback';
@@ -107,6 +108,7 @@ export function OrderMonthView() {
                               .join(' · ')}
                           >
                             {order.orderNumber}
+                            <AllocationWarning order={order} />
                             <span className="sr-only">, {order.status}</span>
                           </Link>
                         </li>
