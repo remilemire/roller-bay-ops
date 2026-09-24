@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { ServiceUnavailableException } from '@nestjs/common';
 import request from 'supertest';
 import { currentUserSchema } from '@roller-bay/shared/auth';
-import { UsersService } from '../users/users.service.js';
+import { UsersService } from '../users/index.js';
 import { MicrosoftService } from './microsoft.service.js';
 import { MicrosoftAccountNotEligibleException } from './microsoft.errors.js';
 import { SessionsService } from './sessions/sessions.service.js';

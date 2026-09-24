@@ -14,9 +14,8 @@ import {
 import { createHash } from 'node:crypto';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { stockChanges } from '../stock-items/stock-items.audit.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
+import { AuditService } from '../audit/index.js';
+import { stockChanges, StockItemsService } from '../stock-items/index.js';
 import {
   receiptFormData,
   receiptSummary,

@@ -15,7 +15,7 @@ import { userRoles } from '@roller-bay/shared/users';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
-import { UsersService } from '../users/users.service.js';
+import { UsersService } from '../users/index.js';
 import { MicrosoftService } from './microsoft.service.js';
 import { LoginRedirectFilter } from './login-redirect.filter.js';
 import { SessionsService } from './sessions/sessions.service.js';

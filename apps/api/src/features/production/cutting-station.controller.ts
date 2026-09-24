@@ -16,7 +16,7 @@ import {
   locationQuerySchema,
   type LocationQuery,
 } from '@roller-bay/shared/locations';
-import { LocationLevelsService } from '../locations/levels/location-levels.service.js';
+import { LocationLevelsService } from '../locations/index.js';
 import type { z } from 'zod';
 import type { Request } from 'express';
 import {
@@ -30,7 +30,7 @@ import {
 } from '@roller-bay/shared/production';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
-import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
+import { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
 import { requireStation } from './production-access.js';
 @Controller('production/cutting')
 @Roles('production')

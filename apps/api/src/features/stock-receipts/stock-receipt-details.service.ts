@@ -6,7 +6,7 @@ import {
   stockReceiptSummarySchema,
 } from '@roller-bay/shared/stock-receipts';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
+import { StockItemsService } from '../stock-items/index.js';
 import type {
   StockReceiptRecord,
   StockReceiptsRepository,

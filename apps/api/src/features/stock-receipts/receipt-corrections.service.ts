@@ -10,10 +10,12 @@ import {
 } from '@roller-bay/shared/corrections';
 import type { StockEffect } from '@roller-bay/shared/stock-items';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { StockCorrectionsService } from '../stock-items/stock-corrections.service.js';
-import { stockChanges } from '../stock-items/stock-items.audit.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
+import { AuditService } from '../audit/index.js';
+import {
+  StockCorrectionsService,
+  stockChanges,
+  StockItemsService,
+} from '../stock-items/index.js';
 import { StockReceiptDetailsService } from './stock-receipt-details.service.js';
 import { stockReceiptsOperation } from './stock-receipts.operation.js';
 /**

@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { OrderCancellation } from '@roller-bay/shared/work-orders';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
-import { workOrdersOperation } from '../work-orders/work-orders.operation.js';
-import { AllocationsService } from '../allocations/allocations.service.js';
+import { AuditService } from '../audit/index.js';
+import {
+  WorkOrdersService,
+  workOrdersOperation,
+} from '../work-orders/index.js';
+import { AllocationsService } from '../allocations/index.js';
 
 @Injectable()
 export class WorkOrderCancellationService {

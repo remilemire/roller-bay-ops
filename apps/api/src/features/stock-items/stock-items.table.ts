@@ -10,9 +10,9 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
-import { locations } from '../locations/levels/location-levels.table.js';
-import { stockReceiptItems } from '../stock-receipts/stock-receipt-items.table.js';
+import { fabricColors } from '../fabric-catalog/tables.js';
+import { locations } from '../locations/tables.js';
+import { stockReceiptItems } from '../stock-receipts/tables.js';
 
 export const stockItems = pgTable(
   'fabric_stock_items',

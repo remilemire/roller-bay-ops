@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../database/database.module.js';
 import { DatabaseService } from '../../database/database.service.js';
 import { UnitOfWorkModule } from '../../unit-of-work/unit-of-work.module.js';
-import { AuditModule } from '../audit/audit.module.js';
+import { AuditModule } from '../audit/index.js';
 import { EmployeesController } from './employees.controller.js';
 import { EmployeesRepository } from './employees.repository.js';
 import { EmployeesService } from './employees.service.js';

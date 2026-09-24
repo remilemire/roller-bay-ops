@@ -5,10 +5,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import {
-  orderAlreadyAllocated,
-  orderNotFound,
-} from '../work-orders/work-orders.operation.js';
+import { orderAlreadyAllocated, orderNotFound } from '../work-orders/index.js';
 
 export async function allocationOperation<T>(
   operation: () => Promise<T>,

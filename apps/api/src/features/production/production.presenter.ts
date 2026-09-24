@@ -3,8 +3,10 @@ import {
   stationOrderListSchema,
 } from '@roller-bay/shared/production';
 import type { CompletionRecord } from './production-completions.table.js';
-import type { WorkOrderRecord } from '../work-orders/work-orders.repository.js';
-import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
+import {
+  type WorkOrderRecord,
+  presentWorkOrder,
+} from '../work-orders/index.js';
 export const presentCompletion = (row: CompletionRecord) =>
   productionCompletionSchema.parse({
     ...row,

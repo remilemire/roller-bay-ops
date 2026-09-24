@@ -24,7 +24,7 @@ import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.
 import {
   cuttingWrite,
   retainedPieceWrite,
-} from '../stock-items/stock-items.cutting.js';
+} from '../stock-items/testing/index.js';
 import { AuditRepository } from './audit.repository.js';
 import { AuditService, canonicalJson } from './audit.service.js';
 const id = randomUUID(),

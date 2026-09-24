@@ -16,7 +16,7 @@ import type {
 } from '@roller-bay/shared/work-orders';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
+import { AuditService } from '../audit/index.js';
 import {
   orderAlreadyAllocated,
   orderAlreadyExists,

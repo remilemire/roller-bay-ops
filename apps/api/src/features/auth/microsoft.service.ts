@@ -8,7 +8,7 @@ import * as oidc from 'openid-client';
 import { z } from 'zod';
 import { emailSchema } from '@roller-bay/shared/users';
 import type { Environment } from '../../config/environment.js';
-import { microsoftProfileSchema } from '../users/microsoft-profile.schema.js';
+import { microsoftProfileSchema } from '../users/index.js';
 import type { OAuthTransaction } from './oauth-transactions/oauth-transaction.schema.js';
 import { MicrosoftAccountNotEligibleException } from './microsoft.errors.js';
 

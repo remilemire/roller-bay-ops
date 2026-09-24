@@ -21,7 +21,7 @@ import { stationSchema, type Station } from '@roller-bay/shared/users';
 import { correctionKeySchema } from '@roller-bay/shared/corrections';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
-import { EmployeesService } from '../employees/employees.service.js';
+import { EmployeesService } from '../employees/index.js';
 import { ProductionService } from './production.service.js';
 import { requireStation } from './production-access.js';
 @Controller('production')

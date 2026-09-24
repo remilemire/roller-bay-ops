@@ -8,7 +8,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
+import { fabricColors } from '../fabric-catalog/tables.js';
 import { workOrders } from './work-orders.table.js';
 
 // A blind on a work order. Rows are never changed or deleted: a plan's cuts

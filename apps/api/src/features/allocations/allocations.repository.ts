@@ -19,8 +19,8 @@ import {
 } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { stockItems } from '../stock-items/stock-items.table.js';
-import { workOrders } from '../work-orders/work-orders.table.js';
+import { stockItems } from '../stock-items/tables.js';
+import { workOrders } from '../work-orders/tables.js';
 import type { CuttingPlanSummary } from './cutting-plan/cutting-plan.types.js';
 import { allocationCutItems } from './tables/allocation-cut-items.table.js';
 import { allocationCuts } from './tables/allocation-cuts.table.js';

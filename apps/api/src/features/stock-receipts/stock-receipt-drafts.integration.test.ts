@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import 'reflect-metadata';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
-import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
+import { StockItemsRepository } from '../stock-items/testing/index.js';
 import { StockReceiptsService } from './stock-receipts.service.js';
 
 test('stock receipt drafts integration', { timeout: 60_000 }, async (t) => {

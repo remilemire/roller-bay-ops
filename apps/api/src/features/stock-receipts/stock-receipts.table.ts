@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from '../users/users.table.js';
+import { users } from '../users/tables.js';
 
 export const stockReceipts = pgTable(
   'stock_receipts',

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { allocationDetailSchema } from '@roller-bay/shared/allocations';
-import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
+import { StockItemsRepository } from '../stock-items/testing/index.js';
 import { startAllocationsApp } from './testing/allocations-app.js';
 
 test('allocation completion integration', { timeout: 60_000 }, async (t) => {

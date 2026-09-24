@@ -17,8 +17,8 @@ import {
   type ValidateAllocation,
 } from '@roller-bay/shared/allocations';
 import { SolverError } from '../../solver/solver.errors.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { StockItemsService } from '../stock-items/index.js';
+import { WorkOrdersService } from '../work-orders/index.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { requirePlanningRevision } from './allocation.rules.js';
 import { allocationOperation } from './allocations.operation.js';

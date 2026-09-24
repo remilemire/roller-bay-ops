@@ -1,4 +1,4 @@
-import { WorkOrderCancellationModule } from '../features/work-order-cancellation/work-order-cancellation.module.js';
+import { WorkOrderCancellationModule } from '../features/work-order-cancellation/index.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -16,19 +16,21 @@ import { ErrorsModule } from '../common/errors/errors.module.js';
 import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
 import { environmentSchema } from '../config/environment.js';
 import { createTestDatabase } from '../database/testing/test-database.js';
-import { AllocationsModule } from '../features/allocations/allocations.module.js';
-import { ProductionModule } from '../features/production/production.module.js';
-import { AuditModule } from '../features/audit/audit.module.js';
-import { AuthModule } from '../features/auth/auth.module.js';
-import { MicrosoftService } from '../features/auth/microsoft.service.js';
-import { SESSION_PREFIX } from '../features/auth/sessions/sessions.repository.js';
-import { FabricCatalogModule } from '../features/fabric-catalog/fabric-catalog.module.js';
-import { HealthModule } from '../features/health/health.module.js';
-import { LocationsModule } from '../features/locations/locations.module.js';
-import { WorkOrdersModule } from '../features/work-orders/work-orders.module.js';
-import { StockItemsModule } from '../features/stock-items/stock-items.module.js';
-import { StockReceiptsModule } from '../features/stock-receipts/stock-receipts.module.js';
-import type { MicrosoftProfileInput } from '../features/users/microsoft-profile.schema.js';
+import { AllocationsModule } from '../features/allocations/index.js';
+import { ProductionModule } from '../features/production/index.js';
+import { AuditModule } from '../features/audit/index.js';
+import { AuthModule } from '../features/auth/index.js';
+import {
+  MicrosoftService,
+  SESSION_PREFIX,
+} from '../features/auth/testing/index.js';
+import { FabricCatalogModule } from '../features/fabric-catalog/index.js';
+import { HealthModule } from '../features/health/index.js';
+import { LocationsModule } from '../features/locations/index.js';
+import { WorkOrdersModule } from '../features/work-orders/index.js';
+import { StockItemsModule } from '../features/stock-items/index.js';
+import { StockReceiptsModule } from '../features/stock-receipts/index.js';
+import type { MicrosoftProfileInput } from '../features/users/index.js';
 import { RateLimitingModule } from '../rate-limiting/rate-limiting.module.js';
 import { RATE_LIMIT_KEY_PREFIX } from '../rate-limiting/rate-limiting.service.js';
 import { RedisService } from '../redis/redis.service.js';

@@ -5,8 +5,8 @@ import {
   allocationDraftSchema,
 } from '@roller-bay/shared/allocations';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { StockItemsService } from '../stock-items/index.js';
+import { WorkOrdersService } from '../work-orders/index.js';
 import { allocationSummary } from './allocations.presenter.js';
 import type { AllocationRecord } from './allocations.repository.js';
 import { CuttingRulesService } from './cutting-rules.service.js';

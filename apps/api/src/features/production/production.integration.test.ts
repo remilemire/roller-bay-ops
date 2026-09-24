@@ -6,9 +6,9 @@ import { test } from 'node:test';
 import 'reflect-metadata';
 import request from 'supertest';
 import { DatabaseService } from '../../database/database.service.js';
-import { AllocationsService } from '../allocations/allocations.service.js';
-import { startAllocationsApp } from '../allocations/testing/allocations-app.js';
-import { AuditService } from '../audit/audit.service.js';
+import { AllocationsService } from '../allocations/index.js';
+import { startAllocationsApp } from '../allocations/testing/index.js';
+import { AuditService } from '../audit/index.js';
 
 test(
   'station production and digital cutting',

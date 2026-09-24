@@ -13,7 +13,7 @@ import type {
   StockSnapshot,
 } from '@roller-bay/shared/stock-items';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
-import { canonicalJson } from '../audit/audit.service.js';
+import { canonicalJson } from '../audit/index.js';
 import { snapshotWrite, stockSnapshot } from './stock-items.audit.js';
 import { cuttingWrite, retainedPieceWrite } from './stock-items.cutting.js';
 import { stockItemsOperation } from './stock-items.operation.js';

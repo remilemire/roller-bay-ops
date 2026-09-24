@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import { Pool } from 'pg';
 import 'reflect-metadata';
 import { DatabaseService } from '../database/database.service.js';
-import { AuditService } from '../features/audit/audit.service.js';
-import { presentEmployee } from '../features/employees/employees.presenter.js';
+import { AuditService } from '../features/audit/index.js';
+import { presentEmployee } from '../features/employees/testing/index.js';
 import { startSignedInApp } from '../testing/integration-app.js';
 import { UnitOfWork } from './unit-of-work.js';
 

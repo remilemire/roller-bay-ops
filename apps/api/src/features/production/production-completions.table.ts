@@ -9,9 +9,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { Station } from '@roller-bay/shared/users';
-import { workOrders } from '../work-orders/work-orders.table.js';
-import { users } from '../users/users.table.js';
-import { employees } from '../employees/employees.table.js';
+import { workOrders } from '../work-orders/tables.js';
+import { users } from '../users/tables.js';
+import { employees } from '../employees/tables.js';
 export const productionCompletions = pgTable(
   'production_completions',
   {

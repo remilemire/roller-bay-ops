@@ -17,7 +17,7 @@ import {
 } from '@roller-bay/shared/stock-items';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService, canonicalJson } from '../audit/audit.service.js';
+import { AuditService, canonicalJson } from '../audit/index.js';
 import { StockCorrectionsService } from './stock-corrections.service.js';
 import {
   snapshotWrite,

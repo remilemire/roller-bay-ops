@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { startAllocationsApp } from '../allocations/testing/allocations-app.js';
+import { startAllocationsApp } from '../allocations/testing/index.js';
 
 test(
   'order history includes worksheets, isolates orders and paginates unique events',

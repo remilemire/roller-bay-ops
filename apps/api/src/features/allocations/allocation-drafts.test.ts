@@ -13,10 +13,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { stubUnitOfWork } from '../../testing/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import type { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
-import type { StockItemsService } from '../stock-items/stock-items.service.js';
-import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { AuditService } from '../audit/index.js';
+import type { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
+import type { StockItemsService } from '../stock-items/index.js';
+import type { WorkOrdersService } from '../work-orders/index.js';
 import { AllocationDetailsService } from './allocation-details.service.js';
 import {
   requireActiveRevision,

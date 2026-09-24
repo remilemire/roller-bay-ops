@@ -10,8 +10,10 @@ import { test } from 'node:test';
 import 'reflect-metadata';
 import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
-import { StockItemsRepository } from '../stock-items/stock-items.repository.js';
-import { stockCommands } from '../stock-items/testing/stock-commands.js';
+import {
+  StockItemsRepository,
+  stockCommands,
+} from '../stock-items/testing/index.js';
 
 test('stock receipts integration', { timeout: 60_000 }, async (t) => {
   const { app, pool, cookie, userId, origin, fixtures } =

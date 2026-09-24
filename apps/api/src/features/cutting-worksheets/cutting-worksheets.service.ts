@@ -13,8 +13,8 @@ import type {
 import type { z } from 'zod';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService, canonicalJson } from '../audit/audit.service.js';
-import { EmployeesService } from '../employees/employees.service.js';
+import { AuditService, canonicalJson } from '../audit/index.js';
+import { EmployeesService } from '../employees/index.js';
 import { worksheetOperation } from './cutting-worksheets.operation.js';
 import {
   presentWorksheet,

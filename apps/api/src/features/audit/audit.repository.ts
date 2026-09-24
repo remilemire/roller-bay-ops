@@ -1,9 +1,9 @@
 import type { AuditChange, AuditRecordType } from '@roller-bay/shared/audit';
 import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm';
-import { allocations } from '../allocations/tables/allocations.table.js';
-import { cuttingWorksheets } from '../cutting-worksheets/cutting-worksheets.table.js';
+import { allocations } from '../allocations/tables.js';
+import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { users } from '../users/users.table.js';
+import { users } from '../users/tables.js';
 import {
   auditChanges,
   auditEvents,

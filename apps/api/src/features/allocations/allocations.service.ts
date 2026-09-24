@@ -3,13 +3,16 @@ import {
   type OrderCancellation,
 } from '@roller-bay/shared/work-orders';
 import type { AuditChange } from '@roller-bay/shared/audit';
-import type { WorkOrderRecord } from '../work-orders/work-orders.repository.js';
-import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
+import {
+  type WorkOrderRecord,
+  presentWorkOrder,
+  WorkOrdersService,
+} from '../work-orders/index.js';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
-import { stockChanges } from '../stock-items/stock-items.audit.js';
+import { AuditService } from '../audit/index.js';
+import { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
+import { stockChanges, StockItemsService } from '../stock-items/index.js';
 /**
  * Reservation-changing writes lock the allocation header, then its work
  * order, then stock in a common order before checking availability.
@@ -36,8 +39,6 @@ import {
   type ReplaceAllocation,
 } from '@roller-bay/shared/allocations';
 import { createHash } from 'node:crypto';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import {
   AllocationDetailsService,

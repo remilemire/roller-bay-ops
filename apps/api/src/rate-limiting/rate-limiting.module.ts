@@ -4,7 +4,7 @@ import {
   type MiddlewareConsumer,
   type NestModule,
 } from '@nestjs/common';
-import { HEALTH_ROUTES } from '../features/health/health.routes.js';
+import { HEALTH_ROUTES } from '../features/health/index.js';
 import { RedisModule } from '../redis/redis.module.js';
 import {
   ApiRateLimitMiddleware,

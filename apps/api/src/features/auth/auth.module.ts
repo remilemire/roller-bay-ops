@@ -5,7 +5,7 @@ import {
   type NestModule,
 } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { UsersModule } from '../users/users.module.js';
+import { UsersModule } from '../users/index.js';
 import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
 import { MicrosoftService } from './microsoft.service.js';

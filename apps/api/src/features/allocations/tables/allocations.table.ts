@@ -17,8 +17,8 @@ import type {
   AllocationDraftData,
 } from '@roller-bay/shared/allocations';
 import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
-import { workOrders } from '../../work-orders/work-orders.table.js';
-import { users } from '../../users/users.table.js';
+import { workOrders } from '../../work-orders/tables.js';
+import { users } from '../../users/tables.js';
 
 export const allocations = pgTable(
   'allocations',

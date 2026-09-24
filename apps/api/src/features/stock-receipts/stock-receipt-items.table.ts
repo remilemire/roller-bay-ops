@@ -9,8 +9,8 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
-import { locations } from '../locations/levels/location-levels.table.js';
+import { fabricColors } from '../fabric-catalog/tables.js';
+import { locations } from '../locations/tables.js';
 import { stockReceipts } from './stock-receipts.table.js';
 
 export const stockReceiptItems = pgTable(

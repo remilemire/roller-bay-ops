@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { stockItems } from '../../stock-items/stock-items.table.js';
+import { stockItems } from '../../stock-items/tables.js';
 import { allocations } from './allocations.table.js';
 
 export const allocationItems = pgTable(

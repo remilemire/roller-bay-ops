@@ -14,14 +14,17 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { allocationItems } from '../allocations/tables/allocation-items.table.js';
-import { allocations } from '../allocations/tables/allocations.table.js';
-import { fabricColors } from '../fabric-catalog/colors/fabric-colors.table.js';
-import { manufacturers } from '../fabric-catalog/manufacturers/manufacturers.table.js';
-import { fabricMaterials } from '../fabric-catalog/materials/fabric-materials.table.js';
-import { locations } from '../locations/levels/location-levels.table.js';
-import { locationSections } from '../locations/sections/location-sections.table.js';
-import { locationZones } from '../locations/zones/location-zones.table.js';
+import { allocationItems, allocations } from '../allocations/tables.js';
+import {
+  fabricColors,
+  manufacturers,
+  fabricMaterials,
+} from '../fabric-catalog/tables.js';
+import {
+  locations,
+  locationSections,
+  locationZones,
+} from '../locations/tables.js';
 import { stockItemsQuery } from './stock-items.persistence.js';
 import { stockItems } from './stock-items.table.js';
 export type StockItemRecord = typeof stockItems.$inferSelect;

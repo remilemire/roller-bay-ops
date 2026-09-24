@@ -9,7 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { allocationCuts } from './allocation-cuts.table.js';
-import { workOrderLines } from '../../work-orders/work-order-lines.table.js';
+import { workOrderLines } from '../../work-orders/tables.js';
 
 export const allocationCutItems = pgTable(
   'allocation_cut_items',

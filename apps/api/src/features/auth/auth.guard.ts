@@ -13,7 +13,7 @@ import type { UserRole } from '@roller-bay/shared/users';
 import { REQUIRED_ROLES } from '../../common/decorators/roles.decorator.js';
 import { IS_PUBLIC } from '../../common/decorators/public.decorator.js';
 import type { Environment } from '../../config/environment.js';
-import { UsersService } from '../users/users.service.js';
+import { UsersService } from '../users/index.js';
 import { SessionsService } from './sessions/sessions.service.js';
 
 @Injectable()

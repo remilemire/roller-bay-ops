@@ -6,17 +6,19 @@ import {
 import type { Station } from '@roller-bay/shared/users';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
-import type { WorkOrderRecord } from '../work-orders/work-orders.repository.js';
+import {
+  type WorkOrderRecord,
+  presentWorkOrder,
+  WorkOrdersService,
+} from '../work-orders/index.js';
+import { milestoneTimestampField } from '../work-orders/tables.js';
 import type {
   CompletionRecord,
   CompletionValues,
 } from './production-completions.table.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
-import { EmployeesService } from '../employees/employees.service.js';
-import { milestoneTimestampField } from '../work-orders/work-order-milestones.js';
-import { presentWorkOrder } from '../work-orders/work-orders.presenter.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { AuditService } from '../audit/index.js';
+import { EmployeesService } from '../employees/index.js';
 import { productionOperation } from './production.operation.js';
 import {
   presentCompletion,

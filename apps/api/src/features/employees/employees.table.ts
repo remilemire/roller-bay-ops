@@ -9,7 +9,7 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { users } from '../users/users.table.js';
+import { users } from '../users/tables.js';
 export const employees = pgTable(
   'employees',
   {

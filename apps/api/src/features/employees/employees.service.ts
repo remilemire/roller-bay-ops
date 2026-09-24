@@ -9,7 +9,7 @@ import {
 } from '@roller-bay/shared/employees';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AuditService } from '../audit/audit.service.js';
+import { AuditService } from '../audit/index.js';
 import { presentEmployee } from './employees.presenter.js';
 import { EmployeesRepository } from './employees.repository.js';
 @Injectable()

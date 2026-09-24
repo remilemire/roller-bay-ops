@@ -15,8 +15,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { milestoneTimestampField } from '../work-orders/work-order-milestones.js';
-import { workOrders } from '../work-orders/work-orders.table.js';
+import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
 import type { CompletionValues } from './production-completions.table.js';
 import { productionCompletions } from './production-completions.table.js';
 export class ProductionRepository {

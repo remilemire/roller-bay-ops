@@ -3,13 +3,15 @@ import type { worksheetReviewSchema } from '@roller-bay/shared/production';
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
-import { AllocationsService } from '../allocations/allocations.service.js';
-import { AuditService } from '../audit/audit.service.js';
-import { worksheetOperation } from '../cutting-worksheets/cutting-worksheets.operation.js';
-import { presentWorksheet } from '../cutting-worksheets/cutting-worksheets.presenter.js';
-import { CuttingWorksheetsService } from '../cutting-worksheets/cutting-worksheets.service.js';
-import { StockItemsService } from '../stock-items/stock-items.service.js';
-import { WorkOrdersService } from '../work-orders/work-orders.service.js';
+import { AllocationsService } from '../allocations/index.js';
+import { AuditService } from '../audit/index.js';
+import {
+  worksheetOperation,
+  presentWorksheet,
+  CuttingWorksheetsService,
+} from '../cutting-worksheets/index.js';
+import { StockItemsService } from '../stock-items/index.js';
+import { WorkOrdersService } from '../work-orders/index.js';
 @Injectable()
 export class CuttingWorkflowService {
   constructor(
