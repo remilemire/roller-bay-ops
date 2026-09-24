@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import type { z } from 'zod';
 import { useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import type {
   AllocationDetail,
@@ -15,23 +15,43 @@ import { stockLocationLabel } from '@/features/stock-items/stock-location';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { dateLabel, shortId } from '@/lib/format';
 import { fieldAmount, fieldLabel, fieldSuffix } from '@/lib/measurements';
-import { worksheetForOrder } from '@/features/production/production.api';
 import { useHydrated } from '@/lib/use-hydrated';
 import { allocationDetail } from './allocations.api';
 import { cuttingSheetItems, type SheetItem } from './cutting-sheet';
 
-export function CuttingSheetScreen({ id }: { id: string }) {
+/**
+ * The plan a cutting station froze when it began, if any. Production owns the
+ * worksheet; the route supplies its query so this screen can print from it.
+ */
+export type SavedWorksheetQuery = (workOrderId: string) => UseQueryOptions<{
+  allocationId: string;
+  snapshot: AllocationDetail;
+} | null>;
+export function CuttingSheetScreen({
+  id,
+  savedWorksheet,
+}: {
+  id: string;
+  savedWorksheet: SavedWorksheetQuery;
+}) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
-  return <AvailableCuttingSheet record={query.data} />;
+  return (
+    <AvailableCuttingSheet
+      record={query.data}
+      savedWorksheet={savedWorksheet}
+    />
+  );
 }
 function AvailableCuttingSheet({
   record,
+  savedWorksheet,
 }: {
   record: AllocationDetail | z.infer<typeof allocationDraftSchema>;
+  savedWorksheet: SavedWorksheetQuery;
 }) {
-  const query = useQuery(worksheetForOrder(record.workOrderId));
+  const query = useQuery(savedWorksheet(record.workOrderId));
   if (query.data && query.data.allocationId === record.id)
     return <CuttingSheet allocation={query.data.snapshot} />;
   const id = record.id;

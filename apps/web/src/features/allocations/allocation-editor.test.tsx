@@ -163,7 +163,14 @@ it('keeps the active plan revision and edited values when a background refresh b
   const queries = client();
   queries.setQueryData([...allocationKey, allocation.id], allocation);
   replace.mockRejectedValue(new ApiError(409, 'Allocation changed'));
-  show(<AllocationDetailScreen id={allocation.id} />, queries);
+  show(
+    <AllocationDetailScreen
+      id={allocation.id}
+      history={null}
+      cancellation={() => null}
+    />,
+    queries,
+  );
   await user.click(screen.getByRole('button', { name: 'Edit plan' }));
   expect(
     screen.queryByLabelText(/Drop allowance|Edge trim|Minimum reusable/),
@@ -273,38 +280,6 @@ it('offers generating a plan or hand-building one, and reports planning in one p
   expect(screen.queryByLabelText(/Cut length/)).not.toBeInTheDocument();
   expect(screen.getByLabelText('Quantity in this cut')).toHaveValue(1);
   expect(save).toBeEnabled();
-});
-
-it('starts a blank form with the order number alone, and creates the order only when asked', async () => {
-  const user = userEvent.setup();
-  createOrder.mockResolvedValue({
-    ...order,
-    id: 'made',
-    orderNumber: '104950',
-  });
-  show(<AllocationEditor />);
-  expect(
-    screen.getByRole('heading', { name: 'New order' }),
-  ).toBeInTheDocument();
-  // With no order there are no blinds to enter and nothing to plan.
-  expect(screen.queryByRole('button', { name: 'Add blind' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
-  const create = screen.getByRole('button', { name: 'Create order' });
-  await user.type(screen.getByLabelText(/Order number/), '10-49x5');
-  expect(screen.getByLabelText(/Order number/)).toHaveValue('10495');
-  expect(create).toBeDisabled();
-  await user.type(screen.getByLabelText(/Order number/), '0');
-  // Typing a number creates nothing.
-  expect(createOrder).not.toHaveBeenCalled();
-  await user.click(create);
-  expect(createOrder).toHaveBeenCalledWith({ orderNumber: '104950' });
-  // The screen then opens on the order, as it does from an Allocate link.
-  await waitFor(() =>
-    expect(routerReplace).toHaveBeenCalledWith(
-      '/allocations/new?workOrder=made',
-    ),
-  );
-  expect(createDraft).not.toHaveBeenCalled();
 });
 
 it('opens on the order it was reached from, with nothing to save yet', async () => {

@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { worksheetSchema, type Worksheet } from '@roller-bay/shared/production';
 import { api } from '@/lib/api';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
 import { completionRecovery } from '@/features/allocations/completion-form';
-import { CompletionEditor } from '@/features/allocations/completion-editor';
+import type { CompletionEditorProps } from '@/features/allocations/completion-editor';
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
@@ -18,14 +18,23 @@ import {
   worksheetForOrder,
   productionKey,
   completions,
+  lookupCuttingLocations,
 } from './production.api';
-export function CuttingWorkspace({ orderId }: { orderId: string }) {
+/** Allocations' results form, composed by the route. */
+type Editor = { completionEditor: ComponentType<CompletionEditorProps> };
+export function CuttingWorkspace({
+  orderId,
+  completionEditor,
+}: { orderId: string } & Editor) {
   const user = useCurrentUser();
   if (user.role === 'production' && !user.stations.includes('cutting'))
     return <p>This account is not assigned to cutting.</p>;
-  return <CuttingOrder orderId={orderId} />;
+  return <CuttingOrder orderId={orderId} completionEditor={completionEditor} />;
 }
-function CuttingOrder({ orderId }: { orderId: string }) {
+function CuttingOrder({
+  orderId,
+  completionEditor,
+}: { orderId: string } & Editor) {
   const query = useQuery(worksheetForOrder(orderId));
   const client = useQueryClient();
   const employee = useEmployeeSelection();
@@ -75,7 +84,13 @@ function CuttingOrder({ orderId }: { orderId: string }) {
           </>
         )}
       </section>
-      {query.data && <Worksheet key={query.data.id} initial={query.data} />}
+      {query.data && (
+        <Worksheet
+          key={query.data.id}
+          initial={query.data}
+          completionEditor={completionEditor}
+        />
+      )}
     </div>
   );
 }
@@ -112,7 +127,10 @@ function CutCompletion({
     </>
   );
 }
-function Worksheet({ initial }: { initial: Worksheet }) {
+function Worksheet({
+  initial,
+  completionEditor: CompletionEditor,
+}: { initial: Worksheet } & Editor) {
   // Keep dirty work pinned through background refetches. Explicit saves advance the revision.
   const [sheet, setSheet] = useState(initial);
   const [editorVersion, setEditorVersion] = useState(0);
@@ -188,6 +206,7 @@ function Worksheet({ initial }: { initial: Worksheet }) {
                 ? completionRecovery(sheet.results, sheet.snapshot, units)
                 : null),
             units,
+            lookupLocations: lookupCuttingLocations,
             saveDraft: async (form) => {
               const result = await api(
                 `/production/cutting/worksheets/${sheet.id}/draft`,

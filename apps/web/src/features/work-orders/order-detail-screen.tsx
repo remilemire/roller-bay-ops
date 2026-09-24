@@ -1,13 +1,10 @@
 'use client';
 import { AllocationWarning } from './allocation-warning';
-import { OrderCancellation } from './order-cancellation';
-import { OrderProduction } from '@/features/production/order-production';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
-import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -22,7 +19,16 @@ import { OrderEditor } from './order-editor';
 import { OrderReschedule } from './order-reschedule';
 import { deleteOrder, orderDetail, workOrdersKey } from './work-orders.api';
 
-export function OrderDetailScreen({ id }: { id: string }) {
+/** Other features' sections of an order, composed by the route. */
+type OrderSections = {
+  history: ReactNode;
+  production: (order: WorkOrder) => ReactNode;
+  cancellation: (close: () => void) => ReactNode;
+};
+export function OrderDetailScreen({
+  id,
+  ...sections
+}: { id: string } & OrderSections) {
   const query = useQuery(orderDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
@@ -31,11 +37,16 @@ export function OrderDetailScreen({ id }: { id: string }) {
       {query.error && (
         <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       )}
-      <OrderRecord order={query.data} />
+      <OrderRecord order={query.data} {...sections} />
     </>
   );
 }
-function OrderRecord({ order }: { order: WorkOrder }) {
+function OrderRecord({
+  order,
+  history,
+  production,
+  cancellation,
+}: { order: WorkOrder } & OrderSections) {
   const canManage = useCanManage();
   const client = useQueryClient();
   const router = useRouter();
@@ -149,14 +160,13 @@ function OrderRecord({ order }: { order: WorkOrder }) {
       {(order.allocatedAt ||
         order.cutAt ||
         order.assembledAt ||
-        order.checkedAt) && <OrderProduction order={order} />}
+        order.checkedAt) &&
+        production(order)}
       {order.cancelledAt && (
         <p className="notice">Cancelled: {order.cancellationReason}</p>
       )}
-      <History type="work-orders" id={order.id} />
-      {cancelling && (
-        <OrderCancellation id={order.id} close={() => setCancelling(false)} />
-      )}
+      {history}
+      {cancelling && cancellation(() => setCancelling(false))}
       {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
       {rescheduling && (
         <OrderReschedule order={order} close={() => setRescheduling(false)} />

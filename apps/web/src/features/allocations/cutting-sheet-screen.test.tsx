@@ -12,6 +12,9 @@ import { allocation, stock, timestamp } from '../../../tests/fixtures';
 import { AllocationDetailScreen } from './allocation-detail-screen';
 import { CuttingSheetScreen } from './cutting-sheet-screen';
 import { allocationKey } from './allocations.api';
+const detail = (props: { id: string }) => (
+  <AllocationDetailScreen {...props} history={null} cancellation={() => null} />
+);
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -27,9 +30,16 @@ vi.mock('@/features/auth/auth-boundary', async () => {
   };
 });
 
+// No station has begun cutting: the sheet prints the allocation's own plan.
+const noWorksheet = () => ({
+  queryKey: ['worksheet'],
+  queryFn: async () => null,
+});
 function show(
   record: unknown,
-  Screen: (props: { id: string }) => ReactNode = CuttingSheetScreen,
+  Screen: (props: { id: string }) => ReactNode = (props) => (
+    <CuttingSheetScreen {...props} savedWorksheet={noWorksheet} />
+  ),
 ) {
   const queries = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -173,7 +183,7 @@ it('withdraws the sheet once results are recorded', () => {
 });
 
 it('links an active allocation to its cutting sheet and hides the link afterwards', () => {
-  show(allocation, AllocationDetailScreen);
+  show(allocation, detail);
   expect(screen.getByRole('link', { name: 'Cutting sheet' })).toHaveAttribute(
     'href',
     `/allocations/${allocation.id}/cutting-sheet`,
@@ -181,10 +191,7 @@ it('links an active allocation to its cutting sheet and hides the link afterward
 });
 
 it('keeps the cutting sheet link for completed allocation snapshots', () => {
-  show(
-    { ...allocation, state: 'completed', completedAt: timestamp },
-    AllocationDetailScreen,
-  );
+  show({ ...allocation, state: 'completed', completedAt: timestamp }, detail);
   expect(
     screen.queryByRole('link', { name: 'Cutting sheet' }),
   ).toBeInTheDocument();

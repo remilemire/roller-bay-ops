@@ -15,7 +15,7 @@ The Next.js App Router app in `apps/web` provides the operational workspace. It 
 | `lib/`                         | Credentialed HTTP client, error descriptions, query defaults, formatting, measurement conversion, and pending keys.   |
 | `styles/`                      | Semantic light/dark tokens in `theme.css`; shared layout, components, responsive styles, and motion in `globals.css`. |
 
-The `(auth)` and `(dashboard)` route groups select layouts without changing URLs. Layouts remain server components; authenticated workflows mount inside a client authentication boundary. Shared components accept data and callbacks without importing domain features. Features can consume another feature's exported API queries or lookup functions.
+The `(auth)` and `(dashboard)` route groups select layouts without changing URLs. Layouts remain server components; authenticated workflows mount inside a client authentication boundary. Shared components accept data and callbacks without importing domain features. Features can consume another feature's exported API queries or lookup functions, but not its screens or editors: when a screen shows another feature's UI, such as an order's production log or history, it takes that section as a slot prop and its route composes the two. Routes that pass callbacks or components are client pages; a route without a dynamic segment that reads `searchParams` stays a server page, since a client page there is prerendered with empty parameters.
 
 `components.json` configures the local shadcn component directory and aliases. Shared public schemas remain in `packages/shared`; UI components remain in the web app. See [shadcn's Next.js setup](https://ui.shadcn.com/docs/installation/next).
 

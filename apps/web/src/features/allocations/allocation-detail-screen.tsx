@@ -1,11 +1,9 @@
 'use client';
-import { AllocationCancellation } from './allocation-cancellation';
-import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { CompletionCorrectionEditor } from './completion-correction-editor';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import {
   allocationRecordSchema,
@@ -33,13 +31,20 @@ import {
 } from './allocations.api';
 import { AllocationEditor } from './allocation-editor';
 import { CompletionEditor } from './completion-editor';
+/** Other features' sections of an allocation, composed by the route. */
+type AllocationSections = {
+  history: ReactNode;
+  /** Admin cancellation review, which reports cutting results to resolve. */
+  cancellation: (close: () => void) => ReactNode;
+};
 export function AllocationDetailScreen({
   id,
   recordResults = false,
+  ...sections
 }: {
   id: string;
   recordResults?: boolean;
-}) {
+} & AllocationSections) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
@@ -52,6 +57,7 @@ export function AllocationDetailScreen({
         key={`${id}:${recordResults}`}
         allocation={query.data}
         recordResults={recordResults}
+        {...sections}
       />
     </>
   );
@@ -59,10 +65,12 @@ export function AllocationDetailScreen({
 function AllocationRecord({
   allocation,
   recordResults,
+  history,
+  cancellation,
 }: {
   allocation: z.infer<typeof allocationRecordSchema>;
   recordResults: boolean;
-}) {
+} & AllocationSections) {
   const id = allocation.id;
   const router = useRouter();
   const openResults = recordResults && allocation.state === 'active';
@@ -99,7 +107,7 @@ function AllocationRecord({
     return (
       <>
         <AllocationEditor initial={draft} onSubmitted={() => setDraft(null)} />
-        <History type="allocations" id={id} />
+        {history}
       </>
     );
   if (mode === 'edit' && editingRecord)
@@ -486,10 +494,8 @@ function AllocationRecord({
           </section>
         )}
       </div>
-      <History type="allocations" id={id} />
-      {cancel && admin && (
-        <AllocationCancellation id={id} close={() => setCancel(false)} />
-      )}
+      {history}
+      {cancel && admin && cancellation(() => setCancel(false))}
       <Dialog
         open={cancel && !admin}
         onOpenChange={setCancel}

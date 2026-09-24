@@ -23,7 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import type { WorkOrderLine } from '@roller-bay/shared/work-orders';
-import { OrderStart } from '@/features/work-orders/order-start';
 import {
   orderDetail,
   saveOrderLines,
@@ -60,17 +59,25 @@ import {
   validateAllocation,
   allocationKey,
 } from './allocations.api';
+/**
+ * A form opens on an existing order, a shared draft or the active plan it
+ * edits. Creating the order comes first, as a request of its own.
+ */
+type Opening =
+  | { workOrderId: string; initial?: never; active?: never }
+  | {
+      initial: z.infer<typeof allocationDraftSchema>;
+      workOrderId?: never;
+      active?: never;
+    }
+  | { active: AllocationDetail; workOrderId?: never; initial?: never };
 export function AllocationEditor({
   workOrderId,
   initial,
   active,
   close,
   onSubmitted,
-}: {
-  /** The order a blank form opens on, when it was reached from that order. */
-  workOrderId?: string;
-  initial?: z.infer<typeof allocationDraftSchema>;
-  active?: AllocationDetail;
+}: Opening & {
   close?: () => void;
   onSubmitted?: () => void;
 }) {
@@ -389,23 +396,6 @@ export function AllocationEditor({
     // so a reload reopens it.
     if (saved && !initial) router.replace(`/allocations/${saved.id}`);
   }
-  // A blank form has no order yet. Making one is its own request, and the
-  // screen then opens on it like on any order reached from elsewhere.
-  if (!values.workOrderId)
-    return (
-      <>
-        <PageHeading
-          eyebrow="FROM ORDER TO CUTTING PLAN"
-          title="New order"
-          description="Start with the order's number. Its blinds and its fabric follow."
-        />
-        <OrderStart
-          onCreated={(made) =>
-            router.replace(`/allocations/new?workOrder=${made.id}`)
-          }
-        />
-      </>
-    );
   const orderNumber =
     active?.orderNumber ?? order?.orderNumber ?? initial?.orderNumber;
   return (

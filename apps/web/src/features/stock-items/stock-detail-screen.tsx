@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useCanManage } from '@/features/auth/auth-boundary';
@@ -17,8 +17,14 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { fieldLabel, measurementHelp } from '@/lib/measurements';
 import { stockDetail } from './stock-items.api';
 import { StockCorrectionEditor } from './stock-correction-editor';
-import { History } from '@/features/audit/history';
-export function StockDetailScreen({ id }: { id: string }) {
+/** `history` is the stock item's audit history, composed by the route. */
+export function StockDetailScreen({
+  id,
+  history,
+}: {
+  id: string;
+  history: ReactNode;
+}) {
   const query = useQuery(stockDetail(id));
   const admin = useCanManage();
   const units = useMeasurementUnits();
@@ -125,7 +131,7 @@ export function StockDetailScreen({ id }: { id: string }) {
           </p>
         </div>
       </section>
-      <History type="stock-items" id={id} />
+      {history}
       {edit && (
         <StockCorrectionEditor item={item} close={() => setEdit(false)} />
       )}

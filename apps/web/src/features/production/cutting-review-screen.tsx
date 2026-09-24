@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import { TextField } from '@/components/ui/field';
 import { allocationDetail } from '@/features/allocations/allocations.api';
-import { CompletionEditor } from '@/features/allocations/completion-editor';
-import { useState } from 'react';
+import type { CompletionEditorProps } from '@/features/allocations/completion-editor';
+import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   worksheetSchema,
@@ -20,15 +20,22 @@ import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, ErrorNotice, Loading } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
-import { worksheets, worksheetDetail, productionKey } from './production.api';
-export function CuttingReviewScreen() {
+import {
+  worksheets,
+  worksheetDetail,
+  productionKey,
+  lookupCuttingLocations,
+} from './production.api';
+/** Allocations' results form, composed by the route. */
+type Editor = { completionEditor: ComponentType<CompletionEditorProps> };
+export function CuttingReviewScreen({ completionEditor }: Editor) {
   return useCanManage() ? (
-    <ReviewQueue />
+    <ReviewQueue completionEditor={completionEditor} />
   ) : (
     <p>Only admins can review cutting results.</p>
   );
 }
-function ReviewQueue() {
+function ReviewQueue({ completionEditor }: Editor) {
   const query = useQuery(worksheets());
   const params = useListParams();
   const selected = params.get('worksheet');
@@ -100,6 +107,7 @@ function ReviewQueue() {
           key={selected}
           id={selected}
           onDirtyChange={setDirty}
+          completionEditor={completionEditor}
         />
       )}
     </div>
@@ -108,10 +116,11 @@ function ReviewQueue() {
 function ReviewWorksheet({
   id,
   onDirtyChange,
+  completionEditor,
 }: {
   id: string;
   onDirtyChange: (dirty: boolean) => void;
-}) {
+} & Editor) {
   const user = useCurrentUser();
   const query = useQuery(worksheetDetail(id));
   const units = useMeasurementUnits();
@@ -275,6 +284,7 @@ function ReviewWorksheet({
           revision={sheet.revision}
           reason={reason}
           onDirtyChange={onDirtyChange}
+          completionEditor={completionEditor}
           submit={(body) => review.mutateAsync(body).then(() => undefined)}
           close={() => {
             setResolving(false);
@@ -293,6 +303,7 @@ function ResolveWorksheet({
   close,
   submit,
   onDirtyChange,
+  completionEditor: CompletionEditor,
 }: {
   submit: (body: z.infer<typeof worksheetReviewSchema>) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
@@ -300,7 +311,7 @@ function ResolveWorksheet({
   revision: number;
   reason: string;
   close: () => void;
-}) {
+} & Editor) {
   const query = useQuery(allocationDetail(allocationId));
   const units = useMeasurementUnits();
   if (query.isPending) return <Loading />;
@@ -322,6 +333,7 @@ function ResolveWorksheet({
         worksheet={{
           initialForm: null,
           units,
+          lookupLocations: lookupCuttingLocations,
           resolution: true,
           submit: async (results) => {
             await submit({

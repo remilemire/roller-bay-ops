@@ -23,6 +23,12 @@ import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
 import { OrderDetailScreen } from './order-detail-screen';
 import { OrderStart } from './order-start';
+// Other features' sections of the order, which the route composes.
+const sections = {
+  history: null,
+  production: () => null,
+  cancellation: () => null,
+};
 import { WorkOrdersScreen } from './work-orders-screen';
 import {
   createOrder,
@@ -48,10 +54,6 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/features/auth/auth-boundary', () => ({
   useCanManage: () => state.canManage,
 }));
-vi.mock('@/features/production/order-production', () => ({
-  OrderProduction: () => null,
-}));
-vi.mock('@/features/audit/history', () => ({ History: () => null }));
 vi.mock('@/lib/calendar-dates', async (original) => ({
   ...(await original<typeof import('@/lib/calendar-dates')>()),
   today: () => '2026-09-28',
@@ -158,6 +160,31 @@ function show(ui: ReactNode) {
 it('formats a ship date as its calendar day in every timezone', () => {
   // Midnight UTC is still Thursday evening west of Greenwich.
   expect(calendarDateLabel('2026-10-02')).toBe('Fri, Oct 2, 2026');
+});
+
+it('creates an order from its number alone, only when asked', async () => {
+  vi.mocked(createOrder).mockResolvedValue({
+    ...order,
+    id: 'made',
+    orderNumber: '104950',
+  });
+  const onCreated = vi.fn();
+  show(<OrderStart onCreated={onCreated} />);
+  const user = userEvent.setup();
+  const create = screen.getByRole('button', { name: 'Create order' });
+  await user.type(screen.getByLabelText(/Order number/), '10-49x5');
+  expect(screen.getByLabelText(/Order number/)).toHaveValue('10495');
+  expect(create).toBeDisabled();
+  await user.type(screen.getByLabelText(/Order number/), '0');
+  // Typing a number creates nothing.
+  expect(createOrder).not.toHaveBeenCalled();
+  await user.click(create);
+  expect(createOrder).toHaveBeenCalledWith({ orderNumber: '104950' });
+  await waitFor(() =>
+    expect(onCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'made' }),
+    ),
+  );
 });
 
 it('says where an order is when its number is already taken', async () => {
@@ -314,7 +341,7 @@ it('sends an order with no allocation to be planned, whoever is signed in', asyn
     screen.queryByRole('link', { name: 'Allocate order 104801' }),
   ).toBeNull();
   cleanup();
-  show(<OrderDetailScreen id="n" />);
+  show(<OrderDetailScreen id="n" {...sections} />);
   expect(await screen.findByRole('link', { name: 'Allocate' })).toHaveAttribute(
     'href',
     '/allocations/new?workOrder=n',
@@ -333,7 +360,7 @@ it('links an allocated order to attributed production logging', async () => {
 it('edits and unschedules an order with the revision it shows', async () => {
   vi.mocked(updateOrder).mockResolvedValue(order);
   vi.mocked(deleteOrder).mockResolvedValue(undefined);
-  show(<OrderDetailScreen id={order.id} />);
+  show(<OrderDetailScreen id={order.id} {...sections} />);
   const user = userEvent.setup();
   expect(
     await screen.findByRole('heading', { name: '104801' }),
@@ -401,7 +428,7 @@ it('keeps a refused delete in its dialog', async () => {
       'This order has an allocation. Cancel it before deleting the order.',
     ),
   );
-  show(<OrderDetailScreen id={order.id} />);
+  show(<OrderDetailScreen id={order.id} {...sections} />);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Delete' }));
   const dialog = within(screen.getByRole('dialog'));
@@ -414,7 +441,7 @@ it('keeps a refused delete in its dialog', async () => {
 
 it('shows employees the order without its admin actions', async () => {
   state.canManage = false;
-  show(<OrderDetailScreen id={order.id} />);
+  show(<OrderDetailScreen id={order.id} {...sections} />);
   await screen.findByRole('heading', { name: '104801' });
   for (const name of ['Edit', 'Mark shipped', 'Delete'])
     expect(screen.queryByRole('button', { name })).toBeNull();

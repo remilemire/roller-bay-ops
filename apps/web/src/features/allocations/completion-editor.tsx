@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +8,6 @@ import {
   type AllocationDetail,
 } from '@roller-bay/shared/allocations';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
-import { lookupCuttingLocations } from '@/features/production/production.api';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrentUser } from '@/features/auth/auth-boundary';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
@@ -41,18 +40,16 @@ import {
   completionRecovery,
   type CompletionForm,
 } from './completion-form';
-export function CompletionEditor({
-  allocation,
-  close,
-  worksheet,
-  onDirtyChange,
-}: {
+export type CompletionEditorProps = {
   allocation: AllocationDetail;
   close: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Recording at a cutting station, whose sheet owns drafts and submission. */
   worksheet?: {
     initialForm: CompletionForm | null;
     units: MeasurementUnits;
+    /** Where the station may put returned stock. */
+    lookupLocations: ComponentProps<typeof Lookup>['load'];
     saveDraft?: (form: CompletionForm) => Promise<void>;
     resolution?: boolean;
     dirty?: boolean;
@@ -61,7 +58,13 @@ export function CompletionEditor({
       form: CompletionForm,
     ) => Promise<void>;
   };
-}) {
+};
+export function CompletionEditor({
+  allocation,
+  close,
+  worksheet,
+  onDirtyChange,
+}: CompletionEditorProps) {
   const user = useCurrentUser();
   // Pin the units this form opened with: a session refetch must not relabel
   // or reinterpret dirty input.
@@ -254,9 +257,7 @@ export function CompletionEditor({
                               error={fieldError(`items.${index}.locationId`)}
                               queryKey={locationsKey}
                               load={
-                                worksheet
-                                  ? lookupCuttingLocations
-                                  : lookupLocations
+                                worksheet?.lookupLocations ?? lookupLocations
                               }
                             />
                           </div>
@@ -367,9 +368,7 @@ export function CompletionEditor({
                                 )}
                                 queryKey={locationsKey}
                                 load={
-                                  worksheet
-                                    ? lookupCuttingLocations
-                                    : lookupLocations
+                                  worksheet?.lookupLocations ?? lookupLocations
                                 }
                               />
                             </div>

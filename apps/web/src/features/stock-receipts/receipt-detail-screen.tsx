@@ -1,10 +1,9 @@
 'use client';
-import { History } from '@/features/audit/history';
 import { useCanManage } from '@/features/auth/auth-boundary';
 import { Button } from '@/components/ui/button';
 import { ReceiptCorrectionEditor } from './receipt-correction-editor';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { stockReceiptRecordSchema } from '@roller-bay/shared/stock-receipts';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +18,14 @@ import {
 import { dateLabel, shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
 import { useMeasurementUnits } from '@/features/users/use-measurement-units';
-export function ReceiptDetailScreen({ id }: { id: string }) {
+/** `history` is the receipt's audit history, composed by the route. */
+export function ReceiptDetailScreen({
+  id,
+  history,
+}: {
+  id: string;
+  history: ReactNode;
+}) {
   const query = useQuery(receiptDetail(id));
   if (query.isPending) return <Loading />;
   if (!query.data) return <ErrorNotice error={query.error} />;
@@ -28,14 +34,16 @@ export function ReceiptDetailScreen({ id }: { id: string }) {
       {query.error && (
         <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       )}
-      <ReceiptRecord key={id} receipt={query.data} />
+      <ReceiptRecord key={id} receipt={query.data} history={history} />
     </>
   );
 }
 function ReceiptRecord({
   receipt,
+  history,
 }: {
   receipt: z.infer<typeof stockReceiptRecordSchema>;
+  history: ReactNode;
 }) {
   const units = useMeasurementUnits();
   const admin = useCanManage();
@@ -48,7 +56,7 @@ function ReceiptRecord({
     return (
       <>
         <ReceiptEditor initial={draft} onSubmitted={() => setDraft(null)} />
-        <History type="stock-receipts" id={receipt.id} />
+        {history}
       </>
     );
   if (receipt.state === 'draft') return <Loading />;
@@ -114,7 +122,7 @@ function ReceiptRecord({
           </table>
         </div>
       </section>
-      <History type="stock-receipts" id={receipt.id} />
+      {history}
       {correcting && (
         <ReceiptCorrectionEditor
           id={receipt.id}
