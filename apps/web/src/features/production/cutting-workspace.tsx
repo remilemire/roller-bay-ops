@@ -76,14 +76,17 @@ function CuttingOrder({
         </Button>
       </PageHeading>
       <section className="panel panel-body stack">
+        <EmployeeSelection
+          value={employee.employeeIds}
+          onChange={employee.selectEmployees}
+        />
         {query.data ? (
-          <CutCompletion sheet={query.data} employee={employee} />
+          <CutCompletion
+            sheet={query.data}
+            employeeIds={employee.employeeIds}
+          />
         ) : (
           <>
-            <EmployeeSelection
-              value={employee.employeeIds}
-              onChange={employee.selectEmployees}
-            />
             <p>
               Choose the one cutter who begins the sheet. Beginning saves the
               current plan and prevents changes while it is being cut.
@@ -112,10 +115,10 @@ function CuttingOrder({
 }
 function CutCompletion({
   sheet,
-  employee,
+  employeeIds,
 }: {
   sheet: Worksheet;
-  employee: ReturnType<typeof useEmployeeSelection>;
+  employeeIds: string[];
 }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
@@ -125,23 +128,17 @@ function CutCompletion({
       {completed ? (
         <p>Cut by {employeeNames(completed.employees)}</p>
       ) : (
-        <>
-          <EmployeeSelection
-            value={employee.employeeIds}
-            onChange={employee.selectEmployees}
-          />
-          <p className="muted">
-            Record completion when the whole order is cut. Measurements can be
-            submitted separately.
-          </p>
-        </>
+        <p className="muted">
+          Record completion when the whole order is cut. Measurements can be
+          submitted separately.
+        </p>
       )}
       {query.data && (
         <CompletionAction
           station="cutting"
           orderId={sheet.workOrderId}
           orderNumber={sheet.orderNumber}
-          employeeIds={employee.employeeIds}
+          employeeIds={employeeIds}
           done={!!completed}
         />
       )}

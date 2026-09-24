@@ -37,10 +37,6 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
     checking: 'checkedAt',
     shipping: 'shippedAt',
   } as const;
-  const recordable = !order.cancelledAt && !!order.allocatedAt;
-  // A recorded milestone only changes through a correction, so the picker
-  // appears while there is something to record.
-  const done = !!order[stamp[station]];
   return (
     <section className="panel">
       <div className="panel-heading">
@@ -65,39 +61,33 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             );
           })}
         </dl>
-        {(recordable || canManage) && (
-          <div className="form-grid">
-            <ChoiceField
-              label="Station"
-              value={station}
-              onChange={(s) => {
-                const next = stationSchema.safeParse(s);
-                if (next.success) {
-                  setStation(next.data);
-                  employee.selectEmployees([]);
-                }
-              }}
-              options={stationSchema.options.map((s) => ({
-                value: s,
-                label: stationLabels[s],
-              }))}
-            />
-            {recordable && !done && (
-              <EmployeeSelection
-                value={employee.employeeIds}
-                onChange={employee.selectEmployees}
-              />
-            )}
-          </div>
-        )}
-        {recordable && (
+        <ChoiceField
+          label="Station"
+          value={station}
+          onChange={(s) => {
+            const next = stationSchema.safeParse(s);
+            if (next.success) {
+              setStation(next.data);
+              employee.selectEmployees([]);
+            }
+          }}
+          options={stationSchema.options.map((s) => ({
+            value: s,
+            label: stationLabels[s],
+          }))}
+        />
+        <EmployeeSelection
+          value={employee.employeeIds}
+          onChange={employee.selectEmployees}
+        />
+        {!order.cancelledAt && order.allocatedAt && (
           <CompletionAction
             key={station}
             station={station}
             orderId={order.id}
             orderNumber={order.orderNumber}
             employeeIds={employee.employeeIds}
-            done={done}
+            done={!!order[stamp[station]]}
           />
         )}
         {canManage && (

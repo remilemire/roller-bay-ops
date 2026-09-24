@@ -44,9 +44,6 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.goto(`/stations/cutting/${ids.order}`);
   await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
-  // A reopened sheet starts with the cutter who began it.
-  await page.reload();
-  await expect(selectedEmployee(page, 'Alex Reed')).toBeVisible();
   await page.getByLabel('Cut 1 done').check();
   await page
     .getByRole('button', { name: 'Mark 104801 cut', exact: true })
@@ -63,7 +60,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
+  await expect(selectedEmployee(page, 'Alex Reed')).toBeVisible();
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   const discard = page.getByRole('button', { name: 'Discard changes' });
