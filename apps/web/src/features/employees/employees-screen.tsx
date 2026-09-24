@@ -81,7 +81,11 @@ function EmployeeDirectory() {
                         <Status value={e.isActive ? 'active' : 'inactive'} />
                       </td>
                       <td>
-                        <Button variant="outline" onClick={() => setEditing(e)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditing(e)}
+                        >
                           Edit
                         </Button>
                       </td>
