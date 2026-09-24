@@ -14,7 +14,11 @@ export const presentCompletion = (row: CompletionRecord) =>
     recordedAt: row.recordedAt.toISOString(),
   });
 export function presentStationOrders(result: {
-  items: (WorkOrderRecord & { completions: CompletionRecord[] })[];
+  items: (WorkOrderRecord & {
+    completions: CompletionRecord[];
+    hasCuttingWorksheet: boolean;
+    canRecordCutManually: boolean;
+  })[];
   total: number;
   page: number;
   pageSize: number;
@@ -23,6 +27,8 @@ export function presentStationOrders(result: {
     ...result,
     items: result.items.map((row) => ({
       ...presentWorkOrder(row),
+      hasCuttingWorksheet: row.hasCuttingWorksheet,
+      canRecordCutManually: row.canRecordCutManually,
       completions: row.completions.map(presentCompletion),
     })),
   });

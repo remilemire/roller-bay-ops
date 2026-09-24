@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
 import { EmployeeSelection, useEmployeeSelection } from './employee-selection';
-import { CompletionAction } from './completion-action';
 import {
   worksheetForOrder,
   productionKey,
@@ -81,10 +80,7 @@ function CuttingOrder({
           onChange={employee.selectEmployees}
         />
         {query.data ? (
-          <CutCompletion
-            sheet={query.data}
-            employeeIds={employee.employeeIds}
-          />
+          <CutCompletion sheet={query.data} />
         ) : (
           <>
             <p>
@@ -107,48 +103,31 @@ function CuttingOrder({
         <Worksheet
           key={query.data.id}
           initial={query.data}
+          employeeIds={employee.employeeIds}
           completionEditor={completionEditor}
         />
       )}
     </div>
   );
 }
-function CutCompletion({
-  sheet,
-  employeeIds,
-}: {
-  sheet: Worksheet;
-  employeeIds: string[];
-}) {
+function CutCompletion({ sheet }: { sheet: Worksheet }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
   const completed = query.data?.find((c) => c.station === 'cutting');
-  return (
-    <>
-      {completed ? (
-        <p>Cut by {employeeNames(completed.employees)}</p>
-      ) : (
-        <p className="muted">
-          Record completion when the whole order is cut. Measurements can be
-          submitted separately.
-        </p>
-      )}
-      {query.data && (
-        <CompletionAction
-          station="cutting"
-          orderId={sheet.workOrderId}
-          orderNumber={sheet.orderNumber}
-          employeeIds={employeeIds}
-          done={!!completed}
-        />
-      )}
-    </>
+  return completed ? (
+    <p>Cut by {employeeNames(completed.employees)}</p>
+  ) : (
+    <p className="muted">
+      Submitting the worksheet records the order as cut and credits the selected
+      employees.
+    </p>
   );
 }
 function Worksheet({
   initial,
+  employeeIds,
   completionEditor: CompletionEditor,
-}: { initial: Worksheet } & Editor) {
+}: { initial: Worksheet; employeeIds: string[] } & Editor) {
   // Keep dirty work pinned through background refetches. Explicit saves advance the revision.
   const [sheet, setSheet] = useState(initial);
   const [editorVersion, setEditorVersion] = useState(0);
@@ -240,6 +219,10 @@ function Worksheet({
               setSheet(result);
             },
             submit: async (results, form) => {
+              if (!employeeIds.length)
+                throw new Error(
+                  'Select the employees who completed the cutting.',
+                );
               const result = await api(
                 `/production/cutting/worksheets/${sheet.id}/submit`,
                 worksheetSchema,
@@ -247,6 +230,7 @@ function Worksheet({
                   method: 'POST',
                   body: {
                     expectedRevision: sheet.revision,
+                    employeeIds,
                     results,
                     draft: { form, units, checkedCuts: checked },
                   },
@@ -254,6 +238,10 @@ function Worksheet({
               );
               setDirty(false);
               setSheet(result);
+              await Promise.all([
+                client.invalidateQueries({ queryKey: productionKey }),
+                client.invalidateQueries({ queryKey: ['work-orders'] }),
+              ]);
             },
           }}
         />

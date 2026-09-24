@@ -93,7 +93,7 @@ export class CuttingStationController {
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!, 'cutting');
-    return this.service.submit(id, body, req.currentUser!.id);
+    return this.workflow.submit(id, body, req.currentUser!.id);
   }
   @Post('worksheets/:id/review') @Roles('admin') review(
     @Param('id', new ParseUUIDPipe()) id: string,

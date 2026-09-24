@@ -18,6 +18,7 @@ import type {
 } from './production-completions.table.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AuditService } from '../audit/index.js';
+import { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
 import { EmployeesService } from '../employees/index.js';
 import type { Employee } from '@roller-bay/shared/employees';
 import { productionOperation } from './production.operation.js';
@@ -44,6 +45,7 @@ export class ProductionService {
     private readonly orders: WorkOrdersService,
     private readonly employees: EmployeesService,
     private readonly audit: AuditService,
+    private readonly worksheets: CuttingWorksheetsService,
   ) {}
   list(id: string) {
     return productionOperation(() =>
@@ -79,6 +81,8 @@ export class ProductionService {
           employeeIds,
         });
         if (replay.result) return replay.result;
+        if (station === 'cutting')
+          await this.worksheets.assertManualCutAllowed(context, id);
         this.orders.assertNotCancelled(order);
         if (!order.allocatedAt)
           throw new ConflictException(
@@ -141,6 +145,32 @@ export class ProductionService {
           },
         );
       }),
+    );
+  }
+  async recordWorksheetCut(
+    context: UnitOfWorkContext,
+    order: WorkOrderRecord,
+    employeeIds: string[],
+    actor: string,
+    submittedAt: Date,
+  ) {
+    // Preserve historical manual completions and admin corrections.
+    if (order.cutAt) return;
+    const people = await this.employees.requireActiveMany(context, employeeIds);
+    const before = (await context.production.completions(order.id)).find(
+      (r) => r.station === 'cutting',
+    );
+    const saved = await this.saveMilestone(context, order, 'cutting', before, {
+      employees: people.map(credited),
+      completedAt: submittedAt,
+      recordedAt: submittedAt,
+      recordedByUserId: actor,
+    });
+    await this.audit.record(
+      context,
+      actor,
+      'order.cutting.completed',
+      saved.changes,
     );
   }
   correct(

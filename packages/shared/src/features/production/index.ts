@@ -62,6 +62,8 @@ export const stationQuerySchema = z
   );
 export const stationOrderSchema = workOrderSchema.extend({
   completions: productionCompletionsSchema,
+  hasCuttingWorksheet: z.boolean(),
+  canRecordCutManually: z.boolean(),
 });
 export const stationOrderListSchema = z.object({
   items: z.array(stationOrderSchema),
@@ -108,6 +110,7 @@ export const worksheetSaveSchema = z.strictObject({
   draft: cuttingDraftSchema,
 });
 export const worksheetSubmitSchema = z.strictObject({
+  employeeIds: employeeIdsSchema,
   expectedRevision: z.number().int().positive(),
   results: completeAllocationSchema,
   draft: cuttingDraftSchema.optional(),

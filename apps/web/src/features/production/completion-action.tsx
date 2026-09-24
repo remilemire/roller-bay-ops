@@ -70,7 +70,9 @@ export function CompletionAction({
           ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`
           : mutation.isPending
             ? 'Saving…'
-            : `Mark ${orderNumber} ${completionLabels[station]}`}
+            : station === 'cutting'
+              ? 'Record cut manually'
+              : `Mark ${orderNumber} ${completionLabels[station]}`}
       </Button>
       {mutation.isSuccess && (
         <p role="status">

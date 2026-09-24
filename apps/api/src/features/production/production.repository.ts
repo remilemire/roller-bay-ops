@@ -14,6 +14,7 @@ import {
   lt,
   sql,
 } from 'drizzle-orm';
+import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
 import type {
@@ -45,6 +46,10 @@ export class ProductionRepository {
     const rows = await this.db
       .select({
         ...getTableColumns(workOrders),
+        // Qualify the outer id explicitly: select-field SQL otherwise loses table
+        // qualifiers and the subquery compares worksheet.work_order_id to its own id.
+        hasCuttingWorksheet: sql<boolean>`EXISTS (SELECT 1 FROM ${cuttingWorksheets} WHERE ${cuttingWorksheets.workOrderId} = ${sql.identifier('work_orders')}.${sql.identifier('id')} AND ${cuttingWorksheets.abandonedAt} IS NULL AND ${cuttingWorksheets.skippedAt} IS NULL)`,
+        canRecordCutManually: sql<boolean>`NOT EXISTS (SELECT 1 FROM ${cuttingWorksheets} WHERE ${cuttingWorksheets.workOrderId} = ${sql.identifier('work_orders')}.${sql.identifier('id')} AND ${cuttingWorksheets.abandonedAt} IS NULL AND ${cuttingWorksheets.skippedAt} IS NULL AND ${cuttingWorksheets.results} IS NULL)`,
         quantity: sql<number>`(SELECT coalesce(sum(quantity),0)::int FROM work_order_lines WHERE work_order_id = "work_orders"."id" AND retired_at IS NULL)`,
       })
       .from(workOrders)

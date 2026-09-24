@@ -1,7 +1,11 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import type { worksheetReviewSchema } from '@roller-bay/shared/production';
+import type {
+  WorksheetSubmit,
+  worksheetReviewSchema,
+} from '@roller-bay/shared/production';
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
+import { ProductionService } from './production.service.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AllocationsService } from '../allocations/index.js';
 import { AuditService } from '../audit/index.js';
@@ -21,6 +25,7 @@ export class CuttingWorkflowService {
     private readonly orders: WorkOrdersService,
     private readonly stock: StockItemsService,
     private readonly worksheets: CuttingWorksheetsService,
+    private readonly production: ProductionService,
   ) {}
   begin(orderId: string, employeeId: string, actor: string) {
     return worksheetOperation(() =>
@@ -61,6 +66,42 @@ export class CuttingWorkflowService {
           employeeId,
           actor,
         );
+      }),
+    );
+  }
+  submit(id: string, input: WorksheetSubmit, actor: string) {
+    return worksheetOperation(() =>
+      this.unitOfWork.transaction(async (context) => {
+        const initial = await this.worksheets.requireRecord(context, id);
+        await this.allocations.lockAllocation(context, initial.allocationId);
+        const order = await this.orders.requireOrder(
+          context,
+          initial.workOrderId,
+        );
+        this.orders.assertNotCancelled(order);
+        if (!order.allocatedAt)
+          throw new ConflictException(
+            'Allocate fabric before submitting cutting results.',
+          );
+        const row = await this.worksheets.requireRecord(context, id, true);
+        const result = await this.worksheets.submitInTransaction(
+          context,
+          id,
+          input,
+          actor,
+        );
+        // A return clears submittedAt but retains results. Resubmissions and retries
+        // must not overwrite attribution or restore an admin-cleared milestone.
+        if (!row.results) {
+          await this.production.recordWorksheetCut(
+            context,
+            order,
+            input.employeeIds,
+            actor,
+            new Date(result.submittedAt!),
+          );
+        }
+        return result;
       }),
     );
   }

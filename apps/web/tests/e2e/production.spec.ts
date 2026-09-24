@@ -34,7 +34,7 @@ test('station login, whole-order attribution, and employee directory', async ({
     ),
   ).toBe(true);
 });
-test('cutter saves a digital sheet, marks cut independently, and submits for office review', async ({
+test('worksheet submission records cutting and sends measurements for office review', async ({
   page,
 }, testInfo) => {
   const state = await mockApi(page, {
@@ -45,12 +45,10 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   await page.getByLabel('Cut 1 done').check();
-  await page
-    .getByRole('button', { name: 'Mark 104801 cut', exact: true })
-    .click();
   await expect(
-    page.getByRole('button', { name: 'Cut recorded', exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Record cut manually' }),
+  ).toHaveCount(0);
+  expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.completionRequests).toHaveLength(0);
   await page
     .getByLabel('What happened to this stock item?')
@@ -82,6 +80,9 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
     .click();
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
   expect(state.worksheets[0]!.reviewedAt).toBeNull();
+  await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
+  const cutAt = state.orders[0]!.cutAt;
+  expect(cutAt).not.toBeNull();
   expect(state.completionRequests).toHaveLength(0);
   state.role = 'admin';
   await page.goto('/stations/review');
@@ -117,6 +118,7 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
     page.getByRole('button', { name: 'Inventory reconciled', exact: true }),
   ).toBeVisible();
   expect(state.worksheets[0]!.reviewedAt).not.toBeNull();
+  expect(state.orders[0]!.cutAt).toBe(cutAt);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -244,8 +246,8 @@ test('clean cutter follows office returns while background refresh preserves dir
   state.worksheets.push(submittedSheet(state));
   await page.goto('/stations');
   await expect(
-    page.getByRole('button', { name: 'Mark 104801 cut', exact: true }),
-  ).toHaveCount(0);
+    page.getByRole('button', { name: 'Record cut manually', exact: true }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Open cutting sheet' }).click();
   await expect(
     page.getByText('Results awaiting office review', { exact: false }),
@@ -422,4 +424,52 @@ test('a rejected correction can be edited and resubmitted with a new request key
   expect(attempts).toHaveLength(2);
   expect(attempts[1]!.key).not.toEqual(attempts[0]!.key);
   expect(attempts[1]!.body.completedAt).toMatch(/^2026-/);
+});
+
+test('cutting station offers manual completion without starting a worksheet', async ({
+  page,
+}) => {
+  const state = await mockApi(page, {
+    role: 'production',
+    stations: ['cutting'],
+  });
+  await page.goto('/stations');
+  await expect(
+    page.getByRole('link', { name: 'Use cutting worksheet' }),
+  ).toBeVisible();
+  const manual = page.getByRole('button', { name: 'Record cut manually' });
+  await expect(manual).toBeDisabled();
+  await pickEmployee(page, 'Alex Reed');
+  await manual.click();
+  await page.getByRole('button', { name: 'All allocated orders' }).click();
+  await expect(page.getByText(/cut · Alex Reed/)).toBeVisible();
+  expect(state.worksheets).toHaveLength(0);
+  expect(state.orders[0]!.cutAt).not.toBeNull();
+});
+
+test('a cleared cut can be recorded manually while keeping the previous worksheet', async ({
+  page,
+}) => {
+  const state = await mockApi(page, {
+    role: 'production',
+    stations: ['cutting'],
+  });
+  const sheet = submittedSheet(state);
+  sheet.reviewedAt = '2026-09-16T14:00:00.000Z';
+  state.worksheets.push(sheet);
+  state.orders[0]!.cutAt = null;
+  await page.goto('/stations');
+  await expect(
+    page.getByRole('link', { name: 'Open cutting sheet' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Use cutting worksheet' }),
+  ).toHaveCount(0);
+  await pickEmployee(page, 'Alex Reed');
+  await page.getByRole('button', { name: 'Record cut manually' }).click();
+  await page.getByRole('button', { name: 'All allocated orders' }).click();
+  await expect(page.getByText(/cut · Alex Reed/)).toBeVisible();
+  expect(state.worksheets).toEqual([sheet]);
+  await page.getByRole('link', { name: 'Open cutting sheet' }).click();
+  await expect(page.getByText(/Inventory reconciled/)).toBeVisible();
 });

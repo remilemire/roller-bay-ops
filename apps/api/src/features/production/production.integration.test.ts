@@ -444,8 +444,11 @@ test(
           draft: { ...draft, checkedCuts: [] },
         }).expect(409);
         const cutPath = `/api/production/cutting/orders/${first.workOrderId}/complete`;
-        await post(cutPath, { employeeIds: [other.id] }).expect(201);
-        const cutAt = (await fixtures.workOrder(first.workOrderId)).cut_at;
+        await post(cutPath, { employeeIds: [other.id] }).expect(409);
+        assert.equal(
+          (await fixtures.workOrder(first.workOrderId)).cut_at,
+          null,
+        );
         const results = {
           expectedRevision: first.revision,
           items: [
@@ -469,6 +472,7 @@ test(
         };
         const submit = (id: string, revision: number, body: object) =>
           post(`/api/production/cutting/worksheets/${id}/submit`, {
+            employeeIds: [other.id],
             expectedRevision: revision,
             results: body,
           });
@@ -476,6 +480,8 @@ test(
           (await submit(sheet.id, saved.revision, results).expect(201)).body,
         );
         await submit(sheet.id, saved.revision, results).expect(201);
+        const cutAt = (await fixtures.workOrder(first.workOrderId)).cut_at;
+        assert.ok(cutAt);
         assert.equal(
           Number(
             (
@@ -548,10 +554,7 @@ test(
           ).rows[0].remaining_length_mm,
         );
         assert.ok(balance > 0);
-        assert.equal(
-          (await fixtures.workOrder(second.workOrderId)).cut_at,
-          null,
-        );
+        assert.ok((await fixtures.workOrder(second.workOrderId)).cut_at);
         const historical = worksheetSchema.parse(
           (
             await get(`/api/production/cutting/worksheets/${sheet.id}`).expect(
@@ -573,6 +576,258 @@ test(
           ),
           1,
         );
+      },
+    );
+    await t.test(
+      'manual cutting and worksheet submission are exclusive, atomic and preserve corrections',
+      async () => {
+        await role('admin');
+        const manual = await create(await input(await seed()));
+        await post(
+          `/api/production/cutting/orders/${manual.workOrderId}/complete`,
+          { employeeIds: [other.id] },
+        ).expect(201);
+        assert.ok((await fixtures.workOrder(manual.workOrderId)).cut_at);
+        await post(
+          `/api/production/cutting/orders/${manual.workOrderId}/worksheet`,
+          { employeeId: other.id },
+        ).expect(409);
+        const allocation = await create(await input(await seed()));
+        const sheet = (
+          await post(
+            `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
+            { employeeId: other.id },
+          ).expect(201)
+        ).body;
+        const path = `/api/production/cutting/worksheets/${sheet.id}/submit`;
+        const helper = (
+          await post('/api/employees', {
+            name: 'Second Cutter',
+            initials: 'SC',
+          }).expect(201)
+        ).body;
+        const body = {
+          expectedRevision: sheet.revision,
+          employeeIds: [other.id, helper.id],
+          results: {
+            expectedRevision: allocation.revision,
+            items: [
+              {
+                stockItemId: allocation.items[0]!.stockItemId,
+                expectedRevision: 1,
+                outcome: 'returned-roll',
+                radialDepthMm: 10,
+                tubeOuterDiameterMm: 50,
+                locationId: ids.location,
+                scraps: [],
+              },
+            ],
+          },
+        };
+        await post(path, { ...body, employeeIds: [] }).expect(400);
+        await post(path, { ...body, employeeIds: [randomUUID()] }).expect(409);
+        assert.equal(
+          (await get(`/api/production/cutting/worksheets/${sheet.id}`)).body
+            .submittedAt,
+          null,
+        );
+        const audit = h.app.get(AuditService);
+        const original = audit.record;
+        const failure = t.mock.method(
+          audit,
+          'record',
+          (...args: Parameters<AuditService['record']>) => {
+            if (args[2] === 'order.cutting.completed')
+              throw new Error('Simulated completion audit failure');
+            return original.apply(audit, args);
+          },
+        );
+        try {
+          await post(path, body).expect(503);
+        } finally {
+          failure.mock.restore();
+        }
+        assert.equal(
+          (await fixtures.workOrder(allocation.workOrderId)).cut_at,
+          null,
+        );
+        assert.equal(
+          (await get(`/api/production/cutting/worksheets/${sheet.id}`)).body
+            .results,
+          null,
+        );
+        assert.deepEqual(
+          (
+            await get(
+              `/api/production/orders/${allocation.workOrderId}/completions`,
+            )
+          ).body,
+          [],
+        );
+        const submissions = await Promise.all([
+          post(path, body),
+          post(path, body),
+        ]);
+        assert.deepEqual(
+          submissions.map((r) => r.status),
+          [201, 201],
+        );
+        const submitted = submissions[0]!.body;
+        const completionPath = `/api/production/orders/${allocation.workOrderId}/completions`;
+        const completed = (await get(completionPath)).body;
+        assert.equal(completed[0].completedAt, submitted.submittedAt);
+        assert.deepEqual(
+          completed[0].employees
+            .map((e: { employeeId: string }) => e.employeeId)
+            .sort(),
+          [other.id, helper.id].sort(),
+        );
+        const history = (
+          await get(`/api/work-orders/${allocation.workOrderId}/history`)
+        ).body;
+        assert.equal(
+          history.items.filter(
+            (e: { action: string }) => e.action === 'order.cutting.completed',
+          ).length,
+          1,
+        );
+        const returned = (
+          await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
+            expectedRevision: submitted.revision,
+            reason: 'Confirm measurements',
+          }).expect(201)
+        ).body;
+        assert.deepEqual((await get(completionPath)).body, completed);
+        const resubmitted = (
+          await post(path, {
+            ...body,
+            expectedRevision: returned.revision,
+          }).expect(201)
+        ).body;
+        assert.deepEqual((await get(completionPath)).body, completed);
+        const returnedAgain = (
+          await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
+            expectedRevision: resubmitted.revision,
+            reason: 'Correct erroneous cutting record',
+          }).expect(201)
+        ).body;
+        const order = (await get(`/api/work-orders/${allocation.workOrderId}`))
+          .body;
+        await post(`/api/production/cutting/orders/${order.id}/corrections`, {
+          expectedRevision: order.revision,
+          employeeIds: null,
+          completedAt: null,
+          reason: 'Recorded in error',
+        }).expect(201);
+        await post(path, {
+          ...body,
+          expectedRevision: returnedAgain.revision,
+        }).expect(201);
+        assert.equal((await fixtures.workOrder(order.id)).cut_at, null);
+      },
+    );
+    await t.test(
+      'regression: a cleared cut can be recorded manually after a previous worksheet submission',
+      async () => {
+        await role('admin');
+        for (const state of ['submitted', 'returned', 'reviewed']) {
+          const allocation = await create(await input(await seed()));
+          const orderId = allocation.workOrderId;
+          const queueOrder = async () => {
+            const order = (await get(`/api/work-orders/${orderId}`).expect(200))
+              .body;
+            const queue = (
+              await get(
+                `/api/production/cutting/orders?search=${order.orderNumber}`,
+              ).expect(200)
+            ).body;
+            return queue.items.find(
+              (item: { id: string }) => item.id === orderId,
+            );
+          };
+          const sheet = (
+            await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
+              employeeId: other.id,
+            }).expect(201)
+          ).body;
+          assert.equal((await queueOrder()).hasCuttingWorksheet, true);
+          assert.equal((await queueOrder()).canRecordCutManually, false);
+          await post(`/api/production/cutting/orders/${orderId}/complete`, {
+            employeeIds: [other.id],
+          }).expect(409);
+          let saved = (
+            await post(
+              `/api/production/cutting/worksheets/${sheet.id}/submit`,
+              {
+                employeeIds: [other.id],
+                expectedRevision: sheet.revision,
+                results: {
+                  expectedRevision: allocation.revision,
+                  items: [
+                    {
+                      stockItemId: allocation.items[0]!.stockItemId,
+                      expectedRevision: 1,
+                      outcome: 'returned-roll',
+                      radialDepthMm: 10,
+                      tubeOuterDiameterMm: 50,
+                      locationId: ids.location,
+                      scraps: [],
+                    },
+                  ],
+                },
+              },
+            ).expect(201)
+          ).body;
+          if (state === 'returned')
+            saved = (
+              await post(
+                `/api/production/cutting/worksheets/${sheet.id}/return`,
+                {
+                  expectedRevision: saved.revision,
+                  reason: 'Check measurement',
+                },
+              ).expect(201)
+            ).body;
+          if (state === 'reviewed')
+            saved = (
+              await post(
+                `/api/production/cutting/worksheets/${sheet.id}/review`,
+                {
+                  expectedRevision: saved.revision,
+                },
+              ).expect(201)
+            ).body;
+          const order = (await get(`/api/work-orders/${orderId}`)).body;
+          await post(`/api/production/cutting/orders/${orderId}/corrections`, {
+            expectedRevision: order.revision,
+            employeeIds: null,
+            completedAt: null,
+            reason: 'Remove mistaken milestone',
+          }).expect(201);
+          assert.equal((await queueOrder()).hasCuttingWorksheet, true);
+          assert.equal((await queueOrder()).canRecordCutManually, true);
+          const stockBefore = (
+            await pool.query('SELECT * FROM fabric_stock_items WHERE id=$1', [
+              allocation.items[0]!.stockItemId,
+            ])
+          ).rows;
+          await post(`/api/production/cutting/orders/${orderId}/complete`, {
+            employeeIds: [other.id],
+          }).expect(201);
+          assert.ok((await fixtures.workOrder(orderId)).cut_at);
+          assert.deepEqual(
+            (await get(`/api/production/cutting/worksheets/${sheet.id}`)).body,
+            saved,
+          );
+          assert.deepEqual(
+            (
+              await pool.query('SELECT * FROM fabric_stock_items WHERE id=$1', [
+                allocation.items[0]!.stockItemId,
+              ])
+            ).rows,
+            stockBefore,
+          );
+        }
       },
     );
     await t.test(
@@ -611,6 +866,7 @@ test(
         };
         const submitted = (
           await post(`/api/production/cutting/worksheets/${fresh.id}/submit`, {
+            employeeIds: [other.id],
             expectedRevision: fresh.revision,
             results,
           }).expect(201)
@@ -639,10 +895,7 @@ test(
             },
           },
         }).expect(201);
-        assert.equal(
-          (await fixtures.workOrder(allocation.workOrderId)).cut_at,
-          null,
-        );
+        assert.ok((await fixtures.workOrder(allocation.workOrderId)).cut_at);
       },
     );
     await t.test(
@@ -700,6 +953,7 @@ test(
         ).body;
         const submitted = (
           await post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
+            employeeIds: [other.id],
             expectedRevision: sheet.revision,
             results: {
               expectedRevision: allocation.revision,
@@ -838,6 +1092,7 @@ test(
         const a = await begin(first.workOrderId);
         const sa = (
           await post(`/api/production/cutting/worksheets/${a.id}/submit`, {
+            employeeIds: [other.id],
             expectedRevision: a.revision,
             results: results(first.revision, 10),
           }).expect(201)
@@ -845,6 +1100,7 @@ test(
         const b = await begin(second.workOrderId);
         const sb = (
           await post(`/api/production/cutting/worksheets/${b.id}/submit`, {
+            employeeIds: [other.id],
             expectedRevision: b.revision,
             results: results(second.revision, 8),
           }).expect(201)

@@ -301,6 +301,16 @@ export async function mockApi(
             )
             .map((o) => ({
               ...o,
+              canRecordCutManually: !state.worksheets.some(
+                (w) =>
+                  w.workOrderId === o.id &&
+                  !w.abandonedAt &&
+                  !w.skippedAt &&
+                  !w.results,
+              ),
+              hasCuttingWorksheet: state.worksheets.some(
+                (w) => w.workOrderId === o.id && !w.abandonedAt && !w.skippedAt,
+              ),
               completions: state.productionCompletions.filter(
                 (c) => c.workOrderId === o.id,
               ),
@@ -436,6 +446,28 @@ export async function mockApi(
         );
       if (sheetPath[2] === 'draft') sheet.draft = body.draft;
       if (sheetPath[2] === 'submit') {
+        const order = state.orders.find((o) => o.id === sheet.workOrderId)!;
+        if (!sheet.results && !order.cutAt) {
+          const completedAt = new Date().toISOString();
+          state.productionCompletions.push({
+            workOrderId: order.id,
+            station: 'cutting',
+            employees: body.employeeIds.map((employeeId: string) => {
+              const employee = state.employees.find(
+                (e) => e.id === employeeId,
+              )!;
+              return {
+                employeeId,
+                employeeName: employee.name,
+                employeeInitials: employee.initials,
+              };
+            }),
+            completedAt,
+            recordedAt: completedAt,
+            recordedByUserId: ids.user,
+          });
+          stampMilestone(order, 'cutting', completedAt);
+        }
         sheet.results = body.results;
         sheet.draft = body.draft ?? sheet.draft;
         sheet.submittedAt = new Date().toISOString();

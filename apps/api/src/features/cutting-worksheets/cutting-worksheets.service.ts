@@ -80,6 +80,15 @@ export class CuttingWorksheetsService {
     if (!row) throw new NotFoundException('Cutting worksheet not found.');
     return row;
   }
+  async assertManualCutAllowed(context: UnitOfWorkContext, orderId: string) {
+    const sheet = await context.cuttingWorksheets.forOrder(orderId);
+    // Retained results prove a prior submission, including sheets returned for
+    // measurement correction. Their cleared milestones can be recorded manually.
+    if (sheet && !sheet.results)
+      throw new ConflictException(
+        'Submit the cutting worksheet to record this order as cut.',
+      );
+  }
   async forAllocation(context: UnitOfWorkContext, id: string) {
     const row = await context.cuttingWorksheets.forAllocation(id);
     return row ? presentWorksheet(row) : null;
@@ -190,62 +199,65 @@ export class CuttingWorksheetsService {
       );
     });
   }
-  submit(id: string, input: WorksheetSubmit, actor: string) {
-    return this.operation(async (context) => {
-      const row = await context.cuttingWorksheets.find(id, true);
-      if (!row) throw new NotFoundException('Worksheet not found.');
-      if (row.abandonedAt || row.skippedAt)
-        throw new ConflictException(
-          'This sheet was closed without recording results.',
-        );
-      if (row.submittedAt) {
-        if (
-          canonicalJson(row.results) === canonicalJson(input.results) &&
-          (!input.draft ||
-            canonicalJson(row.draft) === canonicalJson(input.draft))
-        )
-          return presentWorksheet(row);
-        throw new ConflictException('Results already submitted.');
-      }
-      if (row.revision !== input.expectedRevision)
-        throw new ConflictException(
-          'Worksheet changed; reload before submitting.',
-        );
-      if (input.draft) this.validateDraft(row, input.draft);
-      const ids = row.snapshot.items.map((i) => i.stockItemId);
-      if (
-        (input.results.unusedStockItemIds?.length ?? 0) > 0 ||
-        input.results.expectedRevision !== row.snapshot.revision ||
-        input.results.items.length !== ids.length ||
-        new Set(input.results.items.map((i) => i.stockItemId)).size !==
-          ids.length ||
-        input.results.items.some(
-          (i) =>
-            !ids.includes(i.stockItemId) ||
-            i.expectedRevision !== row.baselines[i.stockItemId]?.revision,
-        )
-      )
-        throw new BadRequestException(
-          'Results must match the saved cutting sheet and stock revisions.',
-        );
-      const result = presentWorksheet(
-        await context.cuttingWorksheets.update(id, {
-          results: input.results,
-          ...(input.draft ? { draft: input.draft } : {}),
-          submittedAt: new Date(),
-          submittedByUserId: actor,
-        }),
+  async submitInTransaction(
+    context: UnitOfWorkContext,
+    id: string,
+    input: WorksheetSubmit,
+    actor: string,
+  ) {
+    const row = await context.cuttingWorksheets.find(id, true);
+    if (!row) throw new NotFoundException('Worksheet not found.');
+    if (row.abandonedAt || row.skippedAt)
+      throw new ConflictException(
+        'This sheet was closed without recording results.',
       );
-      await this.audit.record(context, actor, 'cutting.submitted', [
-        {
-          recordType: 'cutting-worksheets',
-          recordId: id,
-          before: { type: 'cutting-worksheets', value: presentWorksheet(row) },
-          after: { type: 'cutting-worksheets', value: result },
-        },
-      ]);
-      return result;
-    });
+    if (row.submittedAt) {
+      if (
+        canonicalJson(row.results) === canonicalJson(input.results) &&
+        (!input.draft ||
+          canonicalJson(row.draft) === canonicalJson(input.draft))
+      )
+        return presentWorksheet(row);
+      throw new ConflictException('Results already submitted.');
+    }
+    if (row.revision !== input.expectedRevision)
+      throw new ConflictException(
+        'Worksheet changed; reload before submitting.',
+      );
+    if (input.draft) this.validateDraft(row, input.draft);
+    const ids = row.snapshot.items.map((i) => i.stockItemId);
+    if (
+      (input.results.unusedStockItemIds?.length ?? 0) > 0 ||
+      input.results.expectedRevision !== row.snapshot.revision ||
+      input.results.items.length !== ids.length ||
+      new Set(input.results.items.map((i) => i.stockItemId)).size !==
+        ids.length ||
+      input.results.items.some(
+        (i) =>
+          !ids.includes(i.stockItemId) ||
+          i.expectedRevision !== row.baselines[i.stockItemId]?.revision,
+      )
+    )
+      throw new BadRequestException(
+        'Results must match the saved cutting sheet and stock revisions.',
+      );
+    const result = presentWorksheet(
+      await context.cuttingWorksheets.update(id, {
+        results: input.results,
+        ...(input.draft ? { draft: input.draft } : {}),
+        submittedAt: new Date(),
+        submittedByUserId: actor,
+      }),
+    );
+    await this.audit.record(context, actor, 'cutting.submitted', [
+      {
+        recordType: 'cutting-worksheets',
+        recordId: id,
+        before: { type: 'cutting-worksheets', value: presentWorksheet(row) },
+        after: { type: 'cutting-worksheets', value: result },
+      },
+    ]);
+    return result;
   }
   returnForCorrection(
     id: string,

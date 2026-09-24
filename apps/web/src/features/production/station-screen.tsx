@@ -223,14 +223,17 @@ function StationQueue({ station }: { station: Station }) {
                   </div>
                 )}
                 <div className="inline-actions">
-                  {station === 'cutting' && (
-                    <Button asChild variant="outline">
-                      <Link href={`/stations/cutting/${order.id}`}>
-                        Open cutting sheet
-                      </Link>
-                    </Button>
-                  )}
-                  {station !== 'cutting' && (
+                  {station === 'cutting' &&
+                    (order.hasCuttingWorksheet || !order.cutAt) && (
+                      <Button asChild variant="outline">
+                        <Link href={`/stations/cutting/${order.id}`}>
+                          {order.hasCuttingWorksheet
+                            ? 'Open cutting sheet'
+                            : 'Use cutting worksheet'}
+                        </Link>
+                      </Button>
+                    )}
+                  {(station !== 'cutting' || order.canRecordCutManually) && (
                     <CompletionAction
                       station={station}
                       orderId={order.id}
