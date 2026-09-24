@@ -51,9 +51,10 @@ test('cutter saves a digital sheet, marks cut independently, and submits for off
   await page
     .getByRole('button', { name: 'Mark 104801 cut', exact: true })
     .click();
+  await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Cut recorded', exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: /^Mark 104801 cut/ }),
+  ).toHaveCount(0);
   expect(state.completionRequests).toHaveLength(0);
   await page
     .getByLabel('What happened to this stock item?')

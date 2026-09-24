@@ -66,9 +66,7 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
   await page.getByLabel('Station', { exact: true }).selectOption('shipping');
   await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Shipped recorded', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText('Order 104801 shipped recorded.')).toBeVisible();
   expect(state.orderRequests).toEqual([
     { method: 'PATCH', body: { expectedRevision: 3, shipDate: '2026-10-06' } },
   ]);

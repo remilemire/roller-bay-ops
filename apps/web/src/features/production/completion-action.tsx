@@ -39,6 +39,10 @@ export function CompletionAction({
       ]);
     },
   });
+  // A recorded milestone leaves nothing to press: the record itself is shown
+  // by the caller, so a disabled button would only look like a missed field.
+  if (done && !mutation.pending && !mutation.isSuccess && !mutation.error)
+    return null;
   return (
     <div className="action-group">
       {mutation.error && <ErrorNotice error={mutation.error} />}
@@ -57,21 +61,18 @@ export function CompletionAction({
           </Button>
         </div>
       )}
-      <Button
-        disabled={
-          !employeeIds.length ||
-          done ||
-          mutation.isPending ||
-          !!mutation.pending
-        }
-        onClick={() => mutation.mutate({ employeeIds })}
-      >
-        {done
-          ? `${completionLabels[station].replace(/^./, (s) => s.toUpperCase())} recorded`
-          : mutation.isPending
+      {!done && (
+        <Button
+          disabled={
+            !employeeIds.length || mutation.isPending || !!mutation.pending
+          }
+          onClick={() => mutation.mutate({ employeeIds })}
+        >
+          {mutation.isPending
             ? 'Saving…'
             : `Mark ${orderNumber} ${completionLabels[station]}`}
-      </Button>
+        </Button>
+      )}
       {mutation.isSuccess && (
         <p role="status">
           Order {orderNumber} {completionLabels[station]} recorded.
