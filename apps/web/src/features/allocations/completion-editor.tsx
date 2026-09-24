@@ -527,7 +527,11 @@ export function CompletionEditor({
             />
           )}
           {saveDraft.error && <ErrorNotice error={saveDraft.error} />}
-          {draftSaved && !dirty && <p role="status">Progress saved.</p>}
+          {draftSaved && !dirty && (
+            <p className="notice notice-info" role="status">
+              Progress saved.
+            </p>
+          )}
           <div className="form-actions">
             {worksheet?.saveDraft && (
               <Button
