@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { Pool } from 'pg';
 import 'reflect-metadata';
 import { DatabaseService } from '../database/database.service.js';
+import { endPool } from '../database/testing/test-database.js';
 import { AuditService } from '../features/audit/index.js';
 import { presentEmployee } from '../features/employees/testing/index.js';
 import { startSignedInApp } from '../testing/integration-app.js';
@@ -196,7 +197,7 @@ test('unit of work over PostgreSQL', { timeout: 60_000 }, async (t) => {
         connectionString: h.config.DATABASE_URL,
         max: 1,
       });
-      st.after(() => pool.end());
+      st.after(() => endPool(pool));
       const db = drizzle(pool);
       const isolated = new UnitOfWork({ db } as unknown as DatabaseService);
       const settings = sql`SELECT current_setting('lock_timeout') AS lock, current_setting('statement_timeout') AS statement`;

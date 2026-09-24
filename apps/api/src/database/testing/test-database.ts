@@ -45,10 +45,30 @@ export async function createTestDatabase(
   try {
     await migrate(drizzle(pool), { migrationsFolder });
   } catch (error) {
-    await pool.end();
+    await endPool(pool);
     await drop();
     throw error;
   }
-  await pool.end();
+  await endPool(pool);
   return { url: target.href, drop };
+}
+
+/**
+ * Ends `pool` and waits until its connections have closed. `pool.end()`
+ * resolves once the pool has let go of its clients, before their sockets
+ * close, so a forced drop straight after it can terminate a closing
+ * connection; the pool reports that as an 'error' event, which crashes the
+ * test process when nothing listens.
+ */
+export async function endPool(pool: Pool) {
+  let open = pool.totalCount;
+  const closed = new Promise<void>((resolve) => {
+    if (!open) return resolve();
+    // Emitted for every client the pool ends, once its connection has closed.
+    pool.on('remove', () => {
+      if (--open === 0) resolve();
+    });
+  });
+  await pool.end();
+  await closed;
 }

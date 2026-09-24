@@ -7,6 +7,7 @@ import { Pool, type PoolClient } from 'pg';
 import { testDatabaseUrl } from '../testing/test-services.js';
 import {
   createTestDatabase,
+  endPool,
   migrationsFolder,
 } from './testing/test-database.js';
 
@@ -34,7 +35,7 @@ async function databaseBefore(t: TestContext, prefix: string) {
   // In this order: the pool waits for its client, the drop for the pool.
   t.after(async () => {
     client.release();
-    await pool.end();
+    await endPool(pool);
     await database.drop();
   });
   const target = files.findIndex((name) => name.startsWith(prefix));

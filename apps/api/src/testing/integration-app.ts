@@ -15,7 +15,10 @@ import request from 'supertest';
 import { ErrorsModule } from '../common/errors/errors.module.js';
 import { PassthroughExpressAdapter } from '../common/errors/express.adapter.js';
 import { environmentSchema } from '../config/environment.js';
-import { createTestDatabase } from '../database/testing/test-database.js';
+import {
+  createTestDatabase,
+  endPool,
+} from '../database/testing/test-database.js';
 import { AllocationsModule } from '../features/allocations/index.js';
 import { ProductionModule } from '../features/production/index.js';
 import { AuditModule } from '../features/audit/index.js';
@@ -62,7 +65,7 @@ export async function startIntegrationApp(t: TestContext) {
       if (keys.size) await redis.client.del([...keys]);
     }
     await started.app?.close();
-    await started.pool?.end();
+    if (started.pool) await endPool(started.pool);
     await database.drop();
   });
   const pool = new Pool({ connectionString: database.url });
