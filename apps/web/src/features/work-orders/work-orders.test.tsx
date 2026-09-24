@@ -348,7 +348,7 @@ it('sends an order with no allocation to be planned, whoever is signed in', asyn
   );
 });
 
-it('edits and unschedules an order with the revision it shows', async () => {
+it('edits the note and unschedules an order with the revision it shows', async () => {
   vi.mocked(updateOrder).mockResolvedValue(order);
   vi.mocked(deleteOrder).mockResolvedValue(undefined);
   show(<OrderDetailScreen id={order.id} {...sections} />);
@@ -362,13 +362,14 @@ it('edits and unschedules an order with the revision it shows', async () => {
     '/allocations?state=all&search=104801',
   );
 
-  await user.click(screen.getByRole('button', { name: 'Edit' }));
-  const editor = within(screen.getByRole('dialog'));
-  // The order number is fixed once created, and the date has its own dialog.
-  expect(editor.queryByLabelText(/Order number/)).toBeNull();
-  expect(editor.queryByRole('button', { name: 'Ship date' })).toBeNull();
+  // The note is the only field of the order's own that can be edited.
+  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Edit note' }));
+  const editor = within(
+    screen.getByRole('dialog', { name: 'Note for order 104801' }),
+  );
   await user.clear(editor.getByLabelText('Note'));
-  await user.click(editor.getByRole('button', { name: 'Save order' }));
+  await user.click(editor.getByRole('button', { name: 'Save note' }));
   await waitFor(() =>
     expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
       expectedRevision: 3,

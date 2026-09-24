@@ -25,7 +25,7 @@ const fieldName = (issue: ErrorIssue) =>
  * created, and its blinds entered, where its fabric is allocated; its ship
  * date is set once that is done.
  */
-export function OrderEditor({
+export function OrderNoteEditor({
   order,
   close,
 }: {
@@ -60,7 +60,7 @@ export function OrderEditor({
       onOpenChange={(open) => {
         if (!open && !mutation.isPending) close();
       }}
-      title={`Edit order ${opened.orderNumber}`}
+      title={`Note for order ${opened.orderNumber}`}
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
         <TextField
@@ -89,7 +89,7 @@ export function OrderEditor({
             Cancel
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : 'Save order'}
+            {mutation.isPending ? 'Saving…' : 'Save note'}
           </Button>
         </div>
       </form>

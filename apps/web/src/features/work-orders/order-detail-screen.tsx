@@ -15,7 +15,7 @@ import {
   Status,
 } from '@/components/ui/feedback';
 import { calendarDateLabel, dateLabel } from '@/lib/format';
-import { OrderEditor } from './order-editor';
+import { OrderNoteEditor } from './order-note-editor';
 import { OrderReschedule } from './order-reschedule';
 import { deleteOrder, orderDetail, workOrdersKey } from './work-orders.api';
 
@@ -51,7 +51,7 @@ function OrderRecord({
   const client = useQueryClient();
   const router = useRouter();
   const [cancelling, setCancelling] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const remove = useMutation({
@@ -86,9 +86,6 @@ function OrderRecord({
         )}
         {canManage && !order.cancelledAt && (
           <>
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
             {/* A date follows the allocation. */}
             {(order.allocatedAt || order.shipDate) && (
               <Button variant="outline" onClick={() => setRescheduling(true)}>
@@ -137,13 +134,27 @@ function OrderRecord({
               ['Assembled', milestone(order.assembledAt)],
               ['Checked', milestone(order.checkedAt)],
               ['Shipped', milestone(order.shippedAt)],
-              ['Note', order.note ?? '—'],
             ].map(([label, value]) => (
               <div key={label}>
                 <div className="detail-label">{label}</div>
                 <div className="detail-value">{value}</div>
               </div>
             ))}
+            <div>
+              <div className="detail-label">Note</div>
+              <div className="detail-value inline-actions">
+                <span>{order.note ?? '—'}</span>
+                {canManage && !order.cancelledAt && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingNote(true)}
+                  >
+                    Edit note
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
           {order.allocatedAt && (
             <p>
@@ -167,7 +178,9 @@ function OrderRecord({
       )}
       {history}
       {cancelling && cancellation(() => setCancelling(false))}
-      {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
+      {editingNote && (
+        <OrderNoteEditor order={order} close={() => setEditingNote(false)} />
+      )}
       {rescheduling && (
         <OrderReschedule order={order} close={() => setRescheduling(false)} />
       )}
