@@ -1115,6 +1115,12 @@ td strong {
   align-items: center;
   gap: 8px;
 }
+/* A button with its status or error beneath; keeps the button's own width in a stack. */
+.action-group {
+  display: grid;
+  justify-items: start;
+  gap: var(--record-padding);
+}
 .combobox {
   position: relative;
 }

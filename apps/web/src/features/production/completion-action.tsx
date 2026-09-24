@@ -40,10 +40,10 @@ export function CompletionAction({
     },
   });
   return (
-    <div>
+    <div className="action-group">
       {mutation.error && <ErrorNotice error={mutation.error} />}
       {mutation.pending && (
-        <div>
+        <div className="action-group">
           <p>
             The previous completion has an uncertain result. Retry it with its
             original employee before recording another.

@@ -83,13 +83,15 @@ function CuttingOrder({
               Beginning saves the current plan and prevents changes while it is
               being cut.
             </p>
-            <Button
-              disabled={!employee.employeeId || start.isPending}
-              onClick={() => start.mutate()}
-            >
-              Begin cutting
-            </Button>
-            {start.error && <ErrorNotice error={start.error} />}
+            <div className="action-group">
+              <Button
+                disabled={!employee.employeeId || start.isPending}
+                onClick={() => start.mutate()}
+              >
+                Begin cutting
+              </Button>
+              {start.error && <ErrorNotice error={start.error} />}
+            </div>
           </>
         )}
       </section>
@@ -115,9 +117,14 @@ function CutCompletion({
   const completed = query.data?.find((c) => c.station === 'cutting');
   return (
     <>
-      {completed && (
+      {completed ? (
         <p>
           Cut by {completed.employeeName} ({completed.employeeInitials})
+        </p>
+      ) : (
+        <p className="muted">
+          Record completion when the whole order is cut. Measurements can be
+          submitted separately.
         </p>
       )}
       {query.data && (
@@ -129,10 +136,6 @@ function CutCompletion({
           done={!!completed}
         />
       )}
-      <p className="muted">
-        Record completion when the whole order is cut. Measurements can be
-        submitted separately.
-      </p>
     </>
   );
 }
