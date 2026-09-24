@@ -15,7 +15,7 @@ import { stationSchema, type Station } from '@roller-bay/shared/users';
 import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useListParams } from '@/lib/use-list-params';
 import { calendarDateLabel, count, dateTimeLabel } from '@/lib/format';
-import { TextField } from '@/components/ui/field';
+import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,
@@ -157,18 +157,15 @@ function StationQueue({ station }: { station: Station }) {
   } as const;
   return (
     <div className="stack">
-      <section className="panel panel-body stack">
-        <div className="form-grid">
-          <TextField
-            label="Find order"
-            inputMode="numeric"
-            maxLength={6}
-            value={params.search}
-            onChange={(search) =>
-              params.set({ search: search.replace(/\D/g, ''), page: 1 })
-            }
-          />
-        </div>
+      <SearchToolbar
+        search={params.search}
+        onSearch={(search) =>
+          params.set({ search: search.replace(/\D/g, '').slice(0, 6), page: 1 })
+        }
+        placeholder="Search order number…"
+        inputMode="numeric"
+        maxLength={6}
+      >
         <div className="tabs" role="group" aria-label="Order view">
           {(['queue', 'completed', 'all'] as const).map((v) => (
             <button
@@ -185,7 +182,7 @@ function StationQueue({ station }: { station: Station }) {
             </button>
           ))}
         </div>
-      </section>
+      </SearchToolbar>
       {query.isPending ? (
         <Loading />
       ) : query.error ? (

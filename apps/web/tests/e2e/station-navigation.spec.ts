@@ -107,7 +107,9 @@ test('changing stations returns to the station choices and resets attribution an
     page.getByRole('heading', { name: 'Assembly station' }),
   ).toBeVisible();
   await expect(selectedEmployee(page, 'Alex Reed')).toHaveCount(0);
-  await expect(page.getByLabel('Find order')).toHaveValue('');
+  await expect(
+    page.getByRole('searchbox', { name: 'Search order number…' }),
+  ).toHaveValue('');
   await expect(
     page.getByRole('button', { name: 'Work queue', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -139,6 +141,10 @@ test('station layout uses the same content width as other workspace pages', asyn
   ).toHaveCount(0);
   const stationWidth = (await page.locator('.station-workspace').boundingBox())!
     .width;
+  const stationTabHeight = (await page
+    .locator('.toolbar .tab')
+    .first()
+    .boundingBox())!.height;
   await page.screenshot({
     path: info.outputPath('station-layout.png'),
     fullPage: true,
@@ -149,9 +155,48 @@ test('station layout uses the same content width as other workspace pages', asyn
   ).toBeVisible();
   const otherWidth = (await page.locator('.page-heading').boundingBox())!.width;
   expect(stationWidth).toBeCloseTo(otherWidth, 0);
+  await page.goto('/stock-receipts');
+  await expect(
+    page.getByRole('heading', { name: 'Stock receipts', exact: true }),
+  ).toBeVisible();
+  const standardTabHeight = (await page
+    .locator('.toolbar .tab')
+    .first()
+    .boundingBox())!.height;
+  expect(stationTabHeight).toBe(standardTabHeight);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test('station search and views use the shared list toolbar', async ({
+  page,
+}) => {
+  await mockApi(page, { role: 'production', stations: ['cutting'] });
+  await page.goto('/stations');
+  const toolbar = page.locator('.station-workspace .toolbar');
+  const search = toolbar.getByRole('searchbox', {
+    name: 'Search order number…',
+  });
+  await expect(search).toHaveAttribute('inputmode', 'numeric');
+  await expect(
+    toolbar.getByRole('button', { name: 'Search', exact: true }),
+  ).toBeVisible();
+  await expect(
+    toolbar.getByRole('group', { name: 'Order view' }),
+  ).toBeVisible();
+  await search.fill('104801');
+  await search.press('Enter');
+  await expect(page).toHaveURL(/search=104801/);
+  await expect(
+    toolbar.getByRole('button', { name: 'All allocated orders' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await toolbar.getByRole('button', { name: 'Completed today' }).click();
+  await expect(search).toHaveValue('');
+  await expect(page).toHaveURL(/view=completed/);
+  await expect(
+    toolbar.getByRole('button', { name: 'Completed today' }),
+  ).toHaveAttribute('aria-pressed', 'true');
 });

@@ -22,10 +22,14 @@ export function SearchForm({
   search,
   onSearch,
   placeholder = 'Search…',
+  inputMode,
+  maxLength,
 }: {
   search: string;
   onSearch: (value: string) => void;
   placeholder?: string;
+  inputMode?: ComponentProps<typeof Input>['inputMode'];
+  maxLength?: number;
 }) {
   const [text, setText] = useState(search);
   const [editing, setEditing] = useState(false);
@@ -62,6 +66,8 @@ export function SearchForm({
     >
       <Input
         type="search"
+        inputMode={inputMode}
+        maxLength={maxLength}
         aria-label={placeholder}
         placeholder={placeholder}
         value={text}
