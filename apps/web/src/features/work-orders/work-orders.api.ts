@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import * as s from '@roller-bay/shared/work-orders';
 import { api, noContent, queryString } from '@/lib/api';
+import { blindCount } from './order-totals';
 export const workOrdersKey = ['work-orders'] as const;
 export const orderList = (filters: Record<string, unknown> = {}) =>
   queryOptions({
@@ -63,3 +64,33 @@ export const unscheduledOrders = (search = '') =>
         s.workOrderListSchema,
       ),
   });
+/** An order as a picker names it: its number and blind count. */
+export const orderLabel = (order: s.WorkOrder) =>
+  `${order.orderNumber} · ${blindCount(order.quantity)}`;
+/**
+ * The orders an allocation can be made for, as picker options: open, and
+ * without a live allocation. The API searches digits of the order number.
+ */
+export async function lookupUnallocatedOrders(
+  search: string,
+  page: number,
+  signal: AbortSignal,
+) {
+  const data = await api(
+    `/work-orders${queryString({
+      status: 'unallocated',
+      search: search.replace(/\D/g, '').slice(0, 6),
+      page,
+      pageSize: 25,
+    })}`,
+    s.workOrderListSchema,
+    { signal },
+  );
+  return {
+    total: data.total,
+    items: data.items.map((order) => ({
+      id: order.id,
+      label: orderLabel(order),
+    })),
+  };
+}

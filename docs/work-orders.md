@@ -77,7 +77,7 @@ POST with a deleted order's number restores that order instead of reporting a du
 
 ## Lists
 
-Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the eight statuses, `open`, which lists every order that has not shipped or been cancelled, or `unscheduled`, the queue of allocated orders (cut or not) still waiting for a ship date. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. A ship-date bound leaves out orders with no date. Orders sort by ship date, undated last, then order number; page data and totals use the same database snapshot.
+Lists return `{ items, total, page, pageSize }` and accept `page` (default 1), `pageSize` (default 25, maximum 100), `search`, `status`, `shipDateFrom`, and `shipDateTo`. Search is a case-insensitive literal substring of the order number. `status` is one of the eight statuses, `open`, which lists every order that has not shipped or been cancelled, `unscheduled`, the queue of allocated orders (cut or not) still waiting for a ship date, or `unallocated`, the orders an allocation can be made for: not shipped or cancelled and with no live allocation, dated or not. `shipDateFrom` and `shipDateTo` are inclusive calendar-day bounds (`YYYY-MM-DD`) that the week and month views use. A ship-date bound leaves out orders with no date. Orders sort by ship date, undated last, then order number; page data and totals use the same database snapshot.
 
 ## Concurrency and errors
 

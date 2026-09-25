@@ -1,6 +1,8 @@
 export { blindCount, orderTotals } from './order-totals';
 export {
+  lookupUnallocatedOrders,
   orderDetail,
+  orderLabel,
   orderList,
   orderRange,
   workOrdersKey,

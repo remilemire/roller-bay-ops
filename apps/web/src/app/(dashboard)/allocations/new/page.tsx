@@ -1,13 +1,11 @@
-import { AllocationEditor } from '@/features/allocations/allocation-editor';
-import { NewOrder } from './new-order';
+import { NewAllocation } from './new-allocation';
 export default async function Page({
   searchParams,
 }: {
   searchParams: Promise<{ workOrder?: string | string[] }>;
 }) {
   const { workOrder } = await searchParams;
+  const workOrderId = typeof workOrder === 'string' ? workOrder : undefined;
   // Keyed by the order: the form reads it once, when it mounts.
-  if (typeof workOrder === 'string')
-    return <AllocationEditor key={workOrder} workOrderId={workOrder} />;
-  return <NewOrder />;
+  return <NewAllocation key={workOrderId ?? 'new'} workOrderId={workOrderId} />;
 }

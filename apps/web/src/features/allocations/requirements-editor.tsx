@@ -14,13 +14,10 @@ export function RequirementsEditor({
   form,
   units,
   onChange,
-  count,
 }: {
   form: UseFormReturn<AllocationForm>;
   units: MeasurementUnits;
   onChange: () => void;
-  /** The blinds entered against the order's count, once the order is known. */
-  count?: React.ReactNode;
 }) {
   const requirements = useFieldArray({
     control: form.control,
@@ -50,7 +47,6 @@ export function RequirementsEditor({
             In finished sizes. The configured drop allowance is added
             automatically.
           </p>
-          {count}
         </div>
         <Button
           variant="outline"

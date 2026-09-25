@@ -110,10 +110,11 @@ test('work order updates require a revision and a change, and cannot rename the 
   );
 });
 
-test('work order queries accept each status and the two queue filters', () => {
+test('work order queries accept each status and the three queue filters', () => {
   for (const status of [
     'open',
     'unscheduled',
+    'unallocated',
     'new',
     'allocated',
     'scheduled',

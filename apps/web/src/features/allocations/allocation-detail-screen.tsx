@@ -3,7 +3,7 @@ import { useCanManage } from '@/features/auth';
 import { CompletionCorrectionEditor } from './completion-correction-editor';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { z } from 'zod';
 import {
   allocationRecordSchema,
@@ -36,6 +36,8 @@ type AllocationSections = {
   history: ReactNode;
   /** Admin cancellation review, which reports cutting results to resolve. */
   cancellation: (close: () => void) => ReactNode;
+  /** The add-order modal a draft's order picker offers. */
+  addOrder?: ComponentProps<typeof AllocationEditor>['addOrder'];
 };
 export function AllocationDetailScreen({
   id,
@@ -70,6 +72,7 @@ function AllocationRecord({
   recordResults,
   history,
   cancellation,
+  addOrder,
 }: {
   allocation: z.infer<typeof allocationRecordSchema>;
   recordResults: boolean;
@@ -109,7 +112,11 @@ function AllocationRecord({
   if (draft)
     return (
       <>
-        <AllocationEditor initial={draft} onSubmitted={() => setDraft(null)} />
+        <AllocationEditor
+          initial={draft}
+          onSubmitted={() => setDraft(null)}
+          addOrder={addOrder}
+        />
         {history}
       </>
     );

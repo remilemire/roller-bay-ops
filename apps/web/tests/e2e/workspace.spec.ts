@@ -299,33 +299,45 @@ test('allocation optimization is a preview until the shared draft is confirmed',
 }, testInfo) => {
   const state = await mockApi(page);
   await page.goto('/allocations/new');
-  // A new order starts with its number alone: no blinds or plan until it
-  // exists, and it is made by a request of its own, only when asked for.
-  await expect(page.getByRole('heading', { name: 'New order' })).toBeVisible();
+  // An allocation starts from its order: picked from those with no
+  // allocation yet, or added in a modal by a request of its own.
   await expect(
-    page.getByRole('button', { name: 'Add blind', exact: true }),
-  ).toHaveCount(0);
-  const orderNumber = page.getByLabel('Order number');
-  const create = page.getByRole('button', { name: 'Add order' });
-  await page.getByLabel('Blinds').fill('1');
+    page.getByRole('heading', { name: 'Allocate order' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Save draft', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('combobox', { name: 'Order' }).click();
+  await expect(
+    page.getByRole('option', { name: '104877 · 1 blind', exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Add order', exact: true }).click();
+  const adding = page.getByRole('dialog', { name: 'Add order' });
+  const orderNumber = adding.getByLabel('Order number');
+  const create = adding.getByRole('button', { name: 'Add order' });
+  await adding.getByLabel('Blinds').fill('1');
   await orderNumber.fill('1049');
   await expect(create).toBeDisabled();
   // A number that is taken says where its order is.
   await orderNumber.fill('104801');
   await create.click();
-  await expect(page.getByText('Order 104801 already exists.')).toBeVisible();
+  await expect(adding.getByText('Order 104801 already exists.')).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Open the order' }),
+    adding.getByRole('link', { name: 'Open the order' }),
   ).toHaveAttribute('href', `/work-orders/${ids.order}`);
   state.orderRequests.length = 0;
   await orderNumber.fill('104950');
   expect(state.orderRequests).toEqual([]);
   await create.click();
-  // The screen opens on the created order, and a reload would keep it.
+  // The modal closes on the created order, picked for this allocation.
+  await expect(adding).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: 'Allocate 104950' }),
   ).toBeVisible();
-  await expect(page).toHaveURL(/\/allocations\/new\?workOrder=/);
+  await expect(page.getByRole('combobox', { name: 'Order' })).toHaveValue(
+    '104950 · 1 blind',
+  );
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',

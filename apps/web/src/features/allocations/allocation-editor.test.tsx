@@ -6,7 +6,7 @@ import {
   allocationDraftSchema,
   type AllocationOptimization,
 } from '@roller-bay/shared/allocations';
-import { allocation, ids, stock } from '../../../tests/fixtures';
+import { allocation, ids, order, stock } from '../../../tests/fixtures';
 import { AllocationDetailScreen } from './allocation-detail-screen';
 import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
@@ -475,12 +475,11 @@ it('offers to reload a stale draft, but not for an order that is already allocat
   await user.click(confirm);
   await waitFor(() => expect(reload()).toBeInTheDocument());
 
-  // Reloading the draft would not fix the order it names.
+  // Reloading the draft would not fix the order it names, which shows
+  // beside the order picker.
   await user.click(confirm);
   await waitFor(() =>
-    expect(
-      screen.getByText('Order 104801: Already allocated.'),
-    ).toBeInTheDocument(),
+    expect(screen.getByText('Already allocated.')).toBeInTheDocument(),
   );
   expect(reload()).toBeNull();
 });
@@ -510,4 +509,59 @@ it('leaves a pending new-allocation request alone while editing an active plan',
     sessionStorage.getItem('roller-bay:pending:allocation:user-1:new'),
   ).toBe(pending);
   sessionStorage.clear();
+});
+
+it('picks the order to allocate, or adds one in a modal and picks it', async () => {
+  const user = userEvent.setup();
+  const made = { ...allocation, id: crypto.randomUUID() };
+  show(
+    <AllocationEditor
+      addOrder={({ close, onCreated }) => (
+        <div role="dialog" aria-label="Add order">
+          <button
+            type="button"
+            onClick={() =>
+              onCreated({
+                ...order,
+                id: made.id,
+                orderNumber: '104950',
+                quantity: 3,
+              })
+            }
+          >
+            Add order
+          </button>
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+        </div>
+      )}
+    />,
+  );
+  // With no order there is nothing to save or confirm.
+  expect(screen.getByRole('heading', { name: 'Allocate order' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Confirm allocation' }),
+  ).toBeDisabled();
+  // The picker takes an existing order.
+  await user.type(screen.getByLabelText('Order'), ids.order);
+  expect(
+    await screen.findByText('The order has 1 blind; 0 entered.'),
+  ).toBeInTheDocument();
+  await ready();
+  // Or one added in the modal, which is picked once it exists.
+  await user.click(screen.getByRole('button', { name: 'Add order' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Add order' }));
+  await user.click(dialog.getByRole('button', { name: 'Add order' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByLabelText('Order')).toHaveValue(made.id);
+});
+
+it("shows an active plan's order without a picker", async () => {
+  orders.allocated = true;
+  show(<AllocationEditor active={allocation} addOrder={() => null} />);
+  expect(await screen.findByText('104801 · 1 blind')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Order')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Add order' })).toBeNull();
 });

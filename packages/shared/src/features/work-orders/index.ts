@@ -70,9 +70,10 @@ export const workOrderQuerySchema = z.strictObject({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(6).optional(),
   // `open` lists every order that has not shipped; `unscheduled` lists the
-  // allocated orders still waiting for a ship date.
+  // allocated orders still waiting for a ship date; `unallocated` lists the
+  // open orders an allocation can be made for.
   status: z
-    .enum(['open', 'unscheduled', ...orderStatusSchema.options])
+    .enum(['open', 'unscheduled', 'unallocated', ...orderStatusSchema.options])
     .optional(),
   // Inclusive ship-date bounds, for the week and month views.
   shipDateFrom: z.iso.date().optional(),

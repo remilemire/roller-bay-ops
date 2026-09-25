@@ -3,7 +3,7 @@ import { ApiError } from '@/lib/api';
 import { RequirementsEditor } from './requirements-editor';
 import { CutPlanEditor } from './cut-plan-editor';
 import { PlanPreview } from './plan-preview';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, type ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,11 +19,19 @@ import {
   type AllocationValidation,
   requirementInput,
 } from '@roller-bay/shared/allocations';
-import { Save, Check } from 'lucide-react';
+import { Save, Check, Plus } from 'lucide-react';
+import type { WorkOrder } from '@roller-bay/shared/work-orders';
+import { Lookup } from '@/components/ui/lookup';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
-import { blindCount, orderDetail, workOrdersKey } from '@/features/work-orders';
+import {
+  blindCount,
+  lookupUnallocatedOrders,
+  orderDetail,
+  orderLabel,
+  workOrdersKey,
+} from '@/features/work-orders';
 import { stockKey } from '@/features/stock-items';
 import { useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
@@ -56,11 +64,11 @@ import {
   allocationKey,
 } from './allocations.api';
 /**
- * A form opens on an existing order, a shared draft or the active plan it
- * edits. Creating the order comes first, as a request of its own.
+ * A form opens blank or on a chosen order, on a shared draft, or on the active
+ * plan it edits. An order is picked, or added as a request of its own.
  */
 type Opening =
-  | { workOrderId: string; initial?: never; active?: never }
+  | { workOrderId?: string; initial?: never; active?: never }
   | {
       initial: z.infer<typeof allocationDraftSchema>;
       workOrderId?: never;
@@ -73,9 +81,18 @@ export function AllocationEditor({
   active,
   close,
   onSubmitted,
+  addOrder,
 }: Opening & {
   close?: () => void;
   onSubmitted?: () => void;
+  /**
+   * The add-order modal, composed by the route: work orders own it. The
+   * editor opens it and picks the order it creates.
+   */
+  addOrder?: (props: {
+    close: () => void;
+    onCreated: (order: WorkOrder) => void;
+  }) => ReactNode;
 }) {
   const user = useCurrentUser();
   // Pin the units this form opened with: a session refetch must not relabel
@@ -125,6 +142,7 @@ export function AllocationEditor({
   const [preview, setPreview] = useState<
     AllocationOptimization | AllocationValidation | null
   >(null);
+  const [adding, setAdding] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const client = useQueryClient();
   const router = useRouter();
@@ -325,8 +343,8 @@ export function AllocationEditor({
           retry={() => void orderQuery.refetch()}
         />
       )}
-      {/* An issue with the order itself, such as one already allocated. */}
-      {errors.workOrderId?.message && (
+      {/* An issue with an active plan's order, which has no picker. */}
+      {active && errors.workOrderId?.message && (
         <p className="notice notice-error" role="alert">
           Order {orderNumber}: {errors.workOrderId.message}
         </p>
@@ -334,18 +352,56 @@ export function AllocationEditor({
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
         <fieldset disabled={busy} className="form-fieldset">
           <div className="stack">
-            <RequirementsEditor
-              form={form}
-              units={units}
-              onChange={() => setPreview(null)}
-              count={
-                order && (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Order</h2>
+                  <p>
+                    {active
+                      ? 'A plan stays with its order.'
+                      : 'Orders with no allocation yet.'}
+                  </p>
+                </div>
+                {!active && addOrder && (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => setAdding(true)}
+                  >
+                    <Plus size={16} />
+                    Add order
+                  </Button>
+                )}
+              </div>
+              <div className="panel-body">
+                {active ? (
+                  <p>{order ? orderLabel(order) : active.orderNumber}</p>
+                ) : (
+                  <Lookup
+                    label="Order"
+                    value={values.workOrderId}
+                    onChange={(id) => {
+                      form.setValue('workOrderId', id, { shouldDirty: true });
+                      form.clearErrors('workOrderId');
+                    }}
+                    queryKey={[...workOrdersKey, 'unallocated']}
+                    load={lookupUnallocatedOrders}
+                    selectedLabel={order && orderLabel(order)}
+                    error={errors.workOrderId?.message}
+                  />
+                )}
+                {order && (
                   <p className={cn('order-count', mismatch && 'is-mismatch')}>
                     The order has {blindCount(order.quantity)}; {entered}{' '}
                     entered.
                   </p>
-                )
-              }
+                )}
+              </div>
+            </section>
+            <RequirementsEditor
+              form={form}
+              units={units}
+              onChange={() => setPreview(null)}
             />
             <CutPlanEditor
               form={form}
@@ -526,6 +582,16 @@ export function AllocationEditor({
           </Button>
         </div>
       </Dialog>
+      {adding &&
+        addOrder?.({
+          close: () => setAdding(false),
+          onCreated: (created) => {
+            // The new order is the one being allocated.
+            form.setValue('workOrderId', created.id, { shouldDirty: true });
+            form.clearErrors('workOrderId');
+            setAdding(false);
+          },
+        })}
     </>
   );
 }

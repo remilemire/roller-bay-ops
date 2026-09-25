@@ -28,6 +28,9 @@ const statusFilters = {
   open: isNull(shippedAt),
   // Allocated, or already cut, and still waiting for a ship date.
   unscheduled: and(isNotNull(allocatedAt), isNull(shipDate), isNull(shippedAt)),
+  // What an allocation may claim: not shipped, and no live allocation yet.
+  // A promised order whose allocation was cancelled is among them.
+  unallocated: and(isNull(allocatedAt), isNull(shippedAt)),
   new: and(
     isNull(allocatedAt),
     isNull(shipDate),

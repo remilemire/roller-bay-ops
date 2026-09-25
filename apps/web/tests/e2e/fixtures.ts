@@ -524,7 +524,9 @@ export async function mockApi(
                   ? row.status !== 'shipped'
                   : status === 'unscheduled'
                     ? !!row.allocatedAt && !row.shipDate && !row.shippedAt
-                    : row.status === status)),
+                    : status === 'unallocated'
+                      ? !row.allocatedAt && !row.shippedAt
+                      : row.status === status)),
           ),
           url,
         ),

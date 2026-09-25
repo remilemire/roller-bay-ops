@@ -429,6 +429,17 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         [7, 2, 2, 2],
       );
       assert.equal(page.items[0]!.orderNumber, '210003');
+
+      // The allocation picker's queue: open orders without an allocation,
+      // including a promised one whose allocation was cancelled.
+      await pool.query(
+        `INSERT INTO work_orders (order_number, quantity, ship_date, scheduled_at)
+           VALUES ('210008', 1, '2026-10-06', now())`,
+      );
+      assert.deepEqual(await numbers('status=unallocated'), [
+        '210008',
+        '210004',
+      ]);
     },
   );
 });
