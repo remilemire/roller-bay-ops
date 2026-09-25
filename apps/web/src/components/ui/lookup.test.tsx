@@ -16,11 +16,13 @@ function Harness({
   load,
   onChange = () => {},
   after,
+  create,
 }: {
   initial?: string;
   load: (search: string) => Promise<{ items: typeof colors; total: number }>;
   onChange?: (value: string) => void;
   after?: React.ReactNode;
+  create?: React.ComponentProps<typeof Lookup>['create'];
 }) {
   const [value, setValue] = useState(initial);
   const [client] = useState(
@@ -37,6 +39,7 @@ function Harness({
         }}
         queryKey={['colors']}
         load={load}
+        create={create}
       />
       {after}
     </QueryClientProvider>
@@ -179,4 +182,41 @@ it('describes a loading failure and retries without losing the selected value', 
   await waitFor(() => expect(box).toHaveValue('C2-000 · Linen voile'));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(box).not.toHaveAttribute('aria-describedby');
+});
+
+it('offers to create what a search names once its results are in, last among the options', async () => {
+  const user = userEvent.setup();
+  const onSelect = vi.fn();
+  const onChange = vi.fn();
+  render(
+    <Harness
+      load={filtering}
+      onChange={onChange}
+      create={{
+        // Only a full code that no listed color has.
+        label: (search, items) =>
+          /^[A-Z]\d-\d{3}$/.test(search) &&
+          !items.some((item) => item.label.startsWith(search))
+            ? `Create color ${search}`
+            : null,
+        onSelect,
+      }}
+    />,
+  );
+  const box = screen.getByRole('combobox', { name: 'Fabric color' });
+  await user.click(box);
+  await user.type(box, 'C1-000');
+  await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1));
+  expect(screen.queryByText(/Create color/)).toBeNull();
+  await user.clear(box);
+  await user.type(box, 'C9-999');
+  const option = await screen.findByRole('option', {
+    name: 'Create color C9-999',
+  });
+  expect(screen.queryByText('No matches.')).toBeNull();
+  // The keyboard reaches it like any option; choosing it selects nothing.
+  await user.keyboard('{ArrowDown}{Enter}');
+  expect(option).not.toBeInTheDocument();
+  expect(onSelect).toHaveBeenCalledWith('C9-999');
+  expect(onChange).not.toHaveBeenCalled();
 });

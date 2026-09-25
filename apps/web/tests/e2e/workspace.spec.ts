@@ -307,15 +307,22 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   await expect(
     page.getByRole('button', { name: 'Save draft', exact: true }),
   ).toBeDisabled();
-  await page.getByRole('combobox', { name: 'Order' }).click();
+  const picker = page.getByRole('combobox', { name: 'Order' });
+  await picker.click();
   await expect(
     page.getByRole('option', { name: '104877 · 1 blind', exact: true }),
   ).toBeVisible();
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Add order', exact: true }).click();
+  // A number that matches no listed order offers to create it, which opens
+  // the add-order modal with that number.
+  await picker.fill('104950');
+  await page
+    .getByRole('option', { name: 'Create order 104950', exact: true })
+    .click();
   const adding = page.getByRole('dialog', { name: 'Add order' });
   const orderNumber = adding.getByLabel('Order number');
+  await expect(orderNumber).toHaveValue('104950');
   const create = adding.getByRole('button', { name: 'Add order' });
+  await expect(create).toBeDisabled();
   await adding.getByLabel('Blinds').fill('1');
   await orderNumber.fill('1049');
   await expect(create).toBeDisabled();

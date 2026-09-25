@@ -91,6 +91,8 @@ export function AllocationEditor({
   addOrder?: (props: {
     close: () => void;
     onCreated: (order: WorkOrder) => void;
+    /** The number searched for in the picker, when that opened it. */
+    orderNumber?: string;
   }) => ReactNode;
 }) {
   const user = useCurrentUser();
@@ -141,7 +143,8 @@ export function AllocationEditor({
   const [preview, setPreview] = useState<
     AllocationOptimization | AllocationValidation | null
   >(null);
-  const [adding, setAdding] = useState(false);
+  // The add-order modal, open with the number it starts from, if any.
+  const [adding, setAdding] = useState<string | null>(null);
   // Whether a confirmation was tried: the count is checked from then on.
   const [countChecked, setCountChecked] = useState(false);
   const abort = useRef<AbortController | null>(null);
@@ -377,7 +380,7 @@ export function AllocationEditor({
                   <Button
                     variant="outline"
                     type="button"
-                    onClick={() => setAdding(true)}
+                    onClick={() => setAdding('')}
                   >
                     <Plus size={16} />
                     Add order
@@ -399,6 +402,20 @@ export function AllocationEditor({
                     load={lookupUnallocatedOrders}
                     selectedLabel={order && orderLabel(order)}
                     error={errors.workOrderId?.message}
+                    // A full number that matches no listed order can be
+                    // added from here.
+                    create={
+                      addOrder && {
+                        label: (search, items) =>
+                          /^\d{6}$/.test(search) &&
+                          !items.some((item) =>
+                            item.label.startsWith(`${search} `),
+                          )
+                            ? `Create order ${search}`
+                            : null,
+                        onSelect: setAdding,
+                      }
+                    }
                   />
                 )}
               </div>
@@ -592,14 +609,15 @@ export function AllocationEditor({
           </Button>
         </div>
       </Dialog>
-      {adding &&
+      {adding !== null &&
         addOrder?.({
-          close: () => setAdding(false),
+          orderNumber: adding,
+          close: () => setAdding(null),
           onCreated: (created) => {
             // The new order is the one being allocated.
             form.setValue('workOrderId', created.id, { shouldDirty: true });
             form.clearErrors('workOrderId');
-            setAdding(false);
+            setAdding(null);
           },
         })}
     </>

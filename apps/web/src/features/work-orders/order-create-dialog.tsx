@@ -34,14 +34,17 @@ const fieldName = (issue: ErrorIssue) => {
 export function OrderCreateForm({
   onCreated,
   onCancel,
+  orderNumber = '',
 }: {
   onCreated: (order: WorkOrder) => void;
   onCancel?: () => void;
+  /** A number to start from, such as one searched for and not found. */
+  orderNumber?: string;
 }) {
   // A note stays with admins; the API refuses one from anyone else.
   const canManage = useCanManage();
   const [fields, setFields] = useState<Fields>({
-    orderNumber: '',
+    orderNumber,
     quantity: '',
     note: '',
   });
@@ -177,9 +180,11 @@ export function OrderCreateForm({
 export function OrderCreateDialog({
   close,
   onCreated,
+  orderNumber,
 }: {
   close: () => void;
   onCreated: (order: WorkOrder) => void;
+  orderNumber?: string;
 }) {
   return (
     <Dialog
@@ -189,7 +194,11 @@ export function OrderCreateDialog({
       }}
       title="Add order"
     >
-      <OrderCreateForm onCreated={onCreated} onCancel={close} />
+      <OrderCreateForm
+        onCreated={onCreated}
+        onCancel={close}
+        orderNumber={orderNumber}
+      />
     </Dialog>
   );
 }

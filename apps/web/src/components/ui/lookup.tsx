@@ -20,6 +20,7 @@ export function Lookup({
   load,
   selectedLabel,
   error,
+  create,
 }: {
   label: string;
   value: string;
@@ -32,6 +33,17 @@ export function Lookup({
   ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
   selectedLabel?: string;
   error?: string;
+  /**
+   * An extra last option that creates what the search names, offered once
+   * the results for that search are in and `label` returns one for them.
+   */
+  create?: {
+    label: (
+      search: string,
+      items: readonly { id: string; label: string }[],
+    ) => string | null;
+    onSelect: (search: string) => void;
+  };
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -59,6 +71,12 @@ export function Lookup({
       `Selected · ${value.slice(0, 8).toUpperCase()}`)
     : '';
   const query = term.trim();
+  const creating =
+    create && query && search === query && result.data && !result.isFetching
+      ? create.label(query, items)
+      : null;
+  // The options the keyboard walks: the matches, then the create option.
+  const count = items.length + (creating ? 1 : 0);
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
@@ -86,9 +104,20 @@ export function Lookup({
     setTerm('');
     setOpen(true);
   }
+  function choose(index: number) {
+    const item = items[index];
+    if (item) pick(item);
+    else if (creating && index === items.length) {
+      close();
+      // Creating usually opens a dialog; focus coming back here must not
+      // reopen the list over the selection it makes.
+      input.current?.blur();
+      create!.onSelect(query);
+    }
+  }
   function move(step: number) {
-    if (!items.length) return;
-    setActive(Math.min(Math.max(active + step, 0), items.length - 1));
+    if (!count) return;
+    setActive(Math.min(Math.max(active + step, 0), count - 1));
   }
   const listId = `${id}-list`;
   const labelId = `${id}-label`;
@@ -114,7 +143,7 @@ export function Lookup({
               .join(' ') || undefined
           }
           aria-activedescendant={
-            open && items[active] ? `${id}-option-${active}` : undefined
+            open && active < count ? `${id}-option-${active}` : undefined
           }
           placeholder={selected || 'Type to search…'}
           value={open ? term : selected}
@@ -142,18 +171,17 @@ export function Lookup({
             } else if (event.key === 'ArrowUp') {
               event.preventDefault();
               move(-1);
-            } else if (event.key === 'Tab' && open && items.length) {
+            } else if (event.key === 'Tab' && open && count) {
               // Tab walks the options; past either end it leaves the field.
               const next = active + (event.shiftKey ? -1 : 1);
-              if (next < 0 || next >= items.length) close();
+              if (next < 0 || next >= count) close();
               else {
                 event.preventDefault();
                 setActive(next);
               }
             } else if (event.key === 'Enter' && open) {
               event.preventDefault();
-              const item = items[active];
-              if (item) pick(item);
+              choose(active);
             } else if (event.key === 'Escape' && open) {
               event.preventDefault();
               close();
@@ -206,7 +234,22 @@ export function Lookup({
               {item.label}
             </li>
           ))}
-          {!items.length && result.data && !result.error && (
+          {creating && (
+            <li
+              id={`${id}-option-${items.length}`}
+              role="option"
+              aria-selected={false}
+              className={cn(
+                'combobox-create',
+                active === items.length && 'is-active',
+              )}
+              onMouseEnter={() => setActive(items.length)}
+              onClick={() => choose(items.length)}
+            >
+              {creating}
+            </li>
+          )}
+          {!count && result.data && !result.error && (
             <li className="combobox-empty" role="presentation">
               No matches.
             </li>

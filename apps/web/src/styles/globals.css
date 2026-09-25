@@ -1260,6 +1260,11 @@ td strong {
   color: var(--muted);
   cursor: default;
 }
+/* Creating what the search names, set apart from the matches. */
+.combobox-list .combobox-create {
+  color: var(--primary);
+  font-weight: 600;
+}
 .date-trigger {
   display: flex;
   align-items: center;
