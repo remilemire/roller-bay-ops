@@ -122,8 +122,10 @@ test('help icons keep measurement labels aligned in station forms', async ({
     stations: ['cutting'],
   });
   await page.goto(`/stations/cutting/${ids.order}`);
-  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Begin cutting' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Begin cutting' });
+  await pickEmployee(dialog, 'Alex Reed', 'Started by');
+  await dialog.getByRole('button', { name: 'Start worksheet' }).click();
   await page
     .getByLabel('What happened to this stock item?')
     .selectOption('returned-roll');

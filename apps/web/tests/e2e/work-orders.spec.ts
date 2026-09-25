@@ -132,10 +132,14 @@ test('work orders reach attributed shipping through station navigation', async (
     .getByRole('navigation', { name: 'Choose station' })
     .getByRole('link', { name: /^Shipping/ })
     .click();
-  await page.getByLabel('Find order').fill('104801');
+  await page
+    .getByRole('searchbox', { name: 'Search order number…' })
+    .fill('104801');
   await expect(page).toHaveURL(/stations\?station=shipping&search=104801/);
-  await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Mark 104801 shipped' }).click();
+  const dialog = page.getByRole('dialog');
+  await pickEmployee(dialog, 'Alex Reed');
+  await dialog.getByRole('button', { name: 'Record completion' }).click();
   await expect(page.getByText(/shipped · Alex Reed/)).toBeVisible();
   expect(state.orders.find((o) => o.id === ids.order)!.cutAt).toBeNull();
 });

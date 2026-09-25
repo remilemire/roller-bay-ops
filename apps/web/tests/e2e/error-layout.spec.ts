@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test';
 import { mockApi, ids, pickEmployee, unallocatedOrderId } from './fixtures';
 import { orderLines } from '../fixtures';
 
-test('station error stays below its actions', async ({ page }, testInfo) => {
+test('station completion errors sit between attribution and the retryable action', async ({
+  page,
+}, testInfo) => {
   await mockApi(page, { role: 'production', stations: ['assembly'] });
   await page.route(
     `**/api/production/assembly/orders/${ids.order}/complete`,
@@ -13,36 +15,26 @@ test('station error stays below its actions', async ({ page }, testInfo) => {
       }),
   );
   await page.goto('/stations?station=assembly');
-  await pickEmployee(page, 'Alex Reed');
-  const manual = page.getByRole('button', { name: 'Mark 104801 assembled' });
-  await manual.click();
-  const alert = page
+  await page.getByRole('button', { name: 'Mark 104801 assembled' }).click();
+  const dialog = page.getByRole('dialog');
+  await pickEmployee(dialog, 'Alex Reed');
+  const submit = dialog.getByRole('button', { name: 'Record completion' });
+  await submit.click();
+  const alert = dialog
     .getByRole('alert')
     .filter({ hasText: 'This order cannot be recorded yet.' });
   await expect(alert).toBeVisible();
-  // The cutting screen can have a worksheet action beside the completion
-  // action. Add that sibling after React renders the error, so this layout
-  // check stays independent of uncommitted cutting workflow changes.
-  await page.evaluate(() => {
-    const group = document.querySelector(
-      '.station-workspace .inline-actions > .action-group',
-    );
-    if (!group?.parentElement) throw new Error('Station actions not found');
-    const link = document.createElement('a');
-    link.href = '#worksheet';
-    link.className = 'button button-outline';
-    link.textContent = 'Worksheet action';
-    group.parentElement.prepend(link);
-  });
-  const worksheet = page.getByRole('link', { name: 'Worksheet action' });
-  const [worksheetBox, manualBox, alertBox] = await Promise.all([
-    worksheet.boundingBox(),
-    manual.boundingBox(),
+  await expect(submit).toBeEnabled();
+  const [selectionBox, alertBox, submitBox] = await Promise.all([
+    dialog.locator('.employee-selection').boundingBox(),
     alert.boundingBox(),
+    submit.boundingBox(),
   ]);
-  expect(worksheetBox && manualBox && alertBox).toBeTruthy();
-  expect(Math.abs(worksheetBox!.y - manualBox!.y)).toBeLessThan(2);
-  expect(alertBox!.y).toBeGreaterThanOrEqual(manualBox!.y + manualBox!.height);
+  expect(selectionBox && alertBox && submitBox).toBeTruthy();
+  expect(alertBox!.y).toBeGreaterThanOrEqual(
+    selectionBox!.y + selectionBox!.height,
+  );
+  expect(submitBox!.y).toBeGreaterThanOrEqual(alertBox!.y + alertBox!.height);
   expect(
     await alert.evaluate(
       (element) => element.scrollWidth <= element.clientWidth,

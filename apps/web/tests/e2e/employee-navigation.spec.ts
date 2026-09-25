@@ -49,7 +49,7 @@ test('production accounts have no employee management action or directory access
   });
   await page.goto('/stations');
   await expect(
-    page.getByRole('combobox', { name: 'Completed by' }),
+    page.getByRole('button', { name: 'Mark 104801 shipped' }),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Manage employees' }),
