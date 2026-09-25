@@ -22,17 +22,8 @@ import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { workOrderLines } from './work-order-lines.table.js';
 import { milestoneTimestampField } from './work-order-milestones.js';
 import { workOrders } from './work-orders.table.js';
-// An order's blind count is the total of its blinds, never a stored number.
-// The names are spelled out: Drizzle leaves table qualifiers off a
-// single-table select, which would compare a line's columns with each other.
-const columns = {
-  ...getTableColumns(workOrders),
-  quantity: sql<number>`(SELECT coalesce(sum(l.quantity), 0)::int FROM work_order_lines l
-    WHERE l.work_order_id = "work_orders"."id" AND l.retired_at IS NULL)`,
-};
-export type WorkOrderRecord = typeof workOrders.$inferSelect & {
-  quantity: number;
-};
+const columns = getTableColumns(workOrders);
+export type WorkOrderRecord = typeof workOrders.$inferSelect;
 export type WorkOrderLineRecord = typeof workOrderLines.$inferSelect;
 const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
   workOrders;
@@ -164,6 +155,7 @@ export class WorkOrdersRepository {
         | 'shipDate'
         | 'scheduledAt'
         | 'note'
+        | 'quantity'
         | 'shippedAt'
         | 'allocatedAt'
         | 'cancelledAt'

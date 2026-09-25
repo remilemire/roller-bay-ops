@@ -85,7 +85,10 @@ test(
           '/api/production/cutting/worksheets',
         ])
           await get(path).expect(403);
-        await post('/api/work-orders', { orderNumber: '789000' }).expect(403);
+        await post('/api/work-orders', {
+          orderNumber: '789000',
+          quantity: 1,
+        }).expect(403);
         await post(`/api/allocations/${order.id}/complete`, {}).expect(403);
         await post('/api/employees', {
           name: 'Imposter',

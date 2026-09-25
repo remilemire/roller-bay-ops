@@ -66,7 +66,10 @@ export function createFixtures(pool: Pool) {
       return ids;
     },
 
-    /** A work order and its blinds, as creating it and saving them leaves it. */
+    /**
+     * A work order and its blinds, as creating it and saving them leaves it.
+     * Its quantity is the blinds' total unless given.
+     */
     async createWorkOrder(
       orderNumber: string,
       lines: {
@@ -75,11 +78,12 @@ export function createFixtures(pool: Pool) {
         lengthMm: number;
         quantity: number;
       }[] = [],
+      quantity = lines.reduce((sum, line) => sum + line.quantity, 0) || 1,
     ) {
       const id = randomUUID();
       await pool.query(
-        `INSERT INTO work_orders (id, order_number) VALUES ($1, $2)`,
-        [id, orderNumber],
+        `INSERT INTO work_orders (id, order_number, quantity) VALUES ($1, $2, $3)`,
+        [id, orderNumber, quantity],
       );
       const lineIds = lines.map(() => randomUUID());
       for (const [index, line] of lines.entries())

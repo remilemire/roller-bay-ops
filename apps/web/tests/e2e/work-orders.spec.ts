@@ -321,14 +321,26 @@ test('the overview counts the order queues and lists the orders shipping this we
   ).toBeVisible();
 });
 test('employees read work orders without admin actions', async ({ page }) => {
-  await mockApi(page, { role: 'staff' });
+  const state = await mockApi(page, { role: 'staff' });
   await page.goto('/work-orders?view=list');
   await expect(page.getByRole('row', { name: /104801/ })).toBeVisible();
-  // Entering an order and planning its fabric are open to them.
-  await expect(page.getByRole('link', { name: 'New order' })).toHaveAttribute(
-    'href',
-    '/allocations/new',
-  );
+  // Adding an order is open to them, without a note. It stays on the
+  // schedule, waiting for fabric; nothing is allocated.
+  await page.getByRole('button', { name: 'New order' }).click();
+  const adding = page.getByRole('dialog', { name: 'Add order' });
+  await expect(adding.getByLabel('Note')).toHaveCount(0);
+  await adding.getByLabel('Order number').fill('104950');
+  await adding.getByLabel('Blinds').fill('6');
+  await adding.getByRole('button', { name: 'Add order' }).click();
+  await expect(adding).toHaveCount(0);
+  await expect(page).toHaveURL(/\/work-orders\?view=list$/);
+  expect(state.orderRequests).toEqual([
+    {
+      method: 'POST',
+      body: { orderNumber: '104950', quantity: 6, note: null },
+    },
+  ]);
+  expect(state.allocationRequests).toEqual([]);
   await expect(
     page.getByRole('link', { name: 'Allocate order 104877' }),
   ).toBeVisible();

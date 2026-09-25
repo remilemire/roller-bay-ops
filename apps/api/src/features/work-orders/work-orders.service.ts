@@ -225,8 +225,26 @@ export class WorkOrdersService {
               },
             ],
           });
+        // The allocation's blinds were checked against this quantity.
+        if (
+          input.quantity !== undefined &&
+          input.quantity !== previous.quantity &&
+          previous.allocatedAt
+        )
+          throw new ConflictException({
+            message:
+              'This order has an allocation. Cancel it before changing the quantity.',
+            issues: [
+              {
+                code: 'order_allocated',
+                path: ['quantity'],
+                message: 'Fixed while the order has an allocation.',
+              },
+            ],
+          });
         const row = await context.workOrders.update(id, {
           shipDate: input.shipDate,
+          quantity: input.quantity,
           // Kept through a reschedule: it is when the order went on the
           // schedule, not when its date last moved.
           scheduledAt:
@@ -325,6 +343,18 @@ export class WorkOrdersService {
             code: 'order_has_no_lines',
             path: ['workOrderId'],
             message: 'No blinds entered.',
+          },
+        ],
+      });
+    const total = lines.reduce((sum, line) => sum + line.quantity, 0);
+    if (total !== order.quantity)
+      throw new BadRequestException({
+        message: `The blinds add up to ${total}, but the order has ${order.quantity}.`,
+        issues: [
+          {
+            code: 'order_quantity_mismatch',
+            path: ['workOrderId'],
+            message: `Blinds add up to ${total} of ${order.quantity}.`,
           },
         ],
       });

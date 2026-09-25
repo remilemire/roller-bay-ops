@@ -22,7 +22,7 @@ export function OrderReschedule({
   order: WorkOrder;
   close: () => void;
 }) {
-  // Pin the row this opened from; see OrderNoteEditor.
+  // Pin the row this opened from; see OrderEditor.
   const [opened] = useState(order);
   const [shipDate, setShipDate] = useState(opened.shipDate ?? '');
   const client = useQueryClient();

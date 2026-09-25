@@ -37,9 +37,12 @@ const noteSchema = z
   .nullable()
   .transform((value) => value || null);
 
+// How many blinds the order has; its allocation's blinds must add up to it.
+export const orderQuantitySchema = z.number().int().min(1).max(10000);
 // An order starts without a ship date; it gets one once fabric is allocated.
 export const createWorkOrderSchema = z.strictObject({
   orderNumber: orderNumberSchema,
+  quantity: orderQuantitySchema,
   note: noteSchema.default(null),
 });
 // The order number is fixed once created. A null ship date takes the order
@@ -48,11 +51,12 @@ export const updateWorkOrderSchema = z
   .strictObject({
     expectedRevision: revision,
     shipDate: shipDateSchema.nullable().optional(),
+    quantity: orderQuantitySchema.optional(),
     note: noteSchema.optional(),
   })
   .refine(
-    ({ shipDate, note }) =>
-      [shipDate, note].some((field) => field !== undefined),
+    ({ shipDate, quantity, note }) =>
+      [shipDate, quantity, note].some((field) => field !== undefined),
     'Provide at least one field.',
   );
 export const deleteWorkOrderSchema = z.strictObject({
@@ -101,8 +105,7 @@ export const workOrderSchema = z.object({
   id: z.uuid(),
   orderNumber: z.string(),
   shipDate: z.iso.date().nullable(),
-  // The total of its blinds' quantities; zero until blinds are entered.
-  quantity: z.number().int().nonnegative(),
+  quantity: z.number().int().positive(),
   note: z.string().nullable(),
   status: orderStatusSchema,
   createdAt: z.iso.datetime(),

@@ -55,8 +55,11 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('work-orders'),
     // Snapshots recorded before orders had a creation time lack it, and only
-    // a change to the blinds records them.
-    value: workOrderDetailSchema.partial({ createdAt: true, lines: true }),
+    // a change to the blinds records them. While the quantity was the total
+    // of the order's blinds, an order without any recorded zero.
+    value: workOrderDetailSchema
+      .partial({ createdAt: true, lines: true })
+      .extend({ quantity: z.number().int().nonnegative() }),
   }),
 ]);
 export const auditChangeSchema = z.object({

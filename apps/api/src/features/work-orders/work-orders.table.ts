@@ -18,6 +18,8 @@ export const workOrders = pgTable(
     // none until fabric is allocated and someone schedules it.
     shipDate: date('ship_date', { mode: 'string' }),
     note: varchar('note', { length: 1000 }),
+    // How many blinds the order has. An allocation's blinds must add up to it.
+    quantity: integer('quantity').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -57,6 +59,7 @@ export const workOrders = pgTable(
       sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,
     ),
     check('work_orders_revision_positive', sql`${table.revision} > 0`),
+    check('work_orders_quantity_positive', sql`${table.quantity} > 0`),
     // Only an order without a live allocation can be deleted.
     check(
       'work_orders_deleted_unallocated',

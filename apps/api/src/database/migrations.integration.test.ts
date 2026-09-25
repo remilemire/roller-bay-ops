@@ -64,6 +64,73 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  "0036 gives each order its current blinds' total, or a placeholder of 1",
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0036_');
+    const [manufacturer, material, color] = [
+      randomUUID(),
+      randomUUID(),
+      randomUUID(),
+    ];
+    await client.query(`INSERT INTO manufacturers (id,name) VALUES ($1,'M')`, [
+      manufacturer,
+    ]);
+    await client.query(
+      `INSERT INTO fabric_materials (id,manufacturer_id,name) VALUES ($1,$2,'M')`,
+      [material, manufacturer],
+    );
+    await client.query(
+      `INSERT INTO fabric_colors (id,material_id,code,thickness_mm) VALUES ($1,$2,'C',0.5)`,
+      [color, material],
+    );
+    const [blinds, none] = [randomUUID(), randomUUID()];
+    await client.query(
+      `INSERT INTO work_orders (id,order_number) VALUES ($1,'360001'),($2,'360002')`,
+      [blinds, none],
+    );
+    // Two current blinds and a retired one, which no longer counts.
+    for (const [position, quantity, retired] of [
+      [1, 3, false],
+      [2, 2, false],
+      [3, 7, true],
+    ] as const)
+      await client.query(
+        `INSERT INTO work_order_lines (id,work_order_id,position,fabric_color_id,width_mm,length_mm,quantity,retired_at)
+         VALUES ($1,$2,$3,$4,1000,1500,$5,$6)`,
+        [
+          randomUUID(),
+          blinds,
+          position,
+          color,
+          quantity,
+          retired ? new Date() : null,
+        ],
+      );
+    await migrate();
+    const quantities = await client.query(
+      `SELECT order_number, quantity FROM work_orders ORDER BY order_number`,
+    );
+    assert.deepEqual(quantities.rows, [
+      { order_number: '360001', quantity: 5 },
+      { order_number: '360002', quantity: 1 },
+    ]);
+    // New orders must state theirs, and it is positive.
+    await assert.rejects(
+      client.query(`INSERT INTO work_orders (order_number) VALUES ('360003')`),
+      { code: '23502' },
+    );
+    await assert.rejects(
+      client.query(
+        `INSERT INTO work_orders (order_number,quantity) VALUES ('360003',0)`,
+      ),
+      { code: '23514' },
+    );
+    await migrateRest();
+  },
+);
+
+test(
   '0035 moves each credited employee to its own row and drops the single columns',
   { timeout: 60_000 },
   async (t) => {
@@ -481,7 +548,6 @@ test(
     const columns = await client.query(
       `SELECT table_name, column_name FROM information_schema.columns
          WHERE (table_name='allocations' AND column_name='order_number')
-            OR (table_name='work_orders' AND column_name='quantity')
             OR table_name='allocation_requirements'`,
     );
     assert.deepEqual(columns.rows, []);

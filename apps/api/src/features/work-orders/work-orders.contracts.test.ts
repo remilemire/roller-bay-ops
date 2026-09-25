@@ -9,9 +9,10 @@ import {
 } from '@roller-bay/shared/work-orders';
 
 test('work order contracts require a six-digit number, and a ship date is a real weekday set later', () => {
-  const input = { orderNumber: ' 104801 ' };
+  const input = { orderNumber: ' 104801 ', quantity: 12 };
   assert.deepEqual(createWorkOrderSchema.parse(input), {
     orderNumber: '104801',
+    quantity: 12,
     note: null,
   });
   for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
@@ -48,19 +49,28 @@ test('work order contracts require a six-digit number, and a ship date is a real
   });
 });
 
-test("an order's blind count is derived from its blinds, never entered", () => {
-  const input = { orderNumber: '104801' };
-  assert.equal(createWorkOrderSchema.safeParse(input).success, true);
-  assert.equal(
-    createWorkOrderSchema.safeParse({ ...input, quantity: 12 }).success,
-    false,
-  );
-  assert.equal(
-    updateWorkOrderSchema.safeParse({ expectedRevision: 1, quantity: 14 })
-      .success,
-    false,
-  );
-  // Every field of a blind is required, and its ids are unique in the list.
+test('an order states its blind count, a whole number from 1 to 10,000', () => {
+  const input = { orderNumber: '104801', quantity: 12 };
+  const create = (quantity: unknown) =>
+    createWorkOrderSchema.safeParse({ ...input, quantity }).success;
+  const update = (quantity: unknown) =>
+    updateWorkOrderSchema.safeParse({ expectedRevision: 1, quantity }).success;
+  for (const [quantity, valid] of [
+    [1, true],
+    [10000, true],
+    [undefined, false],
+    [0, false],
+    [1.5, false],
+    [10001, false],
+    ['12', false],
+  ] as const) {
+    assert.equal(create(quantity), valid);
+    // An update may leave the quantity alone, but it is then no change.
+    assert.equal(update(quantity), valid);
+  }
+});
+
+test('every field of a blind is required, and its ids are unique in the list', () => {
   const line = {
     id: randomUUID(),
     fabricColorId: randomUUID(),
@@ -80,7 +90,7 @@ test("an order's blind count is derived from its blinds, never entered", () => {
 });
 
 test('work order notes are trimmed, bounded, and blank notes clear the note', () => {
-  const input = { orderNumber: '104801' };
+  const input = { orderNumber: '104801', quantity: 1 };
   const note = (value: string | null) =>
     createWorkOrderSchema.parse({ ...input, note: value }).note;
   assert.equal(note('  Rush  '), 'Rush');

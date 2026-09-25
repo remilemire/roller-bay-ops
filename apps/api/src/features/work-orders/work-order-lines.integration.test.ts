@@ -66,14 +66,12 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
       );
       assert.deepEqual(saved.lines, [a, b]);
       assert.equal(saved.revision, 2);
-      // The order's blind count is the total of its blinds.
-      assert.equal(saved.quantity, 3);
-      // The order's own fields are not the lines' to change.
+      // The order's own fields, its quantity included, are not the lines' to
+      // change.
       assert.deepEqual(
         {
           ...saved,
           lines: [],
-          quantity: 0,
           revision: 1,
           updatedAt: created.updatedAt,
         },
@@ -85,8 +83,6 @@ test('work order lines integration', { timeout: 60_000 }, async (t) => {
         (await save(created.id, 2, [c, a]).expect(200)).body,
       );
       assert.deepEqual(reordered.lines, [c, a]);
-      // A retired blind no longer counts.
-      assert.equal(reordered.quantity, 4);
       assert.deepEqual((await detail(created.id)).lines, [c, a]);
       const rows = await pool.query(
         `SELECT id, retired_at IS NOT NULL AS retired FROM work_order_lines WHERE work_order_id=$1`,

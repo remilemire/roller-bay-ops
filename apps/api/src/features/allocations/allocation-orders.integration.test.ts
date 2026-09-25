@@ -89,6 +89,19 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       ]);
       assert.equal((await fixtures.workOrder(empty.id)).allocated_at, null);
 
+      // The blinds must add up to the quantity the order states.
+      const short = await input(await seed());
+      await pool.query(`UPDATE work_orders SET quantity=2 WHERE id=$1`, [
+        short.workOrderId,
+      ]);
+      assert.deepEqual(issue(await post(path, short).expect(400)), [
+        { code: 'order_quantity_mismatch', path: ['workOrderId'] },
+      ]);
+      assert.equal(
+        (await fixtures.workOrder(short.workOrderId)).allocated_at,
+        null,
+      );
+
       const body = await input(await seed());
       // A plan assigns its own order's blinds, confirmed or draft.
       const foreign = { ...body, plan: (await input(await seed())).plan };
@@ -217,14 +230,16 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       // and the order returns with its blinds.
       const denied = await orders('post', '').send({
         orderNumber: order.order_number,
+        quantity: 2,
       });
       assert.equal(denied.status, 409);
       assert.deepEqual(issue(denied), [
         { code: 'order_deleted', path: ['orderNumber'] },
       ]);
       const back = await asAdmin(() =>
+        // Restored with the count of the blinds it is about to get.
         orders('post', '')
-          .send({ orderNumber: order.order_number })
+          .send({ orderNumber: order.order_number, quantity: 2 })
           .expect(201),
       );
       assert.equal(back.body.id, order.id);

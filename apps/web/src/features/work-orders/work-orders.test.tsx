@@ -22,7 +22,7 @@ import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
 import { OrderDetailScreen } from './order-detail-screen';
-import { OrderStart } from './order-start';
+import { OrderCreateForm } from './order-create-dialog';
 // Other features' sections of the order, which the route composes.
 const sections = {
   history: null,
@@ -162,29 +162,69 @@ it('formats a ship date as its calendar day in every timezone', () => {
   expect(calendarDateLabel('2026-10-02')).toBe('Fri, Oct 2, 2026');
 });
 
-it('creates an order from its number alone, only when asked', async () => {
+it('creates an order from its number and blind count, only when asked', async () => {
   vi.mocked(createOrder).mockResolvedValue({
     ...order,
     id: 'made',
     orderNumber: '104950',
   });
   const onCreated = vi.fn();
-  show(<OrderStart onCreated={onCreated} />);
+  show(<OrderCreateForm onCreated={onCreated} />);
   const user = userEvent.setup();
-  const create = screen.getByRole('button', { name: 'Create order' });
+  const create = screen.getByRole('button', { name: 'Add order' });
   await user.type(screen.getByLabelText(/Order number/), '10-49x5');
   expect(screen.getByLabelText(/Order number/)).toHaveValue('10495');
   expect(create).toBeDisabled();
   await user.type(screen.getByLabelText(/Order number/), '0');
-  // Typing a number creates nothing.
+  // Both the number and the count are required.
+  expect(create).toBeDisabled();
+  await user.type(screen.getByLabelText(/Blinds/), '1x2');
+  expect(screen.getByLabelText(/Blinds/)).toHaveValue('12');
+  await user.type(screen.getByLabelText('Note'), ' Rush ');
+  // Typing creates nothing.
   expect(createOrder).not.toHaveBeenCalled();
   await user.click(create);
-  expect(createOrder).toHaveBeenCalledWith({ orderNumber: '104950' });
+  expect(createOrder).toHaveBeenCalledWith({
+    orderNumber: '104950',
+    quantity: 12,
+    note: ' Rush ',
+  });
   await waitFor(() =>
     expect(onCreated).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'made' }),
     ),
   );
+});
+
+it('leaves the note to admins when adding an order', async () => {
+  state.canManage = false;
+  vi.mocked(createOrder).mockResolvedValue(order);
+  show(<OrderCreateForm onCreated={vi.fn()} />);
+  const user = userEvent.setup();
+  expect(screen.queryByLabelText('Note')).toBeNull();
+  await user.type(screen.getByLabelText(/Order number/), '104950');
+  await user.type(screen.getByLabelText(/Blinds/), '3');
+  await user.click(screen.getByRole('button', { name: 'Add order' }));
+  expect(createOrder).toHaveBeenCalledWith({
+    orderNumber: '104950',
+    quantity: 3,
+    note: null,
+  });
+});
+
+it('adds an order from the schedule without leaving it or allocating', async () => {
+  vi.mocked(createOrder).mockResolvedValue({ ...order, id: 'made' });
+  show(<WorkOrdersScreen />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'New order' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Add order' }));
+  await user.type(dialog.getByLabelText(/Order number/), '104950');
+  await user.type(dialog.getByLabelText(/Blinds/), '4');
+  await user.click(dialog.getByRole('button', { name: 'Add order' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(createOrder).toHaveBeenCalledOnce();
+  expect(state.push).not.toHaveBeenCalled();
+  expect(state.replace).not.toHaveBeenCalled();
 });
 
 it('says where an order is when its number is already taken', async () => {
@@ -202,10 +242,11 @@ it('says where an order is when its number is already taken', async () => {
   );
   vi.mocked(createOrder).mockRejectedValue(taken);
   const onCreated = vi.fn();
-  show(<OrderStart onCreated={onCreated} />);
+  show(<OrderCreateForm onCreated={onCreated} />);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(/Order number/), '104801');
-  await user.click(screen.getByRole('button', { name: 'Create order' }));
+  await user.type(screen.getByLabelText(/Blinds/), '2');
+  await user.click(screen.getByRole('button', { name: 'Add order' }));
   // The refusal names no order, so the one it means is read by its number.
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Order 104801 already exists.',
@@ -227,7 +268,7 @@ it('says where an order is when its number is already taken', async () => {
       }),
     }),
   );
-  await user.click(screen.getByRole('button', { name: 'Create order' }));
+  await user.click(screen.getByRole('button', { name: 'Add order' }));
   expect(
     await screen.findByRole('link', { name: 'Allocate it' }),
   ).toHaveAttribute('href', `/allocations/new?workOrder=${order.id}`);
@@ -293,11 +334,8 @@ it('hides schedule writes from employees who cannot manage', async () => {
   await screen.findByText('104801');
   expect(screen.queryByRole('button', { name: /Mark order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /chedule order/ })).toBeNull();
-  // Entering an order and planning its fabric are open to everyone.
-  expect(screen.getByRole('link', { name: 'New order' })).toHaveAttribute(
-    'href',
-    '/allocations/new',
-  );
+  // Adding an order and planning its fabric are open to everyone.
+  expect(screen.getByRole('button', { name: 'New order' })).toBeInTheDocument();
 });
 
 it('sends an order with no allocation to be planned, whoever is signed in', async () => {
@@ -362,17 +400,19 @@ it('edits the note and unschedules an order with the revision it shows', async (
     '/allocations?state=all&search=104801',
   );
 
-  // The note is the only field of the order's own that can be edited.
-  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Edit note' }));
+  // The blind count and note are the order's own editable fields; the count
+  // is fixed while the order has an allocation, and left out unchanged.
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
   const editor = within(
-    screen.getByRole('dialog', { name: 'Note for order 104801' }),
+    screen.getByRole('dialog', { name: 'Edit order 104801' }),
   );
+  expect(editor.getByLabelText(/Blinds/)).toBeDisabled();
   await user.clear(editor.getByLabelText('Note'));
-  await user.click(editor.getByRole('button', { name: 'Save note' }));
+  await user.click(editor.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
       expectedRevision: 3,
+      quantity: undefined,
       note: '',
     }),
   );

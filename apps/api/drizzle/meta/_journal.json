@@ -253,6 +253,13 @@
       "when": 1790277471191,
       "tag": "0035_multi_employee_completions",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790312709951,
+      "tag": "0036_add_work_order_quantity",
+      "breakpoints": true
     }
   ]
 }

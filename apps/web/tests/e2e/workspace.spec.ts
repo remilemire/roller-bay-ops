@@ -306,7 +306,8 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     page.getByRole('button', { name: 'Add blind', exact: true }),
   ).toHaveCount(0);
   const orderNumber = page.getByLabel('Order number');
-  const create = page.getByRole('button', { name: 'Create order' });
+  const create = page.getByRole('button', { name: 'Add order' });
+  await page.getByLabel('Blinds').fill('1');
   await orderNumber.fill('1049');
   await expect(create).toBeDisabled();
   // A number that is taken says where its order is.
@@ -326,7 +327,10 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   ).toBeVisible();
   await expect(page).toHaveURL(/\/allocations\/new\?workOrder=/);
   expect(state.orderRequests).toEqual([
-    { method: 'POST', body: { orderNumber: '104950', note: null } },
+    {
+      method: 'POST',
+      body: { orderNumber: '104950', quantity: 1, note: null },
+    },
   ]);
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
   await page.getByLabel('Color · blind 1', { exact: true }).click();

@@ -5,7 +5,10 @@ import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
-import type { WorkOrder } from '@roller-bay/shared/work-orders';
+import {
+  orderQuantitySchema,
+  type WorkOrder,
+} from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
@@ -14,18 +17,23 @@ import { issuePath } from '@/lib/errors';
 import { showFieldIssues } from '@/lib/field-issues';
 import { workOrdersKey, updateOrder } from './work-orders.api';
 
-const formSchema = z.object({ note: z.string().trim().max(1000) });
+const formSchema = z.object({
+  quantity: z.string().transform(Number).pipe(orderQuantitySchema),
+  note: z.string().trim().max(1000),
+});
 type OrderFields = z.input<typeof formSchema>;
 type OrderForm = z.output<typeof formSchema>;
-const fieldName = (issue: ErrorIssue) =>
-  issuePath(issue) === 'note' ? ('note' as const) : null;
+const fieldName = (issue: ErrorIssue) => {
+  const path = issuePath(issue);
+  return path === 'note' || path === 'quantity' ? path : null;
+};
 
 /**
- * An order's note, the one field of its own that can be edited. The order is
- * created, and its blinds entered, where its fabric is allocated; its ship
- * date is set once that is done.
+ * An order's own editable fields: its blind count and note. The number is
+ * fixed, and the ship date has its own dialog. The count is fixed while the
+ * order has an allocation, whose blinds were checked against it.
  */
-export function OrderNoteEditor({
+export function OrderEditor({
   order,
   close,
 }: {
@@ -35,9 +43,12 @@ export function OrderNoteEditor({
   // Pin the record this form opened with: a background refetch must not swap
   // in a newer revision and let the save overwrite a change nobody saw.
   const [opened] = useState(order);
-  const form = useForm({
+  const form = useForm<OrderFields, unknown, OrderForm>({
     resolver: zodResolver(formSchema),
-    defaultValues: { note: opened.note ?? '' },
+    defaultValues: {
+      quantity: String(opened.quantity),
+      note: opened.note ?? '',
+    },
   });
   const values = useWatch({ control: form.control }) as OrderFields;
   const client = useQueryClient();
@@ -45,6 +56,8 @@ export function OrderNoteEditor({
     mutationFn: (data: OrderForm) =>
       updateOrder(opened.id, {
         expectedRevision: opened.revision,
+        // An unchanged count is left out, so an allocated order saves its note.
+        quantity: data.quantity === opened.quantity ? undefined : data.quantity,
         note: data.note,
       }),
     onError: (error) => showFieldIssues(form, error, fieldName),
@@ -60,9 +73,29 @@ export function OrderNoteEditor({
       onOpenChange={(open) => {
         if (!open && !mutation.isPending) close();
       }}
-      title={`Note for order ${opened.orderNumber}`}
+      title={`Edit order ${opened.orderNumber}`}
     >
-      <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
+      <form
+        className="stack"
+        onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
+      >
+        <TextField
+          label="Blinds"
+          value={values.quantity}
+          onChange={(v) => {
+            form.setValue('quantity', v.replace(/\D/g, ''));
+            form.clearErrors('quantity');
+          }}
+          disabled={Boolean(opened.allocatedAt)}
+          hint={
+            opened.allocatedAt
+              ? 'Fixed while the order has an allocation.'
+              : undefined
+          }
+          error={errors.quantity && 'Enter a whole number from 1 to 10,000.'}
+          maxLength={5}
+          inputMode="numeric"
+        />
         <TextField
           label="Note"
           value={values.note}
@@ -89,7 +122,7 @@ export function OrderNoteEditor({
             Cancel
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : 'Save note'}
+            {mutation.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </form>

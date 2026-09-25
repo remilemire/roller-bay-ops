@@ -558,7 +558,6 @@ export async function mockApi(
         shipDate: null,
         scheduledAt: null,
         allocatedAt: null,
-        quantity: 0,
         lines: [] as WorkOrderLine[],
         revision: 1,
       };
@@ -577,7 +576,6 @@ export async function mockApi(
         state.orders[index] = {
           ...found,
           lines,
-          quantity: lines.reduce((total, line) => total + line.quantity, 0),
           revision: body.expectedRevision + 1,
         };
         return send(state.orders[index]);
