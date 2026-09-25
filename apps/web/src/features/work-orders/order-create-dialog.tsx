@@ -117,7 +117,6 @@ export function OrderCreateForm({
         required
         maxLength={5}
         inputMode="numeric"
-        hint="How many blinds the order has. Its allocation must match."
         error={issues.quantity}
       />
       {canManage && (
