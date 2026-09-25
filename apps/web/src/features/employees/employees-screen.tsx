@@ -7,6 +7,10 @@ import {
   employeeSchema,
   type Employee,
 } from '@roller-bay/shared/employees';
+import type { ErrorIssue } from '@roller-bay/shared/errors';
+import { issuePath } from '@/lib/errors';
+import { fieldIssues } from '@/lib/field-issues';
+import { useListParams } from '@/lib/use-list-params';
 import { api } from '@/lib/api';
 import { useCanManage } from '@/features/auth';
 import { listUsers } from '@/features/users';
@@ -16,6 +20,7 @@ import { Lookup } from '@/components/ui/lookup';
 import { Dialog } from '@/components/ui/dialog';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import {
+  Empty,
   PageHeading,
   Loading,
   ErrorNotice,
@@ -36,7 +41,13 @@ function EmployeeDirectory() {
     queryFn: () => api('/employees', employeeListSchema),
   });
   const [editing, setEditing] = useState<Employee | null | undefined>();
-  const [search, setSearch] = useState('');
+  const params = useListParams();
+  const employees =
+    query.data?.filter((employee) =>
+      `${employee.name} ${employee.initials}`
+        .toLowerCase()
+        .includes(params.search.toLowerCase()),
+    ) ?? [];
   return (
     <>
       <PageHeading
@@ -46,14 +57,14 @@ function EmployeeDirectory() {
         <Button onClick={() => setEditing(null)}>Add employee</Button>
       </PageHeading>
       <SearchToolbar
-        search={search}
-        onSearch={setSearch}
+        search={params.search}
+        onSearch={(search) => params.set({ search })}
         placeholder="Find employee…"
       />
       {query.isPending ? (
         <Loading />
       ) : query.error ? (
-        <ErrorNotice error={query.error} />
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       ) : (
         <section className="panel">
           <div className="data-table-wrap">
@@ -67,36 +78,36 @@ function EmployeeDirectory() {
                 </tr>
               </thead>
               <tbody>
-                {query.data
-                  .filter((e) =>
-                    `${e.name} ${e.initials}`
-                      .toLowerCase()
-                      .includes(search.toLowerCase()),
-                  )
-                  .map((e) => (
-                    <tr key={e.id}>
-                      <td>{e.name}</td>
-                      <td>{e.initials}</td>
-                      <td>
-                        <Status value={e.isActive ? 'active' : 'inactive'} />
-                      </td>
-                      <td>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(e)}
-                        >
-                          Edit
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                {employees.map((e) => (
+                  <tr key={e.id}>
+                    <td>{e.name}</td>
+                    <td>{e.initials}</td>
+                    <td>
+                      <Status value={e.isActive ? 'active' : 'inactive'} />
+                    </td>
+                    <td>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditing(e)}
+                      >
+                        Edit
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            {!query.data.length && (
-              <p className="panel-body">
-                Add employees so stations can attribute completed work.
-              </p>
+            {!employees.length && (
+              <Empty
+                title={
+                  params.search ? 'No matching employees' : 'No employees yet'
+                }
+              >
+                {params.search
+                  ? 'Try another name or initials.'
+                  : 'Add employees so stations can attribute completed work.'}
+              </Empty>
             )}
           </div>
         </section>
@@ -117,6 +128,12 @@ function EmployeeDirectory() {
     </>
   );
 }
+const employeeFieldName = (issue: ErrorIssue) => {
+  const path = issuePath(issue);
+  return path === 'name' || path === 'initials' || path === 'linkedUserId'
+    ? path
+    : null;
+};
 function EmployeeEditor({
   employee,
   close,
@@ -132,6 +149,11 @@ function EmployeeEditor({
   const [linkedUserId, setLinkedUserId] = useState(
     employee?.linkedUserId ?? '',
   );
+  const [errors, setErrors] = useState<
+    Partial<Record<'name' | 'initials' | 'linkedUserId', string>>
+  >({});
+  const clearError = (field: keyof typeof errors) =>
+    setErrors((current) => ({ ...current, [field]: undefined }));
   const mutation = useMutation({
     mutationFn: () => {
       const body = employeeInputSchema.parse({
@@ -152,6 +174,7 @@ function EmployeeEditor({
       );
     },
     onSuccess: saved,
+    onError: (error) => setErrors(fieldIssues(error, employeeFieldName)),
   });
   return (
     <Dialog
@@ -162,7 +185,7 @@ function EmployeeEditor({
       title={employee ? 'Edit employee' : 'Add employee'}
     >
       <form
-        className="stack"
+        className="form-stack"
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate();
@@ -171,29 +194,33 @@ function EmployeeEditor({
         <TextField
           label="Full name"
           value={name}
-          onChange={setName}
+          onChange={(value) => {
+            setName(value);
+            clearError('name');
+          }}
+          error={errors.name}
           required
           maxLength={120}
         />
         <TextField
           label="Initials"
           value={initials}
-          onChange={setInitials}
+          onChange={(value) => {
+            setInitials(value);
+            clearError('initials');
+          }}
+          error={errors.initials}
           required
           maxLength={12}
         />
-        <label>
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-          />{' '}
-          Active
-        </label>
         <Lookup
           label="Linked application account (optional)"
           value={linkedUserId}
-          onChange={setLinkedUserId}
+          onChange={(value) => {
+            setLinkedUserId(value);
+            clearError('linkedUserId');
+          }}
+          error={errors.linkedUserId}
           queryKey={['users', 'employee-link']}
           load={async (search, page, signal) => {
             const data = await listUsers(search, page, signal);
@@ -203,19 +230,23 @@ function EmployeeEditor({
             };
           }}
         />
-        {linkedUserId && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setLinkedUserId('')}
-          >
-            Remove account link
-          </Button>
-        )}
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />{' '}
+          Active
+        </label>
         <p className="muted">
           Inactive employees remain in past completion records.
         </p>
-        {mutation.error && <ErrorNotice error={mutation.error} />}
+        {mutation.error && (
+          <ErrorNotice
+            error={mutation.error}
+            inline={(issue) => employeeFieldName(issue) !== null}
+          />
+        )}
         <div className="form-actions">
           <Button
             type="button"

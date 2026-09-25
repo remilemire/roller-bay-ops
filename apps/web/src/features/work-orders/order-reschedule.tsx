@@ -72,7 +72,9 @@ export function OrderReschedule({
         {mutation.error && (
           <ErrorNotice
             error={mutation.error}
-            inline={(issue) => fieldName(issue) !== null}
+            inline={(issue) =>
+              !!opened.allocatedAt && fieldName(issue) !== null
+            }
           />
         )}
         <div className="form-actions">

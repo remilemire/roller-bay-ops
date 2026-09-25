@@ -1,3 +1,4 @@
+import { describeIssues } from '@/lib/errors';
 import type {
   AllocationOptimization,
   AllocationValidation,
@@ -12,6 +13,7 @@ export function PlanPreview({
 }) {
   if ('valid' in result && !result.valid) {
     const unplaced = result.issues.filter((issue) => !inline(issue));
+    const details = describeIssues(unplaced);
     return (
       <div className="notice notice-warning" role="alert">
         <div>
@@ -20,11 +22,9 @@ export function PlanPreview({
             <p>Check the highlighted fields.</p>
           )}
           {unplaced.length > 0 && (
-            <ul>
-              {unplaced.map((issue, index) => (
-                <li key={index}>
-                  {issue.message} <small>({issue.path})</small>
-                </li>
+            <ul className="notice-details">
+              {details.map((message) => (
+                <li key={message}>{message}</li>
               ))}
             </ul>
           )}

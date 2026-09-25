@@ -59,7 +59,10 @@ function CuttingOrder({
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   return (
     <div className="stack station-workspace">
       <PageHeading
@@ -125,7 +128,10 @@ function CuttingOrder({
 }
 function CutAttribution({ sheet }: { sheet: Worksheet }) {
   const query = useQuery(completions(sheet.workOrderId));
-  if (query.error) return <ErrorNotice error={query.error} />;
+  if (query.error)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   const completed = query.data?.find((c) => c.station === 'cutting');
   return completed ? <p>Cut by {employeeNames(completed.employees)}</p> : null;
 }

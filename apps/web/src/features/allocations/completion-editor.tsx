@@ -101,6 +101,7 @@ export function CompletionEditor({
   const [extraId, setExtraId] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<unknown>(null);
+  const [selectionError, setSelectionError] = useState<string>();
   const additionalIds = values.items
     .filter(
       (row) =>
@@ -121,16 +122,21 @@ export function CompletionEditor({
   async function addRoll() {
     setAdding(true);
     setAddError(null);
+    setSelectionError(undefined);
     try {
       const stock = await api(`/stock-items/${extraId}`, stockItemSchema);
-      if (stock.consumedAt || stock.voidedAt)
-        throw new Error('Select available fabric.');
+      if (stock.consumedAt || stock.voidedAt) {
+        setSelectionError('Select available fabric.');
+        return;
+      }
       if (
         !allocation.requirements.some(
           (line) => line.fabricColorId === stock.fabricColorId,
         )
-      )
-        throw new Error('Select fabric used by this order.');
+      ) {
+        setSelectionError('Select fabric used by this order.');
+        return;
+      }
       const items = form.getValues('items');
       if (!items.some((item) => item.stockItemId === stock.id))
         form.setValue('items', [...items, completionItemToForm(stock, units)], {
@@ -217,7 +223,7 @@ export function CompletionEditor({
             adding ||
             loadingExtraStock
           }
-          style={{ border: 0, margin: 0, padding: 0 }}
+          className="form-fieldset"
         >
           <div className="stack">
             {values.items.map((row, index) => {
@@ -501,7 +507,12 @@ export function CompletionEditor({
                   <Lookup
                     label="Additional roll used"
                     value={extraId}
-                    onChange={setExtraId}
+                    onChange={(value) => {
+                      setExtraId(value);
+                      setSelectionError(undefined);
+                      setAddError(null);
+                    }}
+                    error={selectionError}
                     queryKey={[...stockKey, 'completion-add', units.rollWidth]}
                     load={lookupStock(units.rollWidth)}
                   />

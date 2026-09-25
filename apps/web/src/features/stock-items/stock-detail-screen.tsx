@@ -31,7 +31,10 @@ export function StockDetailScreen({
   const [edit, setEdit] = useState(false);
   const [remove, setRemove] = useState(false);
   if (query.isPending) return <Loading />;
-  if (!query.data) return <ErrorNotice error={query.error} />;
+  if (!query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   const item = query.data;
   const details: [label: string, value: string, help?: string][] = [
     ['Width', fieldLabel(units, 'rollWidth', item.widthMm)],

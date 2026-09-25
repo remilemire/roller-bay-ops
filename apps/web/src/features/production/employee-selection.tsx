@@ -27,7 +27,10 @@ export function EmployeeSelection({
     const active = value.filter((id) => query.data.some((e) => e.id === id));
     if (active.length !== value.length) onChange(active);
   }, [value, query.data, onChange]);
-  if (query.error) return <ErrorNotice error={query.error} />;
+  if (query.error)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   const chosen = value.flatMap(
     (id) => query.data?.find((e) => e.id === id) ?? [],
   );

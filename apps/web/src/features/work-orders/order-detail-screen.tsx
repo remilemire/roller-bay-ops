@@ -31,7 +31,10 @@ export function OrderDetailScreen({
 }: { id: string } & OrderSections) {
   const query = useQuery(orderDetail(id));
   if (query.isPending) return <Loading />;
-  if (!query.data) return <ErrorNotice error={query.error} />;
+  if (!query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   return (
     <>
       {query.error && (
@@ -77,31 +80,8 @@ function OrderRecord({
         }
       >
         <Status value={order.status} />
-        {!order.allocatedAt && !order.cancelledAt && !order.shippedAt && (
-          <Button asChild>
-            <Link href={`/allocations/new?workOrder=${order.id}`}>
-              Allocate
-            </Link>
-          </Button>
-        )}
         {canManage && !order.cancelledAt && (
           <>
-            {/* A date follows the allocation. */}
-            {(order.allocatedAt || order.shipDate) && (
-              <Button variant="outline" onClick={() => setRescheduling(true)}>
-                {!order.allocatedAt
-                  ? 'Unschedule'
-                  : order.shipDate
-                    ? 'Reschedule'
-                    : 'Schedule'}
-              </Button>
-            )}
-
-            {!order.shippedAt && (
-              <Button variant="outline" onClick={() => setCancelling(true)}>
-                Cancel work order
-              </Button>
-            )}
             {!order.allocatedAt &&
               !order.shipDate &&
               !order.cutAt &&
@@ -118,7 +98,32 @@ function OrderRecord({
                   Delete
                 </Button>
               )}
+            {!order.shippedAt && (
+              <Button variant="outline" onClick={() => setCancelling(true)}>
+                Cancel work order
+              </Button>
+            )}
+            {/* A date follows the allocation. */}
+            {(order.allocatedAt || order.shipDate) && (
+              <Button
+                variant={order.allocatedAt ? 'default' : 'outline'}
+                onClick={() => setRescheduling(true)}
+              >
+                {!order.allocatedAt
+                  ? 'Unschedule'
+                  : order.shipDate
+                    ? 'Reschedule'
+                    : 'Schedule'}
+              </Button>
+            )}
           </>
+        )}
+        {!order.allocatedAt && !order.cancelledAt && !order.shippedAt && (
+          <Button asChild>
+            <Link href={`/allocations/new?workOrder=${order.id}`}>
+              Allocate
+            </Link>
+          </Button>
         )}
       </PageHeading>
       <AllocationWarning order={order} />

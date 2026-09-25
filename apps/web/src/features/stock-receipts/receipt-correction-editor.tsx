@@ -51,7 +51,7 @@ export function ReceiptCorrectionEditor({
       ) : query.data ? (
         <ReceiptCorrectionForm context={query.data} close={close} />
       ) : (
-        <ErrorNotice error={query.error} />
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       )}
     </Dialog>
   );

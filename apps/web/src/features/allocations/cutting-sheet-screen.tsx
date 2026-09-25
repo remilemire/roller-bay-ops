@@ -36,7 +36,10 @@ export function CuttingSheetScreen({
 }) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
-  if (!query.data) return <ErrorNotice error={query.error} />;
+  if (!query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   return (
     <AvailableCuttingSheet
       record={query.data}

@@ -52,7 +52,7 @@ function ReviewQueue({ completionEditor }: Editor) {
       {query.isPending ? (
         <Loading />
       ) : query.error ? (
-        <ErrorNotice error={query.error} />
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       ) : (
         <section className="panel">
           <div className="data-table-wrap">
@@ -161,7 +161,10 @@ function ReviewWorksheet({
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   const sheet = query.data;
   return (
     <section className="stack">
@@ -231,6 +234,7 @@ function ReviewWorksheet({
               onChange={setReason}
             />
             {returnResults.error && <ErrorNotice error={returnResults.error} />}
+            {abandon.error && <ErrorNotice error={abandon.error} />}
             <div className="inline-actions">
               {!sheet.submittedAt && (
                 <Button
@@ -249,7 +253,6 @@ function ReviewWorksheet({
                   Abandon unused sheet
                 </Button>
               )}
-              {abandon.error && <ErrorNotice error={abandon.error} />}
               <Button
                 variant="outline"
                 disabled={
@@ -317,7 +320,10 @@ function ResolveWorksheet({
   const query = useQuery(allocationDetail(allocationId));
   const units = useMeasurementUnits();
   if (query.isPending) return <Loading />;
-  if (query.error && !query.data) return <ErrorNotice error={query.error} />;
+  if (query.error && !query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   if (query.data.state !== 'active')
     return <p>This allocation is no longer active.</p>;
   return (

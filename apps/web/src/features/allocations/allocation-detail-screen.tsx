@@ -47,7 +47,10 @@ export function AllocationDetailScreen({
 } & AllocationSections) {
   const query = useQuery(allocationDetail(id));
   if (query.isPending) return <Loading />;
-  if (!query.data) return <ErrorNotice error={query.error} />;
+  if (!query.data)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
   return (
     <>
       {query.error && (

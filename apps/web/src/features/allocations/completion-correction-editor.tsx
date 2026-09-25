@@ -60,7 +60,7 @@ export function CompletionCorrectionEditor({
       ) : query.data ? (
         <CompletionCorrectionForm context={query.data} close={close} />
       ) : (
-        <ErrorNotice error={query.error} />
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       )}
     </Dialog>
   );
@@ -127,9 +127,11 @@ function CompletionCorrectionForm({
   const [extraId, setExtraId] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<unknown>(null);
+  const [selectionError, setSelectionError] = useState<string>();
   async function addRoll() {
     setAdding(true);
     setAddError(null);
+    setSelectionError(undefined);
     try {
       const stock: StockItem = await api(
         `/stock-items/${extraId}`,
@@ -139,8 +141,10 @@ function CompletionCorrectionForm({
         !original.record.requirements.some(
           (r) => r.fabricColorId === stock.fabricColorId,
         )
-      )
-        throw new Error('Select fabric used by this order.');
+      ) {
+        setSelectionError('Select fabric used by this order.');
+        return;
+      }
       setRows((previous) =>
         previous.some((r) => r.id === stock.id)
           ? previous
@@ -490,7 +494,12 @@ function CompletionCorrectionForm({
           <Lookup
             label="Additional roll used"
             value={extraId}
-            onChange={setExtraId}
+            onChange={(value) => {
+              setExtraId(value);
+              setSelectionError(undefined);
+              setAddError(null);
+            }}
+            error={selectionError}
             queryKey={[...stockKey, 'additional-usage', units.rollWidth]}
             load={lookupStock(units.rollWidth)}
           />
