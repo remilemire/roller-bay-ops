@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,7 +8,6 @@ import type { AuditChange } from '@roller-bay/shared/audit';
 import type { Station } from '@roller-bay/shared/users';
 import type {
   CreateWorkOrder,
-  SaveWorkOrderLines,
   UpdateWorkOrder,
   WorkOrderList,
   WorkOrderQuery,
@@ -23,13 +21,9 @@ import {
   orderNotFound,
   workOrdersOperation,
 } from './work-orders.operation.js';
-import {
-  presentWorkOrder,
-  presentWorkOrderDetail,
-} from './work-orders.presenter.js';
+import { presentWorkOrder } from './work-orders.presenter.js';
 import {
   WorkOrdersRepository,
-  type WorkOrderLineRecord,
   type WorkOrderRecord,
 } from './work-orders.repository.js';
 function change(
@@ -49,31 +43,6 @@ function change(
     },
   };
 }
-/** A change to the blinds records them on both sides of the order's change. */
-function linesChange(
-  before: WorkOrderRecord,
-  beforeLines: WorkOrderLineRecord[],
-  after: WorkOrderRecord,
-  afterLines: WorkOrderLineRecord[],
-): AuditChange {
-  return {
-    recordType: 'work-orders',
-    recordId: after.id,
-    before: {
-      type: 'work-orders',
-      value: presentWorkOrderDetail(before, beforeLines),
-    },
-    after: {
-      type: 'work-orders',
-      value: presentWorkOrderDetail(after, afterLines),
-    },
-  };
-}
-const lineIssue = (code: string, index: number, message: string) =>
-  new BadRequestException({
-    message: 'A saved blind cannot be changed; replace it with a new one.',
-    issues: [{ code, path: ['lines', index], message }],
-  });
 function requireRevision(row: WorkOrderRecord | undefined, revision: number) {
   if (!row) throw new NotFoundException('Order not found.');
   if (row.revision !== revision)
@@ -104,70 +73,8 @@ export class WorkOrdersService {
     return workOrdersOperation(async () => {
       const row = await this.repository.findById(id);
       if (!row) throw new NotFoundException('Order not found.');
-      return presentWorkOrderDetail(row, await this.repository.lines(id));
+      return presentWorkOrder(row);
     });
-  }
-  /**
-   * Replaces the order's list of blinds. Rows are never changed or deleted,
-   * because a plan's cuts point at the blinds they were made for: a blind the
-   * list keeps must be as it was saved, one it drops is retired, and a
-   * changed blind arrives under a new id. Nothing outside the order is
-   * touched, so plans for a retired blind fail their own validation.
-   */
-  saveLines(id: string, input: SaveWorkOrderLines, userId: string) {
-    return workOrdersOperation(() =>
-      this.unitOfWork.transaction(async (context) => {
-        const previous = requireRevision(
-          await context.workOrders.findByIdForUpdate(id),
-          input.expectedRevision,
-        );
-        this.assertNotCancelled(previous);
-        // The allocation's cuts were planned for these blinds.
-        if (previous.allocatedAt)
-          throw new ConflictException({
-            message:
-              'This order has an allocation. Cancel it before changing the blinds.',
-            issues: [
-              {
-                code: 'order_allocated',
-                path: ['lines'],
-                message: 'Fixed while the order has an allocation.',
-              },
-            ],
-          });
-        const stored = await context.workOrders.lines(id, true);
-        const before = stored.filter((line) => !line.retiredAt);
-        const known = new Map(stored.map((line) => [line.id, line]));
-        const added: Parameters<typeof context.workOrders.insertLines>[1] = [];
-        for (const [index, line] of input.lines.entries()) {
-          const position = index + 1;
-          const saved = known.get(line.id);
-          if (!saved) added.push({ ...line, position });
-          else if (saved.retiredAt)
-            throw lineIssue('line_retired', index, 'Removed earlier.');
-          else if (
-            saved.fabricColorId !== line.fabricColorId ||
-            Number(saved.widthMm) !== line.widthMm ||
-            Number(saved.lengthMm) !== line.lengthMm ||
-            saved.quantity !== line.quantity
-          )
-            throw lineIssue('line_immutable', index, 'Already saved.');
-          else if (saved.position !== position)
-            await context.workOrders.moveLine(saved.id, position);
-        }
-        const kept = new Set(input.lines.map((line) => line.id));
-        await context.workOrders.retireLines(
-          before.filter((line) => !kept.has(line.id)).map((line) => line.id),
-        );
-        await context.workOrders.insertLines(id, added);
-        const row = await context.workOrders.update(id, {});
-        const after = await context.workOrders.lines(id);
-        await this.audit.record(context, userId, 'order.lines-saved', [
-          linesChange(previous, before, row, after),
-        ]);
-        return presentWorkOrderDetail(row, after);
-      }),
-    );
   }
   /**
    * Employees create the orders they allocate fabric for. A note, and bringing
@@ -299,23 +206,11 @@ export class WorkOrdersService {
   // The allocation workflow stamps the order inside its own transaction and
   // records the returned change on its own audit event. Only allocated_at
   // mirrors allocation state; production records its milestones separately.
-  /** The blinds a plan may assign; refuses an order that does not exist. */
-  async lines(context: UnitOfWorkContext, workOrderId: string) {
-    const order = await context.workOrders.findById(workOrderId);
-    if (!order) throw orderNotFound();
-    return {
-      order,
-      lines: await context.workOrders.lines(workOrderId, false),
-    };
-  }
-  /** Blinds by id, retired or not: what a past plan's cuts were made for. */
-  linesById(context: UnitOfWorkContext, ids: string[]) {
-    return context.workOrders.linesById(ids);
-  }
   /**
-   * Claims the order for a confirmed allocation and returns the blinds it
-   * must plan. Holding the order's row lock from here keeps a save of the
-   * blinds, which takes the same lock, from slipping in before confirmation.
+   * Claims the order for a confirmed allocation and returns it as it was, so
+   * the allocation can check its blinds against the order's quantity. The
+   * row lock, held from here, keeps the quantity from changing before
+   * confirmation.
    */
   async allocate(context: UnitOfWorkContext, workOrderId: string, at: Date) {
     const order = await context.workOrders.findByIdForUpdate(workOrderId);
@@ -334,32 +229,8 @@ export class WorkOrdersService {
           },
         ],
       });
-    const lines = await context.workOrders.lines(workOrderId, false);
-    if (!lines.length)
-      throw new BadRequestException({
-        message: 'This order has no blinds. Enter them before allocating.',
-        issues: [
-          {
-            code: 'order_has_no_lines',
-            path: ['workOrderId'],
-            message: 'No blinds entered.',
-          },
-        ],
-      });
-    const total = lines.reduce((sum, line) => sum + line.quantity, 0);
-    if (total !== order.quantity)
-      throw new BadRequestException({
-        message: `The blinds add up to ${total}, but the order has ${order.quantity}.`,
-        issues: [
-          {
-            code: 'order_quantity_mismatch',
-            path: ['workOrderId'],
-            message: `Blinds add up to ${total} of ${order.quantity}.`,
-          },
-        ],
-      });
     return {
-      lines,
+      order,
       change: change(
         order,
         await context.workOrders.stamp(order.id, { allocatedAt: at }),
@@ -404,6 +275,7 @@ export class WorkOrdersService {
     await this.requireOrder(context, id);
     return context.workOrders.setProductionMilestone(id, station, at);
   }
+  /** Locks the order for a replan and returns it; refuses once production is recorded. */
   async assertPlanningAllowed(context: UnitOfWorkContext, workOrderId: string) {
     const order = await context.workOrders.findByIdForUpdate(workOrderId);
     if (!order) throw orderNotFound();
@@ -412,6 +284,7 @@ export class WorkOrdersService {
       throw new ConflictException(
         'Production has been recorded; the fabric plan cannot be changed.',
       );
+    return order;
   }
   assertNotCancelled(order: WorkOrderRecord) {
     if (order.cancelledAt)

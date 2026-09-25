@@ -153,9 +153,7 @@ test('admins drag an order between days and the to-schedule tray, by mouse and b
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
-  await expect(
-    page.getByText('1 order · 14 blinds · 1 scheduled'),
-  ).toBeVisible();
+  await expect(page.getByText('1 order · 1 blind · 1 scheduled')).toBeVisible();
   const day = (name: string) => page.getByRole('region', { name });
   const card = day('Fri, Oct 2, 2026').getByRole('link', { name: '104801' });
   await expect(card).toBeVisible();
@@ -236,7 +234,7 @@ test('admins drag an order between days and the to-schedule tray, by mouse and b
     await expect(target.getByRole('link', { name: '104801' })).toBeVisible();
   };
   await drag(day('Thu, Oct 1, 2026'), tray, 'the orders to schedule');
-  await expect(tray).toContainText('1 order · 14 blinds');
+  await expect(tray).toContainText('1 order · 1 blind');
   await expect(page.getByText('0 orders · 0 blinds').first()).toBeVisible();
   await drag(tray, day('Mon, Sep 28, 2026'), 'Mon, Sep 28, 2026');
   expect(state.orderRequests.slice(-2)).toEqual([

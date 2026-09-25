@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import {
   createWorkOrderSchema,
-  saveWorkOrderLinesSchema,
   workOrderQuerySchema,
   updateWorkOrderSchema,
 } from '@roller-bay/shared/work-orders';
@@ -68,25 +66,6 @@ test('an order states its blind count, a whole number from 1 to 10,000', () => {
     // An update may leave the quantity alone, but it is then no change.
     assert.equal(update(quantity), valid);
   }
-});
-
-test('every field of a blind is required, and its ids are unique in the list', () => {
-  const line = {
-    id: randomUUID(),
-    fabricColorId: randomUUID(),
-    widthMm: 1200.5,
-    lengthMm: 1800,
-    quantity: 2,
-  };
-  const save = (lines: unknown[]) =>
-    saveWorkOrderLinesSchema.safeParse({ expectedRevision: 1, lines }).success;
-  assert.equal(save([line]), true);
-  assert.equal(save([]), true);
-  assert.equal(save([line, line]), false);
-  for (const field of ['fabricColorId', 'widthMm', 'lengthMm', 'quantity'])
-    assert.equal(save([{ ...line, [field]: undefined }]), false);
-  for (const invalid of [{ widthMm: 0 }, { lengthMm: 1.0001 }, { quantity: 0 }])
-    assert.equal(save([{ ...line, ...invalid }]), false);
 });
 
 test('work order notes are trimmed, bounded, and blank notes clear the note', () => {

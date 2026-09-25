@@ -14,6 +14,7 @@ import {
   createAllocationSchema,
   optimizeAllocationSchema,
   replaceAllocationSchema,
+  requirementInput,
 } from '@roller-bay/shared/allocations';
 import { stockCuttingOutcomeSchema } from '@roller-bay/shared/stock-items';
 import { allocationOperation } from './allocations.operation.js';
@@ -25,6 +26,7 @@ function submission() {
   const context = fixture();
   return {
     workOrderId: randomUUID().toUpperCase(),
+    requirements: context.requirements.map(requirementInput),
     plan: {
       cuts: [
         {
@@ -36,15 +38,14 @@ function submission() {
   };
 }
 
-test('allocation contracts name a work order, carry only the plan, and require revisions', () => {
+test('allocation contracts name a work order, carry their own blinds and plan, and require revisions', () => {
   const input = submission();
-  const { workOrderId, plan } = input;
+  const { workOrderId, requirements, plan } = input;
   assert.equal(
     createAllocationSchema.parse(input).workOrderId,
     workOrderId.toLowerCase(),
   );
-  // The blinds are the order's: a request neither carries them nor names the
-  // order by its number.
+  // The order is named by id, and the cutting rules are the server's.
   for (const extra of [
     { orderNumber: '104801' },
     { requirements: fixture().requirements },
@@ -54,22 +55,40 @@ test('allocation contracts name a work order, carry only the plan, and require r
       createAllocationSchema.safeParse({ ...input, ...extra }).success,
       false,
     );
-  assert.equal(createAllocationSchema.safeParse({ plan }).success, false);
-  // A draft is an unfinished plan for an order, so it names one too.
+  assert.equal(
+    createAllocationSchema.safeParse({ workOrderId, plan }).success,
+    false,
+  );
+  // At least one blind, each complete, under ids unique in the list.
+  for (const blinds of [
+    [],
+    [requirements[0], requirements[0]],
+    [{ ...requirements[0], quantity: undefined }],
+  ])
+    assert.equal(
+      createAllocationSchema.safeParse({ ...input, requirements: blinds })
+        .success,
+      false,
+    );
+  // A draft is an unfinished allocation for an order, so it names one too;
+  // its blinds may be unfinished.
   assert.deepEqual(allocationDraftInputSchema.parse({ workOrderId }), {
     workOrderId: workOrderId.toLowerCase(),
+    requirements: [],
     plan: { cuts: [] },
   });
   assert.equal(allocationDraftInputSchema.safeParse({}).success, false);
+  // A replan stays with its order and needs the revision it replaces.
   assert.equal(
-    allocationDraftInputSchema.safeParse({ workOrderId, requirements: [] })
-      .success,
+    replaceAllocationSchema.safeParse({ requirements, plan }).success,
     false,
   );
-  // A replan stays with its order and needs the revision it replaces.
-  assert.equal(replaceAllocationSchema.safeParse({ plan }).success, false);
   assert.equal(
-    replaceAllocationSchema.safeParse({ plan, expectedRevision: 1 }).success,
+    replaceAllocationSchema.safeParse({
+      requirements,
+      plan,
+      expectedRevision: 1,
+    }).success,
     true,
   );
   assert.equal(
@@ -77,7 +96,12 @@ test('allocation contracts name a work order, carry only the plan, and require r
       .success,
     false,
   );
-  // A preview of an existing allocation names it and its revision together.
+  // Previews plan the request's blinds. A preview of an existing allocation
+  // names it and its revision together.
+  assert.equal(
+    optimizeAllocationSchema.safeParse({ workOrderId, requirements }).success,
+    false,
+  );
   for (const [extra, valid] of [
     [{}, true],
     [{ allocationId: randomUUID() }, false],
@@ -85,7 +109,7 @@ test('allocation contracts name a work order, carry only the plan, and require r
     [{ allocationId: randomUUID(), expectedRevision: 1 }, true],
   ] as const)
     assert.equal(
-      optimizeAllocationSchema.safeParse({ workOrderId, ...extra }).success,
+      optimizeAllocationSchema.safeParse({ requirements, ...extra }).success,
       valid,
     );
   const key = randomUUID();

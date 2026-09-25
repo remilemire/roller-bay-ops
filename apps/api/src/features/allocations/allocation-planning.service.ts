@@ -18,7 +18,6 @@ import {
 } from '@roller-bay/shared/allocations';
 import { SolverError } from '../../solver/solver.errors.js';
 import { StockItemsService } from '../stock-items/index.js';
-import { WorkOrdersService } from '../work-orders/index.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { requirePlanningRevision } from './allocation.rules.js';
 import { allocationOperation } from './allocations.operation.js';
@@ -37,7 +36,6 @@ export class AllocationPlanningService {
     @Inject(CuttingPlanOptimizer)
     private readonly optimizer: CuttingPlanOptimizer | null,
     private readonly cuttingRules: CuttingRulesService,
-    private readonly orders: WorkOrdersService,
   ) {}
   async optimize(input: OptimizeAllocation, signal?: AbortSignal) {
     if (!this.optimizer)
@@ -114,27 +112,8 @@ export class AllocationPlanningService {
               input.expectedRevision,
             )
           : undefined;
-        // A confirmed allocation stays with its order; a draft being edited
-        // may be previewed against the order the form has moved it to.
-        if (
-          header &&
-          !header.isDraft &&
-          header.workOrderId !== input.workOrderId
-        )
-          throw new BadRequestException('An allocation stays with its order.');
-        // The order's saved blinds, not the form's: what would be confirmed.
-        const { lines } = await this.orders.lines(context, input.workOrderId);
-        const requirements = lines.map((line) => ({
-          id: line.id,
-          fabricColorId: line.fabricColorId,
-          widthMm: Number(line.widthMm),
-          lengthMm: Number(line.lengthMm),
-          quantity: line.quantity,
-        }));
-        if (!requirements.length)
-          throw new BadRequestException(
-            'This order has no blinds. Enter them before planning.',
-          );
+        // The form's blinds, as they would be confirmed.
+        const { requirements } = input;
         const configured = this.cuttingRules.apply(
           requirements,
           header?.settings,

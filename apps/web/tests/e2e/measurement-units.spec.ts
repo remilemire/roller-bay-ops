@@ -44,17 +44,14 @@ test('units chosen per field in Settings relabel forms and lists while requests 
   await page.getByLabel('Width (mm)', { exact: true }).fill('1371.6');
   await page.getByLabel('Finished drop (in)', { exact: true }).fill('90');
   await page.getByLabel('Quantity', { exact: true }).fill('1');
-  // The blinds reach the order in millimetres, whatever units they were
-  // typed in.
-  await page.getByRole('button', { name: 'Save blinds', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Blinds saved', exact: true }),
-  ).toBeVisible();
-  expect(state.orderRequests.at(-1)!.body).toMatchObject({
-    lines: [{ widthMm: 1371.6, lengthMm: 2286, quantity: 1 }],
-  });
+  // The blinds are saved in millimetres, whatever units they were typed in.
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/allocations/${ids.allocation}$`));
+  expect(state.allocationDraft!.data.requirements[0]).toMatchObject({
+    widthMm: 1371.6,
+    lengthMm: 2286,
+    quantity: 1,
+  });
   await expect(page.getByLabel('Width (mm)', { exact: true })).toHaveValue(
     '1371.6',
   );

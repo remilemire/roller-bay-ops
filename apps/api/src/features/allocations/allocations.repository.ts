@@ -25,6 +25,7 @@ import type { CuttingPlanSummary } from './cutting-plan/cutting-plan.types.js';
 import { allocationCutItems } from './tables/allocation-cut-items.table.js';
 import { allocationCuts } from './tables/allocation-cuts.table.js';
 import { allocationItems } from './tables/allocation-items.table.js';
+import { allocationRequirements } from './tables/allocation-requirements.table.js';
 import { allocations } from './tables/allocations.table.js';
 // Reads carry the order's number, which lives on the work order alone.
 const columns = {
@@ -34,6 +35,18 @@ const columns = {
 export type AllocationRecord = typeof allocations.$inferSelect & {
   orderNumber: string;
 };
+export type RequirementRow = typeof allocationRequirements.$inferSelect;
+/** A blind as a write sends it; a draft's may be unfinished. */
+type RequirementInput = Pick<
+  AllocationDraftData['requirements'][number],
+  'id'
+> &
+  Partial<
+    Omit<
+      AllocationDraftData['requirements'][number],
+      'id' | 'lengthAllowanceMm'
+    >
+  >;
 // Only confirmed, unfinished orders reserve stock; draft selections are not claims.
 const active = () =>
   and(
@@ -156,6 +169,14 @@ export class AllocationsRepository {
       .where(eq(allocationItems.allocationId, id))
       .orderBy(asc(allocationItems.stockItemId));
   }
+  /** The allocation's own blinds, in order. */
+  requirements(id: string) {
+    return this.db
+      .select()
+      .from(allocationRequirements)
+      .where(eq(allocationRequirements.allocationId, id))
+      .orderBy(asc(allocationRequirements.position));
+  }
   async plan(id: string) {
     const rows = await this.db
       .select({ cut: allocationCuts, stockItemId: allocationItems.stockItemId })
@@ -190,8 +211,7 @@ export class AllocationsRepository {
         lengthMm:
           cut.plannedLengthMm === null ? null : Number(cut.plannedLengthMm),
         items: (byCut.get(cut.id) ?? []).map((item) => ({
-          // A plan calls the blinds it assigns its requirements.
-          requirementId: item.workOrderLineId,
+          requirementId: item.requirementId,
           quantity: item.quantity,
         })),
       })),
@@ -215,21 +235,38 @@ export class AllocationsRepository {
     await this.db
       .delete(allocationItems)
       .where(eq(allocationItems.allocationId, id));
+    await this.db
+      .delete(allocationRequirements)
+      .where(eq(allocationRequirements.allocationId, id));
   }
   async delete(id: string) {
     await this.clearPlan(id);
     await this.db.delete(allocations).where(eq(allocations.id, id));
   }
   /**
-   * Replace the full child graph inside the caller's header-locked
-   * transaction. The blinds it assigns are the order's and are not written.
+   * Replace the full child graph, the blinds included, inside the caller's
+   * header-locked transaction.
    */
   async replacePlan(
     id: string,
-    input: Pick<AllocationDraftData, 'plan' | 'settings'>,
+    input: Pick<AllocationDraftData, 'plan' | 'settings'> & {
+      requirements: readonly RequirementInput[];
+    },
     summary?: CuttingPlanSummary,
   ) {
     await this.clearPlan(id);
+    for (const batch of batches([...input.requirements.entries()]))
+      await this.db.insert(allocationRequirements).values(
+        batch.map(([index, item]) => ({
+          id: item.id,
+          allocationId: id,
+          position: index + 1,
+          fabricColorId: item.fabricColorId ?? null,
+          widthMm: item.widthMm?.toFixed(3) ?? null,
+          lengthMm: item.lengthMm?.toFixed(3) ?? null,
+          quantity: item.quantity ?? null,
+        })),
+      );
     // Unassigned cuts each get a placeholder; selected stock is shared across its cuts.
     const itemKeys = input.plan.cuts.map(
       (cut, index) => cut.stockItemId ?? `unassigned:${index}`,
@@ -277,7 +314,7 @@ export class AllocationsRepository {
     const assignments = inputs.flatMap(({ cut, values }) =>
       cut.items.map((item, index) => ({
         allocationCutId: values.id,
-        workOrderLineId: item.requirementId,
+        requirementId: item.requirementId,
         position: index + 1,
         quantity: item.quantity,
       })),
@@ -325,9 +362,9 @@ export class AllocationsRepository {
           active(),
           sql`(${stockItems.voidedAt} IS NOT NULL OR ${stockItems.consumedAt} IS NOT NULL OR ${stockItems.remainingLengthMm} < ${total}
             OR EXISTS (SELECT 1 FROM allocation_cuts ac JOIN allocation_cut_items aci ON aci.allocation_cut_id = ac.id
-              JOIN work_order_lines wl ON wl.id = aci.work_order_line_id
+              JOIN allocation_requirements ar ON ar.id = aci.allocation_requirement_id
               WHERE ac.allocation_item_id = ${allocationItems.id}
-              GROUP BY ac.id, ac.edge_trim_mm HAVING sum(wl.width_mm * aci.quantity) + 2 * coalesce(ac.edge_trim_mm, 0) > ${stockItems.widthMm}))`,
+              GROUP BY ac.id, ac.edge_trim_mm HAVING sum(ar.width_mm * aci.quantity) + 2 * coalesce(ac.edge_trim_mm, 0) > ${stockItems.widthMm}))`,
           stockIds ? inArray(stockItems.id, stockIds) : undefined,
           allocationIds ? inArray(allocations.id, allocationIds) : undefined,
         ),

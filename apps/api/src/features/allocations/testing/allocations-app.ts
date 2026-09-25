@@ -47,23 +47,57 @@ export async function startAllocationsApp(t: TestContext) {
   };
   // Sequential numbers keep order-number searches unambiguous.
   let orderNumber = 100000;
-  /** A new order of one blind, and the plan that cuts it from the stock. */
+  /** A new order of one blind, that blind, and the plan that cuts it from the stock. */
   const input = async (
     stockId: string,
     length = 1000,
   ): Promise<CreateAllocation> => {
-    const order = await fixtures.createWorkOrder(String(++orderNumber), [
-      { fabricColorId: ids.color, widthMm: 500, lengthMm: length, quantity: 1 },
-    ]);
+    const order = await fixtures.createWorkOrder(String(++orderNumber));
+    const requirementId = randomUUID();
     return {
       workOrderId: order.id,
+      requirements: [
+        {
+          id: requirementId,
+          fabricColorId: ids.color,
+          widthMm: 500,
+          lengthMm: length,
+          quantity: 1,
+        },
+      ],
       plan: {
         cuts: [
           {
             stockItemId: stockId,
-            items: [{ requirementId: order.lineIds[0]!, quantity: 1 }],
+            items: [{ requirementId, quantity: 1 }],
           },
         ],
+      },
+    };
+  };
+  /**
+   * The same blinds under new ids, for another allocation or draft of the
+   * order: a blind's id is unique across allocations. The plan follows them,
+   * optionally cut from other stock.
+   */
+  const copy = (body: CreateAllocation, stockItemId?: string) => {
+    const ids = new Map(
+      body.requirements.map((item) => [item.id, randomUUID()]),
+    );
+    return {
+      ...body,
+      requirements: body.requirements.map((item) => ({
+        ...item,
+        id: ids.get(item.id)!,
+      })),
+      plan: {
+        cuts: body.plan.cuts.map((cut) => ({
+          stockItemId: stockItemId ?? cut.stockItemId,
+          items: cut.items.map((item) => ({
+            ...item,
+            requirementId: ids.get(item.requirementId)!,
+          })),
+        })),
       },
     };
   };
@@ -118,6 +152,7 @@ export async function startAllocationsApp(t: TestContext) {
     put,
     seed,
     input,
+    copy,
     create,
     countStock,
     optimizedContexts,

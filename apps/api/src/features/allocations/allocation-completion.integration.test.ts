@@ -83,10 +83,12 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
       ).expect(409);
       await post(`${path}/${first.id}/complete`, body).expect(409);
       await put(first.id, {
+        requirements: firstInput.requirements,
         plan: firstInput.plan,
         expectedRevision: 2,
       }).expect(409);
       const replacement = {
+        requirements: secondInput.requirements,
         plan: {
           cuts: [{ ...secondInput.plan.cuts[0]!, stockItemId: await seed() }],
         },

@@ -1,3 +1,4 @@
+import { requirementInput } from '@roller-bay/shared/allocations';
 import {
   BadRequestException,
   ConflictException,
@@ -7,14 +8,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { StockItem } from '@roller-bay/shared/stock-items';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import 'reflect-metadata';
 import { z } from 'zod';
 import { SolverError } from '../../solver/solver.errors.js';
 import { stubUnitOfWork } from '../../testing/unit-of-work.js';
 import type { StockItemsService } from '../stock-items/index.js';
-import type { WorkOrdersService } from '../work-orders/index.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
 import { CuttingRulesService } from './cutting-rules.service.js';
 import type { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
@@ -40,17 +39,6 @@ function optimizeWith(failure: unknown) {
       throw failure;
     },
   } as unknown as CuttingPlanOptimizer;
-  // The blinds planned are the work order's saved lines.
-  const orders = {
-    lines: async () => ({
-      lines: context.requirements.map((item, index) => ({
-        ...item,
-        position: index + 1,
-        widthMm: String(item.widthMm),
-        lengthMm: String(item.lengthMm),
-      })),
-    }),
-  } as unknown as WorkOrdersService;
   return new AllocationPlanningService(
     unitOfWork,
     stockItems,
@@ -63,8 +51,11 @@ function optimizeWith(failure: unknown) {
         CUTTING_DROP_ALLOWANCE_MM: 0,
       }),
     ),
-    orders,
-  ).optimize({ workOrderId: randomUUID(), maxTimeSeconds: 5 });
+  ).optimize({
+    // The blinds planned are the request's.
+    requirements: context.requirements.map(requirementInput),
+    maxTimeSeconds: 5,
+  });
 }
 
 function expectHttp<T extends HttpException>(

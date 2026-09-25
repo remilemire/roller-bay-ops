@@ -1,13 +1,8 @@
 import {
-  workOrderDetailSchema,
   workOrderSchema,
   type WorkOrder,
-  type WorkOrderDetail,
 } from '@roller-bay/shared/work-orders';
-import type {
-  WorkOrderLineRecord,
-  WorkOrderRecord,
-} from './work-orders.repository.js';
+import type { WorkOrderRecord } from './work-orders.repository.js';
 
 // The status is the furthest step reached; it is never stored. A promised
 // date survives fabric release, so `scheduled` can have no current allocation.
@@ -38,21 +33,5 @@ export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
     shippedAt: row.shippedAt?.toISOString() ?? null,
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
-  });
-}
-
-export function presentWorkOrderDetail(
-  row: WorkOrderRecord,
-  lines: WorkOrderLineRecord[],
-): WorkOrderDetail {
-  return workOrderDetailSchema.parse({
-    ...presentWorkOrder(row),
-    lines: lines.map((line) => ({
-      id: line.id,
-      fabricColorId: line.fabricColorId,
-      widthMm: Number(line.widthMm),
-      lengthMm: Number(line.lengthMm),
-      quantity: line.quantity,
-    })),
   });
 }

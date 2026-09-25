@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   allocationDraftDataSchema,
+  allocationDraftInputSchema,
   createAllocationSchema,
 } from '@roller-bay/shared/allocations';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -59,6 +60,23 @@ const header = (): AllocationRecord => ({
 
 test('allocation drafts preserve missing values and reject invalid supplied fields and foreign assignments', () => {
   const id = randomUUID();
+  // A draft names its order, and may hold half-entered blinds of its own.
+  const input = allocationDraftInputSchema.parse({
+    workOrderId: randomUUID(),
+    requirements: [{ id, widthMm: 500 }],
+  });
+  assert.deepEqual(input.requirements, [
+    { id, fabricColorId: null, widthMm: 500, lengthMm: null, quantity: null },
+  ]);
+  for (const invalid of [
+    { requirements: [{ id }] },
+    { workOrderId: randomUUID(), requirements: [{ id, lengthAllowanceMm: 0 }] },
+    {
+      workOrderId: randomUUID(),
+      plan: { cuts: [{ items: [{ requirementId: id }] }] },
+    },
+  ])
+    assert.equal(allocationDraftInputSchema.safeParse(invalid).success, false);
   const data = allocationDraftDataSchema.parse({
     requirements: [{ id }],
     plan: { cuts: [{ items: [{ requirementId: id }] }, {}] },
@@ -138,8 +156,20 @@ test('all reservation and shortage SQL excludes unconfirmed allocations', async 
 test('incomplete allocation draft cannot reach reservation or confirmation writes', async () => {
   const draft = header();
   let writes = 0;
+  // A draft with a half-entered blind and no plan.
   const repository = {
     findById: async () => draft,
+    requirements: async () => [
+      {
+        id: randomUUID(),
+        allocationId: draft.id,
+        position: 1,
+        fabricColorId: null,
+        widthMm: '500.000',
+        lengthMm: null,
+        quantity: 1,
+      },
+    ],
     plan: async () => ({ cuts: [] }),
     replacePlan: async () => {
       writes++;
@@ -154,9 +184,8 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       writes++;
     },
   };
-  // An incomplete draft reads its order's blinds, and must not claim it.
+  // An incomplete draft must not claim its order.
   const orders = {
-    lines: async () => ({ lines: [] }),
     allocate: async () => {
       writes++;
     },
@@ -179,7 +208,6 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
     new AllocationDetailsService(
       stock as unknown as StockItemsService,
       cuttingRules,
-      orders as unknown as WorkOrdersService,
     ),
   );
   await assert.rejects(

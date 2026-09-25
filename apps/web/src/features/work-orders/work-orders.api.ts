@@ -34,18 +34,12 @@ export const orderDetail = (id: string) =>
   queryOptions({
     queryKey: [...workOrdersKey, id],
     queryFn: ({ signal }) =>
-      api(`/work-orders/${id}`, s.workOrderDetailSchema, { signal }),
+      api(`/work-orders/${id}`, s.workOrderSchema, { signal }),
   });
 export const createOrder = (body: unknown) =>
   api('/work-orders', s.workOrderSchema, {
     method: 'POST',
     body: s.createWorkOrderSchema.parse(body),
-  });
-// The order's blinds, whole and in order; see saveWorkOrderLinesSchema.
-export const saveOrderLines = (id: string, body: unknown) =>
-  api(`/work-orders/${id}/lines`, s.workOrderDetailSchema, {
-    method: 'PUT',
-    body: s.saveWorkOrderLinesSchema.parse(body),
   });
 export const updateOrder = (id: string, body: unknown) =>
   api(`/work-orders/${id}`, s.workOrderSchema, {

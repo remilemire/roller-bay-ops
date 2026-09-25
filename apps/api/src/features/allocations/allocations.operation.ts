@@ -31,6 +31,43 @@ export async function allocationOperation<T>(
           constraint === 'allocations_live_work_order_unique'
         )
           throw orderAlreadyAllocated(error);
+        // Neither key says which blind; the issue names the list.
+        if (
+          cause.code === '23503' &&
+          constraint ===
+            'allocation_requirements_fabric_color_id_fabric_colors_id_fk'
+        )
+          throw new NotFoundException(
+            {
+              message: 'A blind names a fabric color that does not exist.',
+              issues: [
+                {
+                  code: 'fabric_color_not_found',
+                  path: ['requirements'],
+                  message: 'Unknown fabric color.',
+                },
+              ],
+            },
+            { cause: error },
+          );
+        // Blind ids are client-generated and unique across allocations.
+        if (
+          cause.code === '23505' &&
+          constraint === 'allocation_requirements_pkey'
+        )
+          throw new BadRequestException(
+            {
+              message: 'A blind uses an ID that another allocation holds.',
+              issues: [
+                {
+                  code: 'requirement_id_in_use',
+                  path: ['requirements'],
+                  message: 'ID already used.',
+                },
+              ],
+            },
+            { cause: error },
+          );
         if (cause.code === '23503')
           throw new NotFoundException(
             'A referenced allocation, fabric, stock item, or location no longer exists.',

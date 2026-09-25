@@ -839,6 +839,9 @@ td strong {
   color: var(--muted);
   font-size: 11px;
 }
+.order-count.is-mismatch {
+  color: var(--danger);
+}
 .input[aria-invalid='true'],
 .input[data-invalid] {
   border-color: var(--danger);

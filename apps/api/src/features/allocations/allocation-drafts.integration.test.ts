@@ -50,13 +50,15 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
     );
   const colleague = await fixtures.createUser('Draft colleague');
   await t.test(
-    "allocation drafts show their order's blinds and keep unfinished cuts in order without reserving stock",
+    'allocation drafts keep their own unfinished blinds and cuts in order without reserving stock',
     async () => {
       const stockId = await seed(1000);
       const complete = await input(stockId);
-      // The unfinished part of a draft is its plan; the blinds are the order's.
+      // A half-entered blind is kept as it is, beside a finished one.
+      const half = { id: randomUUID(), widthMm: 800 };
       const partial = {
         workOrderId: complete.workOrderId,
+        requirements: [...complete.requirements, half],
         plan: {
           cuts: [
             {},
@@ -68,8 +70,15 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       };
       const draft = await create(partial);
       assert.deepEqual(
-        draft.data.requirements.map((item) => item.id),
-        [complete.plan.cuts[0]!.items[0]!.requirementId],
+        draft.data.requirements.map(({ id, widthMm, quantity }) => ({
+          id,
+          widthMm,
+          quantity,
+        })),
+        [
+          { id: complete.requirements[0]!.id, widthMm: 500, quantity: 1 },
+          { id: half.id, widthMm: 800, quantity: null },
+        ],
       );
       // Only the assigned cut has a derived length; the test allowance is zero.
       assert.deepEqual(
@@ -89,7 +98,11 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       assert.ok(
         savedItems.rows.every((row) => row.reserved_length_mm === null),
       );
-      const preview = complete;
+      // A preview plans the blinds it is sent; this is the finished one.
+      const preview = {
+        requirements: complete.requirements,
+        plan: complete.plan,
+      };
       assert.equal(
         (await post(`${path}/validate`, preview).expect(200)).body.valid,
         true,
@@ -135,7 +148,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
     'allocation draft creation retries, references, revisions and deletion are checked',
     async () => {
       const key = randomUUID();
-      // A draft plans an order's blinds, so it names one from the start.
+      // A draft is an allocation for an order, so it names one from the start.
       await post(`${path}/drafts`, { data: {} }).expect(400);
       const { workOrderId } = await input(await seed());
       const other = (await input(await seed())).workOrderId;
@@ -154,8 +167,24 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
         { data: { workOrderId: other } },
         key,
       ).expect(409);
-      // Blinds are the order's and are not part of a draft.
-      await put(draft.id, 1, { workOrderId, requirements: [] }).expect(400);
+      // Supplied ids must exist, the blinds' fabric included.
+      const unknownColor = await put(draft.id, 1, {
+        workOrderId,
+        requirements: [{ id: randomUUID(), fabricColorId: randomUUID() }],
+      }).expect(404);
+      assert.deepEqual(
+        unknownColor.body.issues.map(
+          ({ code, path }: { code: string; path: string[] }) => ({
+            code,
+            path,
+          }),
+        ),
+        [{ code: 'fabric_color_not_found', path: ['requirements'] }],
+      );
+      await put(draft.id, 1, {
+        workOrderId,
+        requirements: [{ id: 'not-an-id' }],
+      }).expect(400);
       await put(draft.id, 1, {
         workOrderId,
         plan: { cuts: [{ stockItemId: randomUUID() }] },
@@ -164,7 +193,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
         workOrderId,
         plan: { cuts: [{ items: [{ requirementId: randomUUID() }] }] },
       }).expect(400);
-      // A draft may move to another order, whose blinds it then plans.
+      // A draft may move to another order, taking its blinds along.
       const updates = await Promise.all([
         put(draft.id, 1, { workOrderId: other }),
         put(draft.id, 1, { workOrderId: other }),
@@ -208,10 +237,7 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
       assert.equal(saved.state, 'active');
       assert.equal(saved.id, draft.id);
       assert.equal(saved.createdByUserId, colleague);
-      assert.equal(
-        saved.requirements[0]!.id,
-        body.plan.cuts[0]!.items[0]!.requirementId,
-      );
+      assert.equal(saved.requirements[0]!.id, body.requirements[0]!.id);
       assert.equal(saved.items[0]!.reservedLengthMm, 1000);
       assert.equal(saved.revision, 3);
       assert.deepEqual(await history(draft.id), [
@@ -305,13 +331,14 @@ test('allocation drafts integration', { timeout: 60_000 }, async (t) => {
         expectedRevision: 1,
       }).expect(200);
       const client = await pool.connect();
-      // A blind is complete by its own columns; the plan's fields are
-      // nullable for drafts, so a trigger holds them for confirmed plans.
-      await assert.rejects(
-        pool.query(`UPDATE work_order_lines SET width_mm=NULL`),
-        { code: '23502' },
-      );
+      // Blinds and plan fields are nullable for drafts, so a trigger holds
+      // them for confirmed plans.
       const children = [
+        {
+          table: 'allocation_requirements',
+          fields: ['fabric_color_id', 'width_mm', 'length_mm', 'quantity'],
+          where: 'allocation_id=$1',
+        },
         {
           table: 'allocation_items',
           fields: ['stock_item_id', 'reserved_length_mm'],

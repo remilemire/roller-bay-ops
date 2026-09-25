@@ -11,7 +11,7 @@ import {
   allocationDetailSchema,
   allocationDraftSchema,
 } from '../allocations/index.js';
-import { workOrderDetailSchema } from '../work-orders/index.js';
+import { workOrderSchema } from '../work-orders/index.js';
 export const auditRecordTypeSchema = z.enum([
   'employees',
   'production',
@@ -54,12 +54,23 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('work-orders'),
-    // Snapshots recorded before orders had a creation time lack it, and only
-    // a change to the blinds records them. While the quantity was the total
-    // of the order's blinds, an order without any recorded zero.
-    value: workOrderDetailSchema
-      .partial({ createdAt: true, lines: true })
-      .extend({ quantity: z.number().int().nonnegative() }),
+    // Snapshots recorded before orders had a creation time lack it. While an
+    // order held its own blinds, a change to them recorded them, and its
+    // quantity was their total, zero for an order without any.
+    value: workOrderSchema.partial({ createdAt: true }).extend({
+      quantity: z.number().int().nonnegative(),
+      lines: z
+        .array(
+          z.object({
+            id: z.uuid(),
+            fabricColorId: z.uuid(),
+            widthMm: z.number(),
+            lengthMm: z.number(),
+            quantity: z.number().int(),
+          }),
+        )
+        .optional(),
+    }),
   }),
 ]);
 export const auditChangeSchema = z.object({

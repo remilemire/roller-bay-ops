@@ -6,13 +6,7 @@ import {
   allocationDraftSchema,
   type AllocationOptimization,
 } from '@roller-bay/shared/allocations';
-import {
-  allocation,
-  ids,
-  order,
-  orderLines,
-  stock,
-} from '../../../tests/fixtures';
+import { allocation, ids, stock } from '../../../tests/fixtures';
 import { AllocationDetailScreen } from './allocation-detail-screen';
 import { AllocationEditor } from './allocation-editor';
 import { allocationKey } from './allocations.api';
@@ -24,7 +18,6 @@ const {
   createDraft,
   saveDraft,
   submit,
-  saveLines,
   createOrder,
   routerReplace,
   orders,
@@ -36,7 +29,6 @@ const {
   optimize: vi.fn(),
   saveDraft: vi.fn(),
   submit: vi.fn(),
-  saveLines: vi.fn(),
   // Whether the order the form names already has a live allocation.
   orders: { allocated: false },
 }));
@@ -87,12 +79,12 @@ vi.mock('@/components/ui/lookup', async () => {
 });
 vi.mock('@/features/work-orders/work-orders.api', async (original) => {
   const { queryOptions } = await import('@tanstack/react-query');
-  const { order, orderLines } = await import('../../../tests/fixtures');
+  const { order } = await import('../../../tests/fixtures');
   return {
     ...(await original<
       typeof import('@/features/work-orders/work-orders.api')
     >()),
-    // Any order id reads as the fixture order with the fixture's one blind.
+    // Any order id reads as the fixture order, which has one blind.
     orderDetail: (id: string) =>
       queryOptions({
         queryKey: ['work-orders', id],
@@ -100,10 +92,8 @@ vi.mock('@/features/work-orders/work-orders.api', async (original) => {
           ...order,
           id,
           allocatedAt: orders.allocated ? order.allocatedAt : null,
-          lines: orderLines,
         }),
       }),
-    saveOrderLines: saveLines,
     createOrder,
   };
 });
@@ -145,15 +135,22 @@ beforeEach(() => {
     createDraft,
     saveDraft,
     submit,
-    saveLines,
     createOrder,
     routerReplace,
   ])
     mock.mockReset();
 });
-/** The plan is held back until the chosen order and its blinds are read. */
+/** Saving waits for the chosen order to be read. */
 const ready = async (name = 'Save draft') =>
   waitFor(() => expect(screen.getByRole('button', { name })).toBeEnabled());
+/** Enters one blind of 54 by 90 inches; returns the id the form gave it. */
+async function enterBlind(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Add blind' }));
+  await user.type(screen.getByLabelText('Color · blind 1'), ids.color);
+  await user.type(screen.getByLabelText('Width (in)'), '54');
+  await user.type(screen.getByLabelText('Finished drop (in)'), '90');
+  await user.type(screen.getByLabelText('Quantity'), '1');
+}
 const show = (ui: React.ReactNode, queries = client()) =>
   render(<QueryClientProvider client={queries}>{ui}</QueryClientProvider>);
 
@@ -175,9 +172,9 @@ it('keeps the active plan revision and edited values when a background refresh b
   expect(
     screen.queryByLabelText(/Drop allowance|Edge trim|Minimum reusable/),
   ).not.toBeInTheDocument();
-  // A replan stays with its order, whose blinds are fixed while allocated.
+  // A replan stays with its order, and may change its own blinds.
   expect(screen.queryByLabelText('Order number')).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Width (in)')).toBeDisabled();
+  expect(screen.getByLabelText('Width (in)')).toBeEnabled();
   await ready('Update reservations');
   // Each change re-keys the cuts, so the field is found again every time.
   const quantity = () => screen.getByLabelText('Quantity in this cut');
@@ -191,6 +188,15 @@ it('keeps the active plan revision and edited values when a background refresh b
   await waitFor(() =>
     expect(replace).toHaveBeenCalledWith(allocation.id, {
       expectedRevision: 1,
+      requirements: [
+        {
+          id: ids.requirement,
+          fabricColorId: ids.color,
+          widthMm: allocation.requirements[0]!.widthMm,
+          lengthMm: allocation.requirements[0]!.lengthMm,
+          quantity: 1,
+        },
+      ],
       plan: {
         cuts: [
           {
@@ -216,9 +222,7 @@ it('offers generating a plan or hand-building one, and reports planning in one p
   );
   show(<AllocationEditor workOrderId={ids.order} />);
   await ready();
-  // The order's blinds arrive with it, already saved.
-  expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
-  expect(screen.getByRole('button', { name: 'Blinds saved' })).toBeDisabled();
+  await enterBlind(user);
   // An empty plan presents the two ways to start and nothing to validate.
   const start = screen.getByText('Build it by hand').closest('.plan-start')!;
   expect(start).toContainElement(
@@ -241,9 +245,19 @@ it('offers generating a plan or hand-building one, and reports planning in one p
   expect(window.confirm).toHaveBeenCalledWith(
     'Replace the current cuts with a generated plan?',
   );
-  // The API plans the order's saved blinds; the request names only the order.
+  // The API plans the blinds the form sends.
   expect(optimize).toHaveBeenCalledWith(
-    { workOrderId: ids.order },
+    {
+      requirements: [
+        {
+          id: expect.any(String),
+          fabricColorId: ids.color,
+          widthMm: 1371.6,
+          lengthMm: 2286,
+          quantity: 1,
+        },
+      ],
+    },
     expect.anything(),
   );
   const save = screen.getByRole('button', { name: 'Save draft' });
@@ -288,71 +302,72 @@ it('opens on the order it was reached from, with nothing to save yet', async () 
     await screen.findByRole('heading', { name: 'Allocate 104801' }),
   ).toBeInTheDocument();
   await ready();
-  // The order is settled; only its blinds and its plan are edited here.
+  // The order is settled; its blinds and its plan are entered here, against
+  // the count it states.
   expect(screen.queryByLabelText(/Order number/)).toBeNull();
-  expect(screen.getByLabelText('Width (in)')).toHaveValue(54);
+  expect(screen.queryByLabelText('Width (in)')).toBeNull();
+  expect(
+    await screen.findByText('The order has 1 blind; 0 entered.'),
+  ).toHaveClass('is-mismatch');
   // Arriving with an order chosen is not a change to lose by leaving.
   expect(screen.getByText('Not saved yet')).toBeInTheDocument();
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-it("saves the order's blinds on their own, an edited one under a new id, and holds the plan until then", async () => {
+it("saves the blinds with the draft, and holds confirmation until they match the order's count", async () => {
   const user = userEvent.setup();
   show(<AllocationEditor initial={draft} />);
   await ready();
-  const width = screen.getByLabelText('Width (in)');
-  await user.clear(width);
-  // A half-entered blind is not saved; the problem shows beside its field.
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'Save the blinds before planning fabric for them.',
+  const count = await screen.findByText('The order has 1 blind; 1 entered.');
+  expect(count).not.toHaveClass('is-mismatch');
+  const quantity = screen.getByLabelText('Quantity');
+  await user.clear(quantity);
+  await user.type(quantity, '2');
+  expect(screen.getByText('The order has 1 blind; 2 entered.')).toHaveClass(
+    'is-mismatch',
   );
-  for (const name of ['Save draft', 'Confirm allocation', 'Add cut'])
-    expect(screen.getByRole('button', { name })).toBeDisabled();
-  await user.click(screen.getByRole('button', { name: 'Save blinds' }));
-  await waitFor(() => expect(width).toBeInvalid());
-  expect(saveLines).not.toHaveBeenCalled();
-
-  await user.type(width, '60');
-  expect(width).not.toBeInvalid();
-  saveLines.mockImplementation(
-    async (id: string, body: { lines: typeof orderLines }) => ({
-      ...order,
-      id,
-      allocatedAt: null,
-      revision: order.revision + 1,
-      lines: body.lines,
-    }),
-  );
-  await user.click(screen.getByRole('button', { name: 'Save blinds' }));
-  await waitFor(() => expect(saveLines).toHaveBeenCalledTimes(1));
-  const [orderId, sent] = saveLines.mock.calls[0]!;
-  expect(orderId).toBe(ids.order);
-  expect(sent.expectedRevision).toBe(order.revision);
-  // A saved blind never changes, so the edited one goes under a new id.
-  expect(sent.lines).toEqual([
-    { ...orderLines[0], id: expect.any(String), widthMm: 1524 },
-  ]);
-  expect(sent.lines[0].id).not.toBe(ids.requirement);
-  // Nothing of the allocation was sent; its plan follows the blind to its new
-  // id, which is a change to the draft that is still to be saved.
-  expect(saveDraft).not.toHaveBeenCalled();
-  await ready();
-  expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Confirm allocation' }),
+  ).toBeDisabled();
+  // A draft may be short of the order, or over it.
   saveDraft.mockResolvedValue({ ...draft, revision: 2 });
   await user.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() =>
     expect(saveDraft).toHaveBeenCalledWith(draft.id, 1, {
       workOrderId: ids.order,
+      requirements: [
+        {
+          id: ids.requirement,
+          fabricColorId: ids.color,
+          widthMm: allocation.requirements[0]!.widthMm,
+          lengthMm: allocation.requirements[0]!.lengthMm,
+          quantity: 2,
+        },
+      ],
       plan: {
         cuts: [
           {
             stockItemId: ids.stock,
-            items: [{ requirementId: sent.lines[0].id, quantity: 1 }],
+            items: [{ requirementId: ids.requirement, quantity: 1 }],
           },
         ],
       },
     }),
   );
+  // A half-entered blind is kept in the draft, blank rather than zero.
+  await user.clear(screen.getByLabelText('Width (in)'));
+  await user.clear(screen.getByLabelText('Quantity'));
+  await user.type(screen.getByLabelText('Quantity'), '1');
+  expect(
+    screen.getByRole('button', { name: 'Confirm allocation' }),
+  ).toBeEnabled();
+  saveDraft.mockResolvedValue({ ...draft, revision: 3 });
+  await user.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
+  expect(saveDraft.mock.calls[1]![2].requirements[0]).toMatchObject({
+    widthMm: null,
+    quantity: 1,
+  });
 });
 
 it('saves unsaved edits to the draft before confirming it', async () => {
@@ -384,25 +399,36 @@ it('leaves the confirmed allocation, not the draft saved on the way, for the pag
   const user = userEvent.setup();
   createDraft.mockResolvedValue(draft);
   submit.mockResolvedValue({ ...allocation, revision: 2 });
-  optimize.mockResolvedValue({
-    status: 'feasible',
-    plan: allocation.plan,
-    stockItems: [stock],
-    summary: {
-      leftovers: [],
-      reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2743.2 }],
-      inputAreaMm2: '1.000000',
-      requiredAreaMm2: '1.000000',
-      reusableAreaMm2: '0.000000',
-      wasteAreaMm2: '0.000000',
-      cutCount: 1,
-      stockItemCount: 1,
-      newRollCount: 1,
-    },
-  });
+  // The generated plan cuts the blind the form sent.
+  optimize.mockImplementation(
+    async ({ requirements }: { requirements: { id: string }[] }) => ({
+      status: 'feasible',
+      plan: {
+        cuts: [
+          {
+            ...allocation.plan.cuts[0]!,
+            items: [{ requirementId: requirements[0]!.id, quantity: 1 }],
+          },
+        ],
+      },
+      stockItems: [stock],
+      summary: {
+        leftovers: [],
+        reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2743.2 }],
+        inputAreaMm2: '1.000000',
+        requiredAreaMm2: '1.000000',
+        reusableAreaMm2: '0.000000',
+        wasteAreaMm2: '0.000000',
+        cutCount: 1,
+        stockItemCount: 1,
+        newRollCount: 1,
+      },
+    }),
+  );
   const queries = client();
   show(<AllocationEditor workOrderId={ids.order} />, queries);
   await ready();
+  await enterBlind(user);
   await user.click(screen.getByRole('button', { name: 'Generate plan' }));
   await screen.findByText('Valid cutting plan');
   // Confirming a plan that was never saved saves it as a draft first.

@@ -343,24 +343,15 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     page.getByLabel(/Drop allowance|Edge trim|Minimum reusable/),
   ).toHaveCount(0);
   await page.getByLabel('Quantity', { exact: true }).fill('1');
-  // The blinds are the order's, saved to it by their own request; the plan
-  // waits for them.
+  // The blinds are the allocation's, sent with its plan; generating plans
+  // the blinds entered and saves nothing.
   const generate = page.getByRole('button', {
     name: 'Generate plan',
     exact: true,
   });
-  await expect(generate).toBeDisabled();
-  await page.getByRole('button', { name: 'Save blinds', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Blinds saved', exact: true }),
+    page.getByText('The order has 1 blind; 1 entered.'),
   ).toBeVisible();
-  expect(state.orderRequests.at(-1)).toMatchObject({
-    method: 'PUT',
-    body: {
-      expectedRevision: 1,
-      lines: [{ widthMm: 1371.6, lengthMm: 2286, quantity: 1 }],
-    },
-  });
   expect(state.allocationRequests).toEqual([]);
   await generate.click();
   await expect(
@@ -370,8 +361,13 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   await expect(
     page.getByLabel('Quantity in this cut', { exact: true }),
   ).toHaveValue('1');
-  expect(state.allocationRequests.map((r) => r.path)).toEqual([
-    '/allocations/optimize',
+  expect(state.allocationRequests).toMatchObject([
+    {
+      path: '/allocations/optimize',
+      body: {
+        requirements: [{ widthMm: 1371.6, lengthMm: 2286, quantity: 1 }],
+      },
+    },
   ]);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({

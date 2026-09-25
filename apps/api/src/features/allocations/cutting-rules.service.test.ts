@@ -9,6 +9,7 @@ import {
   createAllocationSchema,
   optimizeAllocationSchema,
   validateAllocationSchema,
+  requirementInput,
 } from '@roller-bay/shared/allocations';
 import {
   environmentSchema,
@@ -106,16 +107,14 @@ test('write and preview contracts reject client cutting rules while response sna
       },
     ],
   };
-  for (const schema of [
-    createAllocationSchema,
-    validateAllocationSchema,
-    optimizeAllocationSchema,
-    allocationDraftInputSchema,
-  ]) {
-    const input =
-      schema === optimizeAllocationSchema
-        ? { workOrderId }
-        : { workOrderId, plan };
+  // Blinds are sent without an allowance; the server supplies the plan's.
+  const requirements = context.requirements.map(requirementInput);
+  for (const [schema, input] of [
+    [createAllocationSchema, { workOrderId, requirements, plan }],
+    [validateAllocationSchema, { requirements, plan }],
+    [optimizeAllocationSchema, { requirements }],
+    [allocationDraftInputSchema, { workOrderId, requirements, plan }],
+  ] as const) {
     assert.equal(schema.safeParse(input).success, true);
     assert.equal(
       schema.safeParse({ ...input, settings: context.settings }).success,

@@ -9,7 +9,6 @@ import {
   allocationDraftSchema,
   type CreateAllocation,
 } from '@roller-bay/shared/allocations';
-import { workOrderDetailSchema } from '@roller-bay/shared/work-orders';
 import { startAllocationsApp } from './testing/allocations-app.js';
 
 test('allocation orders integration', { timeout: 60_000 }, async (t) => {
@@ -26,6 +25,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
     put,
     seed,
     input,
+    copy,
     create,
   } = await startAllocationsApp(t);
   const issue = (reply: {
@@ -33,11 +33,8 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   }) => reply.body.issues?.map(({ code, path }) => ({ code, path }));
   const missing = [{ code: 'order_not_found', path: ['workOrderId'] }];
   const taken = [{ code: 'order_already_allocated', path: ['workOrderId'] }];
-  const notOnOrder = [
-    {
-      code: 'line_not_on_order',
-      path: ['plan', 'cuts', 0, 'items', 0, 'requirementId'],
-    },
+  const mismatch = [
+    { code: 'order_quantity_mismatch', path: ['requirements'] },
   ];
   /** The same order's blinds cut from other stock. */
   const onto = (body: CreateAllocation, stockItemId: string) => ({
@@ -66,7 +63,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   };
 
   await t.test(
-    "an allocation plans an existing order's blinds, and an order has one live allocation",
+    'an allocation plans blinds of its own for an existing order, which it never edits, and an order has one live allocation',
     async () => {
       const unknown = {
         ...(await input(await seed())),
@@ -78,58 +75,47 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         missing,
       );
 
-      // An order with no blinds has nothing to plan, and is not claimed.
-      const empty = await fixtures.createWorkOrder('200001');
-      const nothing = await post(path, {
-        ...(await input(await seed())),
-        workOrderId: empty.id,
-      }).expect(400);
-      assert.deepEqual(issue(nothing), [
-        { code: 'order_has_no_lines', path: ['workOrderId'] },
-      ]);
-      assert.equal((await fixtures.workOrder(empty.id)).allocated_at, null);
-
-      // The blinds must add up to the quantity the order states.
+      // The blinds must add up to the quantity the order states; a draft
+      // may still be short of it.
       const short = await input(await seed());
       await pool.query(`UPDATE work_orders SET quantity=2 WHERE id=$1`, [
         short.workOrderId,
       ]);
-      assert.deepEqual(issue(await post(path, short).expect(400)), [
-        { code: 'order_quantity_mismatch', path: ['workOrderId'] },
-      ]);
+      assert.deepEqual(issue(await post(path, short).expect(400)), mismatch);
       assert.equal(
         (await fixtures.workOrder(short.workOrderId)).allocated_at,
         null,
       );
+      await post(`${path}/drafts`, { data: short }).expect(201);
 
       const body = await input(await seed());
-      // A plan assigns its own order's blinds, confirmed or draft.
+      // A plan assigns its own blinds, confirmed or draft.
       const foreign = { ...body, plan: (await input(await seed())).plan };
-      for (const reply of [
-        await post(path, foreign).expect(400),
-        await post(`${path}/drafts`, { data: foreign }).expect(400),
-      ])
-        assert.deepEqual(issue(reply), notOnOrder);
+      await post(path, foreign).expect(400);
+      await post(`${path}/drafts`, { data: foreign }).expect(400);
       assert.equal(
         (await fixtures.workOrder(body.workOrderId)).allocated_at,
         null,
       );
 
       // Allocating reads the order and stamps one milestone; it never creates
-      // an order or edits one, its blinds included.
+      // an order or edits one.
       const before = await fixtures.workOrder(body.workOrderId);
-      const lines = async () =>
-        (await pool.query(`SELECT * FROM work_order_lines ORDER BY id`)).rows;
       const count = async () =>
         (await pool.query(`SELECT count(*) FROM work_orders`)).rows[0].count;
-      const [ordersBefore, linesBefore] = [await count(), await lines()];
+      const ordersBefore = await count();
       const first = await create(body);
       assert.equal(first.workOrderId, body.workOrderId);
       assert.equal(first.orderNumber, before.order_number);
+      assert.deepEqual(
+        first.requirements.map(({ id, quantity }) => ({ id, quantity })),
+        body.requirements.map(({ id, quantity }) => ({ id, quantity })),
+      );
       const draft = allocationDraftSchema.parse(
-        (await post(`${path}/drafts`, { data: body }).expect(201)).body,
+        (await post(`${path}/drafts`, { data: copy(body) }).expect(201)).body,
       );
       await put(first.id, {
+        requirements: body.requirements,
         plan: onto(body, await seed()).plan,
         expectedRevision: first.revision,
       }).expect(200);
@@ -140,10 +126,20 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         before,
       );
       assert.equal(await count(), ordersBefore);
-      assert.deepEqual(await lines(), linesBefore);
+      // A replan may change the blinds, which must still add up.
+      assert.deepEqual(
+        issue(
+          await put(first.id, {
+            requirements: [{ ...body.requirements[0]!, quantity: 2 }],
+            plan: body.plan,
+            expectedRevision: 2,
+          }).expect(400),
+        ),
+        mismatch,
+      );
 
       // A second plan for the order is refused, from a request or a draft.
-      const again = onto(body, await seed());
+      const again = copy(body, await seed());
       assert.deepEqual(issue(await post(path, again).expect(409)), taken);
       assert.deepEqual(
         issue(
@@ -184,12 +180,12 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   );
 
   await t.test(
-    "a deleted order is gone for new work, and changing a restored order's blinds leaves past plans as they were",
+    'a deleted order is gone for new work, and a restored order is allocated anew while past plans keep their blinds',
     async () => {
       const body = await input(await seed());
       const allocation = await create(body);
       const draft = allocationDraftSchema.parse(
-        (await post(`${path}/drafts`, { data: body }).expect(201)).body,
+        (await post(`${path}/drafts`, { data: copy(body) }).expect(201)).body,
       );
       const order = await fixtures.workOrder(body.workOrderId);
       await post(`${path}/${allocation.id}/cancel`, {
@@ -205,17 +201,17 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
 
       const stock = await seed();
       assert.deepEqual(
-        issue(await post(path, onto(body, stock)).expect(404)),
+        issue(await post(path, copy(body, stock)).expect(404)),
         missing,
       );
       assert.deepEqual(
-        issue(await post(`${path}/drafts`, { data: body }).expect(404)),
+        issue(await post(`${path}/drafts`, { data: copy(body) }).expect(404)),
         missing,
       );
       assert.deepEqual(
         issue(
           await draftRequest('put', draft.id)
-            .send({ expectedRevision: 1, data: body })
+            .send({ expectedRevision: 1, data: copy(body) })
             .expect(404),
         ),
         missing,
@@ -227,7 +223,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
 
       // An employee cannot bring back what an admin deleted; an admin can,
-      // and the order returns with its blinds.
+      // here with another blind count.
       const denied = await orders('post', '').send({
         orderNumber: order.order_number,
         quantity: 2,
@@ -237,23 +233,13 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         { code: 'order_deleted', path: ['orderNumber'] },
       ]);
       const back = await asAdmin(() =>
-        // Restored with the count of the blinds it is about to get.
         orders('post', '')
           .send({ orderNumber: order.order_number, quantity: 2 })
           .expect(201),
       );
       assert.equal(back.body.id, order.id);
-      const restored = workOrderDetailSchema.parse(
-        (await get(`/api/work-orders/${order.id}`).expect(200)).body,
-      );
-      const [blind] = restored.lines;
-      assert.equal(blind!.id, body.plan.cuts[0]!.items[0]!.requirementId);
+      assert.equal(back.body.quantity, 2);
 
-      // The blind changes, which retires it for a new one: two of them now.
-      const changed = { ...blind!, id: randomUUID(), quantity: 2 };
-      await orders('put', `/${order.id}/lines`)
-        .send({ expectedRevision: restored.revision, lines: [changed] })
-        .expect(200);
       // The cancelled allocation is history: it shows the blind it planned.
       const cancelled = allocationDetailSchema.parse(
         (await get(`${path}/${allocation.id}`).expect(200)).body,
@@ -261,44 +247,46 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       assert.equal(cancelled.state, 'cancelled');
       assert.deepEqual(
         cancelled.requirements.map(({ id, quantity }) => ({ id, quantity })),
-        [{ id: blind!.id, quantity: 1 }],
+        [{ id: body.requirements[0]!.id, quantity: 1 }],
       );
-      // The draft opens with the order's blinds as they are now and without
-      // the assignment of the blind that went, so it cannot be confirmed.
-      const stale = allocationDraftSchema.parse(
-        (await get(`${path}/${draft.id}`).expect(200)).body,
-      );
+      // The draft keeps its own blind, one short of the order now, so it
+      // cannot be confirmed as it is.
       assert.deepEqual(
-        stale.data.requirements.map(({ id, quantity }) => ({ id, quantity })),
-        [{ id: changed.id, quantity: 2 }],
-      );
-      assert.deepEqual(stale.data.plan.cuts[0]!.items, []);
-      await post(`${path}/${draft.id}/submit`, { expectedRevision: 1 }).expect(
-        400,
+        issue(
+          await post(`${path}/${draft.id}/submit`, {
+            expectedRevision: 1,
+          }).expect(400),
+        ),
+        mismatch,
       );
       assert.equal(
         (await get(`${path}/${draft.id}`).expect(200)).body.state,
         'draft',
       );
-      // Saving the old assignment again is refused outright.
-      assert.deepEqual(
-        issue(
-          await draftRequest('put', draft.id)
-            .send({ expectedRevision: 1, data: body })
-            .expect(400),
-        ),
-        notOnOrder,
-      );
+      assert.equal((await fixtures.workOrder(order.id)).allocated_at, null);
 
-      // Replanned for the new blind, the draft confirms and claims the order.
+      // Two of the blind, planned again, and the draft confirms.
+      const [blind] = draft.data.requirements;
       const cut = {
         stockItemId: stock,
-        items: [{ requirementId: changed.id, quantity: 1 }],
+        items: [{ requirementId: blind!.id, quantity: 1 }],
       };
       await draftRequest('put', draft.id)
         .send({
           expectedRevision: 1,
-          data: { workOrderId: order.id, plan: { cuts: [cut, cut] } },
+          data: {
+            workOrderId: order.id,
+            requirements: [
+              {
+                id: blind!.id,
+                fabricColorId: blind!.fabricColorId,
+                widthMm: blind!.widthMm,
+                lengthMm: blind!.lengthMm,
+                quantity: 2,
+              },
+            ],
+            plan: { cuts: [cut, cut] },
+          },
         })
         .expect(200);
       const confirmed = allocationDetailSchema.parse(
@@ -310,14 +298,16 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
       assert.equal(confirmed.state, 'active');
       assert.ok((await fixtures.workOrder(order.id)).allocated_at);
-      // Its blinds are fixed from here.
-      const frozen = await orders('put', `/${order.id}/lines`).send({
-        expectedRevision: restored.revision + 1,
-        lines: [],
-      });
-      assert.equal(frozen.status, 409);
-      assert.deepEqual(issue(frozen), [
-        { code: 'order_allocated', path: ['lines'] },
+      // The order's quantity is fixed from here.
+      const fixed = await asAdmin(() =>
+        orders('patch', `/${order.id}`).send({
+          expectedRevision: back.body.revision,
+          quantity: 3,
+        }),
+      );
+      assert.equal(fixed.status, 409);
+      assert.deepEqual(issue(fixed), [
+        { code: 'order_allocated', path: ['quantity'] },
       ]);
     },
   );
@@ -349,7 +339,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       const contested = await input(await seed());
       const racers = await Promise.all([
         post(path, contested),
-        post(path, onto(contested, await seed())),
+        post(path, copy(contested, await seed())),
       ]);
       assert.deepEqual(racers.map((reply) => reply.status).sort(), [201, 409]);
       assert.deepEqual(
@@ -357,17 +347,19 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
         taken,
       );
 
-      // Saving an order's blinds takes the same lock as allocating it, so one
-      // of the two wins outright: a plan is never confirmed for blinds that
-      // were changing under it.
+      // Changing an order's quantity takes the same lock as allocating it, so
+      // one of the two wins outright: a plan is never confirmed against a
+      // quantity that was changing under it.
       const racing = await input(await seed());
-      const [saved, allocated] = await Promise.all([
-        orders('put', `/${racing.workOrderId}/lines`).send({
-          expectedRevision: 1,
-          lines: [],
-        }),
-        post(path, racing),
-      ]);
+      const [saved, allocated] = await asAdmin(() =>
+        Promise.all([
+          orders('patch', `/${racing.workOrderId}`).send({
+            expectedRevision: 1,
+            quantity: 2,
+          }),
+          post(path, racing),
+        ]),
+      );
       assert.deepEqual(
         [saved.status, allocated.status],
         saved.status === 200 ? [200, 400] : [409, 201],
@@ -396,6 +388,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       const replanned = allocationDetailSchema.parse(
         (
           await put(allocation.id, {
+            requirements: body.requirements,
             plan: onto(body, await seed()).plan,
             expectedRevision: allocation.revision,
           }).expect(200)
@@ -413,7 +406,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       await post(`${path}/${replanned.id}/cancel`, {
         expectedRevision: replanned.revision,
       }).expect(200);
-      const again = await create(body);
+      const again = await create(copy(body));
       // The two schedule edits above are what raised the order's revision.
       const { revision } = await order(target);
 

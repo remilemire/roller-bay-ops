@@ -64,6 +64,177 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0037 gives each allocation its own blinds, and stops on blinds that nothing plans',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0037_');
+    const id = () => randomUUID();
+    const [user, maker, material, color] = [id(), id(), id(), id()];
+    const [zone, section, location, stock] = [id(), id(), id(), id()];
+    await client.query(
+      `INSERT INTO users (id,name,email,microsoft_subject_id) VALUES ($1,'A','a@example.com','a')`,
+      [user],
+    );
+    await client.query(`INSERT INTO manufacturers (id,name) VALUES ($1,'M')`, [
+      maker,
+    ]);
+    await client.query(
+      `INSERT INTO fabric_materials (id,manufacturer_id,name) VALUES ($1,$2,'M')`,
+      [material, maker],
+    );
+    await client.query(
+      `INSERT INTO fabric_colors (id,material_id,code,thickness_mm) VALUES ($1,$2,'C',0.5)`,
+      [color, material],
+    );
+    await client.query(`INSERT INTO location_zones (id,name) VALUES ($1,'Z')`, [
+      zone,
+    ]);
+    await client.query(
+      `INSERT INTO location_sections (id,zone_id,label) VALUES ($1,$2,'A')`,
+      [section, zone],
+    );
+    await client.query(
+      `INSERT INTO locations (id,section_id,label) VALUES ($1,$2,'1')`,
+      [location, section],
+    );
+    await client.query(
+      `INSERT INTO fabric_stock_items (id,fabric_color_id,width_mm,initial_length_mm,location_id)
+         VALUES ($1,$2,1200,10000,$3)`,
+      [stock, color, location],
+    );
+    // Rows as they were before 0037: the order held its blinds. Its current
+    // blind is planned by the live allocation and a draft; the retired one
+    // by a cancelled allocation, and still by the draft, whose reads had
+    // already left that assignment out.
+    const [order, orphaned, current, retired] = [id(), id(), id(), id()];
+    await client.query(
+      `INSERT INTO work_orders (id,order_number,quantity,allocated_at)
+         VALUES ($1,'370001',2,now()),($2,'370002',1,NULL)`,
+      [order, orphaned],
+    );
+    await client.query(
+      `INSERT INTO work_order_lines (id,work_order_id,position,fabric_color_id,width_mm,length_mm,quantity,retired_at)
+         VALUES ($1,$3,1,$4,500,1000,2,NULL),($2,$3,2,$4,600,1100,1,now())`,
+      [current, retired, order, color],
+    );
+    const settings = {
+      edgeTrimMm: 1,
+      minimumRemnantWidthMm: 100,
+      minimumRemnantLengthMm: 100,
+      dropAllowanceMm: 254,
+    };
+    /** An allocation whose one cut assigns the given lines. */
+    const allocation = async (
+      state: 'draft' | 'live' | 'cancelled',
+      lines: string[],
+    ) => {
+      const [self, item, cut] = [id(), id(), id()];
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO allocations (id,is_draft,work_order_id,created_by_user_id,confirmed_at,cancelled_at,settings)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          self,
+          state === 'draft',
+          order,
+          user,
+          state === 'draft' ? null : new Date(),
+          state === 'cancelled' ? new Date() : null,
+          state === 'draft' ? null : settings,
+        ],
+      );
+      await client.query(
+        `INSERT INTO allocation_items (id,allocation_id,stock_item_id,reserved_length_mm) VALUES ($1,$2,$3,$4)`,
+        [item, self, stock, state === 'draft' ? null : 1354],
+      );
+      await client.query(
+        `INSERT INTO allocation_cuts (id,allocation_item_id,plan_position,position,planned_length_mm,edge_trim_mm)
+           VALUES ($1,$2,1,1,1354,1)`,
+        [cut, item],
+      );
+      for (const [index, line] of lines.entries())
+        await client.query(
+          `INSERT INTO allocation_cut_items (allocation_cut_id,work_order_line_id,position,quantity) VALUES ($1,$2,$3,1)`,
+          [cut, line, index + 1],
+        );
+      await client.query('COMMIT');
+      return self;
+    };
+    const cancelled = await allocation('cancelled', [retired]);
+    const live = await allocation('live', [current]);
+    const draft = await allocation('draft', [current, retired]);
+
+    // A current blind that nothing would take stops the migration.
+    const stray = id();
+    await client.query(
+      `INSERT INTO work_order_lines (id,work_order_id,position,fabric_color_id,width_mm,length_mm,quantity)
+         VALUES ($1,$2,1,$3,500,1000,1)`,
+      [stray, orphaned, color],
+    );
+    await assert.rejects(
+      migrate(),
+      /1 blind\(s\) are on an order with no draft/,
+    );
+    await client.query(`DELETE FROM work_order_lines WHERE id=$1`, [stray]);
+    await migrate();
+
+    const requirements = async (allocationId: string) =>
+      (
+        await client.query(
+          `SELECT id, position, width_mm, quantity FROM allocation_requirements WHERE allocation_id=$1 ORDER BY position`,
+          [allocationId],
+        )
+      ).rows;
+    const assigned = async (allocationId: string) =>
+      (
+        await client.query(
+          `SELECT ci.allocation_requirement_id AS id FROM allocation_cut_items ci
+             JOIN allocation_cuts c ON c.id = ci.allocation_cut_id
+             JOIN allocation_items i ON i.id = c.allocation_item_id
+             WHERE i.allocation_id=$1 ORDER BY ci.position`,
+          [allocationId],
+        )
+      ).rows.map((row) => row.id);
+    // The live allocation keeps the current blind's id, the cancelled one
+    // the retired blind's, and the draft a copy of the current blind.
+    assert.deepEqual(await requirements(live), [
+      { id: current, position: 1, width_mm: '500.000', quantity: 2 },
+    ]);
+    assert.deepEqual(await assigned(live), [current]);
+    assert.deepEqual(await requirements(cancelled), [
+      { id: retired, position: 1, width_mm: '600.000', quantity: 1 },
+    ]);
+    assert.deepEqual(await assigned(cancelled), [retired]);
+    const [copy] = await requirements(draft);
+    assert.notEqual(copy.id, current);
+    assert.deepEqual({ ...copy, id: current }, (await requirements(live))[0]);
+    assert.deepEqual(await assigned(draft), [copy.id]);
+    assert.equal(
+      (
+        await client.query(
+          `SELECT to_regclass('public.work_order_lines') AS lines`,
+        )
+      ).rows[0].lines,
+      null,
+    );
+
+    // A confirmed allocation needs complete blinds; a draft does not.
+    await client.query(
+      `UPDATE allocation_requirements SET quantity=NULL WHERE allocation_id=$1`,
+      [draft],
+    );
+    await assert.rejects(
+      client.query(
+        `UPDATE allocation_requirements SET quantity=NULL WHERE allocation_id=$1`,
+        [live],
+      ),
+      { code: '23514', constraint: 'allocations_confirmed_fields_required' },
+    );
+    await migrateRest();
+  },
+);
+
+test(
   "0036 gives each order its current blinds' total, or a placeholder of 1",
   { timeout: 60_000 },
   async (t) => {
@@ -126,6 +297,8 @@ test(
       ),
       { code: '23514' },
     );
+    // 0037 moves blinds to the allocations that plan them; these have none.
+    await client.query(`DELETE FROM work_order_lines`);
     await migrateRest();
   },
 );
@@ -528,8 +701,6 @@ test(
     );
 
     await migrate();
-    // The later migrations accept what this one left, the rules check included.
-    await migrateRest();
 
     // Each allocation names its order by id, and the number is the order's.
     const allocations = await client.query(
@@ -613,6 +784,8 @@ test(
       code: '23514',
       constraint: 'allocations_confirmed_fields_required',
     });
+    // The later migrations accept what this one left, the rules check included.
+    await migrateRest();
   },
 );
 

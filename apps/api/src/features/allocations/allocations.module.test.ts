@@ -30,9 +30,18 @@ test('allocation module starts without solver credentials and only optimization 
     assert.ok(module.get(AllocationsController));
     assert.equal(module.get(SolverClient), null);
     await assert.rejects(
-      module
-        .get(AllocationPlanningService)
-        .optimize({ workOrderId: randomUUID(), maxTimeSeconds: 5 }),
+      module.get(AllocationPlanningService).optimize({
+        requirements: [
+          {
+            id: randomUUID(),
+            fabricColorId: randomUUID(),
+            widthMm: 500,
+            lengthMm: 1000,
+            quantity: 1,
+          },
+        ],
+        maxTimeSeconds: 5,
+      }),
       ServiceUnavailableException,
     );
   } finally {

@@ -66,41 +66,14 @@ export function createFixtures(pool: Pool) {
       return ids;
     },
 
-    /**
-     * A work order and its blinds, as creating it and saving them leaves it.
-     * Its quantity is the blinds' total unless given.
-     */
-    async createWorkOrder(
-      orderNumber: string,
-      lines: {
-        fabricColorId: string;
-        widthMm: number;
-        lengthMm: number;
-        quantity: number;
-      }[] = [],
-      quantity = lines.reduce((sum, line) => sum + line.quantity, 0) || 1,
-    ) {
+    /** A work order as creating it leaves it: a number and a blind count. */
+    async createWorkOrder(orderNumber: string, quantity = 1) {
       const id = randomUUID();
       await pool.query(
         `INSERT INTO work_orders (id, order_number, quantity) VALUES ($1, $2, $3)`,
         [id, orderNumber, quantity],
       );
-      const lineIds = lines.map(() => randomUUID());
-      for (const [index, line] of lines.entries())
-        await pool.query(
-          `INSERT INTO work_order_lines (id, work_order_id, position, fabric_color_id, width_mm, length_mm, quantity)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            lineIds[index],
-            id,
-            index + 1,
-            line.fabricColorId,
-            line.widthMm,
-            line.lengthMm,
-            line.quantity,
-          ],
-        );
-      return { id, orderNumber, lineIds };
+      return { id, orderNumber };
     },
 
     /**

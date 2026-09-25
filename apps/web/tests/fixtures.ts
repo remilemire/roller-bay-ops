@@ -173,13 +173,13 @@ export const allocation = allocationDetailSchema.parse({
   completion: null,
   correctedAt: null,
 });
-// Allocated by the allocation above, then scheduled to ship on a Friday. Its
-// blind count is a list figure; the order's own blinds are `orderLines`.
+// Allocated by the allocation above, whose one blind matches its count, then
+// scheduled to ship on a Friday.
 export const order = workOrderSchema.parse({
   id: ids.order,
   orderNumber: '104801',
   shipDate: '2026-10-02',
-  quantity: 14,
+  quantity: 1,
   note: 'Rush',
   status: 'scheduled',
   createdAt: timestamp,
@@ -190,12 +190,3 @@ export const order = workOrderSchema.parse({
   updatedAt: timestamp,
   revision: 3,
 });
-export const orderLines = allocation.requirements.map(
-  ({ id, fabricColorId, widthMm, lengthMm, quantity }) => ({
-    id,
-    fabricColorId,
-    widthMm,
-    lengthMm,
-    quantity,
-  }),
-);

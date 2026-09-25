@@ -1,3 +1,7 @@
+import {
+  requirementInput,
+  type AllocationDetail,
+} from '@roller-bay/shared/allocations';
 import { historySchema } from '@roller-bay/shared/audit';
 import { worksheetSchema } from '@roller-bay/shared/production';
 import assert from 'node:assert/strict';
@@ -9,6 +13,10 @@ import { DatabaseService } from '../../database/database.service.js';
 import { AllocationsService } from '../allocations/index.js';
 import { startAllocationsApp } from '../allocations/testing/index.js';
 import { AuditService } from '../audit/index.js';
+
+/** An allocation's blinds as a replan sends them, without the plan's allowance. */
+const blinds = (allocation: AllocationDetail) =>
+  allocation.requirements.map(requirementInput);
 
 test(
   'station production and digital cutting',
@@ -185,6 +193,7 @@ test(
         await h
           .put(order.id, {
             expectedRevision: order.revision,
+            requirements: blinds(order),
             plan: {
               cuts: order.plan.cuts.map((c) => ({
                 stockItemId: c.stockItemId,
@@ -540,6 +549,7 @@ test(
         await h
           .put(first.id, {
             expectedRevision: first.revision,
+            requirements: blinds(first),
             plan: {
               cuts: first.plan.cuts.map((c) => ({
                 stockItemId: c.stockItemId,

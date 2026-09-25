@@ -13,11 +13,7 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type {
-  WorkOrder,
-  WorkOrderDetail,
-  WorkOrderList,
-} from '@roller-bay/shared/work-orders';
+import type { WorkOrder, WorkOrderList } from '@roller-bay/shared/work-orders';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
@@ -90,9 +86,8 @@ beforeEach(() => {
     .mockImplementation((id) =>
       queryOptions({
         queryKey: ['work-orders', id],
-        queryFn: async (): Promise<WorkOrderDetail> => ({
+        queryFn: async (): Promise<WorkOrder> => ({
           ...order,
-          lines: [],
         }),
       }),
     );
@@ -283,7 +278,7 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
   expect(row).toHaveTextContent('Fri, Oct 2, 2026');
   expect(row).toHaveTextContent('scheduled');
   expect(row).toHaveTextContent('Rush');
-  expect(within(row).getByRole('cell', { name: '14' })).toBeInTheDocument();
+  expect(within(row).getByRole('cell', { name: '1' })).toBeInTheDocument();
   expect(within(row).getByRole('link', { name: '104801' })).toHaveAttribute(
     'href',
     `/work-orders/${order.id}`,
@@ -364,9 +359,8 @@ it('sends an order with no allocation to be planned, whoever is signed in', asyn
   vi.mocked(orderDetail).mockImplementation((id) =>
     queryOptions({
       queryKey: ['work-orders', id],
-      queryFn: async (): Promise<WorkOrderDetail> => ({
+      queryFn: async (): Promise<WorkOrder> => ({
         ...unallocated,
-        lines: [],
       }),
     }),
   );
@@ -444,13 +438,12 @@ it('keeps a refused delete in its dialog', async () => {
   vi.mocked(orderDetail).mockImplementation((id) =>
     queryOptions({
       queryKey: ['work-orders', id],
-      queryFn: async (): Promise<WorkOrderDetail> => ({
+      queryFn: async (): Promise<WorkOrder> => ({
         ...order,
         allocatedAt: null,
         shipDate: null,
         scheduledAt: null,
         status: 'new' as const,
-        lines: [],
       }),
     }),
   );
@@ -513,7 +506,7 @@ it('groups the working week by day with totals', async () => {
   ).toBeInTheDocument();
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-02');
   expect(
-    await screen.findByText('3 orders · 42 blinds · 2 scheduled · 1 cut'),
+    await screen.findByText('3 orders · 3 blinds · 2 scheduled · 1 cut'),
   ).toBeInTheDocument();
   const friday = within(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
@@ -521,7 +514,7 @@ it('groups the working week by day with totals', async () => {
   // Each day's totals sit in its footer.
   expect(
     screen.getByRole('region', { name: 'Fri, Oct 2, 2026' }),
-  ).toHaveTextContent(/Fri\s*Oct 2.*2 orders\s*28 blinds$/);
+  ).toHaveTextContent(/Fri\s*Oct 2.*2 orders\s*2 blinds$/);
   expect(friday.getAllByRole('link').map((link) => link.textContent)).toEqual([
     '104801',
     '104820',
@@ -623,7 +616,7 @@ it('shows any day of a week as that week, and employees a read-only board', asyn
   expect(
     await screen.findByRole('heading', { name: 'Oct 12 – Oct 16, 2026' }),
   ).toBeInTheDocument();
-  await screen.findByText('6 orders · 84 blinds · 6 scheduled');
+  await screen.findByText('6 orders · 6 blinds · 6 scheduled');
   expect(screen.queryByRole('button', { name: /Add order/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /Move order/ })).toBeNull();
   expect(
@@ -648,7 +641,7 @@ it('lays the month out Monday to Friday', async () => {
   expect(orderRange).toHaveBeenLastCalledWith('2026-09-28', '2026-10-30');
   // September's order shows in its edge day but is not an October order.
   expect(
-    await screen.findByText('8 orders · 112 blinds · 7 scheduled · 1 cut'),
+    await screen.findByText('8 orders · 8 blinds · 7 scheduled · 1 cut'),
   ).toBeInTheDocument();
   expect(
     within(
@@ -658,7 +651,7 @@ it('lays the month out Monday to Friday', async () => {
   const busy = within(
     screen.getByRole('gridcell', { name: 'Tue, Oct 13, 2026' }),
   );
-  expect(busy.getByText('6 orders · 84 blinds')).toBeInTheDocument();
+  expect(busy.getByText('6 orders · 6 blinds')).toBeInTheDocument();
   expect(busy.getByRole('link', { name: '+2 more' })).toHaveAttribute(
     'href',
     '/work-orders?view=week&week=2026-10-13',

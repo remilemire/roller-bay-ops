@@ -105,11 +105,49 @@ export const cuttingPlanSummarySchema = z.object({
 export const allocationSettingsSchema = cuttingSettingsSchema.extend({
   dropAllowanceMm: dimension.optional(),
 });
+// A blind the allocation plans, as the form sends it; the server supplies the
+// plan's drop allowance. Ids are client-generated, so a plan can reference a
+// blind before it is saved.
+export const allocationRequirementInputSchema = cuttingRequirementSchema.omit({
+  lengthAllowanceMm: true,
+});
+/** A blind as a write sends it: its own fields, without the plan's allowance. */
+export const requirementInput = <
+  T extends {
+    id: string;
+    fabricColorId: string | null;
+    widthMm: number | null;
+    lengthMm: number | null;
+    quantity: number | null;
+  },
+>({
+  id,
+  fabricColorId,
+  widthMm,
+  lengthMm,
+  quantity,
+}: T): Pick<
+  T,
+  'id' | 'fabricColorId' | 'widthMm' | 'lengthMm' | 'quantity'
+> => ({
+  id,
+  fabricColorId,
+  widthMm,
+  lengthMm,
+  quantity,
+});
+const requirementInputs = z
+  .array(allocationRequirementInputSchema)
+  .min(1)
+  .max(1000)
+  .refine(
+    (items) => new Set(items.map((item) => item.id)).size === items.length,
+    'Blind IDs must be unique.',
+  );
 const revision = z.number().int().positive().max(2147483646);
-// The blinds being planned are the work order's saved lines, read by the
-// server; a request names the order and carries only the fabric plan.
+// Previews plan the blinds in the request, not saved ones.
 const previewFields = {
-  workOrderId: id,
+  requirements: requirementInputs,
   allocationId: id.optional(),
   expectedRevision: revision.optional(),
 };
@@ -139,12 +177,22 @@ const withinAssignmentLimit = [
     10000,
   'An allocation may contain at most 10,000 cut assignments.',
 ] as const;
+// The allocation's blinds and the plan that cuts them. Their quantities must
+// add up to the order's, which the server checks under the order's lock.
 export const createAllocationSchema = z
-  .strictObject({ workOrderId: id, plan: cuttingPlanInputSchema })
+  .strictObject({
+    workOrderId: id,
+    requirements: requirementInputs,
+    plan: cuttingPlanInputSchema,
+  })
   .refine(...withinAssignmentLimit);
-// A replanned allocation stays with its order: another order has other blinds.
+// A replanned allocation stays with its order, and may change its blinds.
 export const replaceAllocationSchema = z
-  .strictObject({ plan: cuttingPlanInputSchema, expectedRevision: revision })
+  .strictObject({
+    requirements: requirementInputs,
+    plan: cuttingPlanInputSchema,
+    expectedRevision: revision,
+  })
   .refine(...withinAssignmentLimit);
 export const cancelAllocationSchema = z.strictObject({
   expectedRevision: revision,
@@ -251,8 +299,8 @@ const draftPlan = <T extends z.ZodType>(cut: T) =>
   z.strictObject({ cuts: z.array(cut).max(10000).default([]) }).prefault({});
 export const allocationDraftDataSchema = z
   .strictObject({
-    // Read shape. The blinds are the work order's, shown with the plan that
-    // assigns them; new input goes through allocationDraftInputSchema.
+    // Read shape, with the plan's allowance on each blind; new input goes
+    // through allocationDraftInputSchema.
     requirements: z
       .array(
         z.strictObject({
@@ -286,16 +334,15 @@ export const allocationDraftDataSchema = z
 
 function validateDraftAssignments(
   value: {
-    requirements?: { id: string }[];
+    requirements: { id: string }[];
     plan: { cuts: { items: { requirementId: string }[] }[] };
   },
   ctx: z.RefinementCtx,
 ) {
-  // A stored draft's assignments resolve within the blinds it is shown with.
-  // A write names none: the server checks them against the order's blinds.
-  const ids =
-    value.requirements && new Set(value.requirements.map((i) => i.id));
-  if (ids && ids.size !== value.requirements!.length)
+  // Draft blinds may be unfinished, but assignments must already resolve
+  // within the draft's own blinds, so a save keeps a coherent plan.
+  const ids = new Set(value.requirements.map((i) => i.id));
+  if (ids.size !== value.requirements.length)
     ctx.addIssue({
       code: 'custom',
       path: ['requirements'],
@@ -305,14 +352,11 @@ function validateDraftAssignments(
   value.plan.cuts.forEach((cut, i) => {
     const assigned = new Set<string>();
     cut.items.forEach((item, j) => {
-      if (
-        (ids && !ids.has(item.requirementId)) ||
-        assigned.has(item.requirementId)
-      )
+      if (!ids.has(item.requirementId) || assigned.has(item.requirementId))
         ctx.addIssue({
           code: 'custom',
           path: ['plan', 'cuts', i, 'items', j, 'requirementId'],
-          message: 'Assignments must reference a unique blind of the order.',
+          message: 'Assignments must reference a unique blind of the draft.',
         });
       assigned.add(item.requirementId);
       assignments++;
@@ -326,10 +370,18 @@ function validateDraftAssignments(
     });
 }
 
-// A draft is an unfinished fabric plan for an order's blinds.
+// A draft is an unfinished allocation for an order: blinds and plan alike.
 export const allocationDraftInputSchema = z
   .strictObject({
     workOrderId: id,
+    requirements: z
+      .array(
+        allocationDraftDataSchema.shape.requirements
+          .unwrap()
+          .element.omit({ lengthAllowanceMm: true }),
+      )
+      .max(1000)
+      .default([]),
     plan: draftPlan(z.strictObject(draftCutFields)),
   })
   .superRefine(validateDraftAssignments);
@@ -376,6 +428,9 @@ export const allocationListSchema = z.object({
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
 });
+export type AllocationRequirementInput = z.infer<
+  typeof allocationRequirementInputSchema
+>;
 export type OptimizeAllocation = z.infer<typeof optimizeAllocationSchema>;
 export type ValidateAllocation = z.infer<typeof validateAllocationSchema>;
 export type CreateAllocation = z.infer<typeof createAllocationSchema>;

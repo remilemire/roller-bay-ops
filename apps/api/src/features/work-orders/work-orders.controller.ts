@@ -8,7 +8,6 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -16,12 +15,10 @@ import type { Request } from 'express';
 import {
   createWorkOrderSchema,
   deleteWorkOrderSchema,
-  saveWorkOrderLinesSchema,
   workOrderQuerySchema,
   updateWorkOrderSchema,
   type CreateWorkOrder,
   type DeleteWorkOrder,
-  type SaveWorkOrderLines,
   type WorkOrderQuery,
   type UpdateWorkOrder,
 } from '@roller-bay/shared/work-orders';
@@ -71,18 +68,6 @@ export class WorkOrdersController {
     @Req() request: Request,
   ) {
     return this.service.update(id, input, request.currentUser!.id);
-  }
-
-  // The blinds are entered by whoever allocates the order's fabric, so
-  // saving them needs no admin role.
-  @Put(':id/lines')
-  saveLines(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body(new ZodValidationPipe(saveWorkOrderLinesSchema))
-    input: SaveWorkOrderLines,
-    @Req() request: Request,
-  ) {
-    return this.service.saveLines(id, input, request.currentUser!.id);
   }
 
   @Delete(':id')

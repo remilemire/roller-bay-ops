@@ -15,6 +15,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
     post,
     create,
     input,
+    copy,
     seed,
     pool,
     server,
@@ -124,10 +125,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         ).body.total,
         1,
       );
-      await post('/api/allocations', {
-        workOrderId: saved.id,
-        plan: planInput.plan,
-      }).expect(409);
+      await post('/api/allocations', copy(planInput)).expect(409);
       await post(`/api/production/assembly/orders/${saved.id}/complete`, {
         employeeIds: [employee.id],
       }).expect(409);
@@ -217,7 +215,8 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
     'completed allocation release preserves stock and allows another allocation',
     async () => {
       const stockId = await seed();
-      const a = await create(await input(stockId));
+      const body = await input(stockId);
+      const a = await create(body);
       await post(`/api/production/cutting/orders/${a.workOrderId}/complete`, {
         employeeIds: [employee.id],
       }).expect(201);
@@ -260,16 +259,8 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         ).rows[0],
         before,
       );
-      const replacement = await seed();
-      await post('/api/allocations', {
-        workOrderId: a.workOrderId,
-        plan: {
-          cuts: a.plan.cuts.map((c) => ({
-            stockItemId: replacement,
-            items: c.items,
-          })),
-        },
-      }).expect(201);
+      // Another allocation plans blinds of its own for the order.
+      await post('/api/allocations', copy(body, await seed())).expect(201);
     },
   );
   await t.test(

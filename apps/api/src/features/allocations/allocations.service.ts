@@ -17,9 +17,9 @@ import { stockChanges, StockItemsService } from '../stock-items/index.js';
  * Reservation-changing writes lock the allocation header, then its work
  * order, then stock in a common order before checking availability.
  *
- * The blinds a plan assigns are the work order's. This service reads them
- * through WorkOrdersService and maintains only the allocation timestamp.
- * Production milestones are recorded independently.
+ * An allocation holds its own blinds and the plan that cuts them; their
+ * quantities must add up to the order's. On the order it maintains only the
+ * allocation timestamp. Production milestones are recorded independently.
  */
 import {
   BadRequestException,
@@ -37,14 +37,11 @@ import {
   type CompleteAllocationRequest,
   type CreateAllocation,
   type ReplaceAllocation,
+  requirementInput,
 } from '@roller-bay/shared/allocations';
 import { createHash } from 'node:crypto';
 import { buildCuttingContext } from './allocation-cutting-context.js';
-import {
-  AllocationDetailsService,
-  requirementsOf,
-  type OrderLine,
-} from './allocation-details.service.js';
+import { AllocationDetailsService } from './allocation-details.service.js';
 import {
   requireActiveRevision,
   requireDraftRevision,
@@ -59,33 +56,25 @@ import {
   planCutLengths,
   type ConfiguredAllocationPlan,
 } from './cutting-rules.service.js';
-type Plan = {
-  cuts: {
-    items: {
-      requirementId: string;
-    }[];
-  }[];
-};
-/** A plan may assign only blinds that are on its order now. */
-function requireOrderLines(lines: OrderLine[], plan: Plan) {
-  const ids = new Set(lines.map((line) => line.id));
-  const issues = plan.cuts.flatMap((cut, i) =>
-    cut.items.flatMap((item, j) =>
-      ids.has(item.requirementId)
-        ? []
-        : [
-            {
-              code: 'line_not_on_order',
-              path: ['plan', 'cuts', i, 'items', j, 'requirementId'],
-              message: 'This blind is not on the order.',
-            },
-          ],
-    ),
-  );
-  if (issues.length)
+/**
+ * Confirmed blinds must add up to the quantity their order states. Callers
+ * hold the order's row lock, which a change of the quantity also takes.
+ */
+function requireOrderQuantity(
+  order: WorkOrderRecord,
+  requirements: readonly { quantity: number }[],
+) {
+  const total = requirements.reduce((sum, item) => sum + item.quantity, 0);
+  if (total !== order.quantity)
     throw new BadRequestException({
-      message: 'The plan assigns a blind that is not on the order.',
-      issues,
+      message: `The blinds add up to ${total}, but order ${order.orderNumber} has ${order.quantity}.`,
+      issues: [
+        {
+          code: 'order_quantity_mismatch',
+          path: ['requirements'],
+          message: `Blinds add up to ${total} of ${order.quantity}.`,
+        },
+      ],
     });
 }
 const hash = (value: unknown) =>
@@ -119,7 +108,7 @@ export class AllocationsService {
             );
           return this.details.load(context, previous);
         }
-        return this.confirmPlan(context, header, input.plan, false, userId);
+        return this.confirmPlan(context, header, input, false, userId);
       }),
     );
   }
@@ -196,12 +185,12 @@ export class AllocationsService {
         if (!header.isDraft && header.submittedDraftRevision === revision)
           return this.details.load(context, header);
         requireDraftRevision(header, revision);
-        // As the draft reads: assignments of blinds since taken off the order
-        // are gone, which leaves the plan incomplete or short.
         const saved = await this.details.formData(context, header);
         const input = createAllocationSchema.safeParse({
           workOrderId: header.workOrderId,
-          // Stored cut lengths are re-derived from the order's blinds.
+          // The plan's allowance is applied again on confirmation.
+          requirements: saved.requirements.map(requirementInput),
+          // Stored cut lengths are re-derived from the blinds.
           plan: {
             cuts: saved.plan.cuts.map(({ stockItemId, items }) => ({
               stockItemId,
@@ -214,7 +203,7 @@ export class AllocationsService {
             message: 'Complete all allocation fields before submitting.',
             issues: input.error.issues,
           });
-        return this.confirmPlan(context, header, input.data.plan, true, userId);
+        return this.confirmPlan(context, header, input.data, true, userId);
       }),
     );
   }
@@ -229,27 +218,29 @@ export class AllocationsService {
   ) {
     const order = await this.orders.requireOrder(context, data.workOrderId);
     this.orders.assertNotCancelled(order);
-    const { lines } = await this.orders.lines(context, data.workOrderId);
-    requireOrderLines(lines, data.plan);
-    return this.configure(lines, data.plan, settings);
+    return this.configure(data.requirements, data.plan, settings);
   }
   private async confirmPlan(
     context: UnitOfWorkContext,
     header: AllocationRecord,
-    plan: CreateAllocation['plan'],
+    submitted: Pick<CreateAllocation, 'requirements' | 'plan'>,
     fromDraft: boolean,
     userId: string,
   ) {
     // The order's allocated_at mirrors this allocation's confirmed_at.
     const now = new Date();
-    const { lines, change: order } = await this.orders.allocate(
+    const { order: claimed, change: order } = await this.orders.allocate(
       context,
       header.workOrderId,
       now,
     );
-    requireOrderLines(lines, plan);
+    requireOrderQuantity(claimed, submitted.requirements);
     // A submitted draft keeps the rules it was planned with.
-    const input = this.configure(lines, plan, header.settings);
+    const input = this.configure(
+      submitted.requirements,
+      submitted.plan,
+      header.settings,
+    );
     const summary = await this.validateForWrite(context, input, header.id);
     await context.allocations.replacePlan(header.id, input, summary);
     const saved = fromDraft
@@ -286,14 +277,21 @@ export class AllocationsService {
           await context.allocations.findById(id, true),
           input.expectedRevision,
         );
-        await this.orders.assertPlanningAllowed(context, header.workOrderId);
+        const order = await this.orders.assertPlanningAllowed(
+          context,
+          header.workOrderId,
+        );
         await this.worksheets.assertPlanMutable(context, id);
         const before = await this.details.load(context, header);
-        // The order lock above prevents a production completion during replanning.
-        // Its blinds remain fixed; replanning does not change its milestones.
-        const { lines } = await this.orders.lines(context, header.workOrderId);
-        requireOrderLines(lines, input.plan);
-        const configured = this.configure(lines, input.plan, header.settings);
+        // The order lock above prevents a production completion during
+        // replanning, and a change of its quantity. Replanning may change the
+        // blinds, never the order's milestones.
+        requireOrderQuantity(order, input.requirements);
+        const configured = this.configure(
+          input.requirements,
+          input.plan,
+          header.settings,
+        );
         const current = await context.allocations.items(id);
         const summary = await this.validateForWrite(
           context,
@@ -770,20 +768,16 @@ export class AllocationsService {
   }
   // Cutting rules and cut lengths are server-derived on every write, so a
   // draft, submission, or edit never carries client-authored lengths.
+  /** Applies the plan's rules: each blind's allowance and each cut's length. */
   private configure<
-    C extends {
-      items: {
-        requirementId: string;
-      }[];
-    },
+    R extends { id: string; lengthMm: number | null },
+    C extends { items: { requirementId: string }[] },
   >(
-    lines: OrderLine[],
-    plan: {
-      cuts: C[];
-    },
+    requirements: readonly R[],
+    plan: { cuts: C[] },
     saved?: Parameters<CuttingRulesService['apply']>[1],
   ) {
-    const rules = this.cuttingRules.apply(requirementsOf(lines), saved);
+    const rules = this.cuttingRules.apply([...requirements], saved);
     return { ...rules, plan: planCutLengths(rules.requirements, plan) };
   }
   private async validateForWrite(

@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { mockApi, ids, pickEmployee, unallocatedOrderId } from './fixtures';
-import { orderLines } from '../fixtures';
 
 test('station completion errors sit between attribution and the retryable action', async ({
   page,
@@ -46,8 +45,7 @@ test('station completion errors sit between attribution and the retryable action
 test('generation banner centers its cancel action', async ({
   page,
 }, testInfo) => {
-  const state = await mockApi(page);
-  state.orders[1]!.lines = structuredClone(orderLines);
+  await mockApi(page);
   let release!: () => void;
   await page.route('**/api/allocations/optimize', async (route) => {
     await new Promise<void>((resolve) => {
@@ -56,6 +54,15 @@ test('generation banner centers its cancel action', async ({
     await route.abort('failed').catch(() => {});
   });
   await page.goto(`/allocations/new?workOrder=${unallocatedOrderId}`);
+  // A plan is generated for the blinds entered.
+  await page.getByRole('button', { name: 'Add blind', exact: true }).click();
+  await page.getByLabel('Color · blind 1', { exact: true }).click();
+  await page
+    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
+    .click();
+  await page.getByLabel('Width (in)', { exact: true }).fill('54');
+  await page.getByLabel('Finished drop (in)').fill('90');
+  await page.getByLabel('Quantity', { exact: true }).fill('1');
   await page.getByRole('button', { name: 'Generate plan' }).click();
   const banner = page
     .getByRole('status')

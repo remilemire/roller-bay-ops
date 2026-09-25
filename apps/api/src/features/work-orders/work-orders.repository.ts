@@ -1,7 +1,6 @@
 import type { Station } from '@roller-bay/shared/users';
 import type {
   CreateWorkOrder,
-  WorkOrderLine,
   WorkOrderQuery,
 } from '@roller-bay/shared/work-orders';
 import {
@@ -12,19 +11,16 @@ import {
   getTableColumns,
   gte,
   ilike,
-  inArray,
   isNotNull,
   isNull,
   lte,
   sql,
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { workOrderLines } from './work-order-lines.table.js';
 import { milestoneTimestampField } from './work-order-milestones.js';
 import { workOrders } from './work-orders.table.js';
 const columns = getTableColumns(workOrders);
 export type WorkOrderRecord = typeof workOrders.$inferSelect;
-export type WorkOrderLineRecord = typeof workOrderLines.$inferSelect;
 const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
   workOrders;
 // Each mirrors the presenter's derived status, except the two work queues.
@@ -196,57 +192,6 @@ export class WorkOrdersRepository {
       .set({ ...values, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
     return (await this.findById(id))!;
-  }
-  /** Blinds by id, retired or not: what a past plan's cuts were made for. */
-  linesById(ids: string[]) {
-    if (!ids.length) return Promise.resolve([]);
-    return this.db
-      .select()
-      .from(workOrderLines)
-      .where(inArray(workOrderLines.id, ids))
-      .orderBy(asc(workOrderLines.position), asc(workOrderLines.id));
-  }
-  /** The order's blinds in order; retired ones only for a save to compare. */
-  lines(workOrderId: string, includeRetired = false) {
-    return this.db
-      .select()
-      .from(workOrderLines)
-      .where(
-        and(
-          eq(workOrderLines.workOrderId, workOrderId),
-          includeRetired ? undefined : isNull(workOrderLines.retiredAt),
-        ),
-      )
-      .orderBy(asc(workOrderLines.position), asc(workOrderLines.id));
-  }
-  async insertLines(
-    workOrderId: string,
-    lines: (WorkOrderLine & {
-      position: number;
-    })[],
-  ) {
-    if (!lines.length) return;
-    await this.db.insert(workOrderLines).values(
-      lines.map((line) => ({
-        ...line,
-        workOrderId,
-        widthMm: line.widthMm.toFixed(3),
-        lengthMm: line.lengthMm.toFixed(3),
-      })),
-    );
-  }
-  async moveLine(id: string, position: number) {
-    await this.db
-      .update(workOrderLines)
-      .set({ position })
-      .where(eq(workOrderLines.id, id));
-  }
-  async retireLines(ids: string[]) {
-    if (!ids.length) return;
-    await this.db
-      .update(workOrderLines)
-      .set({ retiredAt: new Date() })
-      .where(inArray(workOrderLines.id, ids));
   }
   /** The service locks the row and checks it may go; see findByIdForUpdate. */
   async delete(id: string) {

@@ -260,6 +260,13 @@
       "when": 1790312709951,
       "tag": "0036_add_work_order_quantity",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790314814985,
+      "tag": "0037_allocation_owned_blinds",
+      "breakpoints": true
     }
   ]
 }

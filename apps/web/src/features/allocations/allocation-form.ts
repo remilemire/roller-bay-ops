@@ -4,15 +4,11 @@ import {
   allocationDraftInputSchema,
   type AllocationDraftInput,
 } from '@roller-bay/shared/allocations';
-import {
-  workOrderLineSchema,
-  type WorkOrderLine,
-} from '@roller-bay/shared/work-orders';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { nullableText, nullableNumber } from '@/lib/format';
 import { fieldInput, fieldValue } from '@/lib/measurements';
-// One form, two records: `requirements` are the work order's blinds, saved to
-// the order; `workOrderId` and `cuts` are the allocation's plan for them.
+// The allocation as one form: the order it is for, its blinds, and the plan
+// that cuts them.
 export const allocationFormSchema = z.object({
   workOrderId: z.string(),
   requirements: z.array(
@@ -41,12 +37,6 @@ const FIELD_PATHS: [
   (match: RegExpMatchArray, form: AllocationForm) => string | null,
 ][] = [
   [/^workOrderId$/, () => 'workOrderId'],
-  // A refused save of the blinds names the row, and sometimes its field.
-  [
-    /^lines\.(\d+)(?:\.(fabricColorId|widthMm|lengthMm|quantity))?$/,
-    ([, row, key]) =>
-      `requirements.${row}.${{ widthMm: 'width', lengthMm: 'length' }[key ?? ''] ?? key ?? 'quantity'}`,
-  ],
   [
     /^requirements\.(\d+)\.(fabricColorId|width|length|quantity)(Mm)?$/,
     ([, row, key]) => `requirements.${row}.${key}`,
@@ -102,41 +92,21 @@ export const emptyRequirement = () => ({
   quantity: '',
 });
 // Form strings are expressed in the given units; callers must convert back
-// with the same units so a saved value never drifts.
-export const linesToRows = (
-  lines: readonly WorkOrderLine[],
-  units: MeasurementUnits,
-): AllocationForm['requirements'] =>
-  lines.map((line) => ({
-    id: line.id,
-    fabricColorId: line.fabricColorId,
-    width: fieldInput(units, 'blindWidth', line.widthMm),
-    length: fieldInput(units, 'finishedDrop', line.lengthMm),
-    quantity: String(line.quantity),
-  }));
-const lineList = z.object({ lines: z.array(workOrderLineSchema) });
-/** The blinds as the order stores them; throws on a half-entered row. */
-export const rowsToLines = (
-  rows: AllocationForm['requirements'],
-  units: MeasurementUnits,
-): WorkOrderLine[] =>
-  lineList.parse({
-    lines: rows.map((row) => ({
-      id: row.id,
-      fabricColorId: nullableText(row.fabricColorId),
-      widthMm: fieldValue(units, 'blindWidth', row.width),
-      lengthMm: fieldValue(units, 'finishedDrop', row.length),
-      quantity: nullableNumber(row.quantity),
-    })),
-  }).lines;
+// with the same units so a saved value never drifts. Blanks stay blank.
 export function allocationToForm(
   data: AllocationDraftInput | undefined,
-  lines: readonly WorkOrderLine[],
   units: MeasurementUnits,
 ): AllocationForm {
   return {
     workOrderId: data?.workOrderId ?? '',
-    requirements: linesToRows(lines, units),
+    requirements:
+      data?.requirements.map((item) => ({
+        id: item.id,
+        fabricColorId: item.fabricColorId ?? '',
+        width: fieldInput(units, 'blindWidth', item.widthMm),
+        length: fieldInput(units, 'finishedDrop', item.lengthMm),
+        quantity: String(item.quantity ?? ''),
+      })) ?? [],
     cuts:
       data?.plan.cuts.map((d) => ({
         stockItemId: d.stockItemId ?? '',
@@ -147,10 +117,20 @@ export function allocationToForm(
       })) ?? [],
   };
 }
-/** The allocation's half of the form: the order it plans, and the plan. */
-export function allocationFromForm(form: AllocationForm): AllocationDraftInput {
+/** The form as a draft sends it; blank fields become null, never zero. */
+export function allocationFromForm(
+  form: AllocationForm,
+  units: MeasurementUnits,
+): AllocationDraftInput {
   return allocationDraftInputSchema.parse({
     workOrderId: form.workOrderId,
+    requirements: form.requirements.map((r) => ({
+      id: r.id,
+      fabricColorId: nullableText(r.fabricColorId),
+      widthMm: fieldValue(units, 'blindWidth', r.width),
+      lengthMm: fieldValue(units, 'finishedDrop', r.length),
+      quantity: nullableNumber(r.quantity),
+    })),
     plan: {
       cuts: form.cuts.map((d) => ({
         stockItemId: nullableText(d.stockItemId),
@@ -162,3 +142,9 @@ export function allocationFromForm(form: AllocationForm): AllocationDraftInput {
     },
   });
 }
+/** How many blinds the form's rows add up to; unfinished counts are skipped. */
+export const blindTotal = (form: AllocationForm) =>
+  form.requirements.reduce(
+    (total, row) => total + (Number(row.quantity) || 0),
+    0,
+  );

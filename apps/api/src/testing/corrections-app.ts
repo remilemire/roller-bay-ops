@@ -109,16 +109,27 @@ export async function startCorrectionsApp(t: TestContext) {
   // Each allocation plans the one blind of a work order of its own.
   let orderNumber = 300000;
   const plan = async (stockId: string, quantity = 1) => {
-    const order = await fixtures.createWorkOrder(String(++orderNumber), [
-      { fabricColorId: color.id, widthMm: 500, lengthMm: 1000, quantity },
-    ]);
+    const order = await fixtures.createWorkOrder(
+      String(++orderNumber),
+      quantity,
+    );
+    const requirementId = randomUUID();
     return {
       workOrderId: order.id,
+      requirements: [
+        {
+          id: requirementId,
+          fabricColorId: color.id,
+          widthMm: 500,
+          lengthMm: 1000,
+          quantity,
+        },
+      ],
       plan: {
         cuts: [
           {
             stockItemId: stockId,
-            items: [{ requirementId: order.lineIds[0]!, quantity: 1 }],
+            items: [{ requirementId, quantity: 1 }],
           },
         ],
       },

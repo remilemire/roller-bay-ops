@@ -1,6 +1,6 @@
 # Work orders API
 
-A work order is the one definition of a production order: its number, its note, its blinds, and how far it has progressed. An [allocation](allocations.md) is how fabric is assigned to it and the schedule is when it ships; neither defines it. Fabric is required when setting or changing a ship date. Later allocation cancellation preserves the promised date and flags the order as needing fabric; the week and month calendars are views of the orders that have one. `work_orders` holds one row per six-digit production order number (0–9, leading zeros kept). It is unrelated to the supplier `purchaseOrderNumber` on stock receipts.
+A work order is the one definition of a production order: its number, its note, how many blinds it has, and how far it has progressed. It can exist without an allocation. An [allocation](allocations.md) holds the order's blinds and how fabric is assigned to them, and the schedule is when it ships; neither defines the order. Fabric is required when setting or changing a ship date. Later allocation cancellation preserves the promised date and flags the order as needing fabric; the week and month calendars are views of the orders that have one. `work_orders` holds one row per six-digit production order number (0–9, leading zeros kept). It is unrelated to the supplier `purchaseOrderNumber` on stock receipts.
 
 The slice lives in `apps/api/src/features/work-orders/`; its contracts are `@roller-bay/shared/work-orders`.
 
@@ -23,33 +23,17 @@ Allocation is required before scheduling or recording production. Every later st
 
 ## Quantity
 
-An order states how many blinds it has in `quantity`, a whole number from 1 to 10,000 given when the order is created. It is stored, not counted from the blinds, and a check constraint keeps it positive. The blinds an allocation confirms must add up to it: confirming an allocation whose order's blinds total anything else returns 400 with an issue on `workOrderId` (`order_quantity_mismatch`) and stamps nothing. The quantity is fixed while the order has an allocation, whose blinds were checked against it: changing it returns 409 with an issue on `quantity` (`order_allocated`), while sending the unchanged value is accepted. Migration 0036 gave existing orders the total of their current blinds, and those without any a placeholder of 1 to be corrected by hand.
+An order states how many blinds it has in `quantity`, a whole number from 1 to 10,000 given when the order is created. It is stored, and a check constraint keeps it positive. The order holds no blinds of its own: each allocation enters the blinds it plans, and the ones it confirms must add up to the order's quantity ([allocations](allocations.md#allocation-workflow-api)). The quantity is fixed while the order has an allocation, whose blinds were checked against it: changing it returns 409 with an issue on `quantity` (`order_allocated`), while sending the unchanged value is accepted. The check and the change both hold the order's row lock, so neither slips in under the other.
 
-## Blinds
-
-An order's blinds are rows of `work_order_lines`: a fabric color, finished width and drop in millimetres (thousandths kept), and a quantity. Every field is required, in the contract and as `NOT NULL` columns with positive checks, so a half-entered blind stays in the form rather than being saved.
-
-`PUT /api/work-orders/:id/lines` takes `{ expectedRevision, lines }`, the whole list in order, and returns the order with its blinds. **A saved blind never changes and is never deleted**, because a plan's cuts point at the blinds they were made for:
-
-| The list…                       | Result                                        |
-| ------------------------------- | --------------------------------------------- |
-| keeps an id, values unchanged   | Kept; only its position may change            |
-| keeps an id with changed values | 400 `line_immutable` on `lines.<index>`       |
-| adds an unknown id              | Inserted; ids are client-generated UUIDs      |
-| leaves out a saved id           | Retired (`retired_at`), and left out of reads |
-| brings back a retired id        | 400 `line_retired` on `lines.<index>`         |
-
-So a changed blind arrives under a new id, and a cancelled or completed allocation goes on showing the blinds it was planned for. Saving blinds writes only the order's rows: nothing outside the order is touched, and a plan that still points at a retired blind fails its own validation.
-
-An id identifies one blind across all orders (`line_id_in_use`, 400), and an unknown fabric color returns 404 (`fabric_color_not_found`); the foreign key cannot say which blind. The blinds are fixed while the order has a live allocation: the save returns 409 with an issue on `lines` (`order_allocated`). A save locks the order row, checks `expectedRevision`, and increments the order's revision, so two saves serialize and the second is refused as stale. It is recorded as `order.lines-saved`, the one event whose snapshots carry the blinds.
+Migration 0036 gave existing orders the total of their current blinds, and those without any a placeholder of 1 to be corrected by hand. Migration 0037 moved the blinds themselves, which orders held as `work_order_lines` between migrations 0028 and 0037, to the allocations that plan them; older `order.lines-saved` history events still show them.
 
 ## Allocations
 
-`allocations.work_order_id` references `work_orders.id` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name an order that exists, and they plan its [blinds](#blinds) rather than blinds of their own. An order with a live allocation cannot be deleted; see [Deleting and restoring](#deleting-and-restoring). An order has at most one live allocation; a completed allocation remains live until explicitly released through allocation cancellation or whole-order cancellation.
+`allocations.work_order_id` references `work_orders.id` (`ON DELETE RESTRICT`), so [allocations](allocations.md) and their drafts can only name an order that exists. Each holds its own blinds. An order with a live allocation cannot be deleted; see [Deleting and restoring](#deleting-and-restoring). An order has at most one live allocation; a completed allocation remains live until explicitly released through allocation cancellation or whole-order cancellation.
 
-**Creating an order and allocating it are separate requests, however close together they happen.** An allocation request never creates an order or changes its number, note, ship date or blinds; the allocation editor's "Create order" is a `POST /api/work-orders` of its own, sent when that option is chosen, and its blinds are saved by a `PUT …/lines` of their own. What an allocation request does write is listed below, and nothing else crosses the boundary: work orders write no allocation table, there are no cascades, and no trigger touches the work-order tables.
+**Creating an order and allocating it are separate requests, however close together they happen.** An allocation request never creates an order or changes its number, note, quantity or ship date; the add-order form in the allocation editor sends a `POST /api/work-orders` of its own. What an allocation request does write is listed below, and nothing else crosses the boundary: work orders write no allocation table, there are no cascades, and no trigger touches the work-order tables.
 
-The allocation workflow stamps the order inside its own transaction through named `WorkOrdersService` methods, and the order's change is recorded on the allocation's own audit event; these columns are not writable through the endpoints below. Confirming locks the order's row and reads its blinds under that lock, the same lock a save of the blinds takes, so a plan is never confirmed for blinds that were changing under it; an order with no blinds is refused (`order_has_no_lines`).
+The allocation workflow stamps the order inside its own transaction through named `WorkOrdersService` methods, and the order's change is recorded on the allocation's own audit event; these columns are not writable through the endpoints below. Confirming locks the order's row and compares the allocation's blinds with its quantity under that lock, the same lock a change of the quantity takes, so a plan is never confirmed against a count that was changing under it.
 
 | Allocation event                 | Order                                                 |
 | -------------------------------- | ----------------------------------------------------- |
@@ -73,7 +57,6 @@ Confirmation and narrow cancellation stamps do not increment the order's `revisi
 | GET    | `/api/work-orders/:id/history` | Signed in    |
 | POST   | `/api/work-orders`             | Signed in    |
 | PATCH  | `/api/work-orders/:id`         | Admin, owner |
-| PUT    | `/api/work-orders/:id/lines`   | Signed in    |
 | DELETE | `/api/work-orders/:id`         | Admin, owner |
 
 Station accounts use the dedicated production endpoints and cannot access these general order routes. Mutations require the configured Origin header. Global API rate limits apply. Unknown body or query fields are rejected.
@@ -82,7 +65,7 @@ POST accepts `orderNumber`, `quantity` and an optional `note`; an order is creat
 
 PATCH requires `expectedRevision` and at least one of `shipDate`, `quantity` or `note`; see [Quantity](#quantity) for when the quantity can change. `shipDate` is a calendar date (`YYYY-MM-DD`) with no time or timezone, stored in a `date` column, or null to take the order off the schedule, which changes nothing else. It must fall on a weekday: Saturdays and Sundays are rejected with 400 (`Must be a weekday.`). The shared `shipDateSchema` supplies the field message, and the `work_orders_ship_date_weekday` check constraint holds the same rule for writes that bypass the API. An omitted note is left alone; a blank or null note clears it. DELETE takes `{ expectedRevision }` in its body and returns 204.
 
-`GET /api/work-orders/:id` and the blinds save return the order with `lines`; lists and the other writes return it without. Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity`, `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `assembledAt`, `checkedAt`, `shippedAt`, `updatedAt`, and `revision`.
+Records include `id`, `orderNumber`, `shipDate` (null until scheduled), `quantity`, `note`, `status`, `createdAt`, `scheduledAt`, `allocatedAt`, `cutAt`, `assembledAt`, `checkedAt`, `shippedAt`, `updatedAt`, and `revision`.
 
 ## Deleting and restoring
 
@@ -90,7 +73,7 @@ Deleting an order sets `deleted_at` and keeps the row. A foreign key can only re
 
 A live allocation or recorded production blocks deletion: DELETE returns 409 (`Use order cancellation to retain the production history.`). Orders with recorded production must use cancellation even after their fabric is released. Cancelled allocations and drafts do not block it, and a remaining ship date also blocks deletion. The check and the delete happen under the order's row lock, so an allocation cannot confirm in between, and a check constraint keeps a deleted order from holding `allocated_at`.
 
-POST with a deleted order's number restores that order instead of reporting a duplicate: same `id`, `created_at` and blinds, the new quantity and note, `shipped_at` cleared, and the next revision. It is recorded as `order.restored`. Only an admin restores: an employee naming a deleted number gets 409 (`order_deleted`), so creating orders cannot undo an admin's delete. A number held by an order that still exists returns the usual 409 (`order_already_exists`).
+POST with a deleted order's number restores that order instead of reporting a duplicate: same `id` and `created_at`, the new quantity and note, `shipped_at` cleared, and the next revision. It is recorded as `order.restored`. Only an admin restores: an employee naming a deleted number gets 409 (`order_deleted`), so creating orders cannot undo an admin's delete. A number held by an order that still exists returns the usual 409 (`order_already_exists`).
 
 ## Lists
 
@@ -106,7 +89,7 @@ Creating, restoring, editing, scheduling, unscheduling and deleting record trans
 
 ## Tests
 
-`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, the required quantity and its lock while allocated, duplicate and concurrent creation, revision conflicts, scheduling only after allocation through the API, clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. `migrations.integration.test.ts` applies migration 0028 over rows as they were, since every other suite starts from an empty database: it checks each guard stops the migration, where the blinds land, and that every cut still points at its blind. `migrations.integration.test.ts` also checks 0036's quantity backfill. The allocation cases cover unknown, empty, deleted and already-allocated orders, blinds that do not add up to the order's quantity, plans that assign another order's blinds, that allocation requests never create or edit an order, a save of the blinds racing a confirmation, cancelling an allocation while preserving the order's ship date, a cancelled allocation keeping its blinds after the order's change, a draft losing a retired blind's assignment, concurrent allocation of one order, shared draft numbers, allocation confirmation stamps and production independent of inventory completion, moving and cancelling, shipped orders, blocked deletion, and the attached history. `work-order-lines.integration.test.ts` covers keeping, adding, reordering and retiring blinds, immutability and retired ids, validation, unknown colors, ids held by another order, stale and racing saves, allocated and deleted orders, employee access, and the recorded history. Unit tests cover the contracts, status derivation, and driver-error mapping.
+`work-orders.integration.test.ts` runs in its own throwaway database ([testing](testing.md)) and covers role and Origin checks, validation, the required quantity and its lock while allocated, duplicate and concurrent creation, revision conflicts, scheduling only after allocation through the API, clearing a date, shipping, history, deletion and restoring, status and queue filters, literal search, ordering, and pagination. `migrations.integration.test.ts` applies migrations 0028, 0036 and 0037 over rows as they were, since every other suite starts from an empty database: it checks each guard stops its migration, where the blinds land, and that every cut still points at its blind. The allocation cases cover unknown, deleted and already-allocated orders, blinds that do not add up to the order's quantity on confirmation, submission and replanning, plans that assign blinds not their own, that allocation requests never create or edit an order, a change of the quantity racing a confirmation, cancelling an allocation while preserving the order's ship date, a cancelled allocation keeping its blinds after the order is restored with another count, concurrent allocation of one order, shared draft numbers, allocation confirmation stamps and production independent of inventory completion, moving and cancelling, shipped orders, blocked deletion, and the attached history. Unit tests cover the contracts, status derivation, and driver-error mapping.
 
 ## Cancellation and scheduling actions
 
@@ -114,7 +97,7 @@ The UI exposes separate actions:
 
 - **Unschedule** in the scheduling controls clears `ship_date` and `scheduled_at`; it leaves fabric reservations and production intact.
 - **Cancel allocation** on the allocation releases reservations and clears the order's `allocated_at`. The order stays open and its existing date remains. A scheduled order without an allocation displays **Needs fabric allocation**. New scheduling/rescheduling still requires an allocation; clearing a date or editing a note does not.
-- **Cancel work order** on the order releases its allocation and clears its date, then records `cancelled_at` and a reason. Cancelled orders stay readable and appear in the Cancelled/All lists; new allocation, scheduling, blind edits and production completion are refused.
+- **Cancel work order** on the order releases its allocation and clears its date, then records `cancelled_at` and a reason. Cancelled orders stay readable and appear in the Cancelled/All lists; new allocation, scheduling and production completion are refused.
 
 Order cancellation uses `GET /api/work-orders/:id/cancellation-context` and `POST /api/work-orders/:id/cancellation`. Reviewed allocation cancellation uses the equivalent paths under `/api/allocations/:id`. Each POST takes a required reason, preview order/allocation/worksheet IDs and revisions, and `skipCuttingResults`; there is no action selector. Both reviewed operations are admin-only and require a UUID `Idempotency-Key`. Exact retries replay; changed payloads conflict. The narrow staff allocation-cancel route remains available for active allocations without production or worksheets.
 
