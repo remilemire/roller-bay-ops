@@ -17,7 +17,6 @@ import {
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
-import { CompletionAction } from './completion-action';
 import { CuttingInstructions } from './cutting-instructions';
 import { EmployeeSelection } from './employee-selection';
 import { Dialog } from '@/components/ui/dialog';
@@ -72,51 +71,48 @@ function CuttingOrder({
           <Link href="/stations?station=cutting">Back to cutting</Link>
         </Button>
       </PageHeading>
-      <section className="panel panel-body stack">
-        {query.data ? (
-          <CutCompletion sheet={query.data} />
-        ) : (
-          <>
-            <p>
-              Beginning saves the current plan and prevents changes while it is
-              being cut.
-            </p>
-            <div className="action-group">
-              <Button
-                onClick={() => {
-                  setStarterIds([]);
-                  setBeginOpen(true);
-                }}
-              >
-                Begin cutting
-              </Button>
-            </div>
-            <Dialog
-              open={beginOpen}
-              onOpenChange={setBeginOpen}
-              title="Begin cutting"
-              description="Choose the cutter who is starting this worksheet. Completion is recorded separately when you sign off or submit results."
+      {!query.data && (
+        <section className="panel panel-body stack">
+          <p>
+            Beginning saves the current plan and prevents changes while it is
+            being cut.
+          </p>
+          <div className="action-group">
+            <Button
+              onClick={() => {
+                setStarterIds([]);
+                setBeginOpen(true);
+              }}
             >
-              <div className="stack">
-                <EmployeeSelection
-                  label="Started by"
-                  value={starterIds}
-                  onChange={setStarterIds}
-                />
-                {start.error && <ErrorNotice error={start.error} />}
-                <div className="form-actions">
-                  <Button
-                    disabled={!starter || start.isPending}
-                    onClick={() => start.mutate()}
-                  >
-                    Start worksheet
-                  </Button>
-                </div>
+              Begin cutting
+            </Button>
+          </div>
+          <Dialog
+            open={beginOpen}
+            onOpenChange={setBeginOpen}
+            title="Begin cutting"
+            description="Choose the cutter who is starting this worksheet. Completion is recorded separately when you sign off or submit results."
+          >
+            <div className="stack">
+              <EmployeeSelection
+                label="Started by"
+                value={starterIds}
+                onChange={setStarterIds}
+              />
+              {start.error && <ErrorNotice error={start.error} />}
+              <div className="form-actions">
+                <Button
+                  disabled={!starter || start.isPending}
+                  onClick={() => start.mutate()}
+                >
+                  Start worksheet
+                </Button>
               </div>
-            </Dialog>
-          </>
-        )}
-      </section>
+            </div>
+          </Dialog>
+        </section>
+      )}
+      {query.data && <CutAttribution sheet={query.data} />}
       {query.data && (
         <Worksheet
           key={query.data.id}
@@ -127,30 +123,11 @@ function CuttingOrder({
     </div>
   );
 }
-function CutCompletion({ sheet }: { sheet: Worksheet }) {
+function CutAttribution({ sheet }: { sheet: Worksheet }) {
   const query = useQuery(completions(sheet.workOrderId));
   if (query.error) return <ErrorNotice error={query.error} />;
   const completed = query.data?.find((c) => c.station === 'cutting');
-  return (
-    <>
-      {completed ? (
-        <p>Cut by {employeeNames(completed.employees)}</p>
-      ) : (
-        <p className="muted">
-          Sign off only records completion without submitting measurements.
-          Submitting the worksheet records both the results and completion.
-        </p>
-      )}
-      {query.data && !sheet.skippedAt && (
-        <CompletionAction
-          station="cutting"
-          orderId={sheet.workOrderId}
-          orderNumber={sheet.orderNumber}
-          done={!!completed}
-        />
-      )}
-    </>
-  );
+  return completed ? <p>Cut by {employeeNames(completed.employees)}</p> : null;
 }
 function Worksheet({
   initial,

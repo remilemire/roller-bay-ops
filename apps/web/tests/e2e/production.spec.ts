@@ -50,9 +50,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await pickEmployee(page, 'Alex Reed', 'Started by');
   await page.getByRole('button', { name: 'Start worksheet' }).click();
   await page.getByLabel('Cut 1 done').check();
-  await expect(
-    page.getByRole('button', { name: 'Sign off only' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign off only' })).toHaveCount(
+    0,
+  );
   expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.completionRequests).toHaveLength(0);
   await page
@@ -525,16 +525,21 @@ test('a started worksheet can be signed manually and resumed without losing save
   await page.getByLabel('Radial depth (mm)').fill('10');
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
-  await page.getByRole('button', { name: 'Sign off only' }).click();
+  await expect(page.getByRole('button', { name: 'Sign off only' })).toHaveCount(
+    0,
+  );
+  await page.getByRole('link', { name: 'Back to cutting' }).click();
+  await page
+    .getByRole('button', { name: 'Record cutting', exact: true })
+    .click();
   await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Sign off only' })
     .click();
-  await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const completion = structuredClone(state.productionCompletions);
   expect(state.worksheets[0]!.submittedAt).toBeNull();
-  await page.getByRole('link', { name: 'Back to cutting' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
   await expect(
     page.getByRole('button', { name: 'Record cutting', exact: true }),
