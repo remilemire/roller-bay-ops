@@ -302,33 +302,30 @@ it('opens on the order it was reached from, with nothing to save yet', async () 
     await screen.findByRole('heading', { name: 'Allocate 104801' }),
   ).toBeInTheDocument();
   await ready();
-  // The order is settled; its blinds and its plan are entered here, against
-  // the count it states.
+  // The order is picked; its blinds and its plan are entered here. Nothing
+  // is wrong with a count not yet reached.
   expect(screen.queryByLabelText(/Order number/)).toBeNull();
   expect(screen.queryByLabelText('Width (in)')).toBeNull();
-  expect(
-    await screen.findByText('The order has 1 blind; 0 entered.'),
-  ).toHaveClass('is-mismatch');
+  expect(screen.queryByRole('alert')).toBeNull();
   // Arriving with an order chosen is not a change to lose by leaving.
   expect(screen.getByText('Not saved yet')).toBeInTheDocument();
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-it("saves the blinds with the draft, and holds confirmation until they match the order's count", async () => {
+it("saves the blinds with the draft, and refuses to confirm them until they match the order's count", async () => {
   const user = userEvent.setup();
   show(<AllocationEditor initial={draft} />);
   await ready();
-  const count = await screen.findByText('The order has 1 blind; 1 entered.');
-  expect(count).not.toHaveClass('is-mismatch');
   const quantity = screen.getByLabelText('Quantity');
   await user.clear(quantity);
   await user.type(quantity, '2');
-  expect(screen.getByText('The order has 1 blind; 2 entered.')).toHaveClass(
-    'is-mismatch',
+  // Nothing is said about the count until confirming is tried.
+  expect(screen.queryByRole('alert')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'The order has 1 blind; the blinds add up to 2.',
   );
-  expect(
-    screen.getByRole('button', { name: 'Confirm allocation' }),
-  ).toBeDisabled();
+  expect(screen.queryByRole('dialog')).toBeNull();
   // A draft may be short of the order, or over it.
   saveDraft.mockResolvedValue({ ...draft, revision: 2 });
   await user.click(screen.getByRole('button', { name: 'Save draft' }));
@@ -354,13 +351,12 @@ it("saves the blinds with the draft, and holds confirmation until they match the
       },
     }),
   );
-  // A half-entered blind is kept in the draft, blank rather than zero.
+  // A half-entered blind is kept in the draft, blank rather than zero. A
+  // matching count clears the refusal.
   await user.clear(screen.getByLabelText('Width (in)'));
   await user.clear(screen.getByLabelText('Quantity'));
   await user.type(screen.getByLabelText('Quantity'), '1');
-  expect(
-    screen.getByRole('button', { name: 'Confirm allocation' }),
-  ).toBeEnabled();
+  expect(screen.queryByText(/the blinds add up to/)).toBeNull();
   saveDraft.mockResolvedValue({ ...draft, revision: 3 });
   await user.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
@@ -546,9 +542,6 @@ it('picks the order to allocate, or adds one in a modal and picks it', async () 
   ).toBeDisabled();
   // The picker takes an existing order.
   await user.type(screen.getByLabelText('Order'), ids.order);
-  expect(
-    await screen.findByText('The order has 1 blind; 0 entered.'),
-  ).toBeInTheDocument();
   await ready();
   // Or one added in the modal, which is picked once it exists.
   await user.click(screen.getByRole('button', { name: 'Add order' }));

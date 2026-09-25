@@ -42,7 +42,6 @@ import {
 } from '@/lib/pending-request';
 import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { issuePath } from '@/lib/errors';
-import { cn } from '@/lib/utils';
 import { showFieldIssues } from '@/lib/field-issues';
 import {
   allocationFormSchema,
@@ -143,6 +142,8 @@ export function AllocationEditor({
     AllocationOptimization | AllocationValidation | null
   >(null);
   const [adding, setAdding] = useState(false);
+  // Whether a confirmation was tried: the count is checked from then on.
+  const [countChecked, setCountChecked] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const client = useQueryClient();
   const router = useRouter();
@@ -309,6 +310,7 @@ export function AllocationEditor({
       setValidationError(null);
       form.clearErrors();
       // The API refuses blinds that do not add up to the order's count.
+      setCountChecked(true);
       if (mismatch) return;
       setConfirm('submit');
     } catch (error) {
@@ -349,7 +351,16 @@ export function AllocationEditor({
           Order {orderNumber}: {errors.workOrderId.message}
         </p>
       )}
-      <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
+      <form
+        onSubmit={form.handleSubmit((value) => {
+          // A replan is confirmed as it saves, so its count is checked first.
+          if (active) {
+            setCountChecked(true);
+            if (mismatch) return;
+          }
+          save.mutate(value);
+        })}
+      >
         <fieldset disabled={busy} className="form-fieldset">
           <div className="stack">
             <section className="panel">
@@ -389,12 +400,6 @@ export function AllocationEditor({
                     selectedLabel={order && orderLabel(order)}
                     error={errors.workOrderId?.message}
                   />
-                )}
-                {order && (
-                  <p className={cn('order-count', mismatch && 'is-mismatch')}>
-                    The order has {blindCount(order.quantity)}; {entered}{' '}
-                    entered.
-                  </p>
                 )}
               </div>
             </section>
@@ -462,6 +467,12 @@ export function AllocationEditor({
             Restore earlier request
           </Button>
         )}
+        {countChecked && order && mismatch && (
+          <p className="notice notice-error" role="alert">
+            The order has {blindCount(order.quantity)}; the blinds add up to{' '}
+            {entered}.
+          </p>
+        )}
         <div className="form-actions">
           <span className="draft-state">
             {dirty
@@ -498,8 +509,7 @@ export function AllocationEditor({
           <Button
             type="submit"
             variant={active ? 'default' : 'outline'}
-            // A replan is confirmed as it saves, so it must match too.
-            disabled={busy || !values.workOrderId || (!!active && mismatch)}
+            disabled={busy || !values.workOrderId}
           >
             <Save size={16} />
             {save.isPending
@@ -511,7 +521,7 @@ export function AllocationEditor({
           {!active && (
             <Button
               type="button"
-              disabled={busy || !values.workOrderId || mismatch}
+              disabled={busy || !values.workOrderId}
               onClick={confirmSubmit}
             >
               <Check size={16} />

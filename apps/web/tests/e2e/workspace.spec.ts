@@ -361,9 +361,6 @@ test('allocation optimization is a preview until the shared draft is confirmed',
     name: 'Generate plan',
     exact: true,
   });
-  await expect(
-    page.getByText('The order has 1 blind; 1 entered.'),
-  ).toBeVisible();
   expect(state.allocationRequests).toEqual([]);
   await generate.click();
   await expect(
