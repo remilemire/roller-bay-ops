@@ -82,7 +82,7 @@ it('opens on active allocations and keeps the tab in the URL', async () => {
   });
 });
 
-it('asks the API for every state on the All orders tab', async () => {
+it('asks the API for every state on the All allocations tab', async () => {
   state.search = 'state=all&search=1048&page=2';
   show(<AllocationListScreen />);
   await screen.findByText('104801');

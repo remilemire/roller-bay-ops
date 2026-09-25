@@ -28,7 +28,13 @@ export function ErrorNotice({
           </ul>
         )}
         {retry && (
-          <Button variant="ghost" size="sm" onClick={retry}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="notice-retry"
+            onClick={retry}
+          >
             Try again
           </Button>
         )}

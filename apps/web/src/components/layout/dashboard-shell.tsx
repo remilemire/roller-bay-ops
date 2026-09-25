@@ -137,6 +137,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <Link
           className={`nav-link ${pathname === '/settings' ? 'active' : ''}`}
           href="/settings"
+          aria-current={pathname === '/settings' ? 'page' : undefined}
           onClick={() => setMobileOpen(false)}
         >
           <Settings2 size={20} />

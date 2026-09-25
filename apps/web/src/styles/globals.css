@@ -20,6 +20,10 @@
   --field-gap: 16px;
   --panel-padding: 24px;
   --record-padding: 10px;
+  --control-height: 44px;
+  --control-compact-height: 36px;
+  --control-radius: 10px;
+  --action-gap: 8px;
 }
 * {
   box-sizing: border-box;
@@ -336,8 +340,8 @@ textarea {
   display: grid;
   place-items: center;
   border-radius: 7px;
-  min-width: 36px;
-  height: 34px;
+  min-width: var(--control-compact-height);
+  height: var(--control-compact-height);
 }
 .theme-switch button[aria-pressed='true'] {
   background: var(--surface);
@@ -493,19 +497,20 @@ textarea {
 }
 .heading-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--action-gap);
   align-items: center;
   flex-wrap: wrap;
 }
 .button {
+  flex-shrink: 0;
   border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: var(--control-height);
   padding: 10px 16px;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   font-weight: 550;
   font-size: 12px;
   white-space: nowrap;
@@ -532,13 +537,13 @@ textarea {
   color: var(--background);
 }
 .button-sm {
-  min-height: 36px;
+  min-height: var(--control-compact-height);
   padding: 7px 12px;
   font-size: 11px;
 }
 .button-icon {
-  width: 42px;
-  min-height: 42px;
+  width: var(--control-height);
+  min-height: var(--control-height);
   padding: 8px;
 }
 .panel {
@@ -724,12 +729,13 @@ td strong {
   flex: 1;
 }
 .input {
+  color: var(--foreground);
   width: 100%;
-  height: 43px;
+  height: var(--control-height);
   padding: 10px 12px;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   font-size: 12px;
   min-width: 0;
   box-shadow: 0 1px 2px #00000003;
@@ -760,7 +766,7 @@ td strong {
 }
 .tab {
   padding: 8px 13px;
-  min-height: 36px;
+  min-height: var(--control-compact-height);
   border: 0;
   background: transparent;
   border-radius: 7px;
@@ -802,8 +808,15 @@ td strong {
   color: var(--foreground);
 }
 .field small {
+  overflow-wrap: anywhere;
   font-size: 10px;
   color: var(--muted);
+}
+.lookup-error {
+  display: flex;
+  align-items: center;
+  gap: var(--action-gap);
+  flex-wrap: wrap;
 }
 .field small.field-error {
   color: var(--danger);
@@ -826,11 +839,12 @@ td strong {
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--action-gap);
   align-items: center;
-  margin-top: 24px;
+  margin-top: var(--section-gap);
   flex-wrap: wrap;
 }
+.form-stack,
 .role-form {
   display: grid;
   gap: var(--field-gap);
@@ -863,7 +877,7 @@ td strong {
   min-height: 40px;
   padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   background: var(--surface-soft);
   font-size: 12px;
   cursor: pointer;
@@ -893,7 +907,7 @@ td strong {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 36px;
+  min-height: var(--control-compact-height);
   padding: 4px 6px 4px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -980,6 +994,9 @@ td strong {
 }
 .notice > div {
   min-width: 0;
+}
+.notice-retry {
+  margin-top: var(--action-gap);
 }
 .notice-details {
   margin: 6px 0 0;
@@ -1160,6 +1177,7 @@ td strong {
 }
 .inline-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -1209,7 +1227,7 @@ td strong {
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -1261,8 +1279,8 @@ td strong {
   font-size: 13px;
 }
 .calendar-heading .button-icon {
-  width: 34px;
-  min-height: 34px;
+  width: var(--control-compact-height);
+  min-height: var(--control-compact-height);
 }
 .calendar-grid [role='row'] {
   display: grid;
@@ -1685,7 +1703,7 @@ td strong {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 43px;
+  min-height: var(--control-height);
   font-size: 12px;
 }
 .check-field input {
@@ -1739,12 +1757,14 @@ td strong {
   .section-grid {
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   }
-  .button,
-  .theme-switch button {
-    min-height: 44px;
+  :root {
+    --control-compact-height: 44px;
   }
-  .theme-switch button {
-    min-width: 40px;
+  .theme-switch button,
+  .calendar-heading .button-icon,
+  .calendar-day {
+    min-height: var(--control-height);
+    min-width: var(--control-height);
   }
   .stats-grid {
     gap: 12px;
@@ -1822,9 +1842,6 @@ td strong {
   }
   .theme-switch {
     gap: 0;
-  }
-  .theme-switch button {
-    min-width: 32px;
   }
   .toolbar {
     gap: 12px;
@@ -2208,7 +2225,7 @@ td strong {
 }
 
 /* A stack owns separation; child margins must not add a second gap. */
-.stack
+:is(.stack, .form-stack)
   > :is(
     .page-heading,
     .toolbar,
@@ -2281,8 +2298,7 @@ td strong {
   transform: translateX(3px);
 }
 /* Keep station entry fields comfortable for repeated tablet input. */
-.station-workspace select,
-.station-workspace input {
+.station-workspace .input {
   min-height: 48px;
 }
 .station-workspace input[type='checkbox'] {
@@ -2343,4 +2359,12 @@ td strong {
   color: var(--warning);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Disabled form groups must shrink with the panel on tablet screens. */
+.form-fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }

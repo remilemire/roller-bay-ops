@@ -55,3 +55,16 @@ it('replaces text from other exceptions with generic copy and no details', () =>
   expect(screen.getByRole('alert')).not.toHaveTextContent('secret');
   expect(screen.queryByRole('list')).toBeNull();
 });
+
+it('retries inside a form without submitting its pending edits', async () => {
+  const retry = vi.fn();
+  const submit = vi.fn((event) => event.preventDefault());
+  render(
+    <form onSubmit={submit}>
+      <ErrorNotice error={new Error()} retry={retry} />
+    </form>,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(retry).toHaveBeenCalledOnce();
+  expect(submit).not.toHaveBeenCalled();
+});

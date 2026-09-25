@@ -16,6 +16,7 @@ import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useListParams } from '@/lib/use-list-params';
 import { calendarDateLabel, count, dateTimeLabel } from '@/lib/format';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import {
   PageHeading,
@@ -166,22 +167,16 @@ function StationQueue({ station }: { station: Station }) {
         inputMode="numeric"
         maxLength={6}
       >
-        <div className="tabs" role="group" aria-label="Order view">
-          {(['queue', 'completed', 'all'] as const).map((v) => (
-            <button
-              key={v}
-              className={`tab ${view === v ? 'active' : ''}`}
-              aria-pressed={view === v}
-              onClick={() => params.set({ view: v, search: '', page: 1 })}
-            >
-              {v === 'queue'
-                ? 'Work queue'
-                : v === 'completed'
-                  ? 'Completed today'
-                  : 'All allocated orders'}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Order view"
+          value={view}
+          options={[
+            { value: 'queue', label: 'Work queue' },
+            { value: 'completed', label: 'Completed today' },
+            { value: 'all', label: 'All allocated orders' },
+          ]}
+          onChange={(value) => params.set({ view: value, search: '', page: 1 })}
+        />
       </SearchToolbar>
       {query.isPending ? (
         <Loading />

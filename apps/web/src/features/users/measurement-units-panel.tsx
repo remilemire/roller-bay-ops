@@ -82,10 +82,7 @@ export function MeasurementUnitsPanel() {
         </Button>
       </div>
       <div className="panel-body">
-        <fieldset
-          disabled={change.isPending}
-          style={{ border: 0, padding: 0, margin: 0 }}
-        >
+        <fieldset disabled={change.isPending} className="form-fieldset">
           {sections.map((section) => (
             <div className="form-section" key={section.title}>
               <h3>{section.title}</h3>

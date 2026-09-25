@@ -40,7 +40,9 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
         <h2>Production</h2>
       </div>
       <div className="panel-body stack">
-        {query.error && <ErrorNotice error={query.error} />}
+        {query.error && (
+          <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+        )}
         <dl className="record-list">
           {stationSchema.options.map((s) => {
             const c = query.data?.find((v) => v.station === s);
@@ -126,8 +128,8 @@ function Correction({
       }}
       title={`Correct ${completionLabels[station]} record`}
     >
-      <div className="stack">
-        <label>
+      <div className="form-stack">
+        <label className="check-field">
           <input
             type="checkbox"
             checked={clear}
@@ -172,30 +174,39 @@ function Correction({
             </Button>
           </>
         )}
-        <Button
-          disabled={
-            mutation.isPending ||
-            !!mutation.pending ||
-            !reason.trim() ||
-            (!clear && (!employeeIds.length || !time))
-          }
-          onClick={() => {
-            try {
-              mutation.mutate({
-                expectedRevision: order.revision,
-                reason,
-                employeeIds: clear ? null : employeeIds,
-                completedAt: clear ? null : facilityTimeToIso(time),
-              });
-            } catch (error) {
-              setTimeError(
-                error instanceof Error ? error.message : 'Invalid time.',
-              );
+        <div className="form-actions">
+          <Button
+            variant="outline"
+            disabled={mutation.isPending}
+            onClick={close}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              mutation.isPending ||
+              !!mutation.pending ||
+              !reason.trim() ||
+              (!clear && (!employeeIds.length || !time))
             }
-          }}
-        >
-          Save correction
-        </Button>
+            onClick={() => {
+              try {
+                mutation.mutate({
+                  expectedRevision: order.revision,
+                  reason,
+                  employeeIds: clear ? null : employeeIds,
+                  completedAt: clear ? null : facilityTimeToIso(time),
+                });
+              } catch (error) {
+                setTimeError(
+                  error instanceof Error ? error.message : 'Invalid time.',
+                );
+              }
+            }}
+          >
+            Save correction
+          </Button>
+        </div>
       </div>
     </Dialog>
   );

@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Plus, Scissors } from 'lucide-react';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -22,7 +23,7 @@ const tabs = [
   { value: 'draft', label: 'Drafts' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
-  { value: 'all', label: 'All orders' },
+  { value: 'all', label: 'All allocations' },
 ];
 export function AllocationListScreen() {
   const params = useListParams();
@@ -53,19 +54,14 @@ export function AllocationListScreen() {
         onSearch={(search) => params.set({ search })}
         placeholder="Search order number…"
       >
-        <div className="tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              className={`tab ${state === tab.value ? 'active' : ''}`}
-              onClick={() =>
-                params.set({ state: tab.value === 'active' ? '' : tab.value })
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Allocation status"
+          value={state}
+          options={tabs}
+          onChange={(value) =>
+            params.set({ state: value === 'active' ? '' : value })
+          }
+        />
       </SearchToolbar>
       <section className="panel">
         {query.isPending ? (

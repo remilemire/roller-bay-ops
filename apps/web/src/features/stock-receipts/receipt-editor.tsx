@@ -210,11 +210,7 @@ export function ReceiptEditor({
         description="Save as you go. Stock is created only when you submit the receipt."
       />
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
-        <fieldset
-          className="stack"
-          disabled={busy}
-          style={{ border: 0, padding: 0, margin: 0 }}
-        >
+        <fieldset className="stack form-fieldset" disabled={busy}>
           <section className="panel">
             <div className="panel-body">
               <TextField

@@ -424,7 +424,7 @@ export function AllocationEditor({
         </p>
       )}
       <form onSubmit={form.handleSubmit((value) => save.mutate(value))}>
-        <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0 }}>
+        <fieldset disabled={busy} className="form-fieldset">
           <div className="stack">
             <RequirementsEditor
               form={form}
@@ -460,10 +460,7 @@ export function AllocationEditor({
                 {blocked}
               </p>
             )}
-            <fieldset
-              disabled={!!blocked}
-              style={{ border: 0, padding: 0, margin: 0 }}
-            >
+            <fieldset disabled={!!blocked} className="form-fieldset">
               <CutPlanEditor
                 form={form}
                 units={units}

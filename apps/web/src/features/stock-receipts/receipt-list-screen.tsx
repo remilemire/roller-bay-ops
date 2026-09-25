@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Plus, PackagePlus } from 'lucide-react';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -42,20 +43,17 @@ export function ReceiptListScreen() {
         onSearch={(search) => params.set({ search })}
         placeholder="Search purchase-order number…"
       >
-        <div className="tabs">
-          <button
-            className={`tab ${!draft ? 'active' : ''}`}
-            onClick={() => params.set({ state: null })}
-          >
-            Submitted
-          </button>
-          <button
-            className={`tab ${draft ? 'active' : ''}`}
-            onClick={() => params.set({ state: 'draft' })}
-          >
-            Drafts
-          </button>
-        </div>
+        <SegmentedControl
+          label="Receipt status"
+          value={draft ? 'draft' : 'submitted'}
+          options={[
+            { value: 'submitted', label: 'Submitted' },
+            { value: 'draft', label: 'Drafts' },
+          ]}
+          onChange={(value) =>
+            params.set({ state: value === 'draft' ? 'draft' : null })
+          }
+        />
       </SearchToolbar>
       <section className="panel">
         {query.isPending ? (

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from './button';
 const SEARCH_DELAY_MS = 250;
 /**
  * A single text input that searches as you type and lists the matches to pick
@@ -107,7 +108,11 @@ export function Lookup({
           aria-expanded={open}
           aria-controls={listId}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-error` : undefined}
+          aria-describedby={
+            [error && `${id}-error`, result.error && `${id}-load-error`]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
           aria-activedescendant={
             open && items[active] ? `${id}-option-${active}` : undefined
           }
@@ -209,12 +214,17 @@ export function Lookup({
         </ul>
       )}
       {result.error ? (
-        <small role="alert">
-          Could not load options.{' '}
-          <button type="button" onClick={() => void result.refetch()}>
+        <div className="lookup-error" role="alert" id={`${id}-load-error`}>
+          <small className="field-error">Could not load options.</small>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void result.refetch()}
+          >
             Retry
-          </button>
-        </small>
+          </Button>
+        </div>
       ) : result.isPending ? (
         <small role="status">Loading options…</small>
       ) : open && result.isFetching ? (

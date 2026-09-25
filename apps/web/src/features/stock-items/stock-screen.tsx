@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Layers3, Plus } from 'lucide-react';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -54,29 +55,24 @@ export function StockScreen() {
         onSearch={(search) => params.set({ search })}
         placeholder="Search color code, material or ID…"
       >
-        <div className="tabs">
-          {[
+        <SegmentedControl
+          label="Stock status"
+          value={
+            voided ? 'voided' : consumed ? 'consumed' : remnant ? 'remnant' : ''
+          }
+          options={[
             { value: '', label: 'On hand' },
             { value: 'remnant', label: 'Remnants' },
             { value: 'consumed', label: 'Consumed' },
             { value: 'voided', label: 'Voided' },
-          ].map((tab) => (
-            <button
-              className={`tab ${(voided ? 'voided' : consumed ? 'consumed' : remnant ? 'remnant' : '') === tab.value ? 'active' : ''}`}
-              key={tab.value}
-              onClick={() =>
-                params.set({
-                  state: ['consumed', 'voided'].includes(tab.value)
-                    ? tab.value
-                    : null,
-                  kind: tab.value === 'remnant' ? 'remnant' : null,
-                })
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+          ]}
+          onChange={(value) =>
+            params.set({
+              state: ['consumed', 'voided'].includes(value) ? value : null,
+              kind: value === 'remnant' ? 'remnant' : null,
+            })
+          }
+        />
       </SearchToolbar>
       <section className="panel">
         {query.isPending ? (

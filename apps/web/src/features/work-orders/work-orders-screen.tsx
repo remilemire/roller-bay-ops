@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { useCanManage } from '@/features/auth';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import { PageHeading } from '@/components/ui/feedback';
 import { useListParams } from '@/lib/use-list-params';
@@ -11,9 +12,9 @@ import { OrderWeekView } from './order-week-view';
 
 // The schedule opens on the current week; the list is the searchable table.
 const views = [
-  { value: 'list', label: 'List' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
+  { value: 'list', label: 'List' },
 ];
 export function WorkOrdersScreen() {
   const params = useListParams();
@@ -24,20 +25,14 @@ export function WorkOrdersScreen() {
   return (
     <>
       <PageHeading title="Work orders">
-        <div className="tabs" role="group" aria-label="View">
-          {views.map((item) => (
-            <button
-              key={item.value}
-              className={`tab ${view === item.value ? 'active' : ''}`}
-              aria-pressed={view === item.value}
-              onClick={() =>
-                params.set({ view: item.value === 'week' ? '' : item.value })
-              }
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="View"
+          value={view}
+          options={views}
+          onChange={(value) =>
+            params.set({ view: value === 'week' ? '' : value })
+          }
+        />
         {/* An order starts where its blinds are entered and its fabric
             allocated; it reaches this schedule once that is done. */}
         <Button asChild>

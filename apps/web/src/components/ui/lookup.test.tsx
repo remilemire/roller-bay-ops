@@ -163,3 +163,20 @@ it('lets Escape close an open list inside a dialog before it closes the dialog',
   await user.keyboard('{Escape}');
   expect(onOpenChange).toHaveBeenCalledWith(false);
 });
+
+it('describes a loading failure and retries without losing the selected value', async () => {
+  const load = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue({ items: colors, total: colors.length });
+  render(<Harness initial="b2" load={load} />);
+  const box = screen.getByRole('combobox', { name: 'Fabric color' });
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not load options.',
+  );
+  expect(box).toHaveAccessibleDescription(/Could not load options/);
+  await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(box).toHaveValue('C2-000 · Linen voile'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(box).not.toHaveAttribute('aria-describedby');
+});

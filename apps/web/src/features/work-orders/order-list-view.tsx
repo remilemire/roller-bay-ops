@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -56,19 +57,14 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
         onSearch={(search) => params.set({ search: search.trim().slice(0, 6) })}
         placeholder="Search order number…"
       >
-        <div className="tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              className={`tab ${status === tab.value ? 'active' : ''}`}
-              onClick={() =>
-                params.set({ status: tab.value === 'open' ? '' : tab.value })
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Order status"
+          value={status}
+          options={tabs}
+          onChange={(value) =>
+            params.set({ status: value === 'open' ? '' : value })
+          }
+        />
       </SearchToolbar>
       <section className="panel">
         {query.isPending ? (
