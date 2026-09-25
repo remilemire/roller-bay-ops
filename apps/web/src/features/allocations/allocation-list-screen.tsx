@@ -80,7 +80,7 @@ export function AllocationListScreen() {
                   <th>Order</th>
                   <th>Last updated</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th className="table-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,7 +110,7 @@ export function AllocationListScreen() {
                         }
                       />
                     </td>
-                    <td>
+                    <td className="table-actions">
                       {item.state === 'active' && (
                         <Button asChild variant="ghost" size="sm">
                           <Link

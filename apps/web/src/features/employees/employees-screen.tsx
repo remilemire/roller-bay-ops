@@ -74,7 +74,7 @@ function EmployeeDirectory() {
                   <th>Name</th>
                   <th>Initials</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th className="table-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -85,7 +85,7 @@ function EmployeeDirectory() {
                     <td>
                       <Status value={e.isActive ? 'active' : 'inactive'} />
                     </td>
-                    <td>
+                    <td className="table-actions">
                       <Button
                         variant="ghost"
                         size="sm"

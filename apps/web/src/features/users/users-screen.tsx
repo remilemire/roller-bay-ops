@@ -161,7 +161,7 @@ function UserDirectory() {
                   <th>Role</th>
                   <th>Access</th>
                   <th>Joined</th>
-                  <th>Actions</th>
+                  <th className="table-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,7 +178,7 @@ function UserDirectory() {
                       <Status value={row.isActive ? 'active' : 'inactive'} />
                     </td>
                     <td>{dateLabel(row.createdAt)}</td>
-                    <td>
+                    <td className="table-actions">
                       {/* The owner changes only through a transfer, and
                           self-service changes could lock the actor out. */}
                       {row.id === current.id ? (

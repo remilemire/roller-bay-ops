@@ -85,7 +85,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                   <th>Blinds</th>
                   <th>Status</th>
                   <th>Note</th>
-                  <th>Actions</th>
+                  <th className="table-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -111,7 +111,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                       <AllocationWarning order={order} />
                     </td>
                     <td>{order.note}</td>
-                    <td>
+                    <td className="table-actions">
                       <div className="inline-actions">
                         {/* Planning fabric is open to everyone; the rest of
                             an order's changes are an admin's. */}

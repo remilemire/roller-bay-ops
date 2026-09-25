@@ -654,6 +654,18 @@ td {
   font-size: 12px;
   vertical-align: middle;
 }
+.table-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+.table-actions .inline-actions {
+  flex-wrap: nowrap;
+}
+/* Offset the compact ghost button's inset so its label meets the heading. */
+.table-actions > .button,
+.table-actions > .inline-actions {
+  margin-inline-start: -12px;
+}
 td small {
   display: block;
   font-size: 10px;
