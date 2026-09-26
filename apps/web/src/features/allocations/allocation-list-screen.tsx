@@ -11,6 +11,7 @@ import {
   PageHeading,
   Pagination,
   Status,
+  Flag,
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
@@ -107,11 +108,8 @@ export function AllocationListScreen() {
                     </td>
                     <td>{dateLabel(item.updatedAt)}</td>
                     <td>
-                      <Status
-                        value={
-                          item.needsReplanning ? 'needs-replanning' : item.state
-                        }
-                      />
+                      <Status value={item.state} />
+                      {item.needsReplanning && <Flag>Needs replanning</Flag>}
                     </td>
                     <td className="table-actions">
                       {item.state === 'active' && (

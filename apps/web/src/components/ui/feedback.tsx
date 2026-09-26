@@ -1,4 +1,10 @@
-import { AlertCircle, ArrowRight, LoaderCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  LoaderCircle,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
@@ -96,6 +102,26 @@ export function Status({ value }: { value: string }) {
   return (
     <span className={`status status-${value}`}>
       {value.replaceAll('-', ' ')}
+    </span>
+  );
+}
+/**
+ * Something about a record that needs attention, shown beside its status
+ * rather than in place of it. A warning flag also marks its table row.
+ */
+export function Flag({
+  tone = 'warning',
+  icon: Icon = TriangleAlert,
+  children,
+}: {
+  tone?: 'warning' | 'ready' | 'waiting';
+  icon?: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <span className={`flag flag-${tone}`}>
+      <Icon size={12} aria-hidden />
+      <span>{children}</span>
     </span>
   );
 }

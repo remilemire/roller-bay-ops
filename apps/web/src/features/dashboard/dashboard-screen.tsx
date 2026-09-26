@@ -23,6 +23,7 @@ import {
   Empty,
   Loading,
   Status,
+  Flag,
   TextLink,
 } from '@/components/ui/feedback';
 import { addDays, mondayOf, nextWeekday, today } from '@/lib/calendar-dates';
@@ -233,13 +234,8 @@ export function DashboardScreen() {
                       </td>
                       <td>{dateLabel(item.createdAt)}</td>
                       <td>
-                        <Status
-                          value={
-                            item.needsReplanning
-                              ? 'needs-replanning'
-                              : item.state
-                          }
-                        />
+                        <Status value={item.state} />
+                        {item.needsReplanning && <Flag>Needs replanning</Flag>}
                       </td>
                     </tr>
                   ))}

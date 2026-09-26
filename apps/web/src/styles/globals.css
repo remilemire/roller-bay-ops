@@ -715,7 +715,6 @@ td strong {
   background: var(--primary-soft);
 }
 .status-draft,
-.status-needs-replanning,
 .status-new {
   color: var(--warning);
   background: var(--warning-soft);
@@ -2408,9 +2407,9 @@ label.detail-label {
   height: 18px;
   margin-top: 3px;
 }
-/* An order's fabric flag: a compact pill that sits under the status in a
-   table, beside it on a card, and shrinks to its icon in a month cell. */
-.order-flag {
+/* A flag is a compact pill that sits under the status in a table, beside it
+   on a card, and shrinks to its icon in a month cell. */
+.flag {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -2423,35 +2422,35 @@ label.detail-label {
   font-weight: 550;
   line-height: 1.3;
 }
-.order-flag svg {
+.flag svg {
   flex: 0 0 auto;
 }
-.order-flag-warning {
+.flag-warning {
   color: var(--warning);
   background: var(--warning-soft);
 }
-.order-flag-ready {
+.flag-ready {
   color: var(--primary);
   background: var(--primary-soft);
 }
-.order-flag-waiting {
+.flag-waiting {
   color: var(--muted);
   background: var(--muted-surface);
 }
-/* A table row that needs fabric carries a warning edge so it stands out when
-   scanning the list. */
-tbody tr:has(.order-flag-warning) > td:first-child {
+/* A row with a warning flag carries a warning edge so it stands out when
+   scanning a list. */
+tbody tr:has(.flag-warning) > td:first-child {
   box-shadow: inset 3px 0 0 var(--warning);
 }
-.order-card-title .order-flag {
+.order-card-title .flag {
   margin-top: 0;
 }
-.month-order .order-flag {
+.month-order .flag {
   margin: 0;
   padding: 2px;
   background: none;
 }
-.month-order .order-flag > span {
+.month-order .flag > span {
   position: absolute;
   width: 1px;
   height: 1px;
