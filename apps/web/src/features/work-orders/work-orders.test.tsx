@@ -13,12 +13,18 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { WorkOrder, WorkOrderList } from '@roller-bay/shared/work-orders';
+import {
+  updateWorkOrderSchema,
+  type WorkOrder,
+  type WorkOrderList,
+} from '@roller-bay/shared/work-orders';
 import { ApiError } from '@/lib/api';
 import { calendarDateLabel } from '@/lib/format';
 import { order } from '../../../tests/fixtures';
 import { OrderDetailScreen } from './order-detail-screen';
 import { OrderCreateForm } from './order-create-dialog';
+import { OrderReschedule } from './order-reschedule';
+import { AllocationWarning } from './allocation-warning';
 // Other features' sections of the order, which the route composes.
 const sections = {
   history: null,
@@ -183,6 +189,8 @@ it('creates an order from its number and blind count, only when asked', async ()
     orderNumber: '104950',
     quantity: 12,
     note: ' Rush ',
+    backOrder: null,
+    shipDate: null,
   });
   await waitFor(() =>
     expect(onCreated).toHaveBeenCalledWith(
@@ -197,6 +205,7 @@ it('leaves the note to admins when adding an order', async () => {
   show(<OrderCreateForm onCreated={vi.fn()} />);
   const user = userEvent.setup();
   expect(screen.queryByLabelText('Note')).toBeNull();
+  expect(screen.queryByLabelText('Supplier PO number')).toBeNull();
   await user.type(screen.getByLabelText(/Order number/), '104950');
   await user.type(screen.getByLabelText(/Blinds/), '3');
   await user.click(screen.getByRole('button', { name: 'Add order' }));
@@ -204,6 +213,8 @@ it('leaves the note to admins when adding an order', async () => {
     orderNumber: '104950',
     quantity: 3,
     note: null,
+    backOrder: null,
+    shipDate: null,
   });
 });
 
@@ -495,6 +506,123 @@ it('reschedules an order from its row with the calendar already open', async () 
     }),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+const backOrder = {
+  purchaseOrderNumber: '43142',
+  estimatedArrivalDate: '2026-09-30',
+};
+const unallocated: WorkOrder = {
+  ...order,
+  allocatedAt: null,
+  shipDate: null,
+  scheduledAt: null,
+  status: 'new',
+  backOrder: null,
+};
+
+it('schedules an order without fabric as a back order, no earlier than it is due', async () => {
+  vi.mocked(updateOrder)
+    .mockRejectedValueOnce(
+      new ApiError(
+        409,
+        'The ship date is before the fabric is due to arrive.',
+        undefined,
+        [
+          {
+            code: 'ship_date_before_arrival',
+            path: ['shipDate'],
+            message: "Must be on or after the fabric's estimated arrival.",
+          },
+        ],
+      ),
+    )
+    .mockResolvedValueOnce(order);
+  const close = vi.fn();
+  show(<OrderReschedule order={unallocated} close={close} />);
+  const user = userEvent.setup();
+  const dialog = within(
+    screen.getByRole('dialog', { name: 'Schedule order 104801' }),
+  );
+  await user.type(dialog.getByLabelText('Supplier PO number'), '4x3142');
+  await user.click(dialog.getByLabelText('Fabric due'));
+  await user.click(dialog.getByRole('button', { name: 'Wed, Sep 30, 2026' }));
+  const shipDate = dialog.getByLabelText('Ship date');
+  await user.click(shipDate);
+  await user.click(dialog.getByRole('button', { name: 'Tue, Sep 29, 2026' }));
+  await user.click(dialog.getByRole('button', { name: 'Schedule' }));
+  await waitFor(() =>
+    expect(shipDate).toHaveAccessibleDescription(
+      "Must be on or after the fabric's estimated arrival.",
+    ),
+  );
+  await user.click(shipDate);
+  await user.click(dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
+  await user.click(dialog.getByRole('button', { name: 'Schedule' }));
+  await waitFor(() =>
+    expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
+      expectedRevision: 3,
+      shipDate: '2026-10-02',
+      backOrder,
+    }),
+  );
+  await waitFor(() => expect(close).toHaveBeenCalled());
+});
+
+it('asks for both parts of a back order before sending it', async () => {
+  // As the real request does, the contract refuses before anything is sent.
+  vi.mocked(updateOrder).mockImplementation(async (_, body) => {
+    updateWorkOrderSchema.parse(body);
+    return order;
+  });
+  show(<OrderReschedule order={unallocated} close={vi.fn()} />);
+  const user = userEvent.setup();
+  const dialog = within(screen.getByRole('dialog'));
+  await user.type(dialog.getByLabelText('Supplier PO number'), '43142');
+  await user.click(dialog.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(dialog.getByLabelText('Fabric due')).toHaveAccessibleDescription(
+      'Required.',
+    ),
+  );
+});
+
+it('adds an order with a back order and ship date for admins', async () => {
+  vi.mocked(createOrder).mockResolvedValue(order);
+  show(<OrderCreateForm onCreated={vi.fn()} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText(/Order number/), '104950');
+  await user.type(screen.getByLabelText(/Blinds/), '3');
+  await user.type(screen.getByLabelText('Supplier PO number'), '43142');
+  await user.click(screen.getByLabelText('Fabric due'));
+  await user.click(screen.getByRole('button', { name: 'Wed, Sep 30, 2026' }));
+  await user.click(screen.getByLabelText('Ship date'));
+  await user.click(screen.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
+  await user.click(screen.getByRole('button', { name: 'Add order' }));
+  expect(createOrder).toHaveBeenCalledWith({
+    orderNumber: '104950',
+    quantity: 3,
+    note: '',
+    backOrder,
+    shipDate: '2026-10-02',
+  });
+});
+
+it("names a back order's fabric on the order until it is allocated", () => {
+  const { rerender } = render(
+    <AllocationWarning
+      order={{ ...unallocated, backOrder, shipDate: '2026-10-02' }}
+    />,
+  );
+  expect(
+    screen.getByText('Back order · PO 43142 · fabric due Sep 30'),
+  ).toBeInTheDocument();
+  rerender(
+    <AllocationWarning order={{ ...unallocated, shipDate: '2026-10-02' }} />,
+  );
+  expect(screen.getByText('Needs fabric allocation')).toBeInTheDocument();
+  rerender(<AllocationWarning order={{ ...order, backOrder }} />);
+  expect(screen.queryByText(/Back order|Needs fabric/)).toBeNull();
 });
 
 it('groups the working week by day with totals', async () => {

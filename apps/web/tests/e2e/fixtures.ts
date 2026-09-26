@@ -523,7 +523,9 @@ export async function mockApi(
                 (status === 'open'
                   ? row.status !== 'shipped'
                   : status === 'unscheduled'
-                    ? !!row.allocatedAt && !row.shipDate && !row.shippedAt
+                    ? (!!row.allocatedAt || !!row.backOrder) &&
+                      !row.shipDate &&
+                      !row.shippedAt
                     : status === 'unallocated'
                       ? !row.allocatedAt && !row.shippedAt
                       : row.status === status)),
@@ -553,9 +555,9 @@ export async function mockApi(
         ...order,
         ...body,
         id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-        status: 'new' as const,
-        shipDate: null,
-        scheduledAt: null,
+        // Only a back order can date a new order.
+        status: body.shipDate ? ('scheduled' as const) : ('new' as const),
+        scheduledAt: body.shipDate ? timestamp : null,
         allocatedAt: null,
         revision: 1,
       };

@@ -17,7 +17,7 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
-import { OrderReschedule } from './order-reschedule';
+import { OrderReschedule, scheduleLabel } from './order-reschedule';
 import { orderList } from './work-orders.api';
 
 // The schedule opens on orders that still need work; `all` includes shipped.
@@ -127,21 +127,20 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                               </Link>
                             </Button>
                           )}
-                        {/* A retained date can be cleared without fabric. */}
-                        {canManage && (order.allocatedAt || order.shipDate) && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`${!order.allocatedAt ? 'Unschedule' : order.shipDate ? 'Reschedule' : 'Schedule'} order ${order.orderNumber}`}
-                            onClick={() => setRescheduling(order)}
-                          >
-                            {!order.allocatedAt
-                              ? 'Unschedule'
-                              : order.shipDate
-                                ? 'Reschedule'
-                                : 'Schedule'}
-                          </Button>
-                        )}
+                        {/* An order without fabric is scheduled as a back
+                            order. */}
+                        {canManage &&
+                          !order.cancelledAt &&
+                          !order.shippedAt && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`${scheduleLabel(order)} order ${order.orderNumber}`}
+                              onClick={() => setRescheduling(order)}
+                            >
+                              {scheduleLabel(order)}
+                            </Button>
+                          )}
                       </div>
                     </td>
                   </tr>

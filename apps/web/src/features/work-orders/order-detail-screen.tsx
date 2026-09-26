@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/feedback';
 import { calendarDateLabel, dateLabel } from '@/lib/format';
 import { OrderEditor } from './order-editor';
-import { OrderReschedule } from './order-reschedule';
+import { OrderReschedule, scheduleLabel } from './order-reschedule';
 import { deleteOrder, orderDetail, workOrdersKey } from './work-orders.api';
 
 /** Other features' sections of an order, composed by the route. */
@@ -106,17 +106,13 @@ function OrderRecord({
                 Cancel work order
               </Button>
             )}
-            {/* A date follows the allocation. */}
-            {(order.allocatedAt || order.shipDate) && (
+            {/* An order without fabric is scheduled as a back order. */}
+            {!order.shippedAt && (
               <Button
                 variant={order.allocatedAt ? 'default' : 'outline'}
                 onClick={() => setRescheduling(true)}
               >
-                {!order.allocatedAt
-                  ? 'Unschedule'
-                  : order.shipDate
-                    ? 'Reschedule'
-                    : 'Schedule'}
+                {scheduleLabel(order)}
               </Button>
             )}
           </>
@@ -142,6 +138,16 @@ function OrderRecord({
               ['Assembled', milestone(order.assembledAt)],
               ['Checked', milestone(order.checkedAt)],
               ['Shipped', milestone(order.shippedAt)],
+              // Kept after allocation, as a record of where the fabric came from.
+              ...(order.backOrder
+                ? [
+                    ['Back-order PO', order.backOrder.purchaseOrderNumber],
+                    [
+                      'Fabric due',
+                      calendarDateLabel(order.backOrder.estimatedArrivalDate),
+                    ],
+                  ]
+                : []),
             ].map(([label, value]) => (
               <div key={label}>
                 <div className="detail-label">{label}</div>

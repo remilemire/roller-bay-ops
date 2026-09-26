@@ -9,6 +9,7 @@ import {
   type WorkOrder,
 } from '@roller-bay/shared/work-orders';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { TextField } from '@/components/ui/field';
@@ -18,13 +19,32 @@ import { issuePath } from '@/lib/errors';
 import { fieldIssues } from '@/lib/field-issues';
 import { createOrder, orderList, workOrdersKey } from './work-orders.api';
 
-type Fields = { orderNumber: string; quantity: string; note: string };
-const fieldName = (issue: ErrorIssue) => {
-  const path = issuePath(issue);
-  return path === 'orderNumber' || path === 'quantity' || path === 'note'
-    ? path
-    : null;
+type Fields = {
+  orderNumber: string;
+  quantity: string;
+  note: string;
+  purchaseOrderNumber: string;
+  estimatedArrivalDate: string;
+  shipDate: string;
 };
+const FIELDS: Record<string, keyof Fields> = {
+  orderNumber: 'orderNumber',
+  quantity: 'quantity',
+  note: 'note',
+  backOrder: 'purchaseOrderNumber',
+  'backOrder.purchaseOrderNumber': 'purchaseOrderNumber',
+  'backOrder.estimatedArrivalDate': 'estimatedArrivalDate',
+  shipDate: 'shipDate',
+};
+const fieldName = (issue: ErrorIssue) => FIELDS[issuePath(issue)] ?? null;
+/** Blank parts are left out, so the contract calls them required. */
+const backOrderOf = ({ purchaseOrderNumber, estimatedArrivalDate }: Fields) =>
+  purchaseOrderNumber || estimatedArrivalDate
+    ? {
+        purchaseOrderNumber: purchaseOrderNumber || undefined,
+        estimatedArrivalDate: estimatedArrivalDate || undefined,
+      }
+    : null;
 
 /**
  * Adds an order: its number and how many blinds it has, sent as a request of
@@ -41,12 +61,16 @@ export function OrderCreateForm({
   /** A number to start from, such as one searched for and not found. */
   orderNumber?: string;
 }) {
-  // A note stays with admins; the API refuses one from anyone else.
+  // A note, a back order and a date stay with admins; the API refuses them
+  // from anyone else.
   const canManage = useCanManage();
   const [fields, setFields] = useState<Fields>({
     orderNumber,
     quantity: '',
     note: '',
+    purchaseOrderNumber: '',
+    estimatedArrivalDate: '',
+    shipDate: '',
   });
   const client = useQueryClient();
   const create = useMutation({
@@ -57,6 +81,8 @@ export function OrderCreateForm({
             orderNumber: input.orderNumber,
             quantity: Number(input.quantity),
             note: canManage ? input.note : null,
+            backOrder: canManage ? backOrderOf(input) : null,
+            shipDate: (canManage && input.shipDate) || null,
           }),
         };
       } catch (error) {
@@ -131,6 +157,40 @@ export function OrderCreateForm({
           maxLength={1000}
           error={issues.note}
         />
+      )}
+      {/* Fabric on its way lets a new order be scheduled before it is
+          allocated. */}
+      {canManage && (
+        <div className="form-grid">
+          <TextField
+            label="Supplier PO number"
+            value={fields.purchaseOrderNumber}
+            onChange={(value) =>
+              set('purchaseOrderNumber', value.replace(/\D/g, ''))
+            }
+            optional
+            maxLength={5}
+            inputMode="numeric"
+            hint="For a back order."
+            error={issues.purchaseOrderNumber}
+          />
+          <DateField
+            label="Fabric due"
+            value={fields.estimatedArrivalDate}
+            onChange={(value) => set('estimatedArrivalDate', value)}
+            optional
+            error={issues.estimatedArrivalDate}
+          />
+          <DateField
+            label="Ship date"
+            value={fields.shipDate}
+            onChange={(value) => set('shipDate', value)}
+            weekdaysOnly
+            optional
+            hint="On or after the fabric is due."
+            error={issues.shipDate}
+          />
+        </div>
       )}
       {taken && (
         <p className="notice notice-warning" role="alert">

@@ -247,7 +247,7 @@ test('lookup failures and invalid additional fabric remain actionable', async ({
   await expect(picker).not.toHaveAttribute('aria-invalid');
 });
 
-test('unscheduling shows date issues even when the date picker is unavailable', async ({
+test('unscheduling an order without fabric shows date issues beside its date', async ({
   page,
 }) => {
   const state = await mockApi(page);
@@ -270,10 +270,10 @@ test('unscheduling shows date issues even when the date picker is unavailable', 
       : route.fallback(),
   );
   await page.goto(`/work-orders/${ids.order}`);
-  await page.getByRole('button', { name: 'Unschedule', exact: true }).click();
+  await page.getByRole('button', { name: 'Reschedule', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Unschedule', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText(
+  await expect(dialog.getByLabel('Ship date')).toHaveAccessibleDescription(
     'Reload the order before clearing this date.',
   );
 });

@@ -236,12 +236,11 @@ test('allocation cancellation keeps the date, flags the order, and leaves unsche
     path: testInfo.outputPath('scheduled-without-allocation.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Unschedule', exact: true }).click();
+  // Without fabric, a new date takes a back order; clearing it does not.
+  await page.getByRole('button', { name: 'Reschedule', exact: true }).click();
   await expect(
-    page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Reschedule', exact: true }),
-  ).toHaveCount(0);
+    page.getByRole('dialog').getByLabel('Supplier PO number'),
+  ).toBeVisible();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Unschedule', exact: true })

@@ -381,7 +381,7 @@ function WeekTray({
         <p className="muted">
           {search
             ? `No order waiting for a ship date matches ${search}.`
-            : 'No allocated orders are waiting for a ship date.'}
+            : 'No allocated or back-ordered orders are waiting for a ship date.'}
         </p>
       )}
       {total > orders.length && (

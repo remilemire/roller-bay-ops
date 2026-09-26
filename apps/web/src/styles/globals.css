@@ -2392,6 +2392,11 @@ td strong {
   font-size: 12px;
   font-weight: 600;
 }
+.back-order-note {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
 
 /* Disabled form groups must shrink with the panel on tablet screens. */
 .form-fieldset {

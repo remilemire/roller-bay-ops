@@ -23,13 +23,13 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
   await expect(existing).toContainText('Fri, Oct 2, 2026');
   await expect(existing).toContainText('scheduled');
 
-  // An order that still needs fabric cannot be scheduled; its row opens the
-  // entry screen on it instead.
+  // An order that still needs fabric is scheduled as a back order, or its
+  // row opens the entry screen on it.
   const unallocated = page.getByRole('row', { name: /104877/ });
   await expect(unallocated).toContainText('new');
   await expect(
-    unallocated.getByRole('button', { name: /chedule/ }),
-  ).toHaveCount(0);
+    unallocated.getByRole('button', { name: 'Schedule order 104877' }),
+  ).toBeVisible();
   await unallocated
     .getByRole('link', { name: 'Allocate order 104877' })
     .click();
@@ -202,7 +202,9 @@ test('admins drag an order between days and the to-schedule tray, by mouse and b
   // onto a day again. A tray card is wider than a day, so the day under the
   // pointer, not the one nearest the card's centre, takes the drop.
   const tray = day('To schedule');
-  await expect(tray).toContainText('No allocated orders are waiting');
+  await expect(tray).toContainText(
+    'No allocated or back-ordered orders are waiting',
+  );
   const drag = async (
     source: ReturnType<typeof day>,
     target: ReturnType<typeof day>,
@@ -269,6 +271,43 @@ test('admins reschedule an order from its list row', async ({ page }) => {
     { method: 'PATCH', body: { expectedRevision: 4, shipDate: null } },
   ]);
 });
+test('admins schedule an order without fabric as a back order', async ({
+  page,
+}) => {
+  const state = await mockApi(page);
+  await page.clock.setFixedTime(new Date('2026-09-28T12:00:00-06:00'));
+  await page.goto('/work-orders?view=list');
+  const dialog = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Schedule order 104877' }).click();
+  await dialog.getByLabel('Supplier PO number').fill('43142');
+  await dialog.getByLabel('Fabric due').click();
+  await dialog.getByRole('button', { name: 'Wed, Sep 30, 2026' }).click();
+  await dialog.getByLabel('Ship date').click();
+  await dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }).click();
+  await dialog.getByRole('button', { name: 'Schedule', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(state.orderRequests).toEqual([
+    {
+      method: 'PATCH',
+      body: {
+        expectedRevision: 3,
+        shipDate: '2026-10-02',
+        backOrder: {
+          purchaseOrderNumber: '43142',
+          estimatedArrivalDate: '2026-09-30',
+        },
+      },
+    },
+  ]);
+  // It goes on the week board with the fabric it waits on.
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  const friday = page.getByRole('region', { name: 'Fri, Oct 2, 2026' });
+  await expect(friday).toContainText('104877');
+  await expect(friday).toContainText(
+    'Back order · PO 43142 · fabric due Sep 30',
+  );
+});
+
 test('an order is found from the week board, whether or not it is on it', async ({
   page,
 }) => {
@@ -335,7 +374,13 @@ test('employees read work orders without admin actions', async ({ page }) => {
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',
-      body: { orderNumber: '104950', quantity: 6, note: null },
+      body: {
+        orderNumber: '104950',
+        quantity: 6,
+        note: null,
+        backOrder: null,
+        shipDate: null,
+      },
     },
   ]);
   expect(state.allocationRequests).toEqual([]);

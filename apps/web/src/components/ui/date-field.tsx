@@ -34,6 +34,7 @@ export function DateField({
   defaultOpen = false,
   hint,
   error,
+  optional = false,
 }: {
   label: string;
   value: string;
@@ -43,6 +44,7 @@ export function DateField({
   defaultOpen?: boolean;
   hint?: string;
   error?: string;
+  optional?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(defaultOpen);
@@ -118,6 +120,7 @@ export function DateField({
     >
       <span className="field-label">
         <label htmlFor={id}>{label}</label>
+        {optional && <span className="field-optional">Optional</span>}
       </span>
       <button
         ref={trigger}

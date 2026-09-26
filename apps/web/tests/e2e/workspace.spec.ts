@@ -348,7 +348,13 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',
-      body: { orderNumber: '104950', quantity: 1, note: null },
+      body: {
+        orderNumber: '104950',
+        quantity: 1,
+        note: null,
+        backOrder: null,
+        shipDate: null,
+      },
     },
   ]);
   await page.getByRole('button', { name: 'Add blind', exact: true }).click();
