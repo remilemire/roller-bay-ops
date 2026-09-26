@@ -15,11 +15,7 @@ import {
 } from 'drizzle-orm';
 import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import {
-  milestoneTimestampField,
-  workOrderColumns,
-  workOrders,
-} from '../work-orders/tables.js';
+import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
 import type {
   CompletionRecord,
   CompletionValues,
@@ -30,6 +26,7 @@ import {
 } from './production-completions.table.js';
 export class ProductionRepository {
   constructor(private readonly db: DatabaseExecutor) {}
+  /** A page of the station's orders by id, with the station's own data. */
   async list(station: Station, query: StationQuery) {
     const stamp = workOrders[milestoneTimestampField[station]];
     const where = and(
@@ -48,7 +45,7 @@ export class ProductionRepository {
     );
     const rows = await this.db
       .select({
-        ...workOrderColumns,
+        id: workOrders.id,
         // Qualify the outer id explicitly: select-field SQL otherwise loses table
         // qualifiers and the subquery compares worksheet.work_order_id to its own id.
         hasCuttingWorksheet: sql<boolean>`EXISTS (SELECT 1 FROM ${cuttingWorksheets} WHERE ${cuttingWorksheets.workOrderId} = ${sql.identifier('work_orders')}.${sql.identifier('id')} AND ${cuttingWorksheets.abandonedAt} IS NULL AND ${cuttingWorksheets.skippedAt} IS NULL)`,

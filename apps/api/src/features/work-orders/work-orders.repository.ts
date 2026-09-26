@@ -5,8 +5,10 @@ import {
   asc,
   count,
   eq,
+  getTableColumns,
   gte,
   ilike,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -15,12 +17,16 @@ import {
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { milestoneTimestampField } from './work-order-milestones.js';
-import {
-  backOrdered,
-  workOrderColumns as columns,
-} from './work-order-columns.js';
+import { stockReceipts } from '../stock-receipts/tables.js';
 import { workOrderPurchaseOrders } from './work-order-purchase-orders.table.js';
 import { workOrders } from './work-orders.table.js';
+const columns = getTableColumns(workOrders);
+const backOrdered = sql`EXISTS (SELECT 1 FROM ${workOrderPurchaseOrders} WHERE ${workOrderPurchaseOrders.workOrderId} = ${workOrders.id})`;
+/**
+ * An order with its back order's purchase orders (none when it has no back
+ * order) and those still awaited: a purchase order has arrived once a
+ * submitted stock receipt carries its number.
+ */
 export type WorkOrderRecord = typeof workOrders.$inferSelect & {
   purchaseOrderNumbers: string[];
   awaitingPurchaseOrderNumbers: string[];
@@ -113,14 +119,20 @@ export class WorkOrdersRepository {
       .select({ total: count() })
       .from(workOrders)
       .where(where);
-    return { items, total: result!.total };
+    return { items: await this.withBackOrders(items), total: result!.total };
   }
   async findById(id: string) {
-    const [row] = await this.db
-      .select(columns)
-      .from(workOrders)
-      .where(and(eq(workOrders.id, id), present));
+    const [row] = await this.findByIds([id]);
     return row;
+  }
+  async findByIds(ids: readonly string[]) {
+    if (!ids.length) return [];
+    return this.withBackOrders(
+      await this.db
+        .select(columns)
+        .from(workOrders)
+        .where(and(inArray(workOrders.id, [...ids]), present)),
+    );
   }
   /**
    * Row locks for edits and milestone stamps are `no key update`: unlike
@@ -134,7 +146,7 @@ export class WorkOrdersRepository {
       .from(workOrders)
       .where(and(eq(workOrders.id, id), present))
       .for('no key update');
-    return row;
+    return row && (await this.withBackOrders([row]))[0];
   }
   /**
    * Creates an order, or restores the deleted one that holds the number.
@@ -211,6 +223,51 @@ export class WorkOrdersRepository {
       .set({ ...values, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
     return (await this.findById(id))!;
+  }
+  /** Attaches each order's back-order purchase orders, and those awaited. */
+  private async withBackOrders(
+    rows: (typeof workOrders.$inferSelect)[],
+  ): Promise<WorkOrderRecord[]> {
+    const ordered = rows.length
+      ? await this.db
+          .select()
+          .from(workOrderPurchaseOrders)
+          .where(
+            inArray(
+              workOrderPurchaseOrders.workOrderId,
+              rows.map((row) => row.id),
+            ),
+          )
+          .orderBy(asc(workOrderPurchaseOrders.purchaseOrderNumber))
+      : [];
+    const numbers = [...new Set(ordered.map((po) => po.purchaseOrderNumber))];
+    const arrived = new Set(
+      numbers.length
+        ? (
+            await this.db
+              .selectDistinct({ number: stockReceipts.purchaseOrderNumber })
+              .from(stockReceipts)
+              .where(
+                and(
+                  inArray(stockReceipts.purchaseOrderNumber, numbers),
+                  eq(stockReceipts.isDraft, false),
+                ),
+              )
+          ).map((receipt) => receipt.number)
+        : [],
+    );
+    return rows.map((row) => {
+      const purchaseOrderNumbers = ordered
+        .filter((po) => po.workOrderId === row.id)
+        .map((po) => po.purchaseOrderNumber);
+      return {
+        ...row,
+        purchaseOrderNumbers,
+        awaitingPurchaseOrderNumbers: purchaseOrderNumbers.filter(
+          (number) => !arrived.has(number),
+        ),
+      };
+    });
   }
   /** Replaces the order's back order; an empty list removes it. */
   async replacePurchaseOrders(id: string, numbers: readonly string[]) {

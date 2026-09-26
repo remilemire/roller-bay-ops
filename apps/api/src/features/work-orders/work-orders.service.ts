@@ -321,6 +321,10 @@ export class WorkOrdersService {
       },
     );
   }
+  /** The orders other features list, read as this feature reads them. */
+  findByIds(context: UnitOfWorkContext, ids: readonly string[]) {
+    return context.workOrders.findByIds(ids);
+  }
   async requireOrder(context: UnitOfWorkContext, id: string, lock = true) {
     const order = lock
       ? await context.workOrders.findByIdForUpdate(id)

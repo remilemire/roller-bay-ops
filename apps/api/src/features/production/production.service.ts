@@ -58,9 +58,22 @@ export class ProductionService {
   async listOrders(station: Station, query: StationQuery) {
     return productionOperation(async () =>
       presentStationOrders(
-        await this.unitOfWork.readOnlyTransaction(async (context) =>
-          context.production.list(station, query),
-        ),
+        await this.unitOfWork.readOnlyTransaction(async (context) => {
+          // Production pages its own queue; the orders on the page are read
+          // by work orders, in the same snapshot.
+          const page = await context.production.list(station, query);
+          const orders = await this.orders.findByIds(
+            context,
+            page.items.map((item) => item.id),
+          );
+          return {
+            ...page,
+            items: page.items.flatMap((item) => {
+              const order = orders.find((row) => row.id === item.id);
+              return order ? [{ ...order, ...item }] : [];
+            }),
+          };
+        }),
       ),
     );
   }
