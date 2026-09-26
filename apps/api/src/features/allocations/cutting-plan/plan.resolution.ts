@@ -87,7 +87,7 @@ export function resolveCuttingPlan(
       issues.push({
         code: 'unknown_stock',
         path,
-        message: 'Stock item is absent from the availability snapshot.',
+        message: 'This stock item is not available for the plan.',
       });
     const assignments: ResolvedAssignment[] = [];
     for (const [itemIndex, item] of cut.items.entries()) {
@@ -96,7 +96,7 @@ export function resolveCuttingPlan(
         issues.push({
           code: 'unknown_requirement',
           path: `${path}.items.${itemIndex}`,
-          message: 'Requirement does not exist.',
+          message: 'This blind is not in the allocation.',
         });
         continue;
       }

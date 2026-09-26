@@ -37,7 +37,7 @@ it('shows the curated API message with readable field issues and a retry action'
     screen.getAllByRole('listitem').map((item) => item.textContent),
   ).toEqual([
     'Item 1 › width is required.',
-    'Plan › cut 1: Cut exceeds remaining length.',
+    'Cut 1: Cut exceeds remaining length.',
   ]);
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(retry).toHaveBeenCalledOnce();

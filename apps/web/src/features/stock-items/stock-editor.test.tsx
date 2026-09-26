@@ -33,9 +33,9 @@ it('shows rejected values beside their fields and clears one once it is edited',
   await user.type(width, '0');
   await user.type(screen.getByLabelText('Initial length (yd)'), '30');
   await user.click(screen.getByRole('button', { name: 'Save stock item' }));
-  expect(await screen.findByText('Location: Invalid.')).toBeInTheDocument();
+  expect(await screen.findByText('Location: Required.')).toBeInTheDocument();
   expect(width).toBeInvalid();
-  expect(width).toHaveAccessibleDescription('Too small.');
+  expect(width).toHaveAccessibleDescription('Must be greater than 0.');
   const notice = screen.getByRole('alert');
   expect(notice).toHaveTextContent('Some fields are missing or invalid.');
   expect(notice).not.toHaveTextContent(/width|location/i);

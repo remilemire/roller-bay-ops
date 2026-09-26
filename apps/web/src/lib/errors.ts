@@ -72,27 +72,32 @@ export function describeIssue(issue: ErrorIssue): string {
 }
 
 const INDEX = /^\d+$/;
+// Rows are named by position, or by ID in the plan validator's context.
+const ROW = /^(\d+|[0-9a-f]{8}-[0-9a-f-]{27})$/i;
+// Payload names that differ from what the screens call them.
+const TERMS: Record<string, string> = {
+  requirement: 'blind',
+  requirements: 'blinds',
+};
 
-/** `plan.cuts.0.items.1.widthMm` becomes `Plan › cut 1 › item 2 › width`. */
+/** `plan.cuts.0.items.1.widthMm` becomes `Cut 1 › item 2 › width`. */
 export function describeIssuePath(path: ErrorIssue['path']): string {
-  const segments = (typeof path === 'string' ? path.split('.') : (path ?? []))
-    .map(String)
-    // "context" names the validator's stock snapshot, not a form section.
-    .filter(
-      (segment, index) =>
-        segment !== '' && !(index === 0 && segment === 'context'),
-    );
+  const segments = pathSegments(path);
   const parts: string[] = [];
   for (let index = 0; index < segments.length; index++) {
     const segment = segments[index]!;
     const next = segments[index + 1];
-    if (INDEX.test(segment)) {
-      parts.push(ordinal(segment));
+    if (ROW.test(segment)) {
+      if (INDEX.test(segment)) parts.push(ordinal(segment));
       continue;
     }
     const label = words(segment);
-    if (next !== undefined && INDEX.test(next)) {
-      parts.push(`${singular(label)} ${ordinal(next)}`);
+    if (next !== undefined && ROW.test(next)) {
+      parts.push(
+        INDEX.test(next)
+          ? `${singular(label)} ${ordinal(next)}`
+          : singular(label),
+      );
       index++;
     } else parts.push(label);
   }
@@ -100,13 +105,30 @@ export function describeIssuePath(path: ErrorIssue['path']): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function pathSegments(path: ErrorIssue['path']): string[] {
+  const segments = (typeof path === 'string' ? path.split('.') : (path ?? []))
+    .map(String)
+    .filter((segment) => segment !== '');
+  // A leading "context" names the validator's stock snapshot and "data" a
+  // draft's payload, not form sections; "plan" adds nothing to its cuts.
+  let start = 0;
+  while (
+    start < segments.length - 1 &&
+    ['context', 'data', 'plan'].includes(segments[start]!)
+  )
+    start++;
+  return segments.slice(start);
+}
+
 const ordinal = (segment: string) => String(Number(segment) + 1);
-const words = (segment: string) =>
-  segment
+const words = (segment: string) => {
+  const label = segment
     .replace(/Mm2?$/, '')
-    .replace(/([a-z0-9])Id$/, '$1')
+    .replace(/([a-z0-9])Id(s?)$/, '$1$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase();
+  return TERMS[label] ?? label;
+};
 const singular = (label: string) =>
   label.length > 3 && label.endsWith('s') && !label.endsWith('ss')
     ? label.slice(0, -1)
@@ -120,12 +142,54 @@ function describePredicate(issue: ErrorIssue): string | null {
     return /received (null|undefined)$/.test(message)
       ? 'is required'
       : 'is invalid';
-  // A choice left unselected fails the payload's discriminator.
-  if (/^Invalid discriminator value/.test(message)) return 'is required';
+  // A choice left unselected fails the payload's discriminator, and an ID
+  // left unpicked fails its format: forms only send IDs chosen from a list.
+  if (/^Invalid (discriminator value|UUID)/.test(message)) return 'is required';
+  const bound = message.match(BOUND);
+  if (bound) return describeBound(issue, bound);
   if (/^Too small/.test(message)) return 'is too small';
   if (/^Too big/.test(message)) return 'is too large';
   if (/^Invalid number: must be a multiple of/.test(message))
     return 'has too many decimal places';
-  if (/^Invalid (input|UUID|string|ISO)/.test(message)) return 'is invalid';
+  if (/^Invalid (input|string|ISO)/.test(message)) return 'is invalid';
   return null;
+}
+
+// "Too small: expected string to have >=1 characters"
+const BOUND =
+  /^Too (small|big): expected (\w+) to (?:have|be) ([<>]=?)(-?[\d.]+)/;
+
+function describeBound(
+  issue: ErrorIssue,
+  [, size, origin, operator, value]: RegExpMatchArray,
+): string {
+  const limit = Number(value);
+  const small = size === 'small';
+  const inclusive = operator!.endsWith('=');
+  if (origin === 'string')
+    return small
+      ? limit <= 1
+        ? 'is required'
+        : `must be at least ${limit} characters`
+      : `must be ${inclusive ? limit : limit - 1} characters or fewer`;
+  if (origin === 'array')
+    return small
+      ? limit <= 1
+        ? 'needs at least one entry'
+        : `needs at least ${limit} entries`
+      : `can have at most ${inclusive ? limit : limit - 1} entries`;
+  if (origin === 'number') {
+    if (small && limit === 0)
+      return inclusive ? 'cannot be negative' : 'must be greater than 0';
+    // Measurements are sent in millimetres, so a limit would not read in
+    // the units the operator typed.
+    const field = pathSegments(issue.path).findLast((s) => !ROW.test(s));
+    if (field && /Mm2?$/.test(field))
+      return small ? 'is too small' : 'is too large';
+    const shown = limit.toLocaleString('en-US');
+    return small
+      ? `must be ${inclusive ? 'at least' : 'greater than'} ${shown}`
+      : `must be ${inclusive ? 'at most' : 'less than'} ${shown}`;
+  }
+  return small ? 'is too small' : 'is too large';
 }

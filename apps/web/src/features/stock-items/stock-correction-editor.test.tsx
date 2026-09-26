@@ -144,7 +144,7 @@ it('shows a rejected correction value beside its field instead of listing it', a
   await actor.type(screen.getByLabelText('Reason for correction'), 'Typo');
   await actor.click(screen.getByRole('button', { name: 'Review changes' }));
   expect(width).toBeInvalid();
-  expect(width).toHaveAccessibleDescription('Too small.');
+  expect(width).toHaveAccessibleDescription('Must be greater than 0.');
   const notice = screen.getByRole('alert');
   expect(notice).toHaveTextContent('Check the correction fields.');
   expect(notice).not.toHaveTextContent(/width/i);

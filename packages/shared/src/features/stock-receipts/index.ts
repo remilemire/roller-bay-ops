@@ -25,7 +25,10 @@ export const purchaseOrderNumberSchema = z
 export const createStockReceiptSchema = z
   .strictObject({
     purchaseOrderNumber: purchaseOrderNumberSchema,
-    items: z.array(stockReceiptItemInputSchema).min(1).max(100),
+    items: z
+      .array(stockReceiptItemInputSchema)
+      .min(1, 'Add at least one line.')
+      .max(100),
   })
   .refine(
     (value) =>

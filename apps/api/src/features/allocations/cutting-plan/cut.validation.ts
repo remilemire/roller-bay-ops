@@ -37,7 +37,7 @@ function validateCut(cut: ResolvedCut, trim: bigint): CuttingPlanIssue[] {
     issues.push({
       code: 'width_capacity',
       path,
-      message: 'Widths plus the two outside-edge trims exceed stock width.',
+      message: 'The blinds and both edge trims are wider than this stock.',
     });
   return issues;
 }

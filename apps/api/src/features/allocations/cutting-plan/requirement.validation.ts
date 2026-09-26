@@ -17,14 +17,15 @@ function validateAssignments(cut: ResolvedCut): CuttingPlanIssue[] {
       issues.push({
         code: 'duplicate_requirement',
         path,
-        message: 'Combine repeated requirements within a cut using quantity.',
+        message:
+          'This blind is already in the cut; raise its quantity instead.',
       });
     seen.add(assignment.requirement.id);
     if (assignment.requirement.fabricColorId !== cut.stock.fabricColorId)
       issues.push({
         code: 'color_mismatch',
         path,
-        message: 'Stock and requirement colors must match.',
+        message: "The blind's color does not match this stock.",
       });
   }
   return issues;
@@ -45,7 +46,7 @@ function validateQuantities(plan: ResolvedCuttingPlan): CuttingPlanIssue[] {
     .map((requirement) => ({
       code: 'quantity_mismatch',
       path: `context.requirements.${requirement.id}`,
-      message: 'Planned quantity must exactly match requested quantity.',
+      message: 'The plan cuts a different quantity of this blind.',
     }));
 }
 

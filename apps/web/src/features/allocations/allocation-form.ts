@@ -56,9 +56,9 @@ const FIELD_PATHS: [
       return cut < 0 ? null : `cuts.${cut}.stockItemId`;
     },
   ],
-  // Whole-cut problems (width, derived length) are fixed by changing its stock.
+  // Whole-cut problems (width, derived length, no blinds) show at its stock.
   [
-    /^plan\.cuts\.(\d+)(\.stockItemId|\.lengthMm)?$/,
+    /^plan\.cuts\.(\d+)(\.stockItemId|\.lengthMm|\.items)?$/,
     ([, cut]) => `cuts.${cut}.stockItemId`,
   ],
   [

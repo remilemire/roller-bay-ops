@@ -14,7 +14,7 @@ export const completionEmployeeSchema = z.object({
 // independent of the order employees were chosen in.
 const employeeIdsSchema = z
   .array(z.uuid())
-  .min(1)
+  .min(1, 'Select at least one.')
   .max(20)
   .refine((ids) => new Set(ids).size === ids.length, 'List each employee once.')
   .transform((ids) => [...ids].sort());

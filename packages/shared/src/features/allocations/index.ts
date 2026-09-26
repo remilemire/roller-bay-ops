@@ -54,10 +54,15 @@ export const cuttingContextSchema = z.strictObject({
 // quantities represent adjacent copies. Rotation and nesting are not supported.
 const cutAssignments = z
   .array(z.strictObject({ requirementId: id, quantity }))
-  .min(1)
+  .min(1, 'Add at least one blind.')
   .max(1000);
 const planCuts = <T extends z.ZodType>(cut: T) =>
-  z.strictObject({ cuts: z.array(cut).min(1).max(10000) });
+  z.strictObject({
+    cuts: z
+      .array(cut)
+      .min(1, 'Add at least one, or generate a plan.')
+      .max(10000),
+  });
 export const cuttingPlanSchema = planCuts(
   z.strictObject({
     stockItemId: id,
@@ -138,7 +143,7 @@ export const requirementInput = <
 });
 const requirementInputs = z
   .array(allocationRequirementInputSchema)
-  .min(1)
+  .min(1, 'Add at least one.')
   .max(1000)
   .refine(
     (items) => new Set(items.map((item) => item.id)).size === items.length,

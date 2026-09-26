@@ -160,7 +160,7 @@ it('shows rejected values beside the color code and thickness fields', async () 
     'Use letters, digits, and hyphens.',
   );
   const thickness = dialog.getByLabelText(/^Thickness \(mm\)/);
-  expect(thickness).toHaveAccessibleDescription('Too small.');
+  expect(thickness).toHaveAccessibleDescription('Must be greater than 0.');
   await user.type(thickness, '.5');
   expect(thickness).not.toBeInvalid();
 });

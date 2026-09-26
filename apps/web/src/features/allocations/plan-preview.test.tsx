@@ -28,7 +28,7 @@ it('labels plan issues like other errors and keeps inline issues beside their fi
     'Check the highlighted fields.',
   );
   expect(screen.getByRole('listitem')).toHaveTextContent(
-    'Plan › cut 1: Cut exceeds remaining length.',
+    'Cut 1: Cut exceeds remaining length.',
   );
   expect(screen.getByRole('alert')).not.toHaveTextContent('plan.cuts');
   expect(screen.getByRole('alert')).not.toHaveTextContent('Blind exceeds');

@@ -312,6 +312,27 @@ it('opens on the order it was reached from, with nothing to save yet', async () 
   expect(createDraft).not.toHaveBeenCalled();
 });
 
+it('names what an allocation is missing when it is confirmed', async () => {
+  const user = userEvent.setup();
+  show(<AllocationEditor workOrderId={ids.order} />);
+  await ready('Confirm allocation');
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  const notice = screen.getByRole('alert');
+  expect(notice).toHaveTextContent('Blinds: Add at least one.');
+  expect(notice).toHaveTextContent(
+    'Cuts: Add at least one, or generate a plan.',
+  );
+  expect(screen.queryByRole('dialog')).toBeNull();
+  // A cut without blinds is named at its stock.
+  await user.click(screen.getAllByRole('button', { name: 'Add cut' })[0]!);
+  await user.click(screen.getByLabelText('Stock item · cut 1'));
+  await user.paste(ids.stock);
+  await user.click(screen.getByRole('button', { name: 'Confirm allocation' }));
+  expect(
+    screen.getByLabelText(/^Stock item · cut 1/),
+  ).toHaveAccessibleDescription('Add at least one blind.');
+});
+
 it("saves the blinds with the draft, and refuses to confirm them until they match the order's count", async () => {
   const user = userEvent.setup();
   show(<AllocationEditor initial={draft} />);

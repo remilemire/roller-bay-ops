@@ -43,7 +43,7 @@ Unknown routes under `/api` return a 404 envelope; the global prefix keeps its l
 
 ## Frontend
 
-`apps/web/src/lib/api.ts` parses error bodies with the shared schema; `ApiError` carries `status`, `message`, optional `retryAfterMs`, and `issues`. `apps/web/src/lib/errors.ts` turns any error into a message plus readable detail lines (`plan.cuts.0.items.1.widthMm` becomes `Plan › cut 1 › item 2 › width`), and `ErrorNotice` renders them. Text from any other exception is replaced by generic copy.
+`apps/web/src/lib/api.ts` parses error bodies with the shared schema; `ApiError` carries `status`, `message`, optional `retryAfterMs`, and `issues`. `apps/web/src/lib/errors.ts` turns any error into a message plus readable detail lines (`plan.cuts.0.items.1.widthMm` becomes `Cut 1 › item 2 › width`, and `requirements` becomes `Blinds`), and `ErrorNotice` renders them. Zod's default bound messages are reworded with their limit, except for millimetre fields, whose limits would not read in the operator's units. Where a form can leave a collection empty, the shared schema gives the bound its own message, written to follow the label (`Blinds: Add at least one.`). Text from any other exception is replaced by generic copy.
 
 ## Tests
 

@@ -16,8 +16,17 @@ describe('issue labels', () => {
   it('turns Zod and cutting-plan paths into readable labels', () => {
     expect(describeIssuePath(['items', 0, 'widthMm'])).toBe('Item 1 › width');
     expect(describeIssuePath('plan.cuts.0.items.1.requirementId')).toBe(
-      'Plan › cut 1 › item 2 › requirement',
+      'Cut 1 › item 2 › blind',
     );
+    expect(describeIssuePath(['data', 'requirements', 1, 'lengthMm'])).toBe(
+      'Blind 2 › length',
+    );
+    expect(
+      describeIssuePath(
+        'context.requirements.77777777-7777-4777-8777-777777777777',
+      ),
+    ).toBe('Blind');
+    expect(describeIssuePath('plan')).toBe('Plan');
     expect(describeIssuePath('context.stockItems.2.remainingLengthMm')).toBe(
       'Stock item 3 › remaining length',
     );
@@ -40,7 +49,37 @@ describe('issue labels', () => {
         path: ['quantity'],
         message: 'Too small: expected number to be >=1',
       }),
-    ).toBe('Quantity is too small.');
+    ).toBe('Quantity must be at least 1.');
+    expect(
+      describeIssue({
+        path: ['quantity'],
+        message: 'Too big: expected number to be <=10000',
+      }),
+    ).toBe('Quantity must be at most 10,000.');
+    expect(
+      describeIssue({
+        path: ['widthMm'],
+        message: 'Too small: expected number to be >0',
+      }),
+    ).toBe('Width must be greater than 0.');
+    expect(
+      describeIssue({
+        path: ['reason'],
+        message: 'Too small: expected string to have >=1 characters',
+      }),
+    ).toBe('Reason is required.');
+    expect(
+      describeIssue({
+        path: ['note'],
+        message: 'Too big: expected string to have <=1000 characters',
+      }),
+    ).toBe('Note must be 1000 characters or fewer.');
+    expect(
+      describeIssue({
+        path: ['items'],
+        message: 'Too small: expected array to have >=1 items',
+      }),
+    ).toBe('Items needs at least one entry.');
     expect(
       describeIssue({
         path: ['lengthMm'],
@@ -55,13 +94,16 @@ describe('issue labels', () => {
     ).toBe('Width has too many decimal places.');
     expect(
       describeIssue({ path: ['fabricColorId'], message: 'Invalid UUID' }),
-    ).toBe('Fabric color is invalid.');
+    ).toBe('Fabric color is required.');
     expect(
       describeIssue({
         path: ['items', 0],
         message: 'Remnants require an explicit length.',
       }),
     ).toBe('Item 1: Remnants require an explicit length.');
+    expect(
+      describeIssue({ path: ['requirements'], message: 'Add at least one.' }),
+    ).toBe('Blinds: Add at least one.');
     expect(describeIssue({ message: 'Invalid input' })).toBe(
       'This value is invalid.',
     );
@@ -101,7 +143,7 @@ describe('describeError', () => {
       ),
     ).toEqual({
       message: 'Stock availability changed or is insufficient.',
-      details: ['Plan › cut 1: Cut exceeds remaining length.'],
+      details: ['Cut 1: Cut exceeds remaining length.'],
     });
     expect(describeError(new ApiError(503, 'Temporarily unavailable'))).toEqual(
       { message: 'Temporarily unavailable', details: [] },
@@ -125,7 +167,7 @@ describe('describeError', () => {
     }));
     const lines = describeIssues([...many, ...many]);
     expect(lines).toHaveLength(9);
-    expect(lines[0]).toBe('Item 1 › width is too small.');
+    expect(lines[0]).toBe('Item 1 › width must be greater than 0.');
     expect(lines.at(-1)).toBe('…and 4 more.');
   });
   it('leaves issues shown beside their fields out of the notice', () => {
@@ -140,7 +182,7 @@ describe('describeError', () => {
       describeError(error, (issue) => issuePath(issue) === 'orderNumber'),
     ).toEqual({
       message: 'Validation failed',
-      details: ['Requirements is too small.'],
+      details: ['Blinds needs at least one entry.'],
     });
   });
   it('drops the label from field-level copy', () => {
