@@ -21,6 +21,7 @@ export function Lookup({
   selectedLabel,
   error,
   create,
+  optional = false,
 }: {
   label: string;
   value: string;
@@ -33,6 +34,7 @@ export function Lookup({
   ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
   selectedLabel?: string;
   error?: string;
+  optional?: boolean;
   /**
    * An extra last option that creates what the search names, offered once
    * the results for that search are in and `label` returns one for them.
@@ -123,9 +125,12 @@ export function Lookup({
   const labelId = `${id}-label`;
   return (
     <div className="field">
-      <label id={labelId} htmlFor={id}>
-        {label}
-      </label>
+      <span className="field-label">
+        <label id={labelId} htmlFor={id}>
+          {label}
+        </label>
+        {optional && <span className="field-optional">Optional</span>}
+      </span>
       <div className="combobox">
         <input
           ref={input}

@@ -149,6 +149,7 @@ export function StockCorrectionEditor({
                     onChange={setDepth}
                     error={errors.depth}
                     type="number"
+                    optional
                   />
                   <TextField
                     label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}

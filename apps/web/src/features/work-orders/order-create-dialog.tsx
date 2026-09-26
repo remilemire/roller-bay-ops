@@ -127,6 +127,7 @@ export function OrderCreateForm({
           label="Note"
           value={fields.note}
           onChange={(value) => set('note', value)}
+          optional
           maxLength={1000}
           error={issues.note}
         />

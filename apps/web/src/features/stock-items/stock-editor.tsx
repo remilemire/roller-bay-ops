@@ -161,6 +161,7 @@ export function StockEditor({ close }: { close: () => void }) {
                   onChange={(v) => set('depth', v)}
                   error={errors.depth?.message}
                   type="number"
+                  optional
                 />
               </>
             )}

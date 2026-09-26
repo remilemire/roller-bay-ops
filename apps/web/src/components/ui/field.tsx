@@ -10,6 +10,7 @@ export function Field({
   helpId,
   error,
   errorId,
+  optional = false,
 }: {
   label: string;
   children: ReactNode;
@@ -19,6 +20,8 @@ export function Field({
   helpId?: string;
   error?: string;
   errorId?: string;
+  /** Marks a field that may be left blank; required ones stay unmarked. */
+  optional?: boolean;
 }) {
   // A wrapping label would also name the control after its tooltip button and
   // error text, so fields that know their control's id label it explicitly.
@@ -30,6 +33,7 @@ export function Field({
         <span className="field-label">
           <label htmlFor={htmlFor}>{label}</label>
           {help && <InfoTip text={help} id={helpId} />}
+          {optional && <span className="field-optional">Optional</span>}
         </span>
         {children}
         {/* The error takes the hint's line, so a check that runs on blur does
@@ -64,12 +68,14 @@ export function TextField({
   inputMode,
   error,
   onBlur,
+  optional = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  optional?: boolean;
   hint?: string;
   help?: string;
   disabled?: boolean;
@@ -90,6 +96,7 @@ export function TextField({
       helpId={helpId}
       error={error}
       errorId={errorId}
+      optional={optional}
     >
       <Input
         id={id}

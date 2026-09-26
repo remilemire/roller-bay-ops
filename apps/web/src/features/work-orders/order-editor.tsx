@@ -104,6 +104,7 @@ export function OrderEditor({
             form.clearErrors('note');
           }}
           error={errors.note?.message}
+          optional
           maxLength={1000}
         />
         {mutation.error && (

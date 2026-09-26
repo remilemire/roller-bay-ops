@@ -29,3 +29,9 @@ it('labels the input and describes it with the tooltip text', async () => {
     screen.queryByRole('tooltip', { hidden: true }),
   ).not.toBeInTheDocument();
 });
+
+it('marks an optional field without changing its accessible name', () => {
+  render(<TextField label="Note" value="" onChange={() => {}} optional />);
+  expect(screen.getByLabelText('Note')).not.toBeRequired();
+  expect(screen.getByText('Optional')).toBeInTheDocument();
+});

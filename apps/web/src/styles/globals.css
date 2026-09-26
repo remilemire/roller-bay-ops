@@ -2206,6 +2206,11 @@ td strong {
   align-items: center;
   gap: 4px;
 }
+.field-optional {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--muted);
+}
 .info-tip {
   min-width: 24px;
   min-height: 24px;

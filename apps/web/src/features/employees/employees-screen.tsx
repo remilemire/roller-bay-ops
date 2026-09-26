@@ -214,7 +214,8 @@ function EmployeeEditor({
           maxLength={12}
         />
         <Lookup
-          label="Linked application account (optional)"
+          label="Linked application account"
+          optional
           value={linkedUserId}
           onChange={(value) => {
             setLinkedUserId(value);
