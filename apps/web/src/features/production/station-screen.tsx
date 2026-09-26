@@ -14,6 +14,7 @@ import {
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useListParams } from '@/lib/use-list-params';
+import { useRememberedParam } from '@/lib/use-remembered-param';
 import { calendarDateLabel, count, dateTimeLabel } from '@/lib/format';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -35,18 +36,18 @@ import { CompletionAction } from './completion-action';
 export function StationsScreen() {
   const user = useCurrentUser();
   const canManage = useCanManage();
-  const params = useListParams();
   const allowed =
     user.role === 'production' ? user.stations : stationSchema.options;
-  const parsed = stationSchema.safeParse(params.get('station'));
   // Completions are credited to the open station, so accounts with a choice
-  // pick one explicitly; an unassigned or unknown station asks again.
-  const station =
-    parsed.success && allowed.includes(parsed.data)
-      ? parsed.data
-      : allowed.length === 1
-        ? allowed[0]
-        : undefined;
+  // pick one explicitly, and this browser reopens the last one picked; an
+  // unassigned or unknown station asks again. An account with one station
+  // has nothing to pick or remember.
+  const remembered = useRememberedParam(
+    'station',
+    'roller-bay-station',
+    allowed.length > 1 ? allowed : [],
+  );
+  const station = allowed.length === 1 ? allowed[0] : remembered.value;
   const manage = canManage && (
     <>
       <Button asChild variant="outline">
@@ -64,6 +65,7 @@ export function StationsScreen() {
         <p>An admin must assign this account to a station in Users.</p>
       </>
     );
+  if (station === null) return null;
   if (!station)
     return (
       <div className="station-workspace">
@@ -82,7 +84,9 @@ export function StationsScreen() {
       <PageHeading title={`${stationLabels[station]} station`}>
         {allowed.length > 1 && (
           <Button asChild variant="outline">
-            <Link href="/stations">Change station</Link>
+            <Link href="/stations" onClick={remembered.forget}>
+              Change station
+            </Link>
           </Button>
         )}
         {manage}

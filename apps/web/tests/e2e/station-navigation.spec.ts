@@ -126,6 +126,21 @@ test('changing stations returns to the station choices and resets attribution an
   expect(state.productionRequests[0]!.path).toContain(
     '/production/assembly/orders/',
   );
+
+  // The browser reopens the last station, until the station is changed.
+  await page.goto('/stations');
+  await expect(
+    page.getByRole('heading', { name: 'Assembly station' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/stations\?station=assembly$/);
+  await page.getByRole('link', { name: 'Change station', exact: true }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Choose station' }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('navigation', { name: 'Choose station' }),
+  ).toBeVisible();
 });
 
 test('station layout uses the same content width as other workspace pages', async ({
