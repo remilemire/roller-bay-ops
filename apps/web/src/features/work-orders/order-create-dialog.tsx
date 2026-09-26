@@ -28,16 +28,20 @@ type Fields = {
   orderNumber: string;
   quantity: string;
   note: string;
+  backOrdered: boolean;
   purchaseOrders: string;
   shipDate: string;
 };
-const FIELDS: Record<string, keyof Fields> = {
-  orderNumber: 'orderNumber',
-  quantity: 'quantity',
-  note: 'note',
-  shipDate: 'shipDate',
-};
-const fieldName = (issue: ErrorIssue): keyof Fields | null =>
+const FIELDS: Record<string, 'orderNumber' | 'quantity' | 'note' | 'shipDate'> =
+  {
+    orderNumber: 'orderNumber',
+    quantity: 'quantity',
+    note: 'note',
+    shipDate: 'shipDate',
+  };
+const fieldName = (
+  issue: ErrorIssue,
+): (typeof FIELDS)[string] | 'purchaseOrders' | null =>
   isPurchaseOrderIssue(issue)
     ? 'purchaseOrders'
     : (FIELDS[issuePath(issue)] ?? null);
@@ -64,6 +68,7 @@ export function OrderCreateForm({
     orderNumber,
     quantity: '',
     note: '',
+    backOrdered: false,
     purchaseOrders: '',
     shipDate: '',
   });
@@ -76,11 +81,13 @@ export function OrderCreateForm({
             orderNumber: input.orderNumber,
             quantity: Number(input.quantity),
             note: canManage ? input.note : null,
+            // Numbers left blank are refused beside their field.
             backOrder:
-              canManage && input.purchaseOrders.trim()
+              canManage && input.backOrdered
                 ? backOrderOf(input.purchaseOrders)
                 : null,
-            shipDate: (canManage && input.shipDate) || null,
+            shipDate:
+              (canManage && input.backOrdered && input.shipDate) || null,
           }),
         };
       } catch (error) {
@@ -108,7 +115,7 @@ export function OrderCreateForm({
       onCreated(result.created);
     },
   });
-  const set = (field: keyof Fields, value: string) => {
+  const set = <K extends keyof Fields>(field: K, value: Fields[K]) => {
     setFields((current) => ({ ...current, [field]: value }));
     create.reset();
   };
@@ -159,6 +166,16 @@ export function OrderCreateForm({
       {/* Fabric on its way lets a new order be scheduled before it is
           allocated. */}
       {canManage && (
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={fields.backOrdered}
+            onChange={(event) => set('backOrdered', event.target.checked)}
+          />
+          Back order
+        </label>
+      )}
+      {canManage && fields.backOrdered && (
         <div className="form-grid">
           <TextField
             label="PO numbers"
@@ -166,9 +183,9 @@ export function OrderCreateForm({
             onChange={(value) =>
               set('purchaseOrders', purchaseOrderInput(value))
             }
-            optional
+            required
             inputMode="numeric"
-            hint="For a back order. Separate several with commas."
+            hint="Separate several with commas."
             error={issues.purchaseOrders}
           />
           <DateField

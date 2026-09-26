@@ -205,7 +205,7 @@ it('leaves the note to admins when adding an order', async () => {
   show(<OrderCreateForm onCreated={vi.fn()} />);
   const user = userEvent.setup();
   expect(screen.queryByLabelText('Note')).toBeNull();
-  expect(screen.queryByLabelText('Supplier PO number')).toBeNull();
+  expect(screen.queryByLabelText('Back order')).toBeNull();
   await user.type(screen.getByLabelText(/Order number/), '104950');
   await user.type(screen.getByLabelText(/Blinds/), '3');
   await user.click(screen.getByRole('button', { name: 'Add order' }));
@@ -566,6 +566,11 @@ it('adds an order with a back order and ship date for admins', async () => {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(/Order number/), '104950');
   await user.type(screen.getByLabelText(/Blinds/), '3');
+  // The back order's fields show once it is chosen.
+  expect(screen.queryByLabelText('PO numbers')).toBeNull();
+  expect(screen.queryByLabelText('Ship date')).toBeNull();
+  await user.click(screen.getByLabelText('Back order'));
+  expect(screen.getByLabelText('PO numbers')).toBeRequired();
   await user.type(screen.getByLabelText('PO numbers'), '43142,43150');
   await user.click(screen.getByLabelText('Ship date'));
   await user.click(screen.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
