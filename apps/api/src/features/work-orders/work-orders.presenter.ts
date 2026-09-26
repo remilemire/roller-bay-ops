@@ -5,18 +5,10 @@ import {
 } from '@roller-bay/shared/work-orders';
 import type { WorkOrderRecord } from './work-orders.repository.js';
 
-export const backOrderOf = (
-  row: Pick<
-    WorkOrderRecord,
-    'backOrderPurchaseOrderNumber' | 'backOrderArrivalDate'
-  >,
-): BackOrder | null =>
-  row.backOrderPurchaseOrderNumber && row.backOrderArrivalDate
-    ? {
-        purchaseOrderNumber: row.backOrderPurchaseOrderNumber,
-        estimatedArrivalDate: row.backOrderArrivalDate,
-      }
-    : null;
+export const backOrderOf = ({
+  purchaseOrderNumbers,
+}: Pick<WorkOrderRecord, 'purchaseOrderNumbers'>): BackOrder | null =>
+  purchaseOrderNumbers.length ? { purchaseOrderNumbers } : null;
 
 // The status is the furthest step reached; it is never stored. A promised
 // date survives fabric release, so `scheduled` can have no current allocation.

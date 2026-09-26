@@ -508,10 +508,7 @@ it('reschedules an order from its row with the calendar already open', async () 
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
-const backOrder = {
-  purchaseOrderNumber: '43142',
-  estimatedArrivalDate: '2026-09-30',
-};
+const backOrder = { purchaseOrderNumbers: ['43142', '43150'] };
 const unallocated: WorkOrder = {
   ...order,
   allocatedAt: null,
@@ -521,42 +518,19 @@ const unallocated: WorkOrder = {
   backOrder: null,
 };
 
-it('schedules an order without fabric as a back order, no earlier than it is due', async () => {
-  vi.mocked(updateOrder)
-    .mockRejectedValueOnce(
-      new ApiError(
-        409,
-        'The ship date is before the fabric is due to arrive.',
-        undefined,
-        [
-          {
-            code: 'ship_date_before_arrival',
-            path: ['shipDate'],
-            message: "Must be on or after the fabric's estimated arrival.",
-          },
-        ],
-      ),
-    )
-    .mockResolvedValueOnce(order);
+it('schedules an order without fabric as a back order on its purchase orders', async () => {
+  vi.mocked(updateOrder).mockResolvedValue(order);
   const close = vi.fn();
   show(<OrderReschedule order={unallocated} close={close} />);
   const user = userEvent.setup();
   const dialog = within(
     screen.getByRole('dialog', { name: 'Schedule order 104801' }),
   );
-  await user.type(dialog.getByLabelText('Supplier PO number'), '4x3142');
-  await user.click(dialog.getByLabelText('Fabric due'));
-  await user.click(dialog.getByRole('button', { name: 'Wed, Sep 30, 2026' }));
-  const shipDate = dialog.getByLabelText('Ship date');
-  await user.click(shipDate);
-  await user.click(dialog.getByRole('button', { name: 'Tue, Sep 29, 2026' }));
-  await user.click(dialog.getByRole('button', { name: 'Schedule' }));
-  await waitFor(() =>
-    expect(shipDate).toHaveAccessibleDescription(
-      "Must be on or after the fabric's estimated arrival.",
-    ),
-  );
-  await user.click(shipDate);
+  const numbers = dialog.getByLabelText('PO numbers');
+  expect(numbers).toBeRequired();
+  await user.type(numbers, '43142, x43150');
+  expect(numbers).toHaveValue('43142, 43150');
+  await user.click(dialog.getByLabelText('Ship date'));
   await user.click(dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
   await user.click(dialog.getByRole('button', { name: 'Schedule' }));
   await waitFor(() =>
@@ -569,7 +543,7 @@ it('schedules an order without fabric as a back order, no earlier than it is due
   await waitFor(() => expect(close).toHaveBeenCalled());
 });
 
-it('asks for both parts of a back order before sending it', async () => {
+it('shows a refused purchase order beside the numbers', async () => {
   // As the real request does, the contract refuses before anything is sent.
   vi.mocked(updateOrder).mockImplementation(async (_, body) => {
     updateWorkOrderSchema.parse(body);
@@ -578,12 +552,11 @@ it('asks for both parts of a back order before sending it', async () => {
   show(<OrderReschedule order={unallocated} close={vi.fn()} />);
   const user = userEvent.setup();
   const dialog = within(screen.getByRole('dialog'));
-  await user.type(dialog.getByLabelText('Supplier PO number'), '43142');
+  const numbers = dialog.getByLabelText('PO numbers');
+  await user.type(numbers, '43142 4314');
   await user.click(dialog.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
-    expect(dialog.getByLabelText('Fabric due')).toHaveAccessibleDescription(
-      'Required.',
-    ),
+    expect(numbers).toHaveAccessibleDescription('Must be 5 digits.'),
   );
 });
 
@@ -593,9 +566,7 @@ it('adds an order with a back order and ship date for admins', async () => {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText(/Order number/), '104950');
   await user.type(screen.getByLabelText(/Blinds/), '3');
-  await user.type(screen.getByLabelText('Supplier PO number'), '43142');
-  await user.click(screen.getByLabelText('Fabric due'));
-  await user.click(screen.getByRole('button', { name: 'Wed, Sep 30, 2026' }));
+  await user.type(screen.getByLabelText('PO numbers'), '43142,43150');
   await user.click(screen.getByLabelText('Ship date'));
   await user.click(screen.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
   await user.click(screen.getByRole('button', { name: 'Add order' }));
@@ -608,15 +579,13 @@ it('adds an order with a back order and ship date for admins', async () => {
   });
 });
 
-it("names a back order's fabric on the order until it is allocated", () => {
+it("names a back order's purchase orders on the order until it is allocated", () => {
   const { rerender } = render(
     <AllocationWarning
       order={{ ...unallocated, backOrder, shipDate: '2026-10-02' }}
     />,
   );
-  expect(
-    screen.getByText('Back order · PO 43142 · fabric due Sep 30'),
-  ).toBeInTheDocument();
+  expect(screen.getByText('Back order · PO 43142, 43150')).toBeInTheDocument();
   rerender(
     <AllocationWarning order={{ ...unallocated, shipDate: '2026-10-02' }} />,
   );

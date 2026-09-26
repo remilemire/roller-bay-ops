@@ -18,8 +18,7 @@ test('work order status is the furthest step reached', () => {
     id: randomUUID(),
     orderNumber: '104801',
     shipDate: null,
-    backOrderPurchaseOrderNumber: null,
-    backOrderArrivalDate: null,
+    purchaseOrderNumbers: [],
     quantity: 12,
     note: null,
     createdAt: at,
@@ -52,15 +51,13 @@ test('work order status is the furthest step reached', () => {
   // A back-ordered order is scheduled before any fabric is allocated.
   const backOrdered = {
     ...row,
-    backOrderPurchaseOrderNumber: '43142',
-    backOrderArrivalDate: '2026-09-30',
+    purchaseOrderNumbers: ['43142', '43150'],
     shipDate: '2026-10-02',
     scheduledAt: at,
   };
   assert.equal(presentWorkOrder(backOrdered).status, 'scheduled');
   assert.deepEqual(presentWorkOrder(backOrdered).backOrder, {
-    purchaseOrderNumber: '43142',
-    estimatedArrivalDate: '2026-09-30',
+    purchaseOrderNumbers: ['43142', '43150'],
   });
   assert.deepEqual(presentWorkOrder(scheduled), {
     id: row.id,

@@ -185,37 +185,31 @@ test('order cancellation requests require reviewed revisions, a reason and an ex
   );
 });
 
-test('a back order names a five-digit supplier PO and an arrival that the ship date follows', () => {
+test('a back order lists one or more five-digit supplier purchase orders', () => {
   const input = { orderNumber: '104801', quantity: 12 };
-  const backOrder = {
-    purchaseOrderNumber: ' 43142 ',
-    estimatedArrivalDate: '2026-10-03',
-  };
   const create = (extra: object) =>
     createWorkOrderSchema.safeParse({ ...input, ...extra });
-  // Fabric may arrive on any day; the order still ships on a weekday.
+  const backOrder = { purchaseOrderNumbers: [' 43142 ', '43150'] };
   assert.deepEqual(create({ backOrder, shipDate: '2026-10-05' }).data, {
     ...input,
     note: null,
-    backOrder: {
-      purchaseOrderNumber: '43142',
-      estimatedArrivalDate: '2026-10-03',
-    },
+    backOrder: { purchaseOrderNumbers: ['43142', '43150'] },
     shipDate: '2026-10-05',
   });
-  assert.equal(create({ backOrder }).success, true);
-  const early = create({ backOrder, shipDate: '2026-10-02' });
+  // A new order has no allocation, so only a back order can date it.
   assert.deepEqual(
-    early.error!.issues.map(({ path, message }) => [path.join('.'), message]),
-    [['shipDate', "Must be on or after the fabric's estimated arrival."]],
+    create({ shipDate: '2026-10-05' }).error!.issues.map((i) => i.path),
+    [['shipDate']],
   );
-  for (const partial of [
-    { purchaseOrderNumber: '43142' },
-    { estimatedArrivalDate: '2026-10-03' },
-    { ...backOrder, purchaseOrderNumber: '4314' },
-    { ...backOrder, estimatedArrivalDate: '10/03/2026' },
-  ])
-    assert.equal(create({ backOrder: partial }).success, false);
+  for (const [purchaseOrderNumbers, message] of [
+    [[], 'Add at least one.'],
+    [['43142', '43142'], 'List each purchase order once.'],
+    [['4314'], 'Must be 5 digits.'],
+  ] as const)
+    assert.equal(
+      create({ backOrder: { purchaseOrderNumbers } }).error!.issues[0]!.message,
+      message,
+    );
   // On its own it is a change, and null clears it.
   for (const value of [backOrder, null])
     assert.equal(

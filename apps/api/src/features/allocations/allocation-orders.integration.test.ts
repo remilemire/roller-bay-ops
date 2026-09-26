@@ -462,9 +462,13 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       // Back-ordering is the work-order suite's subject; this order only
       // needs to be scheduled on one.
       await pool.query(
-        `UPDATE work_orders SET back_order_purchase_order_number='43142',
-           back_order_arrival_date='2026-10-05', ship_date='2026-10-09',
-           scheduled_at=now() WHERE id=$1`,
+        `UPDATE work_orders SET ship_date='2026-10-09', scheduled_at=now()
+           WHERE id=$1`,
+        [body.workOrderId],
+      );
+      await pool.query(
+        `INSERT INTO work_order_purchase_orders (work_order_id, purchase_order_number)
+           VALUES ($1, '43142')`,
         [body.workOrderId],
       );
       await create(body);
@@ -473,10 +477,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       ).body;
       assert.ok(order.allocatedAt);
       assert.equal(order.shipDate, '2026-10-09');
-      assert.deepEqual(order.backOrder, {
-        purchaseOrderNumber: '43142',
-        estimatedArrivalDate: '2026-10-05',
-      });
+      assert.deepEqual(order.backOrder, { purchaseOrderNumbers: ['43142'] });
     },
   );
 });

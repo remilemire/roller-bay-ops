@@ -17,34 +17,30 @@ import { useCanManage } from '@/features/auth';
 import { ApiError } from '@/lib/api';
 import { issuePath } from '@/lib/errors';
 import { fieldIssues } from '@/lib/field-issues';
+import {
+  backOrderOf,
+  isPurchaseOrderIssue,
+  purchaseOrderInput,
+} from './back-order';
 import { createOrder, orderList, workOrdersKey } from './work-orders.api';
 
 type Fields = {
   orderNumber: string;
   quantity: string;
   note: string;
-  purchaseOrderNumber: string;
-  estimatedArrivalDate: string;
+  purchaseOrders: string;
   shipDate: string;
 };
 const FIELDS: Record<string, keyof Fields> = {
   orderNumber: 'orderNumber',
   quantity: 'quantity',
   note: 'note',
-  backOrder: 'purchaseOrderNumber',
-  'backOrder.purchaseOrderNumber': 'purchaseOrderNumber',
-  'backOrder.estimatedArrivalDate': 'estimatedArrivalDate',
   shipDate: 'shipDate',
 };
-const fieldName = (issue: ErrorIssue) => FIELDS[issuePath(issue)] ?? null;
-/** Blank parts are left out, so the contract calls them required. */
-const backOrderOf = ({ purchaseOrderNumber, estimatedArrivalDate }: Fields) =>
-  purchaseOrderNumber || estimatedArrivalDate
-    ? {
-        purchaseOrderNumber: purchaseOrderNumber || undefined,
-        estimatedArrivalDate: estimatedArrivalDate || undefined,
-      }
-    : null;
+const fieldName = (issue: ErrorIssue): keyof Fields | null =>
+  isPurchaseOrderIssue(issue)
+    ? 'purchaseOrders'
+    : (FIELDS[issuePath(issue)] ?? null);
 
 /**
  * Adds an order: its number and how many blinds it has, sent as a request of
@@ -68,8 +64,7 @@ export function OrderCreateForm({
     orderNumber,
     quantity: '',
     note: '',
-    purchaseOrderNumber: '',
-    estimatedArrivalDate: '',
+    purchaseOrders: '',
     shipDate: '',
   });
   const client = useQueryClient();
@@ -81,7 +76,10 @@ export function OrderCreateForm({
             orderNumber: input.orderNumber,
             quantity: Number(input.quantity),
             note: canManage ? input.note : null,
-            backOrder: canManage ? backOrderOf(input) : null,
+            backOrder:
+              canManage && input.purchaseOrders.trim()
+                ? backOrderOf(input.purchaseOrders)
+                : null,
             shipDate: (canManage && input.shipDate) || null,
           }),
         };
@@ -163,23 +161,15 @@ export function OrderCreateForm({
       {canManage && (
         <div className="form-grid">
           <TextField
-            label="Supplier PO number"
-            value={fields.purchaseOrderNumber}
+            label="PO numbers"
+            value={fields.purchaseOrders}
             onChange={(value) =>
-              set('purchaseOrderNumber', value.replace(/\D/g, ''))
+              set('purchaseOrders', purchaseOrderInput(value))
             }
             optional
-            maxLength={5}
             inputMode="numeric"
-            hint="For a back order."
-            error={issues.purchaseOrderNumber}
-          />
-          <DateField
-            label="Fabric due"
-            value={fields.estimatedArrivalDate}
-            onChange={(value) => set('estimatedArrivalDate', value)}
-            optional
-            error={issues.estimatedArrivalDate}
+            hint="For a back order. Separate several with commas."
+            error={issues.purchaseOrders}
           />
           <DateField
             label="Ship date"
@@ -187,7 +177,6 @@ export function OrderCreateForm({
             onChange={(value) => set('shipDate', value)}
             weekdaysOnly
             optional
-            hint="On or after the fabric is due."
             error={issues.shipDate}
           />
         </div>

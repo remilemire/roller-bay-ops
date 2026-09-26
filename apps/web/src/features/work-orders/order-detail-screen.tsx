@@ -141,10 +141,9 @@ function OrderRecord({
               // Kept after allocation, as a record of where the fabric came from.
               ...(order.backOrder
                 ? [
-                    ['Back-order PO', order.backOrder.purchaseOrderNumber],
                     [
-                      'Fabric due',
-                      calendarDateLabel(order.backOrder.estimatedArrivalDate),
+                      'Back-order POs',
+                      order.backOrder.purchaseOrderNumbers.join(', '),
                     ],
                   ]
                 : []),

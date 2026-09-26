@@ -5,7 +5,6 @@ import {
   asc,
   count,
   eq,
-  getTableColumns,
   gte,
   ilike,
   inArray,
@@ -16,7 +15,11 @@ import {
 } from 'drizzle-orm';
 import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
-import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
+import {
+  milestoneTimestampField,
+  workOrderColumns,
+  workOrders,
+} from '../work-orders/tables.js';
 import type {
   CompletionRecord,
   CompletionValues,
@@ -45,7 +48,7 @@ export class ProductionRepository {
     );
     const rows = await this.db
       .select({
-        ...getTableColumns(workOrders),
+        ...workOrderColumns,
         // Qualify the outer id explicitly: select-field SQL otherwise loses table
         // qualifiers and the subquery compares worksheet.work_order_id to its own id.
         hasCuttingWorksheet: sql<boolean>`EXISTS (SELECT 1 FROM ${cuttingWorksheets} WHERE ${cuttingWorksheets.workOrderId} = ${sql.identifier('work_orders')}.${sql.identifier('id')} AND ${cuttingWorksheets.abandonedAt} IS NULL AND ${cuttingWorksheets.skippedAt} IS NULL)`,

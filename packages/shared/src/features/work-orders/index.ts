@@ -40,21 +40,20 @@ const noteSchema = z
 
 // How many blinds the order has; its allocation's blinds must add up to it.
 export const orderQuantitySchema = z.number().int().min(1).max(10000);
-// Fabric on its way: the supplier's purchase order and when it should
-// arrive, on any day. It lets an order be scheduled before its fabric is
-// allocated, and stays on the order afterwards as a record. The number is
-// supplier paperwork; it links to no stock receipt.
+// Fabric on its way: the supplier purchase orders bringing it. It lets an
+// order be scheduled before its fabric is allocated, and stays on the order
+// afterwards as a record. The numbers are supplier paperwork, the same ones
+// stock receipts carry.
 export const backOrderSchema = z.strictObject({
-  purchaseOrderNumber: purchaseOrderNumberSchema,
-  estimatedArrivalDate: z.iso.date(),
+  purchaseOrderNumbers: z
+    .array(purchaseOrderNumberSchema)
+    .min(1, 'Add at least one.')
+    .max(20)
+    .refine(
+      (numbers) => new Set(numbers).size === numbers.length,
+      'List each purchase order once.',
+    ),
 });
-/** Whether a ship date comes too early for fabric still on its way. */
-export const shipsBeforeArrival = (
-  shipDate: string | null,
-  backOrder: BackOrder | null,
-) => !!shipDate && !!backOrder && shipDate < backOrder.estimatedArrivalDate;
-export const shipDateBeforeArrivalMessage =
-  "Must be on or after the fabric's estimated arrival.";
 // An order starts unallocated, so a ship date on creation needs a back order.
 export const createWorkOrderSchema = z
   .strictObject({
@@ -64,19 +63,9 @@ export const createWorkOrderSchema = z
     backOrder: backOrderSchema.nullable().default(null),
     shipDate: shipDateSchema.nullable().default(null),
   })
-  .superRefine(({ shipDate, backOrder }, ctx) => {
-    if (shipDate && !backOrder)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['shipDate'],
-        message: 'Enter back-order details to schedule a new order.',
-      });
-    else if (shipsBeforeArrival(shipDate, backOrder))
-      ctx.addIssue({
-        code: 'custom',
-        path: ['shipDate'],
-        message: shipDateBeforeArrivalMessage,
-      });
+  .refine(({ shipDate, backOrder }) => !shipDate || backOrder, {
+    path: ['shipDate'],
+    message: 'Enter back-order details to schedule a new order.',
   });
 // The order number is fixed once created. A null ship date takes the order
 // off the schedule. Production completions have dedicated attributed writes.

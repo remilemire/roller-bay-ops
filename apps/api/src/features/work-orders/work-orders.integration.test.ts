@@ -295,12 +295,10 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
   );
 
   await t.test(
-    'a back order schedules an unallocated order no earlier than its fabric arrives, and stays once allocated',
+    'a back order schedules an unallocated order on its purchase orders, and stays once allocated',
     async () => {
-      const backOrder = {
-        purchaseOrderNumber: '43142',
-        estimatedArrivalDate: '2026-10-10',
-      };
+      const backOrder = { purchaseOrderNumbers: ['43150', '43142'] };
+      const listed = { purchaseOrderNumbers: ['43142', '43150'] };
       const issues = (response: request.Response) =>
         response.body.issues.map(
           (issue: { code: string; path: string[] }) =>
@@ -321,14 +319,14 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         ).body,
       );
       assert.equal(created.status, 'scheduled');
-      assert.deepEqual(created.backOrder, backOrder);
+      assert.deepEqual(created.backOrder, listed);
       assert.ok(created.scheduledAt);
-      await post({
-        orderNumber: '200041',
-        quantity: 1,
-        backOrder,
-        shipDate: '2026-10-09',
-      }).expect(400);
+      for (const purchaseOrderNumbers of [[], ['43142', '43142'], ['4314']])
+        await post({
+          orderNumber: '200041',
+          quantity: 1,
+          backOrder: { purchaseOrderNumbers },
+        }).expect(400);
 
       // An undated back order waits in the queue to be scheduled.
       const order = workOrderSchema.parse(
@@ -347,46 +345,35 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
           .body,
       );
       assert.equal(backOrdered.status, 'new');
+      assert.deepEqual(backOrdered.backOrder, listed);
       assert.deepEqual(await queued(), ['200042']);
-
-      // Not before the fabric is due, and not by moving the arrival past it.
-      const early = await patch(order.id, {
-        expectedRevision: 2,
-        shipDate: '2026-10-09',
-      }).expect(409);
-      assert.deepEqual(issues(early), ['ship_date_before_arrival@shipDate']);
       await patch(order.id, {
         expectedRevision: 2,
         shipDate: '2026-10-12',
       }).expect(200);
-      const late = await patch(order.id, {
-        expectedRevision: 3,
-        backOrder: { ...backOrder, estimatedArrivalDate: '2026-10-13' },
-      }).expect(409);
-      assert.deepEqual(issues(late), ['ship_date_before_arrival@shipDate']);
-      // A dated order keeps a source of fabric.
+      // Its purchase orders can change, but a dated order keeps a source of
+      // fabric.
+      const changed = workOrderSchema.parse(
+        (
+          await patch(order.id, {
+            expectedRevision: 3,
+            backOrder: { purchaseOrderNumbers: ['43199'] },
+          }).expect(200)
+        ).body,
+      );
+      assert.deepEqual(changed.backOrder, { purchaseOrderNumbers: ['43199'] });
       const stranded = await patch(order.id, {
-        expectedRevision: 3,
+        expectedRevision: 4,
         backOrder: null,
       }).expect(409);
       assert.deepEqual(issues(stranded), ['back_order_required@backOrder']);
-      await patch(order.id, { expectedRevision: 3, note: 'Due' }).expect(200);
+      await patch(order.id, { expectedRevision: 4, note: 'Due' }).expect(200);
 
-      // Once allocated, the back order stays as a record and no longer
-      // bounds the date.
+      // Once allocated, the back order stays as a record.
       await pool.query(
         `UPDATE work_orders SET allocated_at=now() WHERE id=$1`,
         [order.id],
       );
-      const allocated = workOrderSchema.parse(
-        (
-          await patch(order.id, {
-            expectedRevision: 4,
-            shipDate: '2026-10-05',
-          }).expect(200)
-        ).body,
-      );
-      assert.deepEqual(allocated.backOrder, backOrder);
       const unscheduled = workOrderSchema.parse(
         (
           await patch(order.id, { expectedRevision: 5, shipDate: null }).expect(
@@ -394,7 +381,9 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
           )
         ).body,
       );
-      assert.deepEqual(unscheduled.backOrder, backOrder);
+      assert.deepEqual(unscheduled.backOrder, {
+        purchaseOrderNumbers: ['43199'],
+      });
       assert.equal(
         workOrderSchema.parse(
           (
@@ -406,23 +395,16 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
         ).backOrder,
         null,
       );
-
-      for (const [values, constraint] of [
-        [
-          `back_order_purchase_order_number='43142'`,
-          'work_orders_back_order_complete',
-        ],
-        [
-          `back_order_purchase_order_number='4314', back_order_arrival_date='2026-10-10'`,
-          'work_orders_back_order_purchase_order_number_format',
-        ],
-      ] as const)
-        await assert.rejects(
-          pool.query(`UPDATE work_orders SET ${values} WHERE id=$1`, [
-            order.id,
-          ]),
-          { code: '23514', constraint },
-        );
+      await assert.rejects(
+        pool.query(
+          `INSERT INTO work_order_purchase_orders (work_order_id, purchase_order_number) VALUES ($1, '4314')`,
+          [order.id],
+        ),
+        {
+          code: '23514',
+          constraint: 'work_order_purchase_orders_number_format',
+        },
+      );
     },
   );
 

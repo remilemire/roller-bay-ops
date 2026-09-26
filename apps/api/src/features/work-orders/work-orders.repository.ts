@@ -5,7 +5,6 @@ import {
   asc,
   count,
   eq,
-  getTableColumns,
   gte,
   ilike,
   isNotNull,
@@ -16,19 +15,19 @@ import {
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { milestoneTimestampField } from './work-order-milestones.js';
+import {
+  backOrdered,
+  workOrderColumns as columns,
+} from './work-order-columns.js';
+import { workOrderPurchaseOrders } from './work-order-purchase-orders.table.js';
 import { workOrders } from './work-orders.table.js';
-const columns = getTableColumns(workOrders);
-export type WorkOrderRecord = typeof workOrders.$inferSelect;
+export type WorkOrderRecord = typeof workOrders.$inferSelect & {
+  purchaseOrderNumbers: string[];
+};
 /** The columns a new or restored order is written with. */
 export type NewWorkOrder = Pick<
   WorkOrderRecord,
-  | 'orderNumber'
-  | 'quantity'
-  | 'note'
-  | 'shipDate'
-  | 'scheduledAt'
-  | 'backOrderPurchaseOrderNumber'
-  | 'backOrderArrivalDate'
+  'orderNumber' | 'quantity' | 'note' | 'shipDate' | 'scheduledAt'
 >;
 const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
   workOrders;
@@ -38,10 +37,7 @@ const statusFilters = {
   // Allocated (perhaps already cut) or back-ordered, and still waiting for a
   // ship date.
   unscheduled: and(
-    or(
-      isNotNull(allocatedAt),
-      isNotNull(workOrders.backOrderPurchaseOrderNumber),
-    ),
+    or(isNotNull(allocatedAt), backOrdered),
     isNull(shipDate),
     isNull(shippedAt),
   ),
@@ -151,7 +147,8 @@ export class WorkOrdersRepository {
       .onConflictDoUpdate({
         target: workOrders.orderNumber,
         // A deleted order had no allocation or date; every field it can be
-        // created with is written, so nothing of the old one carries over.
+        // created with is written, and the service replaces its back order,
+        // so nothing of the old one carries over.
         set: {
           ...values,
           shippedAt: null,
@@ -173,8 +170,6 @@ export class WorkOrdersRepository {
         | 'scheduledAt'
         | 'note'
         | 'quantity'
-        | 'backOrderPurchaseOrderNumber'
-        | 'backOrderArrivalDate'
         | 'shippedAt'
         | 'allocatedAt'
         | 'cancelledAt'
@@ -215,6 +210,19 @@ export class WorkOrdersRepository {
       .set({ ...values, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
     return (await this.findById(id))!;
+  }
+  /** Replaces the order's back order; an empty list removes it. */
+  async replacePurchaseOrders(id: string, numbers: readonly string[]) {
+    await this.db
+      .delete(workOrderPurchaseOrders)
+      .where(eq(workOrderPurchaseOrders.workOrderId, id));
+    if (numbers.length)
+      await this.db.insert(workOrderPurchaseOrders).values(
+        numbers.map((purchaseOrderNumber) => ({
+          workOrderId: id,
+          purchaseOrderNumber,
+        })),
+      );
   }
   /** The service locks the row and checks it may go; see findByIdForUpdate. */
   async delete(id: string) {

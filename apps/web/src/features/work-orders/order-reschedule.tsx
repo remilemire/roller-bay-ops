@@ -10,23 +10,27 @@ import { TextField } from '@/components/ui/field';
 import { fieldIssues } from '@/lib/field-issues';
 import { issuePath } from '@/lib/errors';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
+import {
+  backOrderOf,
+  isPurchaseOrderIssue,
+  purchaseOrderInput,
+  purchaseOrderText,
+} from './back-order';
 import { workOrdersKey, updateOrder } from './work-orders.api';
 
-const FIELDS = {
-  shipDate: 'shipDate',
-  backOrder: 'purchaseOrderNumber',
-  'backOrder.purchaseOrderNumber': 'purchaseOrderNumber',
-  'backOrder.estimatedArrivalDate': 'estimatedArrivalDate',
-} as const;
 const fieldName = (issue: ErrorIssue) =>
-  FIELDS[issuePath(issue) as keyof typeof FIELDS] ?? null;
+  issuePath(issue) === 'shipDate'
+    ? ('shipDate' as const)
+    : isPurchaseOrderIssue(issue)
+      ? ('purchaseOrders' as const)
+      : null;
 
 export const scheduleLabel = (order: WorkOrder) =>
   order.shipDate ? 'Reschedule' : 'Schedule';
 
 /**
  * Sets, moves or clears the ship date. An order without fabric is scheduled
- * as a back order, against the supplier PO that brings its fabric.
+ * as a back order, against the supplier purchase orders bringing it.
  */
 export function OrderReschedule({
   order,
@@ -39,30 +43,17 @@ export function OrderReschedule({
   const [opened] = useState(order);
   const backOrdered = !opened.allocatedAt;
   const [shipDate, setShipDate] = useState(opened.shipDate ?? '');
-  const [purchaseOrderNumber, setPurchaseOrderNumber] = useState(
-    opened.backOrder?.purchaseOrderNumber ?? '',
+  const [purchaseOrders, setPurchaseOrders] = useState(
+    purchaseOrderText(opened.backOrder),
   );
-  const [estimatedArrivalDate, setEstimatedArrivalDate] = useState(
-    opened.backOrder?.estimatedArrivalDate ?? '',
-  );
-  // Both blank clears the back order; half of one is left for the contract
-  // to refuse beside its field.
-  const backOrder =
-    purchaseOrderNumber || estimatedArrivalDate
-      ? ({
-          purchaseOrderNumber: purchaseOrderNumber || undefined,
-          estimatedArrivalDate: estimatedArrivalDate || undefined,
-        } as BackOrder)
-      : null;
+  const backOrder = backOrderOf(purchaseOrders);
   const backOrderChanged =
     backOrdered &&
-    JSON.stringify(backOrder) !== JSON.stringify(opened.backOrder);
+    backOrder.purchaseOrderNumbers.join() !==
+      (opened.backOrder?.purchaseOrderNumbers.join() ?? '');
   const client = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (next: {
-      shipDate?: string | null;
-      backOrder?: BackOrder | null;
-    }) =>
+    mutationFn: (next: { shipDate?: string | null; backOrder?: BackOrder }) =>
       updateOrder(opened.id, { expectedRevision: opened.revision, ...next }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: workOrdersKey });
@@ -85,7 +76,7 @@ export function OrderReschedule({
       title={`${scheduleLabel(opened)} order ${opened.orderNumber}`}
       description={
         backOrdered
-          ? 'No fabric is allocated yet. Schedule it as a back order, on or after its fabric is due.'
+          ? 'No fabric is allocated yet. Schedule it as a back order on the purchase orders bringing it.'
           : undefined
       }
     >
@@ -100,24 +91,17 @@ export function OrderReschedule({
         }}
       >
         {backOrdered && (
-          <div className="form-grid">
-            <TextField
-              label="Supplier PO number"
-              value={purchaseOrderNumber}
-              onChange={edit((value: string) =>
-                setPurchaseOrderNumber(value.replace(/\D/g, '')),
-              )}
-              maxLength={5}
-              inputMode="numeric"
-              error={errors.purchaseOrderNumber}
-            />
-            <DateField
-              label="Fabric due"
-              value={estimatedArrivalDate}
-              onChange={edit(setEstimatedArrivalDate)}
-              error={errors.estimatedArrivalDate}
-            />
-          </div>
+          <TextField
+            label="PO numbers"
+            value={purchaseOrders}
+            onChange={edit((value: string) =>
+              setPurchaseOrders(purchaseOrderInput(value)),
+            )}
+            required
+            inputMode="numeric"
+            hint="Separate several with commas."
+            error={errors.purchaseOrders}
+          />
         )}
         <DateField
           label="Ship date"

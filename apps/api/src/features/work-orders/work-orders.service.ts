@@ -6,14 +6,11 @@ import {
 } from '@nestjs/common';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import type { Station } from '@roller-bay/shared/users';
-import {
-  shipDateBeforeArrivalMessage,
-  shipsBeforeArrival,
-  type BackOrder,
-  type CreateWorkOrder,
-  type UpdateWorkOrder,
-  type WorkOrderList,
-  type WorkOrderQuery,
+import type {
+  CreateWorkOrder,
+  UpdateWorkOrder,
+  WorkOrderList,
+  WorkOrderQuery,
 } from '@roller-bay/shared/work-orders';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
@@ -46,10 +43,6 @@ function change(
     },
   };
 }
-const backOrderColumns = (backOrder: BackOrder | null) => ({
-  backOrderPurchaseOrderNumber: backOrder?.purchaseOrderNumber ?? null,
-  backOrderArrivalDate: backOrder?.estimatedArrivalDate ?? null,
-});
 function requireRevision(row: WorkOrderRecord | undefined, revision: number) {
   if (!row) throw new NotFoundException('Order not found.');
   if (row.revision !== revision)
@@ -104,7 +97,6 @@ export class WorkOrdersService {
           note: input.note,
           shipDate: input.shipDate,
           scheduledAt: input.shipDate ? new Date() : null,
-          ...backOrderColumns(input.backOrder),
         });
         if (!row) throw orderAlreadyExists();
         if (row.revision > 1 && !isAdmin)
@@ -118,15 +110,21 @@ export class WorkOrdersService {
               },
             ],
           });
+        // A restored order drops any back order it had when deleted.
+        await context.workOrders.replacePurchaseOrders(
+          row.id,
+          input.backOrder?.purchaseOrderNumbers ?? [],
+        );
+        const saved = (await context.workOrders.findById(row.id))!;
         // A deleted order's history ends with no record, so restoring it
         // starts from none as well.
         await this.audit.record(
           context,
           userId,
-          row.revision > 1 ? 'order.restored' : 'order.created',
-          [change(null, row)],
+          saved.revision > 1 ? 'order.restored' : 'order.created',
+          [change(null, saved)],
         );
-        return presentWorkOrder(row);
+        return presentWorkOrder(saved);
       }),
     );
   }
@@ -156,11 +154,15 @@ export class WorkOrdersService {
               },
             ],
           });
+        // Replaced first, so the updated row is read with it.
+        if (input.backOrder !== undefined)
+          await context.workOrders.replacePurchaseOrders(
+            id,
+            input.backOrder?.purchaseOrderNumbers ?? [],
+          );
         const row = await context.workOrders.update(id, {
           shipDate: input.shipDate,
           quantity: input.quantity,
-          ...(input.backOrder !== undefined &&
-            backOrderColumns(input.backOrder)),
           // Kept through a reschedule: it is when the order went on the
           // schedule, not when its date last moved.
           scheduledAt:
@@ -185,10 +187,9 @@ export class WorkOrdersService {
     );
   }
   /**
-   * A date is promised against fabric: allocated, or back-ordered and due by
-   * then. Once allocated, the arrival no longer bounds the date. These checks
-   * run only when a write touches the date or back order, so a note can
-   * still be saved on an order whose allocation was later cancelled.
+   * A date is promised against fabric: allocated, or back-ordered. These
+   * checks run only when a write touches the date or back order, so a note
+   * can still be saved on an order whose allocation was later cancelled.
    */
   private assertSchedulable(previous: WorkOrderRecord, input: UpdateWorkOrder) {
     if (input.shipDate === undefined && input.backOrder === undefined) return;
@@ -218,17 +219,6 @@ export class WorkOrdersService {
             code: 'back_order_required',
             path: ['backOrder'],
             message: 'Unschedule the order first, or allocate its fabric.',
-          },
-        ],
-      });
-    if (shipsBeforeArrival(shipDate, backOrder))
-      throw new ConflictException({
-        message: 'The ship date is before the fabric is due to arrive.',
-        issues: [
-          {
-            code: 'ship_date_before_arrival',
-            path: ['shipDate'],
-            message: shipDateBeforeArrivalMessage,
           },
         ],
       });

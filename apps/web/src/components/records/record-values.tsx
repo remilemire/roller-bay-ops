@@ -40,7 +40,7 @@ const labels: Record<string, string> = {
   orderNumber: 'Production order',
   shipDate: 'Ship date',
   backOrder: 'Back order',
-  estimatedArrivalDate: 'Fabric due',
+  purchaseOrderNumbers: 'Purchase orders',
   scheduledAt: 'Scheduled',
   allocatedAt: 'Allocated',
   cutAt: 'Cut',
@@ -91,8 +91,7 @@ export function RecordValues({
       return <Link href={`/stock-items/${value}`}>{shortId(value)}</Link>;
     if (field.endsWith('Id') || field === 'id')
       return <span title={value}>{shortId(value)}</span>;
-    if (field === 'shipDate' || field === 'estimatedArrivalDate')
-      return <span>{calendarDateLabel(value)}</span>;
+    if (field === 'shipDate') return <span>{calendarDateLabel(value)}</span>;
     if (field.endsWith('At') && value) return <span>{dateLabel(value)}</span>;
     return (
       <span>

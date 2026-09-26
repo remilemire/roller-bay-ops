@@ -279,9 +279,7 @@ test('admins schedule an order without fabric as a back order', async ({
   await page.goto('/work-orders?view=list');
   const dialog = page.getByRole('dialog');
   await page.getByRole('button', { name: 'Schedule order 104877' }).click();
-  await dialog.getByLabel('Supplier PO number').fill('43142');
-  await dialog.getByLabel('Fabric due').click();
-  await dialog.getByRole('button', { name: 'Wed, Sep 30, 2026' }).click();
+  await dialog.getByLabel('PO numbers').fill('43142, 43150');
   await dialog.getByLabel('Ship date').click();
   await dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }).click();
   await dialog.getByRole('button', { name: 'Schedule', exact: true }).click();
@@ -292,10 +290,7 @@ test('admins schedule an order without fabric as a back order', async ({
       body: {
         expectedRevision: 3,
         shipDate: '2026-10-02',
-        backOrder: {
-          purchaseOrderNumber: '43142',
-          estimatedArrivalDate: '2026-09-30',
-        },
+        backOrder: { purchaseOrderNumbers: ['43142', '43150'] },
       },
     },
   ]);
@@ -303,9 +298,7 @@ test('admins schedule an order without fabric as a back order', async ({
   await page.getByRole('button', { name: 'Week', exact: true }).click();
   const friday = page.getByRole('region', { name: 'Fri, Oct 2, 2026' });
   await expect(friday).toContainText('104877');
-  await expect(friday).toContainText(
-    'Back order · PO 43142 · fabric due Sep 30',
-  );
+  await expect(friday).toContainText('Back order · PO 43142, 43150');
 });
 
 test('an order is found from the week board, whether or not it is on it', async ({
