@@ -2392,6 +2392,59 @@ td strong {
   font-size: 12px;
   font-weight: 600;
 }
+/* Purchase orders as chips inside one input-like box. */
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  min-height: var(--control-height);
+  padding: 6px 8px;
+  cursor: text;
+}
+.tag-input:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.tag-input input {
+  flex: 1 1 80px;
+  min-width: 80px;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.tag-input input:focus-visible {
+  outline: none;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-variant-numeric: tabular-nums;
+}
+.tag-chip[data-invalid] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.tag-chip-remove:hover {
+  color: var(--primary);
+}
 .back-order-note {
   display: block;
   color: var(--muted);

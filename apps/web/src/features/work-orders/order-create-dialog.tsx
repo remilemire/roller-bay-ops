@@ -17,11 +17,8 @@ import { useCanManage } from '@/features/auth';
 import { ApiError } from '@/lib/api';
 import { issuePath } from '@/lib/errors';
 import { fieldIssues } from '@/lib/field-issues';
-import {
-  backOrderOf,
-  isPurchaseOrderIssue,
-  purchaseOrderInput,
-} from './back-order';
+import { isPurchaseOrderIssue } from './back-order';
+import { PurchaseOrderField } from './purchase-order-field';
 import { createOrder, orderList, workOrdersKey } from './work-orders.api';
 
 type Fields = {
@@ -29,7 +26,7 @@ type Fields = {
   quantity: string;
   note: string;
   backOrdered: boolean;
-  purchaseOrders: string;
+  purchaseOrderNumbers: string[];
   shipDate: string;
 };
 const FIELDS: Record<string, 'orderNumber' | 'quantity' | 'note' | 'shipDate'> =
@@ -69,7 +66,7 @@ export function OrderCreateForm({
     quantity: '',
     note: '',
     backOrdered: false,
-    purchaseOrders: '',
+    purchaseOrderNumbers: [],
     shipDate: '',
   });
   const client = useQueryClient();
@@ -84,7 +81,7 @@ export function OrderCreateForm({
             // Numbers left blank are refused beside their field.
             backOrder:
               canManage && input.backOrdered
-                ? backOrderOf(input.purchaseOrders)
+                ? { purchaseOrderNumbers: input.purchaseOrderNumbers }
                 : null,
             shipDate:
               (canManage && input.backOrdered && input.shipDate) || null,
@@ -177,15 +174,9 @@ export function OrderCreateForm({
       )}
       {canManage && fields.backOrdered && (
         <div className="form-grid">
-          <TextField
-            label="PO numbers"
-            value={fields.purchaseOrders}
-            onChange={(value) =>
-              set('purchaseOrders', purchaseOrderInput(value))
-            }
-            required
-            inputMode="numeric"
-            hint="Separate several with commas."
+          <PurchaseOrderField
+            value={fields.purchaseOrderNumbers}
+            onChange={(numbers) => set('purchaseOrderNumbers', numbers)}
             error={issues.purchaseOrders}
           />
           <DateField

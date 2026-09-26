@@ -526,10 +526,10 @@ it('schedules an order without fabric as a back order on its purchase orders', a
   const dialog = within(
     screen.getByRole('dialog', { name: 'Schedule order 104801' }),
   );
-  const numbers = dialog.getByLabelText('PO numbers');
-  expect(numbers).toBeRequired();
-  await user.type(numbers, '43142, x43150');
-  expect(numbers).toHaveValue('43142, 43150');
+  await user.type(dialog.getByLabelText('PO numbers'), '4314243150');
+  expect(
+    dialog.getByRole('button', { name: 'Remove PO 43150' }),
+  ).toBeInTheDocument();
   await user.click(dialog.getByLabelText('Ship date'));
   await user.click(dialog.getByRole('button', { name: 'Fri, Oct 2, 2026' }));
   await user.click(dialog.getByRole('button', { name: 'Schedule' }));
@@ -570,7 +570,10 @@ it('adds an order with a back order and ship date for admins', async () => {
   expect(screen.queryByLabelText('PO numbers')).toBeNull();
   expect(screen.queryByLabelText('Ship date')).toBeNull();
   await user.click(screen.getByLabelText('Back order'));
-  expect(screen.getByLabelText('PO numbers')).toBeRequired();
+  expect(screen.getByLabelText('PO numbers')).toHaveAttribute(
+    'aria-required',
+    'true',
+  );
   await user.type(screen.getByLabelText('PO numbers'), '43142,43150');
   await user.click(screen.getByLabelText('Ship date'));
   await user.click(screen.getByRole('button', { name: 'Fri, Oct 2, 2026' }));

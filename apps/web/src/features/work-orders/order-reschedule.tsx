@@ -6,16 +6,11 @@ import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
-import { TextField } from '@/components/ui/field';
 import { fieldIssues } from '@/lib/field-issues';
 import { issuePath } from '@/lib/errors';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
-import {
-  backOrderOf,
-  isPurchaseOrderIssue,
-  purchaseOrderInput,
-  purchaseOrderText,
-} from './back-order';
+import { isPurchaseOrderIssue } from './back-order';
+import { PurchaseOrderField } from './purchase-order-field';
 import { workOrdersKey, updateOrder } from './work-orders.api';
 
 const fieldName = (issue: ErrorIssue) =>
@@ -43,13 +38,13 @@ export function OrderReschedule({
   const [opened] = useState(order);
   const backOrdered = !opened.allocatedAt;
   const [shipDate, setShipDate] = useState(opened.shipDate ?? '');
-  const [purchaseOrders, setPurchaseOrders] = useState(
-    purchaseOrderText(opened.backOrder),
+  const [purchaseOrderNumbers, setPurchaseOrderNumbers] = useState(
+    opened.backOrder?.purchaseOrderNumbers ?? [],
   );
-  const backOrder = backOrderOf(purchaseOrders);
+  const backOrder = { purchaseOrderNumbers };
   const backOrderChanged =
     backOrdered &&
-    backOrder.purchaseOrderNumbers.join() !==
+    purchaseOrderNumbers.join() !==
       (opened.backOrder?.purchaseOrderNumbers.join() ?? '');
   const client = useQueryClient();
   const mutation = useMutation({
@@ -91,15 +86,9 @@ export function OrderReschedule({
         }}
       >
         {backOrdered && (
-          <TextField
-            label="PO numbers"
-            value={purchaseOrders}
-            onChange={edit((value: string) =>
-              setPurchaseOrders(purchaseOrderInput(value)),
-            )}
-            required
-            inputMode="numeric"
-            hint="Separate several with commas."
+          <PurchaseOrderField
+            value={purchaseOrderNumbers}
+            onChange={edit(setPurchaseOrderNumbers)}
             error={errors.purchaseOrders}
           />
         )}
