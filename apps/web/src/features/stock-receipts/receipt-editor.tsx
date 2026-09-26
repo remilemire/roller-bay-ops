@@ -15,6 +15,7 @@ import { Plus, Save, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
 import { catalogKey, lookupColors } from '@/features/fabric-catalog';
@@ -279,16 +280,16 @@ export function ReceiptEditor({
                       queryKey={[...catalogKey, 'colors']}
                       load={lookupColors}
                     />
-                    <TextField
+                    <MeasurementField
                       label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                      type="number"
+                      unit={fieldSuffix(units, 'rollWidth')}
                       value={value.width}
                       onChange={(v) => field(index, 'width', v)}
                       error={errors.items?.[index]?.width?.message}
                     />
-                    <TextField
+                    <MeasurementField
                       label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
-                      type="number"
+                      unit={fieldSuffix(units, 'rollLength')}
                       value={value.length}
                       onChange={(v) => field(index, 'length', v)}
                       error={errors.items?.[index]?.length?.message}

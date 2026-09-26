@@ -83,7 +83,7 @@ it('pins stock and units during refetch, reviews changes and retries the exact u
       close={close}
     />,
   );
-  expect(width).toHaveValue(80);
+  expect(width).toHaveValue('80');
   await actor.type(
     screen.getByLabelText('Reason for correction'),
     'Measured width again',

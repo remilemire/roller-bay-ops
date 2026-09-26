@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import {
   Empty,
@@ -465,9 +466,9 @@ function CatalogEditor({
             />
           )}
           {kind === 'colors' && (
-            <TextField
+            <MeasurementField
               label={`Thickness (${fieldSuffix(units, 'thickness')})`}
-              type="number"
+              unit={fieldSuffix(units, 'thickness')}
               value={values.thickness}
               onChange={(v) => set('thickness', v)}
               error={errors.thickness?.message}

@@ -154,5 +154,5 @@ export function ChoiceField({
     </Field>
   );
 }
-const describedBy = (...ids: (string | false | undefined)[]) =>
+export const describedBy = (...ids: (string | false | undefined)[]) =>
   ids.filter(Boolean).join(' ') || undefined;

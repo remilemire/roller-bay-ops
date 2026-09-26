@@ -23,6 +23,7 @@ import { fieldSuffix, measurementHelp } from '@/lib/measurements';
 import { locationsKey, lookupLocations } from '@/features/locations';
 import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice, PageHeading } from '@/components/ui/feedback';
@@ -317,10 +318,10 @@ export function CompletionEditor({
                     {row.outcome && row.outcome !== 'unused' && (
                       <div className="form-grid">
                         {!stock.isRemnant && (
-                          <TextField
+                          <MeasurementField
                             label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                            unit={fieldSuffix(units, 'tubeDiameter')}
                             help={measurementHelp.tubeDiameter}
-                            type="number"
                             value={row.tube}
                             onChange={(tube) => change(index, { ...row, tube })}
                             error={fieldError(`items.${index}.tube`)}
@@ -329,10 +330,10 @@ export function CompletionEditor({
                           />
                         )}
                         {row.outcome === 'returned-roll' && (
-                          <TextField
+                          <MeasurementField
                             label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                            unit={fieldSuffix(units, 'radialDepth')}
                             help={measurementHelp.radialDepth}
-                            type="number"
                             value={row.depth}
                             onChange={(depth) =>
                               change(index, { ...row, depth })
@@ -342,18 +343,18 @@ export function CompletionEditor({
                         )}
                         {row.outcome === 'returned-remnant' && (
                           <>
-                            <TextField
+                            <MeasurementField
                               label={`Remaining width (${fieldSuffix(units, 'rollWidth')})`}
-                              type="number"
+                              unit={fieldSuffix(units, 'rollWidth')}
                               value={row.width}
                               onChange={(width) =>
                                 change(index, { ...row, width })
                               }
                               error={fieldError(`items.${index}.width`)}
                             />
-                            <TextField
+                            <MeasurementField
                               label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
-                              type="number"
+                              unit={fieldSuffix(units, 'rollLength')}
                               value={row.length}
                               onChange={(length) =>
                                 change(index, { ...row, length })
@@ -442,9 +443,9 @@ export function CompletionEditor({
                                   <Trash2 size={16} />
                                 </Button>
                               </div>
-                              <TextField
+                              <MeasurementField
                                 label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                                type="number"
+                                unit={fieldSuffix(units, 'rollWidth')}
                                 value={scrap.width}
                                 onChange={(width) =>
                                   update({ ...scrap, width })
@@ -453,9 +454,9 @@ export function CompletionEditor({
                                   `items.${index}.scraps.${si}.width`,
                                 )}
                               />
-                              <TextField
+                              <MeasurementField
                                 label={`Length (${fieldSuffix(units, 'rollLength')})`}
-                                type="number"
+                                unit={fieldSuffix(units, 'rollLength')}
                                 value={scrap.length}
                                 onChange={(length) =>
                                   update({ ...scrap, length })

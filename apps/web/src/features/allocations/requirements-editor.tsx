@@ -3,6 +3,7 @@ import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form';
 import { Plus, Trash2, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import type { MeasurementUnits } from '@roller-bay/shared/users';
 import { fieldSuffix, measurementHelp } from '@/lib/measurements';
@@ -114,17 +115,17 @@ export function RequirementsEditor({
                 queryKey={[...catalogKey, 'colors']}
                 load={lookupColors}
               />
-              <TextField
+              <MeasurementField
                 label={`Width (${fieldSuffix(units, 'blindWidth')})`}
-                type="number"
+                unit={fieldSuffix(units, 'blindWidth')}
                 value={r.width}
                 onChange={(v) => change('width', v)}
                 error={error('width')}
               />
-              <TextField
+              <MeasurementField
                 label={`Finished drop (${fieldSuffix(units, 'finishedDrop')})`}
+                unit={fieldSuffix(units, 'finishedDrop')}
                 help={measurementHelp.finishedDrop}
-                type="number"
                 value={r.length}
                 onChange={(v) => change('length', v)}
                 error={error('length')}

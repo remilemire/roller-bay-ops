@@ -12,7 +12,10 @@ import {
   fromMm,
   measurementInput,
   measurementLabel,
+  inchParts,
+  joinInches,
   measurementValue,
+  parseAmount,
   toMm,
 } from './measurements';
 
@@ -55,4 +58,37 @@ it('round-trips stored millimetre values through every unit', () => {
         measurementValue(measurementInput(mm, unit), unit),
         `${mm} mm via ${unit}`,
       ).toBe(mm);
+});
+
+it('shows inches as fractions when the stored value is exact', () => {
+  expect(measurementLabel(toMm(36.5, 'in'), 'in')).toBe('36 1/2 in');
+  expect(measurementLabel(toMm(54 + 15 / 16, 'in'), 'in')).toBe('54 15/16 in');
+  expect(measurementLabel(toMm(3 / 64, 'in'), 'in')).toBe('3/64 in');
+  expect(measurementInput(toMm(72.125, 'in'), 'in')).toBe('72 1/8');
+  // Not on a 1/64 inch mark, or not inches: decimals as before.
+  expect(measurementLabel(1000, 'in')).toBe('39.37 in');
+  expect(measurementInput(1000, 'in')).toBe('39.370079');
+  expect(measurementLabel(toMm(2.5, 'yd'), 'yd')).toBe('2.5 yd');
+});
+
+it('reads decimals, mixed numbers and fraction glyphs', () => {
+  for (const text of ['36.5', '36 1/2', '36-1/2', '36 - 1 / 2', '36½', '36 ½'])
+    expect(parseAmount(text), text).toBe(36.5);
+  expect(parseAmount('1/2')).toBe(0.5);
+  expect(parseAmount('.25')).toBe(0.25);
+  expect(parseAmount(' ')).toBeNull();
+  for (const text of ['36 1/', '1/0', 'abc', '1e3', '36 1/2 3', '-4'])
+    expect(parseAmount(text), text).toBeNaN();
+  expect(measurementValue('36 1/2', 'in')).toBe(927.1);
+});
+
+it('splits inch amounts into a whole number and a proper fraction', () => {
+  expect(inchParts('72 10/16')).toEqual({ whole: '72', fraction: '5/8' });
+  expect(inchParts('72½')).toEqual({ whole: '72', fraction: '1/2' });
+  expect(inchParts('3/4')).toEqual({ whole: '', fraction: '3/4' });
+  for (const text of ['72.5', '72', '9/8', '72 5/', ''])
+    expect(inchParts(text), text).toEqual({ whole: text, fraction: '' });
+  expect(joinInches({ whole: '72', fraction: '5/8' })).toBe('72 5/8');
+  expect(joinInches({ whole: '', fraction: '5/8' })).toBe('5/8');
+  expect(joinInches({ whole: '72.5', fraction: '5/8' })).toBe('72.5');
 });

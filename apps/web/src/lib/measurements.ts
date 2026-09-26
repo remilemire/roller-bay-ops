@@ -31,8 +31,27 @@ export const toMm = (value: number, unit: LengthUnit) =>
 export const fromMm = (mm: number, unit: LengthUnit) =>
   mm / (micrometresPerUnit[unit] / 1000);
 
+// Inches read as fractions whenever the stored value is exactly a multiple of
+// this step, so every cut to a tape-measure mark shows as one. Anything else,
+// such as a width recorded in millimetres, keeps a decimal.
+const inchDenominator = 64;
+
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+
+const inchFraction = (mm: number) => {
+  const steps = Math.round(fromMm(mm, 'in') * inchDenominator);
+  if (steps < 0 || toMm(steps / inchDenominator, 'in') !== mm) return null;
+  const whole = Math.floor(steps / inchDenominator);
+  const rest = steps % inchDenominator;
+  if (rest === 0) return String(whole);
+  const divisor = gcd(rest, inchDenominator);
+  const fraction = `${rest / divisor}/${inchDenominator / divisor}`;
+  return whole === 0 ? fraction : `${whole} ${fraction}`;
+};
+
 export const measurementAmount = (mm: number, unit: LengthUnit) =>
-  Number(fromMm(mm, unit).toFixed(3));
+  (unit === 'in' && inchFraction(mm)) ||
+  String(Number(fromMm(mm, unit).toFixed(3)));
 
 export const measurementLabel = (mm: number, unit: LengthUnit) =>
   `${measurementAmount(mm, unit)} ${unit}`;
@@ -40,10 +59,75 @@ export const measurementLabel = (mm: number, unit: LengthUnit) =>
 // Editable values keep more precision than labels so an unchanged field
 // round-trips to the same stored millimetre value in every offered unit.
 export const measurementInput = (mm: number | null, unit: LengthUnit) =>
-  mm === null ? '' : String(Number(fromMm(mm, unit).toFixed(6)));
+  mm === null
+    ? ''
+    : (unit === 'in' && inchFraction(mm)) ||
+      String(Number(fromMm(mm, unit).toFixed(6)));
 
-export const measurementValue = (text: string, unit: LengthUnit) =>
-  text.trim() === '' ? null : toMm(Number(text), unit);
+const vulgarFractions: Record<string, string> = {
+  '½': '1/2',
+  '¼': '1/4',
+  '¾': '3/4',
+  '⅛': '1/8',
+  '⅜': '3/8',
+  '⅝': '5/8',
+  '⅞': '7/8',
+};
+
+// Accepts a decimal or a whole number and fraction: "36.5", "36 1/2",
+// "36-1/2", "36½" and "1/2". Blank is null; anything else is NaN, which
+// measurement inputs report as invalid before a form can submit it.
+const normalizeFractions = (text: string) =>
+  text
+    .replace(/[½¼¾⅛⅜⅝⅞]/g, (glyph) => ` ${vulgarFractions[glyph]}`)
+    .replace(/⁄/g, '/')
+    .trim();
+
+export const parseAmount = (text: string) => {
+  const normalized = normalizeFractions(text);
+  if (normalized === '') return null;
+  if (/^(\d+\.?\d*|\.\d+)$/.test(normalized)) return Number(normalized);
+  const mixed = /^(?:(\d+)(?:\s+|\s*-\s*))?(\d+)\s*\/\s*(\d+)$/.exec(
+    normalized,
+  );
+  if (!mixed || Number(mixed[3]) === 0) return NaN;
+  return Number(mixed[1] ?? 0) + Number(mixed[2]) / Number(mixed[3]);
+};
+
+// An inch amount as the whole number and the proper fraction an inch input
+// edits separately: "72 5/8" is 72 and 5/8. Decimals, improper fractions and
+// unreadable text stay whole so nothing typed is reinterpreted.
+export const inchParts = (text: string) => {
+  const mixed = /^(?:(\d+)(?:\s+|\s*-\s*))?(\d+)\s*\/\s*(\d+)$/.exec(
+    normalizeFractions(text),
+  );
+  const [top, bottom] = [Number(mixed?.[2]), Number(mixed?.[3])];
+  if (!mixed || top === 0 || top >= bottom)
+    return { whole: text, fraction: '' };
+  const divisor = gcd(top, bottom);
+  return {
+    whole: mixed[1] ?? '',
+    fraction: `${top / divisor}/${bottom / divisor}`,
+  };
+};
+
+export const joinInches = ({
+  whole,
+  fraction,
+}: {
+  whole: string;
+  fraction: string;
+}) =>
+  !fraction || whole.includes('.')
+    ? whole
+    : whole.trim() === ''
+      ? fraction
+      : `${whole.trim()} ${fraction}`;
+
+export const measurementValue = (text: string, unit: LengthUnit) => {
+  const amount = parseAmount(text);
+  return amount === null ? null : toMm(amount, unit);
+};
 
 export const fieldSuffix = (units: MeasurementUnits, field: MeasurementField) =>
   units[field];

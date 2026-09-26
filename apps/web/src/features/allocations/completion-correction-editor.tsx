@@ -14,7 +14,8 @@ import {
 import { api } from '@/lib/api';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { TextField, ChoiceField } from '@/components/ui/field';
+import { ChoiceField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { Loading, ErrorNotice } from '@/components/ui/feedback';
 import { lookupLocations, locationsKey } from '@/features/locations';
@@ -356,42 +357,42 @@ function CompletionCorrectionForm({
                         ]}
                       />
                       {!stock.isRemnant && (
-                        <TextField
+                        <MeasurementField
                           label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                          unit={fieldSuffix(units, 'tubeDiameter')}
                           help={measurementHelp.tubeDiameter}
                           value={row.tube}
                           onChange={(tube) => update(index, { tube })}
                           error={errors[`${row.id}.tube`]}
-                          type="number"
                         />
                       )}
                       {row.outcome === 'returned-roll' && (
-                        <TextField
+                        <MeasurementField
                           label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                          unit={fieldSuffix(units, 'radialDepth')}
                           help={measurementHelp.radialDepth}
                           value={row.depth}
                           onChange={(depth) => update(index, { depth })}
                           error={errors[`${row.id}.depth`]}
-                          type="number"
                           required
                         />
                       )}
                       {row.outcome === 'returned-remnant' && (
                         <>
-                          <TextField
+                          <MeasurementField
                             label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                            unit={fieldSuffix(units, 'rollWidth')}
                             value={row.width}
                             onChange={(width) => update(index, { width })}
                             error={errors[`${row.id}.width`]}
-                            type="number"
                             required
                           />
-                          <TextField
+                          <MeasurementField
                             label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
+                            unit={fieldSuffix(units, 'rollLength')}
                             value={row.length}
                             onChange={(length) => update(index, { length })}
                             error={errors[`${row.id}.length`]}
-                            type="number"
                             required
                           />
                         </>
@@ -425,20 +426,20 @@ function CompletionCorrectionForm({
                             <strong>
                               {piece.id ? shortId(piece.id) : 'New piece'}
                             </strong>
-                            <TextField
+                            <MeasurementField
                               label={`Piece width (${fieldSuffix(units, 'rollWidth')})`}
+                              unit={fieldSuffix(units, 'rollWidth')}
                               value={piece.width}
                               onChange={(width) => change({ width })}
                               error={errors[`${row.id}.pieces.${pi}.width`]}
-                              type="number"
                               required
                             />
-                            <TextField
+                            <MeasurementField
                               label={`Piece length (${fieldSuffix(units, 'rollLength')})`}
+                              unit={fieldSuffix(units, 'rollLength')}
                               value={piece.length}
                               onChange={(length) => change({ length })}
                               error={errors[`${row.id}.pieces.${pi}.length`]}
-                              type="number"
                               required
                             />
                             <Lookup

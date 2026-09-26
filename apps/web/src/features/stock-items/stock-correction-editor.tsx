@@ -6,7 +6,8 @@ import {
   stockVoidSchema,
 } from '@roller-bay/shared/corrections';
 import { Dialog } from '@/components/ui/dialog';
-import { TextField, ChoiceField } from '@/components/ui/field';
+import { ChoiceField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { useMeasurementUnits } from '@/features/users';
 import { useCurrentUser } from '@/features/auth';
@@ -120,49 +121,49 @@ export function StockCorrectionEditor({
                   item.isRemnant ? 'form-grid form-grid-3' : 'form-grid'
                 }
               >
-                <TextField
+                <MeasurementField
                   label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                  unit={fieldSuffix(units, 'rollWidth')}
                   value={width}
                   onChange={setWidth}
                   error={errors.width}
-                  type="number"
                   required
                 />
-                <TextField
+                <MeasurementField
                   label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
+                  unit={fieldSuffix(units, 'rollLength')}
                   value={length}
                   onChange={setLength}
                   error={errors.length}
-                  type="number"
                   required
                 />
                 {item.isRemnant ? (
-                  <TextField
+                  <MeasurementField
                     label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
+                    unit={fieldSuffix(units, 'rollLength')}
                     value={remaining}
                     onChange={setRemaining}
                     error={errors.remaining}
-                    type="number"
                     required
                   />
                 ) : (
                   <>
-                    <TextField
+                    <MeasurementField
                       label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                      unit={fieldSuffix(units, 'radialDepth')}
                       help={measurementHelp.radialDepth}
                       value={depth}
                       onChange={setDepth}
                       error={errors.depth}
-                      type="number"
                       optional
                     />
-                    <TextField
+                    <MeasurementField
                       label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                      unit={fieldSuffix(units, 'tubeDiameter')}
                       help={measurementHelp.tubeDiameter}
                       value={tube}
                       onChange={setTube}
                       error={errors.tube}
-                      type="number"
                     />
                   </>
                 )}

@@ -832,6 +832,96 @@ td strong {
 .field small.field-error {
   color: var(--danger);
 }
+/* A typed amount and, for inches, its fraction in one input-like box. */
+.measurement-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.measurement-input {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+.measurement-input:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.measurement-input.is-disabled {
+  opacity: 0.6;
+}
+.measurement-amount {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.measurement-amount:focus-visible {
+  outline: none;
+}
+.measurement-fraction {
+  flex: none;
+  min-width: 72px;
+  padding: 0 12px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--foreground);
+  font-size: 16px;
+  cursor: pointer;
+}
+.measurement-fraction:focus-visible {
+  outline-offset: -3px;
+}
+.measurement-fraction.is-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+.fraction {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fraction sup,
+.fraction sub {
+  font-size: 0.72em;
+  line-height: 0;
+}
+.fraction sup {
+  vertical-align: 0.45em;
+}
+.fraction sub {
+  vertical-align: -0.1em;
+}
+.fraction-picker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.fraction-mark {
+  min-height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.fraction-mark.is-sixteenth {
+  color: var(--muted);
+  font-size: 12px;
+}
+.fraction-mark:hover {
+  background: var(--surface-soft);
+}
+.fraction-mark[aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
 /* The blinds entered against the order's quantity, under its picker. */
 .order-count {
   margin-top: 8px;

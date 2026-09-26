@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TextField, ChoiceField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { Loading, ErrorNotice } from '@/components/ui/feedback';
 import { lookupColors, catalogKey } from '@/features/fabric-catalog';
@@ -204,20 +205,20 @@ function ReceiptCorrectionForm({
                             load={lookupColors}
                           />
                           <div className="form-grid form-grid-3">
-                            <TextField
+                            <MeasurementField
                               label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                              unit={fieldSuffix(units, 'rollWidth')}
                               value={line.width}
                               onChange={(width) => update(index, { width })}
                               error={errors[`${line.key}.width`]}
-                              type="number"
                               required
                             />
-                            <TextField
+                            <MeasurementField
                               label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
+                              unit={fieldSuffix(units, 'rollLength')}
                               value={line.length}
                               onChange={(length) => update(index, { length })}
                               error={errors[`${line.key}.length`]}
-                              type="number"
                               required
                             />
                             <TextField

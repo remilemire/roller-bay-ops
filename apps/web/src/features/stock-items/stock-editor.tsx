@@ -4,7 +4,8 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { TextField, ChoiceField } from '@/components/ui/field';
+import { ChoiceField } from '@/components/ui/field';
+import { MeasurementField } from '@/components/ui/measurement-field';
 import { Lookup } from '@/components/ui/lookup';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { lookupColors, catalogKey } from '@/features/fabric-catalog';
@@ -123,50 +124,50 @@ export function StockEditor({ close }: { close: () => void }) {
               values.kind === 'remnant' ? 'form-grid form-grid-3' : 'form-grid'
             }
           >
-            <TextField
+            <MeasurementField
               label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+              unit={fieldSuffix(units, 'rollWidth')}
               value={values.width}
               onChange={(v) => set('width', v)}
               error={errors.width?.message}
-              type="number"
               required
             />
-            <TextField
+            <MeasurementField
               label={`Initial length (${fieldSuffix(units, 'rollLength')})`}
+              unit={fieldSuffix(units, 'rollLength')}
               value={values.initialLength}
               onChange={(v) => set('initialLength', v)}
               error={errors.initialLength?.message}
-              type="number"
               required
             />
             {values.kind === 'remnant' && (
-              <TextField
+              <MeasurementField
                 label={`Remaining length (${fieldSuffix(units, 'rollLength')})`}
+                unit={fieldSuffix(units, 'rollLength')}
                 value={values.explicitLength}
                 onChange={(v) => set('explicitLength', v)}
                 error={errors.explicitLength?.message}
-                type="number"
                 required
               />
             )}
             {values.kind === 'used' && (
               <>
-                <TextField
+                <MeasurementField
                   label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
+                  unit={fieldSuffix(units, 'tubeDiameter')}
                   help={measurementHelp.tubeDiameter}
                   value={values.tube}
                   onChange={(v) => set('tube', v)}
                   error={errors.tube?.message}
-                  type="number"
                   required
                 />
-                <TextField
+                <MeasurementField
                   label={`Radial depth (${fieldSuffix(units, 'radialDepth')})`}
+                  unit={fieldSuffix(units, 'radialDepth')}
                   help={measurementHelp.radialDepth}
                   value={values.depth}
                   onChange={(v) => set('depth', v)}
                   error={errors.depth?.message}
-                  type="number"
                   optional
                 />
               </>
