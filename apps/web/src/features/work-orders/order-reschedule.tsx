@@ -34,7 +34,7 @@ export function OrderReschedule({
   order: WorkOrder;
   close: () => void;
 }) {
-  // Pin the row this opened from; see OrderEditor.
+  // Pin the row this opened from, so a refetch cannot swap in a newer revision.
   const [opened] = useState(order);
   const backOrdered = !opened.allocatedAt;
   const [shipDate, setShipDate] = useState(opened.shipDate ?? '');

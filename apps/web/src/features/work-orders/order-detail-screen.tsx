@@ -4,7 +4,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
-import type { WorkOrder } from '@roller-bay/shared/work-orders';
+import {
+  orderQuantitySchema,
+  type WorkOrder,
+} from '@roller-bay/shared/work-orders';
 import { useCanManage } from '@/features/auth';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -15,7 +18,7 @@ import {
   Status,
 } from '@/components/ui/feedback';
 import { calendarDateLabel, dateLabel } from '@/lib/format';
-import { OrderEditor } from './order-editor';
+import { OrderField } from './order-field';
 import { OrderReschedule, scheduleLabel } from './order-reschedule';
 import { deleteOrder, orderDetail, workOrdersKey } from './work-orders.api';
 
@@ -54,7 +57,6 @@ function OrderRecord({
   const client = useQueryClient();
   const router = useRouter();
   const [cancelling, setCancelling] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const remove = useMutation({
@@ -68,6 +70,7 @@ function OrderRecord({
     },
   });
   const milestone = (value: string | null) => (value ? dateLabel(value) : '—');
+  const editable = canManage && !order.cancelledAt;
   return (
     <div className="stack">
       <PageHeading
@@ -82,9 +85,6 @@ function OrderRecord({
         <Status value={order.status} />
         {canManage && !order.cancelledAt && (
           <>
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
             {!order.allocatedAt &&
               !order.shipDate &&
               !order.cutAt &&
@@ -129,8 +129,30 @@ function OrderRecord({
       <section className="panel">
         <div className="panel-body stack">
           <div className="details-grid">
+            {/* An order's own fields are edited where they are shown. */}
+            <OrderField
+              order={order}
+              field="quantity"
+              label="Blinds"
+              display={String(order.quantity)}
+              // Its allocation's blinds were checked against the count.
+              editable={editable && !order.allocatedAt}
+              note={
+                editable && order.allocatedAt
+                  ? "Can't be changed while the order has an allocation."
+                  : undefined
+              }
+              inputMode="numeric"
+              maxLength={5}
+              sanitize={(text) => text.replace(/\D/g, '')}
+              validate={(text) =>
+                orderQuantitySchema.safeParse(Number(text)).success
+                  ? undefined
+                  : 'Enter a whole number from 1 to 10,000.'
+              }
+              body={(text) => ({ quantity: Number(text) })}
+            />
             {[
-              ['Blinds', String(order.quantity)],
               ['Created', milestone(order.createdAt)],
               ['Allocated', milestone(order.allocatedAt)],
               ['Scheduled', milestone(order.scheduledAt)],
@@ -158,10 +180,15 @@ function OrderRecord({
                 <div className="detail-value">{value}</div>
               </div>
             ))}
-            <div>
-              <div className="detail-label">Note</div>
-              <div className="detail-value">{order.note ?? '—'}</div>
-            </div>
+            <OrderField
+              order={order}
+              field="note"
+              label="Note"
+              display={order.note ?? '—'}
+              editable={editable}
+              maxLength={1000}
+              body={(note) => ({ note })}
+            />
           </div>
           {order.allocatedAt && (
             <p>
@@ -185,7 +212,6 @@ function OrderRecord({
       )}
       {history}
       {cancelling && cancellation(() => setCancelling(false))}
-      {editing && <OrderEditor order={order} close={() => setEditing(false)} />}
       {rescheduling && (
         <OrderReschedule order={order} close={() => setRescheduling(false)} />
       )}

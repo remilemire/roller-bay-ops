@@ -115,7 +115,6 @@ test('standard controls align, filters expose their defaults, and views follow s
   await page.goto(`/work-orders/${ids.order}`);
   const actions = page.locator('.heading-actions');
   await expect(actions.getByRole('button')).toHaveText([
-    'Edit',
     'Cancel work order',
     'Reschedule',
   ]);

@@ -409,23 +409,24 @@ it('edits the note and unschedules an order with the revision it shows', async (
     '/allocations?state=all&search=104801',
   );
 
-  // The blind count and note are the order's own editable fields; the count
-  // is fixed while the order has an allocation, and left out unchanged.
-  await user.click(screen.getByRole('button', { name: 'Edit' }));
-  const editor = within(
-    screen.getByRole('dialog', { name: 'Edit order 104801' }),
-  );
-  expect(editor.getByLabelText(/Blinds/)).toBeDisabled();
-  await user.clear(editor.getByLabelText('Note'));
-  await user.click(editor.getByRole('button', { name: 'Save' }));
+  // The blind count and note are edited where they are shown; the count is
+  // fixed while the order has an allocation.
+  expect(screen.queryByRole('button', { name: 'Edit blinds' })).toBeNull();
+  expect(
+    screen.getByText("Can't be changed while the order has an allocation."),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Edit note' }));
+  await user.clear(screen.getByLabelText('Note'));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
       expectedRevision: 3,
-      quantity: undefined,
       note: '',
     }),
   );
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull(),
+  );
 
   // An allocated order can be taken off the schedule without touching the rest.
   await user.click(screen.getByRole('button', { name: 'Reschedule' }));
@@ -447,6 +448,53 @@ it('edits the note and unschedules an order with the revision it shows', async (
   expect(
     screen.getByRole('button', { name: 'Cancel work order' }),
   ).toBeInTheDocument();
+});
+
+it("edits an unallocated order's blind count in place, keeping the revision it started from", async () => {
+  let revision = 3;
+  vi.mocked(orderDetail).mockImplementation((id) =>
+    queryOptions({
+      queryKey: ['work-orders', id],
+      queryFn: async (): Promise<WorkOrder> => ({
+        ...order,
+        allocatedAt: null,
+        revision,
+      }),
+    }),
+  );
+  vi.mocked(updateOrder).mockRejectedValueOnce(
+    new ApiError(409, 'Order changed; refresh before saving.'),
+  );
+  show(<OrderDetailScreen id={order.id} {...sections} />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Edit blinds' }));
+  const blinds = screen.getByLabelText('Blinds');
+  await user.clear(blinds);
+  await user.type(blinds, '0');
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(blinds).toHaveAccessibleDescription(
+    'Enter a whole number from 1 to 10,000.',
+  );
+  expect(updateOrder).not.toHaveBeenCalled();
+  // Escape leaves the edit without saving.
+  await user.keyboard('{Escape}');
+  expect(screen.queryByLabelText('Blinds')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Edit blinds' })).toHaveFocus();
+
+  await user.click(screen.getByRole('button', { name: 'Edit blinds' }));
+  await user.clear(screen.getByLabelText('Blinds'));
+  await user.type(screen.getByLabelText('Blinds'), '1x2');
+  revision = 4;
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  // A stale save keeps what was typed.
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Order changed; refresh before saving.',
+  );
+  expect(screen.getByLabelText('Blinds')).toHaveValue('12');
+  expect(updateOrder).toHaveBeenLastCalledWith(order.id, {
+    expectedRevision: 3,
+    quantity: 12,
+  });
 });
 
 it('keeps a refused delete in its dialog', async () => {

@@ -1198,6 +1198,25 @@ td strong {
   align-items: center;
   gap: 8px;
 }
+/* A detail edited where it is shown: its box and actions on one line. */
+label.detail-label {
+  display: block;
+}
+.inline-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--action-gap);
+}
+.inline-edit .input {
+  flex: 1;
+  height: var(--control-compact-height);
+}
+.detail-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
 /* A button with its status or error beneath; keeps the button's own width in a stack. */
 .action-group {
   display: grid;
