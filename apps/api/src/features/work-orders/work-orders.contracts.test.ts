@@ -12,13 +12,15 @@ test('work order contracts require a six-digit number, and a ship date is a real
     orderNumber: '104801',
     quantity: 12,
     note: null,
+    backOrder: null,
+    shipDate: null,
   });
   for (const orderNumber of ['10480', '1048010', 'RB-1048', '104 801'])
     assert.equal(
       createWorkOrderSchema.safeParse({ ...input, orderNumber }).success,
       false,
     );
-  // An order is created without a ship date; it gets one once allocated.
+  // An order is created unallocated, so only a back order can date it.
   for (const extra of [{ shipDate: '2026-10-02' }, { shippedAt: null }])
     assert.equal(
       createWorkOrderSchema.safeParse({ ...input, ...extra }).success,
@@ -181,4 +183,44 @@ test('order cancellation requests require reviewed revisions, a reason and an ex
     orderCancellationSchema.safeParse({ ...base, expectedRevision: 0 }).success,
     false,
   );
+});
+
+test('a back order names a five-digit supplier PO and an arrival that the ship date follows', () => {
+  const input = { orderNumber: '104801', quantity: 12 };
+  const backOrder = {
+    purchaseOrderNumber: ' 43142 ',
+    estimatedArrivalDate: '2026-10-03',
+  };
+  const create = (extra: object) =>
+    createWorkOrderSchema.safeParse({ ...input, ...extra });
+  // Fabric may arrive on any day; the order still ships on a weekday.
+  assert.deepEqual(create({ backOrder, shipDate: '2026-10-05' }).data, {
+    ...input,
+    note: null,
+    backOrder: {
+      purchaseOrderNumber: '43142',
+      estimatedArrivalDate: '2026-10-03',
+    },
+    shipDate: '2026-10-05',
+  });
+  assert.equal(create({ backOrder }).success, true);
+  const early = create({ backOrder, shipDate: '2026-10-02' });
+  assert.deepEqual(
+    early.error!.issues.map(({ path, message }) => [path.join('.'), message]),
+    [['shipDate', "Must be on or after the fabric's estimated arrival."]],
+  );
+  for (const partial of [
+    { purchaseOrderNumber: '43142' },
+    { estimatedArrivalDate: '2026-10-03' },
+    { ...backOrder, purchaseOrderNumber: '4314' },
+    { ...backOrder, estimatedArrivalDate: '10/03/2026' },
+  ])
+    assert.equal(create({ backOrder: partial }).success, false);
+  // On its own it is a change, and null clears it.
+  for (const value of [backOrder, null])
+    assert.equal(
+      updateWorkOrderSchema.safeParse({ expectedRevision: 1, backOrder: value })
+        .success,
+      true,
+    );
 });

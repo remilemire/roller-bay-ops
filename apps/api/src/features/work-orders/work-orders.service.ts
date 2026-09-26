@@ -6,11 +6,14 @@ import {
 } from '@nestjs/common';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import type { Station } from '@roller-bay/shared/users';
-import type {
-  CreateWorkOrder,
-  UpdateWorkOrder,
-  WorkOrderList,
-  WorkOrderQuery,
+import {
+  shipDateBeforeArrivalMessage,
+  shipsBeforeArrival,
+  type BackOrder,
+  type CreateWorkOrder,
+  type UpdateWorkOrder,
+  type WorkOrderList,
+  type WorkOrderQuery,
 } from '@roller-bay/shared/work-orders';
 import type { UnitOfWorkContext } from '../../unit-of-work/unit-of-work-context.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
@@ -21,7 +24,7 @@ import {
   orderNotFound,
   workOrdersOperation,
 } from './work-orders.operation.js';
-import { presentWorkOrder } from './work-orders.presenter.js';
+import { backOrderOf, presentWorkOrder } from './work-orders.presenter.js';
 import {
   WorkOrdersRepository,
   type WorkOrderRecord,
@@ -43,6 +46,10 @@ function change(
     },
   };
 }
+const backOrderColumns = (backOrder: BackOrder | null) => ({
+  backOrderPurchaseOrderNumber: backOrder?.purchaseOrderNumber ?? null,
+  backOrderArrivalDate: backOrder?.estimatedArrivalDate ?? null,
+});
 function requireRevision(row: WorkOrderRecord | undefined, revision: number) {
   if (!row) throw new NotFoundException('Order not found.');
   if (row.revision !== revision)
@@ -77,16 +84,28 @@ export class WorkOrdersService {
     });
   }
   /**
-   * Employees create the orders they allocate fabric for. A note, and bringing
-   * back an order an admin deleted, stay with admins; both are refused rather
-   * than quietly dropped.
+   * Employees create the orders they allocate fabric for. A note, a back
+   * order or a ship date, and bringing back an order an admin deleted, stay
+   * with admins; all are refused rather than quietly dropped. The contract
+   * already ties a new order's date to its back order.
    */
   create(input: CreateWorkOrder, userId: string, isAdmin: boolean) {
     if (input.note && !isAdmin)
       throw new ForbiddenException('Only an admin can add a note to an order.');
+    if ((input.backOrder || input.shipDate) && !isAdmin)
+      throw new ForbiddenException(
+        'Only an admin can back-order or schedule an order.',
+      );
     return workOrdersOperation(() =>
       this.unitOfWork.transaction(async (context) => {
-        const row = await context.workOrders.create(input);
+        const row = await context.workOrders.create({
+          orderNumber: input.orderNumber,
+          quantity: input.quantity,
+          note: input.note,
+          shipDate: input.shipDate,
+          scheduledAt: input.shipDate ? new Date() : null,
+          ...backOrderColumns(input.backOrder),
+        });
         if (!row) throw orderAlreadyExists();
         if (row.revision > 1 && !isAdmin)
           throw new ConflictException({
@@ -119,19 +138,7 @@ export class WorkOrdersService {
           input.expectedRevision,
         );
         this.assertNotCancelled(previous);
-        // Fabric is allocated before a date is promised. The database holds
-        // the same rule; this answers with the field it concerns.
-        if (input.shipDate && !previous.allocatedAt)
-          throw new ConflictException({
-            message: 'Allocate fabric for this order before scheduling it.',
-            issues: [
-              {
-                code: 'order_not_allocated',
-                path: ['shipDate'],
-                message: 'Allocate fabric first.',
-              },
-            ],
-          });
+        this.assertSchedulable(previous, input);
         // The allocation's blinds were checked against this quantity.
         if (
           input.quantity !== undefined &&
@@ -152,6 +159,8 @@ export class WorkOrdersService {
         const row = await context.workOrders.update(id, {
           shipDate: input.shipDate,
           quantity: input.quantity,
+          ...(input.backOrder !== undefined &&
+            backOrderColumns(input.backOrder)),
           // Kept through a reschedule: it is when the order went on the
           // schedule, not when its date last moved.
           scheduledAt:
@@ -174,6 +183,55 @@ export class WorkOrdersService {
         return presentWorkOrder(row);
       }),
     );
+  }
+  /**
+   * A date is promised against fabric: allocated, or back-ordered and due by
+   * then. Once allocated, the arrival no longer bounds the date. These checks
+   * run only when a write touches the date or back order, so a note can
+   * still be saved on an order whose allocation was later cancelled.
+   */
+  private assertSchedulable(previous: WorkOrderRecord, input: UpdateWorkOrder) {
+    if (input.shipDate === undefined && input.backOrder === undefined) return;
+    if (previous.allocatedAt) return;
+    const shipDate =
+      input.shipDate === undefined ? previous.shipDate : input.shipDate;
+    const backOrder =
+      input.backOrder === undefined ? backOrderOf(previous) : input.backOrder;
+    if (input.shipDate && !backOrder)
+      throw new ConflictException({
+        message:
+          'Allocate fabric for this order, or enter back-order details, before scheduling it.',
+        issues: [
+          {
+            code: 'order_not_allocated',
+            path: ['shipDate'],
+            message: 'Allocate fabric or enter back-order details first.',
+          },
+        ],
+      });
+    if (shipDate && !backOrder)
+      throw new ConflictException({
+        message:
+          'This order is scheduled without fabric. Unschedule it, or allocate its fabric, before removing its back order.',
+        issues: [
+          {
+            code: 'back_order_required',
+            path: ['backOrder'],
+            message: 'Unschedule the order first, or allocate its fabric.',
+          },
+        ],
+      });
+    if (shipsBeforeArrival(shipDate, backOrder))
+      throw new ConflictException({
+        message: 'The ship date is before the fabric is due to arrive.',
+        issues: [
+          {
+            code: 'ship_date_before_arrival',
+            path: ['shipDate'],
+            message: shipDateBeforeArrivalMessage,
+          },
+        ],
+      });
   }
   delete(id: string, revision: number, userId: string) {
     return workOrdersOperation(() =>

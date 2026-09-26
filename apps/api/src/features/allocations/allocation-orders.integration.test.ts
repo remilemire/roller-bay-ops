@@ -454,4 +454,29 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
     },
   );
+
+  await t.test(
+    "confirming a back-ordered order's allocation keeps its back order and date",
+    async () => {
+      const body = await input(await seed());
+      // Back-ordering is the work-order suite's subject; this order only
+      // needs to be scheduled on one.
+      await pool.query(
+        `UPDATE work_orders SET back_order_purchase_order_number='43142',
+           back_order_arrival_date='2026-10-05', ship_date='2026-10-09',
+           scheduled_at=now() WHERE id=$1`,
+        [body.workOrderId],
+      );
+      await create(body);
+      const order = (
+        await get(`/api/work-orders/${body.workOrderId}`).expect(200)
+      ).body;
+      assert.ok(order.allocatedAt);
+      assert.equal(order.shipDate, '2026-10-09');
+      assert.deepEqual(order.backOrder, {
+        purchaseOrderNumber: '43142',
+        estimatedArrivalDate: '2026-10-05',
+      });
+    },
+  );
 });

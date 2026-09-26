@@ -1,14 +1,29 @@
 import {
   workOrderSchema,
+  type BackOrder,
   type WorkOrder,
 } from '@roller-bay/shared/work-orders';
 import type { WorkOrderRecord } from './work-orders.repository.js';
+
+export const backOrderOf = (
+  row: Pick<
+    WorkOrderRecord,
+    'backOrderPurchaseOrderNumber' | 'backOrderArrivalDate'
+  >,
+): BackOrder | null =>
+  row.backOrderPurchaseOrderNumber && row.backOrderArrivalDate
+    ? {
+        purchaseOrderNumber: row.backOrderPurchaseOrderNumber,
+        estimatedArrivalDate: row.backOrderArrivalDate,
+      }
+    : null;
 
 // The status is the furthest step reached; it is never stored. A promised
 // date survives fabric release, so `scheduled` can have no current allocation.
 export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
   return workOrderSchema.parse({
     ...row,
+    backOrder: backOrderOf(row),
     status: row.cancelledAt
       ? 'cancelled'
       : row.shippedAt

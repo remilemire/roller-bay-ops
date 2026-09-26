@@ -15,8 +15,14 @@ export const workOrders = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     orderNumber: varchar('order_number', { length: 6 }).notNull().unique(),
     // A calendar date; shipping has no time of day or timezone. An order has
-    // none until fabric is allocated and someone schedules it.
+    // none until fabric is allocated or back-ordered and someone schedules it.
     shipDate: date('ship_date', { mode: 'string' }),
+    // A back order: the supplier purchase order bringing the fabric, and when
+    // it should arrive. Kept after allocation as a record.
+    backOrderPurchaseOrderNumber: varchar('back_order_purchase_order_number', {
+      length: 5,
+    }),
+    backOrderArrivalDate: date('back_order_arrival_date', { mode: 'string' }),
     note: varchar('note', { length: 1000 }),
     // How many blinds the order has. An allocation's blinds must add up to it.
     quantity: integer('quantity').notNull(),
@@ -52,11 +58,20 @@ export const workOrders = pgTable(
       'work_orders_ship_date_weekday',
       sql`EXTRACT(ISODOW FROM ${table.shipDate}) < 6`,
     ),
-    // Allocation is required when scheduling, but may later be released.
-    // Scheduling eligibility is checked under the order lock in the service.
+    // Allocation or a back order is required when scheduling, but fabric may
+    // later be released. Scheduling eligibility is checked under the order
+    // lock in the service.
     check(
       'work_orders_scheduled_at_matches_ship_date',
       sql`(${table.shipDate} IS NULL) = (${table.scheduledAt} IS NULL)`,
+    ),
+    check(
+      'work_orders_back_order_complete',
+      sql`(${table.backOrderPurchaseOrderNumber} IS NULL) = (${table.backOrderArrivalDate} IS NULL)`,
+    ),
+    check(
+      'work_orders_back_order_purchase_order_number_format',
+      sql`${table.backOrderPurchaseOrderNumber} ~ '^[0-9]{5}$'`,
     ),
     check('work_orders_revision_positive', sql`${table.revision} > 0`),
     check('work_orders_quantity_positive', sql`${table.quantity} > 0`),

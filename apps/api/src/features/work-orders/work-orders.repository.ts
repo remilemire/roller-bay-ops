@@ -1,8 +1,5 @@
 import type { Station } from '@roller-bay/shared/users';
-import type {
-  CreateWorkOrder,
-  WorkOrderQuery,
-} from '@roller-bay/shared/work-orders';
+import type { WorkOrderQuery } from '@roller-bay/shared/work-orders';
 import {
   and,
   asc,
@@ -14,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  or,
   sql,
 } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
@@ -21,13 +19,32 @@ import { milestoneTimestampField } from './work-order-milestones.js';
 import { workOrders } from './work-orders.table.js';
 const columns = getTableColumns(workOrders);
 export type WorkOrderRecord = typeof workOrders.$inferSelect;
+/** The columns a new or restored order is written with. */
+export type NewWorkOrder = Pick<
+  WorkOrderRecord,
+  | 'orderNumber'
+  | 'quantity'
+  | 'note'
+  | 'shipDate'
+  | 'scheduledAt'
+  | 'backOrderPurchaseOrderNumber'
+  | 'backOrderArrivalDate'
+>;
 const { allocatedAt, cutAt, assembledAt, checkedAt, shipDate, shippedAt } =
   workOrders;
 // Each mirrors the presenter's derived status, except the two work queues.
 const statusFilters = {
   open: isNull(shippedAt),
-  // Allocated, or already cut, and still waiting for a ship date.
-  unscheduled: and(isNotNull(allocatedAt), isNull(shipDate), isNull(shippedAt)),
+  // Allocated (perhaps already cut) or back-ordered, and still waiting for a
+  // ship date.
+  unscheduled: and(
+    or(
+      isNotNull(allocatedAt),
+      isNotNull(workOrders.backOrderPurchaseOrderNumber),
+    ),
+    isNull(shipDate),
+    isNull(shippedAt),
+  ),
   // What an allocation may claim: not shipped, and no live allocation yet.
   // A promised order whose allocation was cancelled is among them.
   unallocated: and(isNull(allocatedAt), isNull(shippedAt)),
@@ -127,13 +144,14 @@ export class WorkOrdersRepository {
    * Returns nothing when the number belongs to an order that still exists.
    * A restored row is recognisable by its revision, which a new row starts at 1.
    */
-  async create(values: CreateWorkOrder) {
+  async create(values: NewWorkOrder) {
     const [row] = await this.db
       .insert(workOrders)
       .values(values)
       .onConflictDoUpdate({
         target: workOrders.orderNumber,
-        // A deleted order had no allocation, so it has no ship date to clear.
+        // A deleted order had no allocation or date; every field it can be
+        // created with is written, so nothing of the old one carries over.
         set: {
           ...values,
           shippedAt: null,
@@ -155,6 +173,8 @@ export class WorkOrdersRepository {
         | 'scheduledAt'
         | 'note'
         | 'quantity'
+        | 'backOrderPurchaseOrderNumber'
+        | 'backOrderArrivalDate'
         | 'shippedAt'
         | 'allocatedAt'
         | 'cancelledAt'
