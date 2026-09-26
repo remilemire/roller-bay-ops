@@ -1664,7 +1664,10 @@ label.detail-label {
   background: var(--muted-surface);
 }
 .month-order {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 11px;
@@ -2405,11 +2408,56 @@ label.detail-label {
   height: 18px;
   margin-top: 3px;
 }
-.allocation-warning {
-  display: block;
+/* An order's fabric flag: a compact pill that sits under the status in a
+   table, beside it on a card, and shrinks to its icon in a month cell. */
+.order-flag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.3;
+}
+.order-flag svg {
+  flex: 0 0 auto;
+}
+.order-flag-warning {
   color: var(--warning);
-  font-size: 12px;
-  font-weight: 600;
+  background: var(--warning-soft);
+}
+.order-flag-ready {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.order-flag-waiting {
+  color: var(--muted);
+  background: var(--muted-surface);
+}
+/* A table row that needs fabric carries a warning edge so it stands out when
+   scanning the list. */
+tbody tr:has(.order-flag-warning) > td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+.order-card-title .order-flag {
+  margin-top: 0;
+}
+.month-order .order-flag {
+  margin: 0;
+  padding: 2px;
+  background: none;
+}
+.month-order .order-flag > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 /* Purchase orders as chips inside one input-like box. */
 .tag-input {
@@ -2464,12 +2512,6 @@ label.detail-label {
 .tag-chip-remove:hover {
   color: var(--primary);
 }
-.back-order-note {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 /* Disabled form groups must shrink with the panel on tablet screens. */
 .form-fieldset {
   min-width: 0;
