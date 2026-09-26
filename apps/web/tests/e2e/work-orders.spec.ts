@@ -110,8 +110,13 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Delete' })
     .click();
-  // Back to the last view shown.
-  await expect(page).toHaveURL(/\/work-orders\?view=list$/);
+  // Back to the last view and filter shown.
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === '/work-orders' &&
+      url.searchParams.get('view') === 'list' &&
+      url.searchParams.get('status') === 'open',
+  );
   expect(state.orderRequests.at(-1)).toEqual({
     method: 'DELETE',
     body: { expectedRevision: unused.revision },
@@ -374,7 +379,7 @@ test('employees read work orders without admin actions', async ({ page }) => {
   await adding.getByLabel('Blinds').fill('6');
   await adding.getByRole('button', { name: 'Add order' }).click();
   await expect(adding).toHaveCount(0);
-  await expect(page).toHaveURL(/\/work-orders\?view=list$/);
+  await expect(page).toHaveURL(/\/work-orders\?view=list&status=open$/);
   expect(state.orderRequests).toEqual([
     {
       method: 'POST',

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
+import { useRememberedParam } from '@/lib/use-remembered-param';
 import { dateLabel, shortId } from '@/lib/format';
 import { allocationList } from './allocations.api';
 
@@ -24,18 +25,22 @@ const tabs = [
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'all', label: 'All allocations' },
-];
+] as const;
 export function AllocationListScreen() {
   const params = useListParams();
-  const state = tabs.some((tab) => tab.value === params.get('state'))
-    ? params.get('state')
-    : 'active';
+  const { value: state } = useRememberedParam(
+    'state',
+    'roller-bay-allocations-state',
+    tabs.map((tab) => tab.value),
+    'active',
+  );
   const query = useQuery({
     ...allocationList({
       search: params.search,
       page: params.page,
-      state: state === 'all' ? '' : state,
+      state: state === 'all' ? '' : (state ?? ''),
     }),
+    enabled: !!state,
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
   });
@@ -56,11 +61,9 @@ export function AllocationListScreen() {
       >
         <SegmentedControl
           label="Allocation status"
-          value={state}
+          value={state ?? ''}
           options={tabs}
-          onChange={(value) =>
-            params.set({ state: value === 'active' ? '' : value })
-          }
+          onChange={(value) => params.set({ state: value })}
         />
       </SearchToolbar>
       <section className="panel">

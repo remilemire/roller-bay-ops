@@ -77,7 +77,7 @@ export function DashboardScreen() {
       value: stock.data?.total,
       Icon: Layers3,
       error: stock.error,
-      href: '/stock-items',
+      href: '/stock-items?state=on-hand',
     },
     {
       label: 'Receipt drafts',
@@ -251,7 +251,9 @@ export function DashboardScreen() {
         <section className="panel">
           <div className="panel-heading">
             <h2>Recent receipts</h2>
-            <TextLink href="/stock-receipts">All receipts</TextLink>
+            <TextLink href="/stock-receipts?state=submitted">
+              All receipts
+            </TextLink>
           </div>
           {receipts.isPending ? (
             <Loading label="Loading receipts…" />

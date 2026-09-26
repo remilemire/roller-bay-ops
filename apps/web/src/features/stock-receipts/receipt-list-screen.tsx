@@ -14,17 +14,29 @@ import {
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
+import { useRememberedParam } from '@/lib/use-remembered-param';
 import { dateLabel, shortId } from '@/lib/format';
 import { receiptList } from './stock-receipts.api';
+const tabs = [
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'draft', label: 'Drafts' },
+] as const;
 export function ReceiptListScreen() {
   const params = useListParams();
-  const draft = params.get('state') === 'draft';
+  const { value: state } = useRememberedParam(
+    'state',
+    'roller-bay-receipts-state',
+    tabs.map((tab) => tab.value),
+    'submitted',
+  );
+  const draft = state === 'draft';
   const query = useQuery({
     ...receiptList({
       search: params.search,
       page: params.page,
-      state: draft ? 'draft' : 'submitted',
+      state: state ?? 'submitted',
     }),
+    enabled: !!state,
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
   });
@@ -45,14 +57,9 @@ export function ReceiptListScreen() {
       >
         <SegmentedControl
           label="Receipt status"
-          value={draft ? 'draft' : 'submitted'}
-          options={[
-            { value: 'submitted', label: 'Submitted' },
-            { value: 'draft', label: 'Drafts' },
-          ]}
-          onChange={(value) =>
-            params.set({ state: value === 'draft' ? 'draft' : null })
-          }
+          value={state ?? ''}
+          options={tabs}
+          onChange={(value) => params.set({ state: value })}
         />
       </SearchToolbar>
       <section className="panel">

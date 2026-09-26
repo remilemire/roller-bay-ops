@@ -15,26 +15,38 @@ import {
 } from '@/components/ui/feedback';
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { useListParams } from '@/lib/use-list-params';
+import { useRememberedParam } from '@/lib/use-remembered-param';
 import { shortId } from '@/lib/format';
 import { fieldLabel } from '@/lib/measurements';
 import { useCanManage } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
 import { stockList } from './stock-items.api';
 import { StockEditor } from './stock-editor';
+const tabs = [
+  { value: 'on-hand', label: 'On hand' },
+  { value: 'remnant', label: 'Remnants' },
+  { value: 'consumed', label: 'Consumed' },
+  { value: 'voided', label: 'Voided' },
+] as const;
 export function StockScreen() {
   const params = useListParams();
   const units = useMeasurementUnits();
-  const voided = params.get('state') === 'voided';
-  const consumed = params.get('state') === 'consumed';
-  const remnant = params.get('kind') === 'remnant';
+  const { value: state } = useRememberedParam(
+    'state',
+    'roller-bay-stock-state',
+    tabs.map((tab) => tab.value),
+    'on-hand',
+  );
   const query = useQuery({
     ...stockList({
       search: params.search,
       page: params.page,
-      isConsumed: consumed,
-      isVoided: voided,
-      isRemnant: remnant || undefined,
+      isConsumed: state === 'consumed',
+      isVoided: state === 'voided',
+      // Remnants on hand: consumed and voided remnants sit under those tabs.
+      isRemnant: state === 'remnant' || undefined,
     }),
+    enabled: !!state,
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
   });
@@ -57,21 +69,9 @@ export function StockScreen() {
       >
         <SegmentedControl
           label="Stock status"
-          value={
-            voided ? 'voided' : consumed ? 'consumed' : remnant ? 'remnant' : ''
-          }
-          options={[
-            { value: '', label: 'On hand' },
-            { value: 'remnant', label: 'Remnants' },
-            { value: 'consumed', label: 'Consumed' },
-            { value: 'voided', label: 'Voided' },
-          ]}
-          onChange={(value) =>
-            params.set({
-              state: ['consumed', 'voided'].includes(value) ? value : null,
-              kind: value === 'remnant' ? 'remnant' : null,
-            })
-          }
+          value={state ?? ''}
+          options={tabs}
+          onChange={(value) => params.set({ state: value })}
         />
       </SearchToolbar>
       <section className="panel">

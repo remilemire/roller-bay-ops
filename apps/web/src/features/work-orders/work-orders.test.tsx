@@ -73,6 +73,7 @@ vi.mock('./work-orders.api', async (original) => ({
 beforeEach(() => {
   Object.assign(state, { canManage: true, search: '' });
   localStorage.clear();
+  window.history.replaceState(null, '', '/');
   state.replace.mockReset();
   state.push.mockReset();
   vi.mocked(orderList)
@@ -317,11 +318,12 @@ it('opens the list on unshipped orders and keeps the filter in the URL', async (
       { scroll: false },
     );
   }
-  // The default tab needs no parameter.
+  // Even the default is named, since a bare URL reopens the last tab.
   await user.click(screen.getByRole('button', { name: 'Open' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
-    scroll: false,
-  });
+  expect(state.replace).toHaveBeenLastCalledWith(
+    '/work-orders?view=list&status=open',
+    { scroll: false },
+  );
 });
 
 it('asks the API for every order on the All orders tab', async () => {
@@ -618,49 +620,41 @@ it('names the purchase orders a back order still waits on, until it is allocated
   expect(screen.queryByText(/Back order|Needs fabric/)).toBeNull();
 });
 
-it('opens on the list, then on whichever view was last shown', async () => {
+it('opens on the list, then on whichever view and status were last shown', async () => {
   show(<WorkOrdersScreen />);
-  // A bare URL gains the view it shows, so a copied link means that view.
   expect(
     await screen.findByRole('group', { name: 'Order status' }),
   ).toBeInTheDocument();
-  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
-    scroll: false,
+  expect(orderList).toHaveBeenLastCalledWith({
+    search: '',
+    page: 1,
+    status: 'open',
   });
+  // A bare URL gains the view and filter it shows, so a copied link means them.
+  const shown = new URLSearchParams(window.location.search);
+  expect([shown.get('view'), shown.get('status')]).toEqual(['list', 'open']);
   cleanup();
 
+  state.search = 'view=list&status=new';
+  show(<WorkOrdersScreen />);
+  await screen.findByText('104801');
+  cleanup();
   state.search = 'view=month';
   show(<WorkOrdersScreen />);
-  expect(localStorage.getItem('roller-bay-work-orders-view')).toBe('month');
   cleanup();
-
   state.search = 'month=2026-10';
   show(<WorkOrdersScreen />);
   expect(
     await screen.findByRole('grid', { name: 'October 2026' }),
   ).toBeInTheDocument();
-  expect(state.replace).toHaveBeenLastCalledWith(
-    '/work-orders?month=2026-10&view=month',
-    { scroll: false },
-  );
-});
-
-it('keeps a view named in the URL over the remembered one', async () => {
-  localStorage.setItem('roller-bay-work-orders-view', 'month');
+  cleanup();
   state.search = 'view=list';
   show(<WorkOrdersScreen />);
-  expect(
-    await screen.findByRole('group', { name: 'Order status' }),
-  ).toBeInTheDocument();
-  expect(state.replace).not.toHaveBeenCalled();
-  expect(localStorage.getItem('roller-bay-work-orders-view')).toBe('list');
-  // A view nobody saved, or one that no longer exists, falls back to the list.
-  cleanup();
-  localStorage.setItem('roller-bay-work-orders-view', 'agenda');
-  state.search = '';
-  show(<WorkOrdersScreen />);
-  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
-    scroll: false,
+  await screen.findByText('104801');
+  expect(orderList).toHaveBeenLastCalledWith({
+    search: '',
+    page: 1,
+    status: 'new',
   });
 });
 

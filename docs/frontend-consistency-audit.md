@@ -29,7 +29,7 @@ Work-order headers also put destructive/secondary actions before scheduling or a
 ## Order and defaults retained
 
 - Navigation keeps inventory, orders, production, reference data and administration grouped in the existing sequence; Settings remains at the bottom.
-- Stock opens on On hand, receipts on Submitted, allocations on Active, work orders on List (then the view last shown), the order list on Open, and stations on Work queue. Completed/cancelled/voided records remain explicit filters.
+- Stock opens on On hand, receipts on Submitted, allocations on Active, work orders on List, the order list on Open, and stations on Work queue; each browser then reopens the view and status filter it last showed. Completed/cancelled/voided records remain explicit filters.
 - Receipt entry runs from supplier reference to fabric, dimensions, quantity and destination. Allocation entry runs from order and blinds to the cutting plan and confirmation. Completion starts with each stock item's outcome, then the measurements and destinations relevant to that outcome.
 - Blank measurements/quantities remain blank. Completion outcomes and employee attribution require deliberate selection. Measurement units retain the account preferences and established defaults.
 - Existing destructive-action confirmations, revision checks, uncertain-request recovery and dirty-form protection remain in place.

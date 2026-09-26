@@ -39,6 +39,7 @@ const allocation: AllocationList['items'][number] = {
 beforeEach(() => {
   state.search = '';
   state.replace.mockReset();
+  localStorage.clear();
   vi.mocked(allocationList)
     .mockReset()
     .mockImplementation((filters = {}) =>
@@ -75,9 +76,9 @@ it('opens on active allocations and keeps the tab in the URL', async () => {
   expect(state.replace).toHaveBeenLastCalledWith('/allocations?state=draft', {
     scroll: false,
   });
-  // The default tab needs no parameter.
+  // Even the default is named, since a bare URL reopens the last tab.
   await user.click(screen.getByRole('button', { name: 'Active' }));
-  expect(state.replace).toHaveBeenLastCalledWith('/allocations', {
+  expect(state.replace).toHaveBeenLastCalledWith('/allocations?state=active', {
     scroll: false,
   });
 });

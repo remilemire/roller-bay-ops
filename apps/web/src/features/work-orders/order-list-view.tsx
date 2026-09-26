@@ -17,6 +17,7 @@ import {
 import { SearchToolbar } from '@/components/ui/search-toolbar';
 import { calendarDateLabel } from '@/lib/format';
 import { useListParams } from '@/lib/use-list-params';
+import { useRememberedParam } from '@/lib/use-remembered-param';
 import { OrderReschedule, scheduleLabel } from './order-reschedule';
 import { orderList } from './work-orders.api';
 
@@ -33,19 +34,23 @@ const tabs = [
   { value: 'shipped', label: 'Shipped' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'all', label: 'All orders' },
-];
+] as const;
 export function OrderListView({ canManage }: { canManage: boolean }) {
   const params = useListParams();
   const [rescheduling, setRescheduling] = useState<WorkOrder | null>(null);
-  const status = tabs.some((tab) => tab.value === params.get('status'))
-    ? params.get('status')
-    : 'open';
+  const { value: status } = useRememberedParam(
+    'status',
+    'roller-bay-work-orders-status',
+    tabs.map((tab) => tab.value),
+    'open',
+  );
   const query = useQuery({
     ...orderList({
       search: params.search,
       page: params.page,
-      status: status === 'all' ? '' : status,
+      status: status === 'all' ? '' : (status ?? ''),
     }),
+    enabled: !!status,
     // Keep the rows on screen while a search typed or a page turned loads.
     placeholderData: keepPreviousData,
   });
@@ -59,11 +64,9 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
       >
         <SegmentedControl
           label="Order status"
-          value={status}
+          value={status ?? ''}
           options={tabs}
-          onChange={(value) =>
-            params.set({ status: value === 'open' ? '' : value })
-          }
+          onChange={(value) => params.set({ status: value })}
         />
       </SearchToolbar>
       <section className="panel">
