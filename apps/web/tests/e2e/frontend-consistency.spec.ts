@@ -107,8 +107,8 @@ test('standard controls align, filters expose their defaults, and views follow s
   }
   await page.goto('/work-orders');
   const view = page.getByRole('group', { name: 'View', exact: true });
-  await expect(view.getByRole('button')).toHaveText(['Week', 'Month', 'List']);
-  await expect(view.getByRole('button', { name: 'Week' })).toHaveAttribute(
+  await expect(view.getByRole('button')).toHaveText(['List', 'Week', 'Month']);
+  await expect(view.getByRole('button', { name: 'List' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );

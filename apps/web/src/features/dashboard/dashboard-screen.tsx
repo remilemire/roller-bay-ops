@@ -135,7 +135,7 @@ export function DashboardScreen() {
               <h2>Shipping this week</h2>
               {week.data && <p>{orderTotals(week.data)}</p>}
             </div>
-            <TextLink href="/work-orders">Open schedule</TextLink>
+            <TextLink href="/work-orders?view=week">Open schedule</TextLink>
           </div>
           {week.isPending ? (
             <Loading label="Loading work orders…" />
@@ -185,7 +185,7 @@ export function DashboardScreen() {
           )}
           {shipping.length > WEEK_ROWS && (
             <p className="order-count" style={{ padding: '12px 22px' }}>
-              <TextLink href="/work-orders">
+              <TextLink href="/work-orders?view=week">
                 All {shipping.length} orders this week
               </TextLink>
             </p>

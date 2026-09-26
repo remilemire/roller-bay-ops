@@ -72,6 +72,7 @@ vi.mock('./work-orders.api', async (original) => ({
 }));
 beforeEach(() => {
   Object.assign(state, { canManage: true, search: '' });
+  localStorage.clear();
   state.replace.mockReset();
   state.push.mockReset();
   vi.mocked(orderList)
@@ -220,6 +221,7 @@ it('leaves the note to admins when adding an order', async () => {
 
 it('adds an order from the schedule without leaving it or allocating', async () => {
   vi.mocked(createOrder).mockResolvedValue({ ...order, id: 'made' });
+  state.search = 'view=list';
   show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'New order' }));
@@ -616,7 +618,54 @@ it('names the purchase orders a back order still waits on, until it is allocated
   expect(screen.queryByText(/Back order|Needs fabric/)).toBeNull();
 });
 
+it('opens on the list, then on whichever view was last shown', async () => {
+  show(<WorkOrdersScreen />);
+  // A bare URL gains the view it shows, so a copied link means that view.
+  expect(
+    await screen.findByRole('group', { name: 'Order status' }),
+  ).toBeInTheDocument();
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
+    scroll: false,
+  });
+  cleanup();
+
+  state.search = 'view=month';
+  show(<WorkOrdersScreen />);
+  expect(localStorage.getItem('roller-bay-work-orders-view')).toBe('month');
+  cleanup();
+
+  state.search = 'month=2026-10';
+  show(<WorkOrdersScreen />);
+  expect(
+    await screen.findByRole('grid', { name: 'October 2026' }),
+  ).toBeInTheDocument();
+  expect(state.replace).toHaveBeenLastCalledWith(
+    '/work-orders?month=2026-10&view=month',
+    { scroll: false },
+  );
+});
+
+it('keeps a view named in the URL over the remembered one', async () => {
+  localStorage.setItem('roller-bay-work-orders-view', 'month');
+  state.search = 'view=list';
+  show(<WorkOrdersScreen />);
+  expect(
+    await screen.findByRole('group', { name: 'Order status' }),
+  ).toBeInTheDocument();
+  expect(state.replace).not.toHaveBeenCalled();
+  expect(localStorage.getItem('roller-bay-work-orders-view')).toBe('list');
+  // A view nobody saved, or one that no longer exists, falls back to the list.
+  cleanup();
+  localStorage.setItem('roller-bay-work-orders-view', 'agenda');
+  state.search = '';
+  show(<WorkOrdersScreen />);
+  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?view=list', {
+    scroll: false,
+  });
+});
+
 it('groups the working week by day with totals', async () => {
+  state.search = 'view=week';
   show(<WorkOrdersScreen />);
   const user = userEvent.setup();
   // Today is Monday 28 September, so this is the week on show.
@@ -655,9 +704,8 @@ it('groups the working week by day with totals', async () => {
   expect(screen.queryByRole('button', { name: /Add order on/ })).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Next week' }));
-  // The default view needs no parameter of its own.
   expect(state.replace).toHaveBeenLastCalledWith(
-    '/work-orders?week=2026-10-05',
+    '/work-orders?view=week&week=2026-10-05',
     { scroll: false },
   );
 
@@ -668,7 +716,7 @@ it('groups the working week by day with totals', async () => {
 });
 
 it('finds an order on the week board: marks it there, and says where its other matches are', async () => {
-  state.search = 'search=10482';
+  state.search = 'view=week&search=10482';
   const nextWeek: WorkOrder = {
     ...order,
     id: 'x',
@@ -713,7 +761,10 @@ it('finds an order on the week board: marks it there, and says where its other m
   ).toBeInTheDocument();
   expect(
     screen.getByRole('link', { name: '104825 · Tue, Oct 13, 2026' }),
-  ).toHaveAttribute('href', '/work-orders?week=2026-10-13&search=10482');
+  ).toHaveAttribute(
+    'href',
+    '/work-orders?view=week&week=2026-10-13&search=10482',
+  );
   expect(
     screen.getByRole('link', { name: '104826 · to allocate' }),
   ).toHaveAttribute('href', '/allocations/new?workOrder=y');
@@ -723,9 +774,10 @@ it('finds an order on the week board: marks it there, and says where its other m
   await user.clear(box);
   await user.type(box, ' 1048011{Enter}');
   // The API caps the search at an order number's six characters.
-  expect(state.replace).toHaveBeenLastCalledWith('/work-orders?search=104801', {
-    scroll: false,
-  });
+  expect(state.replace).toHaveBeenLastCalledWith(
+    '/work-orders?view=week&search=104801',
+    { scroll: false },
+  );
 });
 
 it('shows any day of a week as that week, and employees a read-only board', async () => {

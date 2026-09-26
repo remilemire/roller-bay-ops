@@ -322,7 +322,7 @@ const whereabouts = (order: WorkOrder, search: string) =>
   order.shipDate
     ? {
         label: calendarDateLabel(order.shipDate),
-        href: `/work-orders?week=${order.shipDate}&search=${search}`,
+        href: `/work-orders?view=week&week=${order.shipDate}&search=${search}`,
       }
     : order.status === 'new'
       ? {

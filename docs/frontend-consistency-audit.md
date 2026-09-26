@@ -10,7 +10,7 @@ Reviewed shared controls, error presentation and issue placement, feature-screen
 | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Buttons were 42px, inputs 43px, and tablet sizing treated control types differently                             | Shared 44px standard control height and 10px radius; 36px compact controls become 44px on tablet            |
 | Repeated exclusive filter markup omitted accessible selection on several lists                                  | Shared `SegmentedControl` across stock, receipts, allocations, work-order views/statuses and station queues |
-| Work-order views began with List although Week was the default                                                  | Week, Month, List order; Week remains the default                                                           |
+| Work-order views began with List although Week was the default                                                  | List, Week, Month order; List, the default, comes first                                                     |
 | Allocation filter said “All orders”                                                                             | “All allocations” matches the records being filtered                                                        |
 | Settings navigation indicated selection only visually                                                           | Same `aria-current` convention as the other navigation links                                                |
 | Inline groups could compress controls or overflow; fieldsets repeated resets without a shrinkable minimum width | Wrapping actions and shared `form-fieldset` styling                                                         |
@@ -29,7 +29,7 @@ Work-order headers also put destructive/secondary actions before scheduling or a
 ## Order and defaults retained
 
 - Navigation keeps inventory, orders, production, reference data and administration grouped in the existing sequence; Settings remains at the bottom.
-- Stock opens on On hand, receipts on Submitted, allocations on Active, work orders on Week, the order list on Open, and stations on Work queue. Completed/cancelled/voided records remain explicit filters.
+- Stock opens on On hand, receipts on Submitted, allocations on Active, work orders on List (then the view last shown), the order list on Open, and stations on Work queue. Completed/cancelled/voided records remain explicit filters.
 - Receipt entry runs from supplier reference to fabric, dimensions, quantity and destination. Allocation entry runs from order and blinds to the cutting plan and confirmation. Completion starts with each stock item's outcome, then the measurements and destinations relevant to that outcome.
 - Blank measurements/quantities remain blank. Completion outcomes and employee attribution require deliberate selection. Measurement units retain the account preferences and established defaults.
 - Existing destructive-action confirmations, revision checks, uncertain-request recovery and dirty-form protection remain in place.

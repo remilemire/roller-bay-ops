@@ -13,10 +13,16 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
   await expect(
     page.getByRole('heading', { name: 'Work orders' }),
   ).toBeVisible();
-  // The page opens on the week of the fixed clock.
+  // The page opens on the list, and later on whichever view was last shown.
+  await expect(page).toHaveURL(/view=list/);
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(page).toHaveURL(/view=week/);
+  await page.goto('/work-orders');
+  // The week of the fixed clock.
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
+  await expect(page).toHaveURL(/view=week/);
   await page.getByRole('button', { name: 'List', exact: true }).click();
   await expect(page).toHaveURL(/view=list/);
   const existing = page.getByRole('row', { name: /104801/ });
@@ -104,7 +110,8 @@ test('admins schedule and ship orders, and delete only unused orders', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Delete' })
     .click();
-  await expect(page).toHaveURL(/\/work-orders$/);
+  // Back to the last view shown.
+  await expect(page).toHaveURL(/\/work-orders\?view=list$/);
   expect(state.orderRequests.at(-1)).toEqual({
     method: 'DELETE',
     body: { expectedRevision: unused.revision },
@@ -149,7 +156,7 @@ test('admins drag an order between days and the to-schedule tray, by mouse and b
 }) => {
   const state = await mockApi(page);
   await page.clock.setFixedTime(new Date('2026-09-30T12:00:00-06:00'));
-  await page.goto('/work-orders');
+  await page.goto('/work-orders?view=week');
   await expect(
     page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
@@ -305,7 +312,7 @@ test('an order is found from the week board, whether or not it is on it', async 
   page,
 }) => {
   await mockApi(page);
-  await page.goto('/work-orders?week=2026-10-12');
+  await page.goto('/work-orders?view=week&week=2026-10-12');
   const find = page.getByRole('searchbox', { name: 'Find order number…' });
   await find.fill('1048');
   await find.press('Enter');
@@ -348,6 +355,10 @@ test('the overview counts the order queues and lists the orders shipping this we
   await week.getByRole('link', { name: 'Open schedule' }).click();
   await expect(
     page.getByRole('heading', { name: 'Work orders' }),
+  ).toBeVisible();
+  // The schedule is the week board, whichever view was last shown.
+  await expect(
+    page.getByRole('heading', { name: 'Sep 28 – Oct 2, 2026' }),
   ).toBeVisible();
 });
 test('employees read work orders without admin actions', async ({ page }) => {
