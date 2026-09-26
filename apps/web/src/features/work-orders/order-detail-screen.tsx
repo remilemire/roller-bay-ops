@@ -143,7 +143,12 @@ function OrderRecord({
                 ? [
                     [
                       'Back-order POs',
-                      order.backOrder.purchaseOrderNumbers.join(', '),
+                      order.backOrder.purchaseOrderNumbers
+                        .map(
+                          (number) =>
+                            `${number} (${order.backOrder!.awaitingPurchaseOrderNumbers.includes(number) ? 'awaited' : 'received'})`,
+                        )
+                        .join(', '),
                     ],
                   ]
                 : []),

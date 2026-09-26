@@ -113,7 +113,12 @@ export const workOrderSchema = z.object({
   shipDate: z.iso.date().nullable(),
   quantity: z.number().int().positive(),
   note: z.string().nullable(),
-  backOrder: backOrderSchema.nullable().default(null),
+  // Awaiting: the numbers no submitted stock receipt carries yet. An
+  // allocation for the order is confirmed only once none are awaited.
+  backOrder: backOrderSchema
+    .extend({ awaitingPurchaseOrderNumbers: z.array(z.string()) })
+    .nullable()
+    .default(null),
   status: orderStatusSchema,
   createdAt: z.iso.datetime(),
   // When the ship date was set; null while the order has none.

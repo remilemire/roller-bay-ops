@@ -19,6 +19,7 @@ test('work order status is the furthest step reached', () => {
     orderNumber: '104801',
     shipDate: null,
     purchaseOrderNumbers: [],
+    awaitingPurchaseOrderNumbers: [],
     quantity: 12,
     note: null,
     createdAt: at,
@@ -52,12 +53,14 @@ test('work order status is the furthest step reached', () => {
   const backOrdered = {
     ...row,
     purchaseOrderNumbers: ['43142', '43150'],
+    awaitingPurchaseOrderNumbers: ['43150'],
     shipDate: '2026-10-02',
     scheduledAt: at,
   };
   assert.equal(presentWorkOrder(backOrdered).status, 'scheduled');
   assert.deepEqual(presentWorkOrder(backOrdered).backOrder, {
     purchaseOrderNumbers: ['43142', '43150'],
+    awaitingPurchaseOrderNumbers: ['43150'],
   });
   assert.deepEqual(presentWorkOrder(scheduled), {
     id: row.id,

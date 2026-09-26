@@ -277,6 +277,20 @@ export class WorkOrdersService {
           },
         ],
       });
+    // A back order's fabric is reserved once it has been received.
+    const awaiting = order.awaitingPurchaseOrderNumbers;
+    if (awaiting.length)
+      throw new ConflictException({
+        message:
+          "This order's back-ordered fabric has not all been received yet.",
+        issues: [
+          {
+            code: 'back_order_not_received',
+            path: ['workOrderId'],
+            message: `Waiting on PO ${awaiting.join(', ')}.`,
+          },
+        ],
+      });
     return {
       order,
       change: change(

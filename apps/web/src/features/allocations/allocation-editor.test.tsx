@@ -29,8 +29,15 @@ const {
   optimize: vi.fn(),
   saveDraft: vi.fn(),
   submit: vi.fn(),
-  // Whether the order the form names already has a live allocation.
-  orders: { allocated: false },
+  // Whether the order the form names already has a live allocation, and the
+  // back order it waits on, if any.
+  orders: {
+    allocated: false,
+    backOrder: null as null | {
+      purchaseOrderNumbers: string[];
+      awaitingPurchaseOrderNumbers: string[];
+    },
+  },
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn() }),
@@ -92,6 +99,7 @@ vi.mock('@/features/work-orders/work-orders.api', async (original) => {
           ...order,
           id,
           allocatedAt: orders.allocated ? order.allocatedAt : null,
+          backOrder: orders.backOrder,
         }),
       }),
     createOrder,
@@ -129,6 +137,7 @@ const client = () =>
 
 beforeEach(() => {
   orders.allocated = false;
+  orders.backOrder = null;
   for (const mock of [
     replace,
     optimize,
@@ -310,6 +319,20 @@ it('opens on the order it was reached from, with nothing to save yet', async () 
   // Arriving with an order chosen is not a change to lose by leaving.
   expect(screen.getByText('Not saved yet')).toBeInTheDocument();
   expect(createDraft).not.toHaveBeenCalled();
+});
+
+it('plans a back-ordered order while saying which purchase orders it waits on', async () => {
+  orders.backOrder = {
+    purchaseOrderNumbers: ['43142', '43150'],
+    awaitingPurchaseOrderNumbers: ['43150'],
+  };
+  show(<AllocationEditor workOrderId={ids.order} />);
+  expect(
+    await screen.findByText(
+      'Back-ordered: waiting on PO 43150. It can be confirmed once received.',
+    ),
+  ).toBeInTheDocument();
+  await ready();
 });
 
 it('names what an allocation is missing when it is confirmed', async () => {

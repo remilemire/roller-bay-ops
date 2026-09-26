@@ -298,7 +298,11 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
     'a back order schedules an unallocated order on its purchase orders, and stays once allocated',
     async () => {
       const backOrder = { purchaseOrderNumbers: ['43150', '43142'] };
-      const listed = { purchaseOrderNumbers: ['43142', '43150'] };
+      // Read back in order, with those no submitted receipt carries yet.
+      const listed = {
+        purchaseOrderNumbers: ['43142', '43150'],
+        awaitingPurchaseOrderNumbers: ['43142', '43150'],
+      };
       const issues = (response: request.Response) =>
         response.body.issues.map(
           (issue: { code: string; path: string[] }) =>
@@ -347,6 +351,22 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       assert.equal(backOrdered.status, 'new');
       assert.deepEqual(backOrdered.backOrder, listed);
       assert.deepEqual(await queued(), ['200042']);
+      // A purchase order arrives with a submitted receipt; a draft is not one.
+      const receipt = (purchaseOrderNumber: string, submitted: boolean) =>
+        pool.query(
+          submitted
+            ? `INSERT INTO stock_receipts (is_draft, created_by_user_id, purchase_order_number, submitted_by_user_id, submitted_at) VALUES (false, $1, $2, $1, now())`
+            : `INSERT INTO stock_receipts (created_by_user_id, purchase_order_number) VALUES ($1, $2)`,
+          [userId, purchaseOrderNumber],
+        );
+      await receipt('43142', true);
+      await receipt('43150', false);
+      assert.deepEqual(
+        workOrderSchema.parse(
+          (await get(`${path}/${order.id}`).expect(200)).body,
+        ).backOrder,
+        { ...listed, awaitingPurchaseOrderNumbers: ['43150'] },
+      );
       await patch(order.id, {
         expectedRevision: 2,
         shipDate: '2026-10-12',
@@ -361,7 +381,10 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
           }).expect(200)
         ).body,
       );
-      assert.deepEqual(changed.backOrder, { purchaseOrderNumbers: ['43199'] });
+      assert.deepEqual(changed.backOrder, {
+        purchaseOrderNumbers: ['43199'],
+        awaitingPurchaseOrderNumbers: ['43199'],
+      });
       const stranded = await patch(order.id, {
         expectedRevision: 4,
         backOrder: null,
@@ -383,6 +406,7 @@ test('work orders integration', { timeout: 60_000 }, async (t) => {
       );
       assert.deepEqual(unscheduled.backOrder, {
         purchaseOrderNumbers: ['43199'],
+        awaitingPurchaseOrderNumbers: ['43199'],
       });
       assert.equal(
         workOrderSchema.parse(

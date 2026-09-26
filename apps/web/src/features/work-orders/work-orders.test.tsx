@@ -579,18 +579,32 @@ it('adds an order with a back order and ship date for admins', async () => {
   });
 });
 
-it("names a back order's purchase orders on the order until it is allocated", () => {
+it('names the purchase orders a back order still waits on, until it is allocated', () => {
+  const waiting = { ...backOrder, awaitingPurchaseOrderNumbers: ['43150'] };
   const { rerender } = render(
     <AllocationWarning
-      order={{ ...unallocated, backOrder, shipDate: '2026-10-02' }}
+      order={{ ...unallocated, backOrder: waiting, shipDate: '2026-10-02' }}
     />,
   );
-  expect(screen.getByText('Back order · PO 43142, 43150')).toBeInTheDocument();
+  expect(
+    screen.getByText('Back order · awaiting PO 43150'),
+  ).toBeInTheDocument();
+  rerender(
+    <AllocationWarning
+      order={{
+        ...unallocated,
+        backOrder: { ...backOrder, awaitingPurchaseOrderNumbers: [] },
+      }}
+    />,
+  );
+  expect(
+    screen.getByText('Back order · received, ready to allocate'),
+  ).toBeInTheDocument();
   rerender(
     <AllocationWarning order={{ ...unallocated, shipDate: '2026-10-02' }} />,
   );
   expect(screen.getByText('Needs fabric allocation')).toBeInTheDocument();
-  rerender(<AllocationWarning order={{ ...order, backOrder }} />);
+  rerender(<AllocationWarning order={{ ...order, backOrder: waiting }} />);
   expect(screen.queryByText(/Back order|Needs fabric/)).toBeNull();
 });
 

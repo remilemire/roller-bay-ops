@@ -298,7 +298,7 @@ test('admins schedule an order without fabric as a back order', async ({
   await page.getByRole('button', { name: 'Week', exact: true }).click();
   const friday = page.getByRole('region', { name: 'Fri, Oct 2, 2026' });
   await expect(friday).toContainText('104877');
-  await expect(friday).toContainText('Back order · PO 43142, 43150');
+  await expect(friday).toContainText('Back order · awaiting PO 43142, 43150');
 });
 
 test('an order is found from the week board, whether or not it is on it', async ({

@@ -456,7 +456,7 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
   );
 
   await t.test(
-    "confirming a back-ordered order's allocation keeps its back order and date",
+    "a back-ordered order's allocation is confirmed once its purchase orders arrive, keeping its back order and date",
     async () => {
       const body = await input(await seed());
       // Back-ordering is the work-order suite's subject; this order only
@@ -468,16 +468,50 @@ test('allocation orders integration', { timeout: 60_000 }, async (t) => {
       );
       await pool.query(
         `INSERT INTO work_order_purchase_orders (work_order_id, purchase_order_number)
-           VALUES ($1, '43142')`,
+           VALUES ($1, '43142'), ($1, '43150')`,
         [body.workOrderId],
       );
-      await create(body);
+      const arrive = (purchaseOrderNumber: string) =>
+        pool.query(
+          `INSERT INTO stock_receipts (is_draft, created_by_user_id, purchase_order_number, submitted_by_user_id, submitted_at)
+             VALUES (false, $1, $2, $1, now())`,
+          [userId, purchaseOrderNumber],
+        );
+      const refused = async (awaiting: string) =>
+        assert.deepEqual((await post(path, body).expect(409)).body.issues, [
+          {
+            code: 'back_order_not_received',
+            path: ['workOrderId'],
+            message: `Waiting on PO ${awaiting}.`,
+          },
+        ]);
+      await refused('43142, 43150');
+      await arrive('43150');
+      await refused('43142');
+      // A draft can still be planned while the fabric is on its way, and
+      // submitting it is what waits.
+      const draft = allocationDraftSchema.parse(
+        (await post(`${path}/drafts`, { data: body }).expect(201)).body,
+      );
+      const submit = () =>
+        post(`${path}/${draft.id}/submit`, {
+          expectedRevision: draft.revision,
+        });
+      assert.equal(
+        (await submit().expect(409)).body.issues[0].code,
+        'back_order_not_received',
+      );
+      await arrive('43142');
+      await submit().expect(200);
       const order = (
         await get(`/api/work-orders/${body.workOrderId}`).expect(200)
       ).body;
       assert.ok(order.allocatedAt);
       assert.equal(order.shipDate, '2026-10-09');
-      assert.deepEqual(order.backOrder, { purchaseOrderNumbers: ['43142'] });
+      assert.deepEqual(order.backOrder, {
+        purchaseOrderNumbers: ['43142', '43150'],
+        awaitingPurchaseOrderNumbers: [],
+      });
     },
   );
 });

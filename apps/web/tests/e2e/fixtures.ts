@@ -190,6 +190,16 @@ export async function mockApi(
     ],
     orderRequests: [] as { method: string; body: unknown }[],
   };
+  // No mocked receipt has arrived, so every purchase order is awaited.
+  const awaited = (
+    backOrder: { purchaseOrderNumbers: string[] } | null | undefined,
+  ) =>
+    backOrder
+      ? {
+          ...backOrder,
+          awaitingPurchaseOrderNumbers: backOrder.purchaseOrderNumbers,
+        }
+      : null;
   const paged = (items: unknown[], url: URL, total = items.length) => ({
     items,
     total,
@@ -554,6 +564,7 @@ export async function mockApi(
       const created = {
         ...order,
         ...body,
+        backOrder: awaited(body.backOrder),
         id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
         // Only a back order can date a new order.
         status: body.shipDate ? ('scheduled' as const) : ('new' as const),
@@ -579,6 +590,9 @@ export async function mockApi(
       const next = {
         ...found,
         ...fields,
+        ...(fields.backOrder === undefined
+          ? {}
+          : { backOrder: awaited(fields.backOrder) }),
         revision: expectedRevision + 1,
         ...(shipped === undefined
           ? {}

@@ -418,6 +418,16 @@ export function AllocationEditor({
                     }
                   />
                 )}
+                {/* Planning can go ahead; the API confirms nothing until
+                    the fabric is received. */}
+                {!active &&
+                  !!order?.backOrder?.awaitingPurchaseOrderNumbers.length && (
+                    <p className="order-count">
+                      Back-ordered: waiting on PO{' '}
+                      {order.backOrder.awaitingPurchaseOrderNumbers.join(', ')}.
+                      It can be confirmed once received.
+                    </p>
+                  )}
               </div>
             </section>
             <RequirementsEditor

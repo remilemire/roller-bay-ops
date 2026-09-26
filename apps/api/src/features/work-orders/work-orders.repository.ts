@@ -23,6 +23,7 @@ import { workOrderPurchaseOrders } from './work-order-purchase-orders.table.js';
 import { workOrders } from './work-orders.table.js';
 export type WorkOrderRecord = typeof workOrders.$inferSelect & {
   purchaseOrderNumbers: string[];
+  awaitingPurchaseOrderNumbers: string[];
 };
 /** The columns a new or restored order is written with. */
 export type NewWorkOrder = Pick<

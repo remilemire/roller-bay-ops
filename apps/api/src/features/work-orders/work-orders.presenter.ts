@@ -15,7 +15,12 @@ export const backOrderOf = ({
 export function presentWorkOrder(row: WorkOrderRecord): WorkOrder {
   return workOrderSchema.parse({
     ...row,
-    backOrder: backOrderOf(row),
+    backOrder: row.purchaseOrderNumbers.length
+      ? {
+          purchaseOrderNumbers: row.purchaseOrderNumbers,
+          awaitingPurchaseOrderNumbers: row.awaitingPurchaseOrderNumbers,
+        }
+      : null,
     status: row.cancelledAt
       ? 'cancelled'
       : row.shippedAt
