@@ -574,10 +574,10 @@ function LocationEditor({
         if (!open && !mutation.isPending) close();
       }}
       title={`${row ? 'Edit' : 'Add'} ${kind === 'levels' ? 'level' : kind === 'sections' ? 'section' : 'zone'}`}
-      description="Labels can be letters or numbers. Existing parent locations stay fixed."
+      description={`${parent ? `${kind === 'levels' ? 'Section' : 'Zone'}: ${parent.parent ? `${parent.parent} / ` : ''}${parent.name}. ` : ''}Labels can be letters or numbers. Existing parent locations stay fixed.`}
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
-        <div className="stack">
+        <div className="form-stack">
           <TextField
             label={kind === 'levels' ? 'Level' : 'Name'}
             value={values.name}
@@ -586,13 +586,6 @@ function LocationEditor({
             required
             maxLength={kind === 'zones' ? 120 : 40}
           />
-          {parent && (
-            <p>
-              {kind === 'levels' ? 'Section' : 'Zone'}:{' '}
-              {parent.parent ? `${parent.parent} / ` : ''}
-              {parent.name}
-            </p>
-          )}
           {kind !== 'zones' && !row && !parent && (
             <Lookup
               label={kind === 'levels' ? 'Section' : 'Zone'}

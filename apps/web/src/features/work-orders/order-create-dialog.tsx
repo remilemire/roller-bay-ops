@@ -96,7 +96,7 @@ export function OrderCreateForm({
     orderQuantitySchema.safeParse(Number(fields.quantity)).success;
   return (
     <form
-      className="stack"
+      className="form-stack"
       onSubmit={(event) => {
         event.preventDefault();
         // The form holds its own copy, so a click during a request is ignored.

@@ -192,7 +192,7 @@ function ReceiptCorrectionForm({
                         <Blockers items={eligibility} />
                       )}
                       {['update', 'add'].includes(line.action) && (
-                        <div className="stack">
+                        <div className="form-stack">
                           <Lookup
                             label="Fabric"
                             value={line.fabricColorId}
@@ -203,30 +203,34 @@ function ReceiptCorrectionForm({
                             queryKey={catalogKey}
                             load={lookupColors}
                           />
-                          <TextField
-                            label={`Width (${fieldSuffix(units, 'rollWidth')})`}
-                            value={line.width}
-                            onChange={(width) => update(index, { width })}
-                            error={errors[`${line.key}.width`]}
-                            type="number"
-                            required
-                          />
-                          <TextField
-                            label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
-                            value={line.length}
-                            onChange={(length) => update(index, { length })}
-                            error={errors[`${line.key}.length`]}
-                            type="number"
-                            required
-                          />
-                          <TextField
-                            label="Quantity"
-                            value={line.quantity}
-                            onChange={(quantity) => update(index, { quantity })}
-                            error={errors[`${line.key}.quantity`]}
-                            type="number"
-                            required
-                          />
+                          <div className="form-grid form-grid-3">
+                            <TextField
+                              label={`Width (${fieldSuffix(units, 'rollWidth')})`}
+                              value={line.width}
+                              onChange={(width) => update(index, { width })}
+                              error={errors[`${line.key}.width`]}
+                              type="number"
+                              required
+                            />
+                            <TextField
+                              label={`Length per roll (${fieldSuffix(units, 'rollLength')})`}
+                              value={line.length}
+                              onChange={(length) => update(index, { length })}
+                              error={errors[`${line.key}.length`]}
+                              type="number"
+                              required
+                            />
+                            <TextField
+                              label="Quantity"
+                              value={line.quantity}
+                              onChange={(quantity) =>
+                                update(index, { quantity })
+                              }
+                              error={errors[`${line.key}.quantity`]}
+                              type="number"
+                              required
+                            />
+                          </div>
                           <Lookup
                             label="Original destination"
                             value={line.locationId}

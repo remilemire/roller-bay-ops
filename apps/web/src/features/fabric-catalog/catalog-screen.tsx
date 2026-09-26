@@ -425,9 +425,13 @@ function CatalogEditor({
         if (!open && !mutation.isPending) close();
       }}
       title={`${row ? 'Edit' : 'Add'} ${singular[kind]}`}
+      description={
+        parent &&
+        `${kind === 'colors' ? 'Material' : 'Manufacturer'}: ${parent.parent ? `${parent.parent} / ` : ''}${parent.name}`
+      }
     >
       <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
-        <div className="stack">
+        <div className="form-stack">
           <TextField
             label={kind === 'colors' ? 'Color code' : 'Name'}
             value={values.name}
@@ -436,13 +440,6 @@ function CatalogEditor({
             required
             maxLength={kind === 'colors' ? 10 : 120}
           />
-          {parent && (
-            <p>
-              {kind === 'colors' ? 'Material' : 'Manufacturer'}:{' '}
-              {parent.parent ? `${parent.parent} / ` : ''}
-              {parent.name}
-            </p>
-          )}
           {/* New records take the branch they were added from; existing
               ones can move, because the API accepts a new parent on PATCH. */}
           {kind !== 'manufacturers' && row && (

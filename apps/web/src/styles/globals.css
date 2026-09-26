@@ -848,6 +848,9 @@ td strong {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--field-gap);
 }
+.form-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .form-actions {
   display: flex;
   justify-content: flex-end;
@@ -1083,6 +1086,8 @@ td strong {
 .dialog-heading {
   display: flex;
   justify-content: space-between;
+  /* A description under the title must not stretch the close button. */
+  align-items: flex-start;
   gap: 20px;
   margin-bottom: 24px;
 }
@@ -2261,6 +2266,11 @@ td strong {
     .divider
   ) {
   margin-block: 0;
+}
+/* Fields sit closer together than sections; the actions keep a section's
+   distance from the last field. */
+.form-stack > .form-actions {
+  margin-top: calc(var(--section-gap) - var(--field-gap));
 }
 .inline-actions {
   flex-wrap: wrap;

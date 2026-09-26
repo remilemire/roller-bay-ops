@@ -127,7 +127,7 @@ export function CorrectionSubmit({
       >
         {/* Keep the reason at the same spacing as the fields above it; a
             class on the fieldset would override its hidden attribute. */}
-        <div className="stack">
+        <div className="form-stack">
           {typeof children === 'function' ? children(errors) : children}
           <TextField
             label="Reason for correction"

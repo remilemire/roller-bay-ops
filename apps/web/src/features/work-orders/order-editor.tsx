@@ -76,7 +76,7 @@ export function OrderEditor({
       title={`Edit order ${opened.orderNumber}`}
     >
       <form
-        className="stack"
+        className="form-stack"
         onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
       >
         <TextField

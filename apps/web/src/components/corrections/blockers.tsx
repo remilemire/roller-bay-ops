@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import type { CorrectionEligibility } from '@roller-bay/shared/corrections';
 import { shortId } from '@/lib/format';
@@ -6,21 +7,28 @@ export function Blockers({ items }: { items: CorrectionEligibility[] }) {
     <>
       {items.flatMap((item) =>
         item.blockers.map((blocker, i) => (
-          <p className="notice" key={`${item.stockItemId}:${i}`}>
-            <Link href={`/stock-items/${item.stockItemId}`}>
-              {shortId(item.stockItemId)}
-            </Link>
-            : {blocker.message}{' '}
-            {blocker.allocationIds.map((id) => (
-              <Link key={id} href={`/allocations/${id}`}>
-                Order {shortId(id)}{' '}
+          <p className="notice notice-warning" key={`${item.stockItemId}:${i}`}>
+            {/* One span, so the notice's flex gap does not split the sentence. */}
+            <span>
+              <Link href={`/stock-items/${item.stockItemId}`}>
+                {shortId(item.stockItemId)}
               </Link>
-            ))}
-            {blocker.stockItemIds.map((id) => (
-              <Link key={id} href={`/stock-items/${id}`}>
-                Stock {shortId(id)}{' '}
-              </Link>
-            ))}
+              : {blocker.message}
+              {blocker.allocationIds.map((id) => (
+                <Fragment key={id}>
+                  {' '}
+                  <Link href={`/allocations/${id}`}>
+                    Allocation {shortId(id)}
+                  </Link>
+                </Fragment>
+              ))}
+              {blocker.stockItemIds.map((id) => (
+                <Fragment key={id}>
+                  {' '}
+                  <Link href={`/stock-items/${id}`}>Stock {shortId(id)}</Link>
+                </Fragment>
+              ))}
+            </span>
           </p>
         )),
       )}

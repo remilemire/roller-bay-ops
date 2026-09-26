@@ -97,7 +97,7 @@ export function StockEditor({ close }: { close: () => void }) {
       description="For fabric already on hand. Record arriving deliveries through Stock receipts."
     >
       <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))}>
-        <div className="stack">
+        <div className="form-stack">
           <Lookup
             label="Fabric color"
             value={values.fabricColorId}
@@ -116,7 +116,13 @@ export function StockEditor({ close }: { close: () => void }) {
               { value: 'remnant', label: 'Remnant' },
             ]}
           />
-          <div className="form-grid">
+          {/* A remnant's three lengths share a row rather than leave one
+              alone on the next. */}
+          <div
+            className={
+              values.kind === 'remnant' ? 'form-grid form-grid-3' : 'form-grid'
+            }
+          >
             <TextField
               label={`Width (${fieldSuffix(units, 'rollWidth')})`}
               value={values.width}
