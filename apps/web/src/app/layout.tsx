@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 import { defaultColorTheme } from '@roller-bay/shared/users';
 import { colorThemeScript } from '@/lib/color-themes';
+import { transparencyScript } from '@/lib/transparency';
 import '@/styles/globals.css';
 export const metadata: Metadata = {
   title: { default: 'Roller Bay · Operations', template: '%s · Roller Bay' },
@@ -18,6 +19,7 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: colorThemeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: transparencyScript }} />
       </head>
       <body>
         <Providers>{children}</Providers>

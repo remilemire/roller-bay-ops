@@ -177,7 +177,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen} title="Navigation">
         <div className="mobile-nav">{nav}</div>
       </Dialog>
-      <div className="workspace-main">
+      <div className="workspace-main glass">
         <header className="topbar">
           <div className="topbar-title">
             <Button

@@ -24,6 +24,44 @@
   --control-compact-height: 36px;
   --control-radius: 10px;
   --action-gap: 8px;
+  --workspace-inset: 16px;
+  --pane-background: var(--surface);
+  --summary-background: var(--surface);
+  --glass-filter: none;
+  /* Soft gradient stops provide static diffusion without a live full-screen blur. */
+  --scene-background:
+    radial-gradient(ellipse at 85% 10%, var(--scene-light), transparent 55%),
+    linear-gradient(0deg, var(--scene-mid), transparent 40%),
+    linear-gradient(
+      90deg,
+      var(--scene-deep) 0% 13%,
+      var(--scene-mid) 15% 37%,
+      var(--scene-deep) 39% 51%,
+      var(--scene-mid) 53% 74%,
+      var(--scene-light) 76% 80%,
+      var(--scene-mid) 82%
+    );
+}
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  :root {
+    --pane-background: color-mix(in srgb, var(--surface) 36%, transparent);
+    --summary-background: var(--glass);
+    --glass-filter: blur(12px) saturate(115%);
+  }
+}
+:root[data-reduce-transparency='true'] {
+  --pane-background: var(--surface);
+  --summary-background: var(--surface);
+  --glass-filter: none;
+  --scene-background: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-reduce-transparency]) {
+    --pane-background: var(--surface);
+    --summary-background: var(--surface);
+    --glass-filter: none;
+    --scene-background: none;
+  }
 }
 * {
   box-sizing: border-box;
@@ -43,9 +81,7 @@ body {
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  background-image:
-    radial-gradient(ellipse at 10% 0%, var(--orb-one), transparent 50%),
-    radial-gradient(ellipse at 95% 15%, var(--orb-two), transparent 45%);
+  background-image: var(--scene-background);
   background-attachment: fixed;
 }
 a {
@@ -129,15 +165,12 @@ textarea {
   color: var(--foreground);
 }
 .glass {
-  background: var(--surface);
+  background: var(--pane-background);
   box-shadow: var(--glass-shadow);
-  border: 1px solid var(--border);
-}
-@supports (backdrop-filter: blur(18px)) {
-  .glass {
-    background: var(--glass);
-    backdrop-filter: blur(18px);
-  }
+  border: 1px solid
+    color-mix(in srgb, var(--glass-highlight) 55%, var(--border));
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 .muted {
   color: var(--muted);
@@ -151,6 +184,7 @@ textarea {
 }
 .workspace {
   min-height: 100vh;
+  padding: var(--workspace-inset);
 }
 .sidebar {
   position: fixed;
@@ -158,7 +192,7 @@ textarea {
   left: 16px;
   bottom: 16px;
   width: 236px;
-  border-radius: 20px;
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
   padding: 27px 17px 15px;
@@ -265,7 +299,16 @@ textarea {
   flex-shrink: 0;
 }
 .workspace-main {
-  margin-left: 268px;
+  margin-left: 252px;
+  min-height: calc(100vh - var(--workspace-inset) * 2);
+  border-radius: 24px;
+}
+/* The scene is already diffused. Re-filtering it adds work on every scroll
+   and would make the content a containing block for fixed controls. */
+.sidebar,
+.workspace-main {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .topbar {
   height: 80px;
@@ -330,7 +373,7 @@ textarea {
   border: 1px solid var(--border);
   padding: 3px;
   border-radius: 11px;
-  background: var(--glass);
+  background: var(--surface);
   gap: 2px;
 }
 .theme-switch button {
@@ -353,6 +396,29 @@ textarea {
   padding: 0;
   margin: 0 0 20px;
   min-width: 0;
+}
+.transparency-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.transparency-setting label {
+  font-weight: 600;
+  cursor: pointer;
+}
+.transparency-setting p {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.transparency-setting input {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 .color-theme-picker legend {
   padding: 0;
@@ -393,7 +459,7 @@ textarea {
   width: 25%;
   padding: 12px 6px;
   border-right: 1px solid var(--border);
-  background: var(--glass);
+  background: var(--surface-soft);
 }
 .preview-brand {
   display: block;
@@ -481,7 +547,7 @@ textarea {
   padding: 34px;
   max-width: 1640px;
   margin: 0 auto;
-  min-height: calc(100vh - 80px);
+  min-height: calc(100vh - 82px - var(--workspace-inset) * 2);
 }
 .page-heading {
   display: flex;
@@ -525,7 +591,7 @@ textarea {
 }
 .button-outline {
   border-color: var(--border);
-  background: var(--glass);
+  background: var(--surface);
   color: var(--foreground);
 }
 .button-ghost {
@@ -547,10 +613,9 @@ textarea {
   padding: 8px;
 }
 .panel {
-  background: var(--glass);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow);
   overflow: hidden;
 }
 .panel-heading {
@@ -594,6 +659,13 @@ textarea {
 .stat {
   padding: 20px 22px;
   position: relative;
+  background: var(--summary-background);
+  color: var(--foreground);
+  /* Keep summary surfaces and their text synchronized during theme changes. */
+  transition: none;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--glass-highlight) 50%, transparent) inset,
+    0 6px 18px -14px color-mix(in srgb, var(--foreground) 30%, transparent);
 }
 .stat-label {
   display: flex;
@@ -1914,6 +1986,7 @@ label.detail-label {
 @media (max-width: 760px) {
   :root {
     --panel-padding: 18px;
+    --workspace-inset: 8px;
   }
   .section-grid {
     grid-template-columns: 1fr;
@@ -2153,8 +2226,9 @@ label.detail-label {
     --warning-soft: #eee !important;
     --shadow: none !important;
     --glass-shadow: none !important;
-    --orb-one: transparent !important;
-    --orb-two: transparent !important;
+    --scene-background: none !important;
+    --summary-background: #fff !important;
+    --glass-filter: none !important;
   }
   .no-print {
     display: none !important;
@@ -2168,9 +2242,18 @@ label.detail-label {
   }
   .workspace-main {
     margin: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: white;
+    box-shadow: none;
+  }
+  .workspace {
+    padding: 0;
   }
   .workspace-content {
     padding: 0;
+    min-height: 0;
   }
   body {
     background: white;
@@ -2184,6 +2267,7 @@ label.detail-label {
     break-inside: avoid;
   }
   .glass {
+    -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
   .muted,
@@ -2347,6 +2431,9 @@ label.detail-label {
   color: var(--foreground);
 }
 .info-tip-text {
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   position: fixed;
   z-index: 110;
   padding: 9px 11px;

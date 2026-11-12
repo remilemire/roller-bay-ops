@@ -54,6 +54,20 @@ Every API response is intercepted by `mockApi` in `apps/web/tests/e2e/fixtures.t
 
 Nothing is retried, locally or on CI. Intercepted responses and a fixed clock make these tests deterministic, so a test that passes on a second attempt has found a race in the UI, which is worth a failure.
 
+### Glass performance measurements
+
+Run the resource benchmark separately from functional tests so concurrent browser workers do not distort timings:
+
+```sh
+npm run build --workspace=@roller-bay/shared
+cd apps/web
+npx playwright test --config playwright.performance.config.ts
+```
+
+It builds and serves production on port 3100, uses intercepted API responses with 25 stock rows, and runs one worker. Desktop and tablet viewports each sample light/dark mode with glass enabled and with reduced transparency. Each combination gets three two-second idle samples and three two-second scroll samples. `metrics.json` in each project's `test-results/glass-performance/` directory records frame intervals, frames over 25 and 33.34 ms, long tasks, total browser-process CPU (including rendering), GPU-process CPU, main-thread task time, layout/style time, JavaScript heap, renderer capabilities, and active/nested blur surfaces. Reports are also attached to the Playwright results. No timing threshold runs in CI: host load affects these numbers, while the regular glass browser tests enforce the absence of live dashboard filters, text contrast, preference persistence, and print behavior.
+
+For a before/after comparison, run the same benchmark before changing the implementation with `GLASS_BENCHMARK_LABEL=baseline`; that mode measures only the original appearance. Copy its results outside `test-results` before the next run clears them. Compare medians on the same machine under similar load. Frame sampling itself adds animation-frame callbacks. CPU percentage is relative to one logical core, calculated from process CPU time divided by elapsed wall time; GPU-process CPU is not physical GPU utilization. JavaScript heap is not total browser memory. GPU memory and battery use are not measured, and a tablet viewport does not reproduce tablet hardware. Check the recorded renderer capabilities: Chromium's default headless shell may use software rendering rather than the device's GPU.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on every pull request and on pushes to `dev` and `main`; a newer push to the same ref cancels the run in progress. Five jobs run in parallel, each the same commands as above on the Node version in `.nvmrc`:

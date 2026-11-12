@@ -1,6 +1,7 @@
 'use client';
 import { useCurrentUser } from '@/features/auth';
 import { ThemeSwitch } from '@/components/layout/theme-switch';
+import { TransparencySetting } from '@/components/layout/transparency-preference';
 import { PageHeading, Status } from '@/components/ui/feedback';
 import { ColorThemePicker } from './color-theme-picker';
 import { MeasurementUnitsPanel } from './measurement-units-panel';
@@ -42,6 +43,7 @@ export function SettingsScreen() {
           </div>
           <div className="panel-body">
             <ColorThemePicker />
+            <TransparencySetting />
             <p className="muted">
               Color theme is saved to your account; light or dark mode is saved
               in this browser. Reduced motion follows your device settings.
