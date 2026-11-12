@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { createQueryClient } from '@/lib/query-client';
 import { SessionEvents } from '@/features/auth/auth-boundary';
 import { AccountColorTheme } from '@/features/users/account-color-theme';
+import { TransparencyPreferenceSync } from '@/components/layout/transparency-preference';
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(createQueryClient);
   return (
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <QueryClientProvider client={client}>
         <SessionEvents />
         <AccountColorTheme />
+        <TransparencyPreferenceSync />
         {children}
       </QueryClientProvider>
     </ThemeProvider>
