@@ -3,32 +3,26 @@ import type {
   LocationSectionQuery,
   UpdateLocationSection,
 } from '@roller-bay/shared/locations';
-import {
-  and,
-  asc,
-  count,
-  eq,
-  exists,
-  getTableColumns,
-  ilike,
-  or,
-} from 'drizzle-orm';
+import { and, asc, count, eq, exists, getTableColumns, or } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../../database/database-executor.js';
 import { locations } from '../levels/location-levels.table.js';
-import { containsPattern, locationsQuery } from '../locations.persistence.js';
+import { locationsQuery } from '../locations.persistence.js';
+import { matchesLocationAddress } from '../locations.search.js';
 import { locationZones } from '../zones/location-zones.table.js';
 import { locationSections } from './location-sections.table.js';
 export class LocationSectionsRepository {
   constructor(private readonly db: DatabaseExecutor) {}
   list(query: LocationSectionQuery) {
-    const pattern = containsPattern(query.search ?? '');
     const where = and(
       // Match the section, its zone, or any of its levels, so the locations
       // tree can search every level at once.
       query.search
         ? or(
-            ilike(locationSections.label, pattern),
-            ilike(locationZones.name, pattern),
+            matchesLocationAddress(
+              query.search,
+              locationZones.name,
+              locationSections.label,
+            ),
             exists(
               this.db
                 .select({ id: locations.id })
@@ -36,7 +30,12 @@ export class LocationSectionsRepository {
                 .where(
                   and(
                     eq(locations.sectionId, locationSections.id),
-                    ilike(locations.label, pattern),
+                    matchesLocationAddress(
+                      query.search,
+                      locationZones.name,
+                      locationSections.label,
+                      locations.label,
+                    ),
                   ),
                 ),
             ),
