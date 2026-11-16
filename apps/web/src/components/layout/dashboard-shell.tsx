@@ -25,6 +25,7 @@ import {
   sessionKey,
 } from '@/features/auth';
 import { Button } from '@/components/ui/button';
+import { SlidingSelection } from '@/components/ui/sliding-selection';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
@@ -173,9 +174,25 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <a href="#workspace-content" className="skip-link">
         Skip to content
       </a>
-      <aside className="sidebar glass">{nav}</aside>
+      <aside className="sidebar glass">
+        <SlidingSelection
+          className="sidebar-navigation"
+          label="Sidebar"
+          value={pathname}
+          selection="page"
+        >
+          {nav}
+        </SlidingSelection>
+      </aside>
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen} title="Navigation">
-        <div className="mobile-nav">{nav}</div>
+        <SlidingSelection
+          className="mobile-nav sidebar-navigation"
+          label="Sidebar"
+          value={pathname}
+          selection="page"
+        >
+          {nav}
+        </SlidingSelection>
       </Dialog>
       <div className="workspace-main glass">
         <header className="topbar">

@@ -30,6 +30,10 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         'backdrop-filter',
         'none',
       );
+      await expect(page.locator('.topbar')).toHaveCSS(
+        'background-color',
+        'rgba(0, 0, 0, 0)',
+      );
       const surfaces = await page.evaluate(() => {
         const blurred = Array.from(
           document.querySelectorAll<HTMLElement>('body *'),
@@ -102,12 +106,37 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
             );
           }),
         );
+        const action = getComputedStyle(
+          document.querySelector('.button-primary')!,
+        );
+        const actionFill = rgba(action.backgroundColor);
+        const actionText = luminance(rgba(action.color));
+        const actionContrast = Math.min(
+          ...['deep', 'mid', 'light'].map((tone) => {
+            const scene = rgba(root.getPropertyValue(`--scene-${tone}`).trim());
+            const background = luminance(
+              scene.map((value, index) => {
+                const shell = value * (1 - alpha) + pane[index]! * alpha;
+                return (
+                  shell * (1 - actionFill[3]! / 255) +
+                  (actionFill[index]! * actionFill[3]!) / 255
+                );
+              }),
+            );
+            return (
+              (Math.max(actionText, background) + 0.05) /
+              (Math.min(actionText, background) + 0.05)
+            );
+          }),
+        );
         const content = getComputedStyle(
           document.querySelector('.panel:not(.stat)')!,
         );
         const summary = getComputedStyle(document.querySelector('.stat')!);
         return {
           muted,
+          actionContrast,
+          actionAlpha: actionFill[3],
           contentAlpha: rgba(content.backgroundColor)[3],
           summaryAlpha: rgba(summary.backgroundColor)[3],
           summaryBackgrounds: Array.from(
@@ -122,12 +151,17 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         };
       });
       expect(materialContrast.muted).toBeGreaterThanOrEqual(4.5);
+      expect(materialContrast.actionContrast).toBeGreaterThanOrEqual(4.5);
+      expect(materialContrast.actionAlpha).toBeLessThan(255);
       expect(new Set(materialContrast.summaryBackgrounds).size).toBe(1);
       expect(new Set(materialContrast.summaryColors).size).toBe(1);
-      expect(materialContrast.contentAlpha).toBe(255);
+      expect(materialContrast.contentAlpha).toBeGreaterThan(
+        materialContrast.summaryAlpha!,
+      );
+      expect(materialContrast.contentAlpha).toBeLessThan(255);
       expect(materialContrast.summaryAlpha).toBeLessThan(255);
       expect(materialContrast.contentImage).toBe('none');
-      expect(materialContrast.contentShadow).toBe('none');
+      expect(materialContrast.contentShadow).not.toBe('none');
       expect(materialContrast.summaryImage).toBe('none');
       await page.screenshot({
         path: info.outputPath(`${palette}-${mode}.png`),
@@ -170,8 +204,15 @@ test('reduced transparency survives navigation and reload and syncs while Settin
     await page
       .locator('.panel')
       .first()
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-  ).toBe('rgb(255, 255, 255)');
+      .evaluate((element) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = getComputedStyle(element).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      }),
+  ).toEqual([255, 255, 255, 255]);
   const other = await context.newPage();
   await mockApi(other);
   await other.goto('/settings');
@@ -263,3 +304,69 @@ test('print removes the scene and the glass pane', async ({ page }) => {
     'rgb(255, 255, 255)',
   );
 });
+
+for (const mode of ['light', 'dark']) {
+  test(`secondary actions remain distinct on a solid ${mode} dialog`, async ({
+    page,
+  }, info) => {
+    await mockApi(page, { role: 'production', stations: ['cutting'] });
+    await page.addInitScript(
+      (mode) => localStorage.setItem('roller-bay-theme', mode),
+      mode,
+    );
+    await page.goto('/stations');
+    await page
+      .getByRole('button', { name: 'Record cutting', exact: true })
+      .first()
+      .click();
+    const action = page.getByRole('link', {
+      name: 'Use worksheet',
+      exact: true,
+    });
+    await expect(action).toBeVisible();
+    const fills = await action.evaluate((element) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d')!;
+      const rgba = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      };
+      const action = getComputedStyle(element);
+      return {
+        action: rgba(action.backgroundColor),
+        dialog: rgba(
+          getComputedStyle(element.closest('.dialog-content')!).backgroundColor,
+        ),
+        shadow: action.boxShadow,
+      };
+    });
+    const luminance = (channels: number[]) => {
+      const linear = channels.slice(0, 3).map((value) => {
+        const channel = value / 255;
+        return channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722;
+    };
+    const alpha = fills.action[3]! / 255;
+    const buttonLuminance = luminance(
+      fills.action.map(
+        (value, index) => value * alpha + fills.dialog[index]! * (1 - alpha),
+      ),
+    );
+    const dialogLuminance = luminance(fills.dialog);
+    const contrast =
+      (Math.max(buttonLuminance, dialogLuminance) + 0.05) /
+      (Math.min(buttonLuminance, dialogLuminance) + 0.05);
+    expect(contrast).toBeGreaterThan(1.1);
+    expect(fills.action[3]).toBeGreaterThan(200);
+    expect(fills.shadow).toBe('none');
+    await page.screenshot({
+      path: info.outputPath(`secondary-action-${mode}.png`),
+    });
+  });
+}

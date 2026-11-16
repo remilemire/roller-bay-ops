@@ -1,3 +1,4 @@
+import { SlidingSelection } from './sliding-selection';
 import { cn } from '@/lib/utils';
 
 /** Exclusive filters and views, kept in URL state by the owning screen. */
@@ -13,7 +14,7 @@ export function SegmentedControl<Value extends string>({
   onChange: (value: Value) => void;
 }) {
   return (
-    <div className="tabs" role="group" aria-label={label}>
+    <SlidingSelection className="tabs" label={label} value={value}>
       {options.map((option) => (
         <button
           type="button"
@@ -25,6 +26,6 @@ export function SegmentedControl<Value extends string>({
           {option.label}
         </button>
       ))}
-    </div>
+    </SlidingSelection>
   );
 }
