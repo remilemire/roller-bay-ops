@@ -236,6 +236,43 @@ it('adds an order from the schedule without leaving it or allocating', async () 
   expect(state.replace).not.toHaveBeenCalled();
 });
 
+it.each(['list', 'week'])(
+  'prefills a new order from the %s search and allows editing',
+  async (view) => {
+    state.search = `view=${view}&search=004950`;
+    show(<WorkOrdersScreen />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'New order' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Add order' }));
+    const number = dialog.getByLabelText(/Order number/);
+    expect(number).toHaveValue('004950');
+    await user.clear(number);
+    await user.type(number, '104951');
+    expect(number).toHaveValue('104951');
+    expect(createOrder).not.toHaveBeenCalled();
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'New order' }));
+    expect(screen.getByLabelText(/Order number/)).toHaveValue('004950');
+  },
+);
+
+it.each([
+  ['list', '', ''],
+  ['week', '', ''],
+  ['list', '004', '004'],
+  ['week', '004', '004'],
+  ['month', '004950', ''],
+])(
+  'starts a new order in %s with search "%s" as "%s"',
+  async (view, search, expected) => {
+    state.search = `view=${view}&search=${search}`;
+    show(<WorkOrdersScreen />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'New order' }));
+    expect(screen.getByLabelText(/Order number/)).toHaveValue(expected);
+  },
+);
+
 it('says where an order is when its number is already taken', async () => {
   const taken = new ApiError(
     409,
