@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { AllocationDetail } from '@roller-bay/shared/allocations';
 import type {
+  WorksheetEmployees,
   WorksheetSave,
   WorksheetSubmit,
   worksheetReviewSchema,
@@ -25,6 +26,18 @@ type StockRevision = {
   id: string;
   revision: number;
 };
+const worksheetEmployee = (e: {
+  id: string;
+  name: string;
+  initials: string;
+}) => ({
+  employeeId: e.id,
+  employeeName: e.name,
+  employeeInitials: e.initials,
+});
+const sameEmployees = (row: WorksheetRecord, employeeIds: string[]) =>
+  canonicalJson(row.employees.map((e) => e.employeeId).sort()) ===
+  canonicalJson(employeeIds);
 @Injectable()
 export class CuttingWorksheetsService {
   constructor(
@@ -118,10 +131,10 @@ export class CuttingWorksheetsService {
     context: UnitOfWorkContext,
     snapshot: AllocationDetail,
     stocks: StockRevision[],
-    employeeId: string,
+    employeeIds: string[],
     actor: string,
   ) {
-    const employee = await this.employees.requireActive(context, employeeId);
+    const people = await this.employees.requireActiveMany(context, employeeIds);
     if (snapshot.needsReplanning)
       throw new ConflictException(
         'This allocation needs replanning before cutting.',
@@ -142,25 +155,28 @@ export class CuttingWorksheetsService {
         !previous.skippedAt &&
         outcome?.outcome === 'consumed'
       )
+        // Cutting it again would contradict that report. The office settles it:
+        // accepting it consumes the stock and flags this plan for replanning;
+        // returning it lets the cutter correct the outcome.
         throw new ConflictException(
-          'This fabric has been reported consumed. Review its cutting results before continuing.',
+          `Order ${previous.orderNumber} reported this fabric fully consumed. The office must accept those cutting results, or return them for correction, before it is cut again.`,
         );
       baselines[stock.id] = {
         revision: stock.revision,
         predecessorId: previous && !previous.reviewedAt ? previous.id : null,
       };
     }
-    const row = await context.cuttingWorksheets.create({
-      allocationId: snapshot.id,
-      workOrderId: snapshot.workOrderId,
-      orderNumber: snapshot.orderNumber,
-      employeeId: employee.id,
-      employeeName: employee.name,
-      employeeInitials: employee.initials,
-      startedByUserId: actor,
-      snapshot,
-      baselines,
-    });
+    const row = await context.cuttingWorksheets.create(
+      {
+        allocationId: snapshot.id,
+        workOrderId: snapshot.workOrderId,
+        orderNumber: snapshot.orderNumber,
+        startedByUserId: actor,
+        snapshot,
+        baselines,
+      },
+      people.map(worksheetEmployee),
+    );
     const result = presentWorksheet(row);
     await this.audit.record(context, actor, 'cutting.started', [
       {
@@ -188,6 +204,45 @@ export class CuttingWorksheetsService {
       return presentWorksheet(
         await context.cuttingWorksheets.update(id, { draft: input.draft }),
       );
+    });
+  }
+  /**
+   * Changes who is working on the sheet. Once results have been submitted the
+   * cut is credited, and only an admin milestone correction changes that.
+   */
+  changeEmployees(id: string, input: WorksheetEmployees, actor: string) {
+    return this.operation(async (context) => {
+      const row = await context.cuttingWorksheets.find(id, true);
+      if (!row) throw new NotFoundException('Worksheet not found.');
+      if (sameEmployees(row, input.employeeIds)) return presentWorksheet(row);
+      if (row.abandonedAt || row.skippedAt)
+        throw new ConflictException('This sheet is closed.');
+      if (row.results)
+        throw new ConflictException(
+          'Cutting results were already submitted; an admin corrects who is credited with the cut.',
+        );
+      if (row.revision !== input.expectedRevision)
+        throw new ConflictException('Worksheet changed; reload and try again.');
+      const people = await this.employees.requireActiveMany(
+        context,
+        input.employeeIds,
+      );
+      const result = presentWorksheet(
+        await context.cuttingWorksheets.update(
+          id,
+          {},
+          people.map(worksheetEmployee),
+        ),
+      );
+      await this.audit.record(context, actor, 'cutting.employees-changed', [
+        {
+          recordType: 'cutting-worksheets',
+          recordId: id,
+          before: { type: 'cutting-worksheets', value: presentWorksheet(row) },
+          after: { type: 'cutting-worksheets', value: result },
+        },
+      ]);
+      return result;
     });
   }
   async submitInTransaction(

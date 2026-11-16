@@ -124,7 +124,7 @@ test('help icons keep measurement labels aligned in station forms', async ({
   await page.goto(`/stations/cutting/${ids.order}`);
   await page.getByRole('button', { name: 'Begin cutting' }).click();
   const dialog = page.getByRole('dialog', { name: 'Begin cutting' });
-  await pickEmployee(dialog, 'Alex Reed', 'Started by');
+  await pickEmployee(dialog, 'Alex Reed', 'Cutters');
   await dialog.getByRole('button', { name: 'Start worksheet' }).click();
   await page
     .getByLabel('What happened to this stock item?')

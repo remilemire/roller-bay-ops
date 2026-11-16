@@ -74,7 +74,7 @@ function draftData(input: AllocationDraftInput) {
 
 // The mocked order that has no allocation yet.
 export const unallocatedOrderId = 'ffffffff-ffff-4fff-8fff-fffffffffff0';
-/** Adds an employee to "Completed by" through its search box, within `within`. */
+/** Adds an employee to an employee picker through its search box, within `within`. */
 export async function pickEmployee(
   within: Page | Locator,
   name: string,
@@ -220,6 +220,16 @@ export async function mockApi(
         body: JSON.stringify({
           message: `Browser tests expect same-origin API calls, not ${url.origin}.`,
         }),
+      });
+    /** Chosen employees as a record credits them. */
+    const credited = (employeeIds: string[]) =>
+      employeeIds.map((employeeId) => {
+        const employee = state.employees.find((e) => e.id === employeeId)!;
+        return {
+          employeeId,
+          employeeName: employee.name,
+          employeeInitials: employee.initials,
+        };
       });
     const send = (body: unknown, status = 200) =>
       route.fulfill({
@@ -395,16 +405,13 @@ export async function mockApi(
       if (method === 'GET') return existing ? send(existing) : send(null, 204);
       if (existing) return send(existing);
       const body = request.postDataJSON();
-      const employee = state.employees.find((e) => e.id === body.employeeId)!;
       const sheet: Worksheet = {
         id: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         allocationId: state.allocation.id,
         workOrderId: state.allocation.workOrderId,
         orderNumber: state.allocation.orderNumber,
         revision: 1,
-        employeeId: employee.id,
-        employeeName: employee.name,
-        employeeInitials: employee.initials,
+        employees: credited(body.employeeIds),
         startedAt: timestamp,
         abandonedAt: null,
         skippedAt: null,
@@ -423,7 +430,7 @@ export async function mockApi(
     if (path === '/production/cutting/worksheets')
       return send(state.worksheets.filter((w) => !w.reviewedAt));
     const sheetPath = path.match(
-      /^\/production\/cutting\/worksheets\/([^/]+)(?:\/(draft|submit|review|return))?$/,
+      /^\/production\/cutting\/worksheets\/([^/]+)(?:\/(draft|employees|submit|review|return))?$/,
     );
     if (sheetPath) {
       const sheet = state.worksheets.find((w) => w.id === sheetPath[1])!;
@@ -449,6 +456,8 @@ export async function mockApi(
           409,
         );
       if (sheetPath[2] === 'draft') sheet.draft = body.draft;
+      if (sheetPath[2] === 'employees')
+        sheet.employees = credited(body.employeeIds);
       if (sheetPath[2] === 'submit') {
         const order = state.orders.find((o) => o.id === sheet.workOrderId)!;
         if (!sheet.results && !order.cutAt) {
@@ -456,16 +465,7 @@ export async function mockApi(
           state.productionCompletions.push({
             workOrderId: order.id,
             station: 'cutting',
-            employees: body.employeeIds.map((employeeId: string) => {
-              const employee = state.employees.find(
-                (e) => e.id === employeeId,
-              )!;
-              return {
-                employeeId,
-                employeeName: employee.name,
-                employeeInitials: employee.initials,
-              };
-            }),
+            employees: sheet.employees,
             completedAt,
             recordedAt: completedAt,
             recordedByUserId: ids.user,

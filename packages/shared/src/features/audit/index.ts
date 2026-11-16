@@ -29,6 +29,14 @@ const legacyProductionSnapshotSchema = productionCompletionSchema
     ...rest,
     employees: [{ employeeId, employeeName, employeeInitials }],
   }));
+// Snapshots recorded while a cutting sheet named only the employee who began it.
+const legacyWorksheetSnapshotSchema = worksheetSchema
+  .omit({ employees: true })
+  .extend(completionEmployeeSchema.shape)
+  .transform(({ employeeId, employeeName, employeeInitials, ...rest }) => ({
+    ...rest,
+    employees: [{ employeeId, employeeName, employeeInitials }],
+  }));
 export const auditSnapshotSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('employees'), value: employeeSchema }),
   z.object({
@@ -38,7 +46,10 @@ export const auditSnapshotSchema = z.discriminatedUnion('type', [
       legacyProductionSnapshotSchema,
     ]),
   }),
-  z.object({ type: z.literal('cutting-worksheets'), value: worksheetSchema }),
+  z.object({
+    type: z.literal('cutting-worksheets'),
+    value: z.union([worksheetSchema, legacyWorksheetSnapshotSchema]),
+  }),
   z.object({ type: z.literal('stock-items'), value: stockSnapshotSchema }),
   z.object({
     type: z.literal('stock-receipts'),

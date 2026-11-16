@@ -27,7 +27,7 @@ export class CuttingWorkflowService {
     private readonly worksheets: CuttingWorksheetsService,
     private readonly production: ProductionService,
   ) {}
-  begin(orderId: string, employeeId: string, actor: string) {
+  begin(orderId: string, employeeIds: string[], actor: string) {
     return worksheetOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         // Same lock order as allocation edits: allocation -> order -> worksheet -> sorted stock.
@@ -63,7 +63,7 @@ export class CuttingWorkflowService {
           context,
           lockedSnapshot,
           stocks,
-          employeeId,
+          employeeIds,
           actor,
         );
       }),
@@ -90,13 +90,15 @@ export class CuttingWorkflowService {
           input,
           actor,
         );
-        // A return clears submittedAt but retains results. Resubmissions and retries
-        // must not overwrite attribution or restore an admin-cleared milestone.
+        // The sheet's employees are credited as they stand at submission. A
+        // return clears submittedAt but retains results. Resubmissions and
+        // retries must not overwrite attribution or restore an admin-cleared
+        // milestone.
         if (!row.results) {
           await this.production.recordWorksheetCut(
             context,
             order,
-            input.employeeIds,
+            result.employees.map((e) => e.employeeId).sort(),
             actor,
             new Date(result.submittedAt!),
           );

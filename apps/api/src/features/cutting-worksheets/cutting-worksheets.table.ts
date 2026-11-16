@@ -8,6 +8,8 @@ import {
   uniqueIndex,
   serial,
   check,
+  primaryKey,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { Worksheet } from '@roller-bay/shared/production';
@@ -30,11 +32,6 @@ export const cuttingWorksheets = pgTable(
       .references(() => workOrders.id, { onDelete: 'restrict' }),
     orderNumber: varchar('order_number', { length: 6 }).notNull(),
     revision: integer('revision').notNull().default(1),
-    employeeId: uuid('employee_id')
-      .notNull()
-      .references(() => employees.id, { onDelete: 'restrict' }),
-    employeeName: varchar('employee_name', { length: 120 }).notNull(),
-    employeeInitials: varchar('employee_initials', { length: 12 }).notNull(),
     startedByUserId: uuid('started_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -78,5 +75,37 @@ export const cuttingWorksheets = pgTable(
   ],
 );
 
-export type WorksheetRecord = typeof cuttingWorksheets.$inferSelect;
+// Whoever is working on a sheet; submission credits them with the cut. Names
+// and initials are copied so the sheet survives renames. Explicit constraint
+// names stay under Postgres's 63-character limit.
+export const cuttingWorksheetEmployees = pgTable(
+  'cutting_worksheet_employees',
+  {
+    worksheetId: uuid('worksheet_id').notNull(),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => employees.id, { onDelete: 'restrict' }),
+    employeeName: varchar('employee_name', { length: 120 }).notNull(),
+    employeeInitials: varchar('employee_initials', { length: 12 }).notNull(),
+  },
+  (t) => [
+    primaryKey({
+      name: 'cutting_worksheet_employees_pk',
+      columns: [t.worksheetId, t.employeeId],
+    }),
+    foreignKey({
+      name: 'cutting_worksheet_employees_worksheet_fk',
+      columns: [t.worksheetId],
+      foreignColumns: [cuttingWorksheets.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+export type WorksheetEmployee = Pick<
+  typeof cuttingWorksheetEmployees.$inferSelect,
+  'employeeId' | 'employeeName' | 'employeeInitials'
+>;
+export type WorksheetRecord = typeof cuttingWorksheets.$inferSelect & {
+  employees: WorksheetEmployee[];
+};
 export type WorksheetInsert = typeof cuttingWorksheets.$inferInsert;

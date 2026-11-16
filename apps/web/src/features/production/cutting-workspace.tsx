@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   worksheetSchema,
   type Worksheet,
+  type WorksheetEmployees,
   type WorksheetSubmit,
 } from '@roller-bay/shared/production';
 import { api } from '@/lib/api';
@@ -45,13 +46,12 @@ function CuttingOrder({
   const query = useQuery(worksheetForOrder(orderId));
   const client = useQueryClient();
   const [beginOpen, setBeginOpen] = useState(false);
-  const [starterIds, setStarterIds] = useState<string[]>([]);
-  const starter = starterIds.length === 1 ? starterIds[0] : undefined;
+  const [cutterIds, setCutterIds] = useState<string[]>([]);
   const start = useMutation({
     mutationFn: () =>
       api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
         method: 'POST',
-        body: { employeeId: starter },
+        body: { employeeIds: cutterIds },
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: productionKey });
@@ -83,7 +83,7 @@ function CuttingOrder({
           <div className="action-group">
             <Button
               onClick={() => {
-                setStarterIds([]);
+                setCutterIds([]);
                 setBeginOpen(true);
               }}
             >
@@ -94,18 +94,18 @@ function CuttingOrder({
             open={beginOpen}
             onOpenChange={setBeginOpen}
             title="Begin cutting"
-            description="Choose the cutter who is starting this worksheet. Completion is recorded separately when you sign off or submit results."
+            description="Choose who is cutting this order. You can change them until results are submitted, which credits them with the cut."
           >
             <div className="stack">
               <EmployeeSelection
-                label="Started by"
-                value={starterIds}
-                onChange={setStarterIds}
+                label="Cutters"
+                value={cutterIds}
+                onChange={setCutterIds}
               />
               {start.error && <ErrorNotice error={start.error} />}
               <div className="form-actions">
                 <Button
-                  disabled={!starter || start.isPending}
+                  disabled={!cutterIds.length || start.isPending}
                   onClick={() => start.mutate()}
                 >
                   Start worksheet
@@ -141,7 +141,7 @@ function Worksheet({
 }: { initial: Worksheet } & Editor) {
   // Keep dirty work pinned through background refetches. Explicit saves advance the revision.
   const [sheet, setSheet] = useState(initial);
-  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+  const [changingCutters, setChangingCutters] = useState(false);
   const [editorVersion, setEditorVersion] = useState(0);
   const [refreshError, setRefreshError] = useState<unknown>(null);
   const [checked, setChecked] = useState(initial.draft?.checkedCuts ?? []);
@@ -174,16 +174,38 @@ function Worksheet({
   };
   return (
     <>
-      <p>
-        Started by {sheet.employeeName} ({sheet.employeeInitials}) ·{' '}
-        {sheet.skippedAt
-          ? 'Closed without recording results'
-          : sheet.reviewedAt
-            ? 'Inventory reconciled'
-            : sheet.submittedAt
-              ? 'Results awaiting office review'
-              : 'Results in progress'}
-      </p>
+      <div className="inline-actions">
+        <p>
+          Cutters: {employeeNames(sheet.employees)} ·{' '}
+          {sheet.skippedAt
+            ? 'Closed without recording results'
+            : sheet.reviewedAt
+              ? 'Inventory reconciled'
+              : sheet.submittedAt
+                ? 'Results awaiting office review'
+                : 'Results in progress'}
+        </p>
+        {/* Submitted results credit the cut; an admin corrects it after that. */}
+        {!sheet.results && !sheet.skippedAt && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setChangingCutters(true)}
+          >
+            Change cutters
+          </Button>
+        )}
+      </div>
+      {changingCutters && (
+        <ChangeCutters
+          sheet={sheet}
+          saved={(result) => {
+            setSheet(result);
+            setChangingCutters(false);
+          }}
+          close={() => setChangingCutters(false)}
+        />
+      )}
       {refreshError && <ErrorNotice error={refreshError} />}
       <CuttingInstructions
         allocation={sheet.snapshot}
@@ -208,13 +230,9 @@ function Worksheet({
           allocation={sheet.snapshot}
           close={() => void refresh().catch(setRefreshError)}
           worksheet={{
-            confirmationFields: (
-              <EmployeeSelection
-                value={employeeIds}
-                onChange={setEmployeeIds}
-              />
+            confirmationDetails: (
+              <p>Credited to {employeeNames(sheet.employees)}.</p>
             ),
-            submissionDisabled: employeeIds.length === 0,
             dirty: checkedDirty,
             initialForm:
               sheet.draft?.form ??
@@ -238,10 +256,6 @@ function Worksheet({
               setSheet(result);
             },
             submit: async (results, form) => {
-              if (!employeeIds.length)
-                throw new Error(
-                  'Select the employees who completed the cutting.',
-                );
               const result = await api(
                 `/production/cutting/worksheets/${sheet.id}/submit`,
                 worksheetSchema,
@@ -249,7 +263,6 @@ function Worksheet({
                   method: 'POST',
                   body: {
                     expectedRevision: sheet.revision,
-                    employeeIds,
                     results,
                     draft: { form, units, checkedCuts: checked },
                   } satisfies WorksheetSubmit,
@@ -266,5 +279,64 @@ function Worksheet({
         />
       )}
     </>
+  );
+}
+function ChangeCutters({
+  sheet,
+  saved,
+  close,
+}: {
+  sheet: Worksheet;
+  saved: (sheet: Worksheet) => void;
+  close: () => void;
+}) {
+  const client = useQueryClient();
+  const [employeeIds, setEmployeeIds] = useState(() =>
+    sheet.employees.map((e) => e.employeeId),
+  );
+  const mutation = useMutation({
+    mutationFn: () =>
+      api(
+        `/production/cutting/worksheets/${sheet.id}/employees`,
+        worksheetSchema,
+        {
+          method: 'PUT',
+          body: {
+            expectedRevision: sheet.revision,
+            employeeIds,
+          } satisfies WorksheetEmployees,
+        },
+      ),
+    onSuccess: async (result) => {
+      saved(result);
+      await client.invalidateQueries({ queryKey: productionKey });
+    },
+  });
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !mutation.isPending) close();
+      }}
+      title="Change cutters"
+      description="Submitting results credits whoever is listed here."
+    >
+      <div className="stack">
+        <EmployeeSelection
+          label="Cutters"
+          value={employeeIds}
+          onChange={setEmployeeIds}
+        />
+        {mutation.error && <ErrorNotice error={mutation.error} />}
+        <div className="form-actions">
+          <Button
+            disabled={!employeeIds.length || mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? 'Saving…' : 'Save cutters'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
