@@ -64,6 +64,68 @@ async function databaseBefore(t: TestContext, prefix: string) {
 }
 
 test(
+  '0040 moves the employee who began each sheet to its own row and drops the single columns',
+  { timeout: 60_000 },
+  async (t) => {
+    const { client, migrate, migrateRest } = await databaseBefore(t, '0040_');
+    const [user, employee, order, allocation, worksheet] = Array.from(
+      { length: 5 },
+      () => randomUUID(),
+    );
+    await client.query(
+      `INSERT INTO users (id,name,email,microsoft_subject_id)
+       VALUES ($1,'Cutter','cutter@example.com','cutter')`,
+      [user],
+    );
+    await client.query(
+      `INSERT INTO employees (id,name,initials) VALUES ($1,'Cutter','C')`,
+      [employee],
+    );
+    await client.query(
+      `INSERT INTO work_orders (id,order_number,quantity) VALUES ($1,'400001',1)`,
+      [order],
+    );
+    await client.query(
+      `INSERT INTO allocations (id,is_draft,work_order_id,created_by_user_id)
+       VALUES ($1,true,$2,$3)`,
+      [allocation, order, user],
+    );
+    await client.query(
+      `INSERT INTO cutting_worksheets (id,allocation_id,work_order_id,order_number,employee_id,employee_name,employee_initials,started_by_user_id,snapshot,baselines)
+       VALUES ($1,$2,$3,'400001',$4,'Cutter at the time','CT',$5,'{}','{}')`,
+      [worksheet, allocation, order, employee, user],
+    );
+    await migrate();
+    const columns = await client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='cutting_worksheets'`,
+    );
+    assert.ok(
+      !columns.rows.some((r) => String(r.column_name).startsWith('employee_')),
+    );
+    const working = await client.query(
+      `SELECT employee_id,employee_name,employee_initials FROM cutting_worksheet_employees WHERE worksheet_id=$1`,
+      [worksheet],
+    );
+    assert.deepEqual(working.rows, [
+      {
+        employee_id: employee,
+        employee_name: 'Cutter at the time',
+        employee_initials: 'CT',
+      },
+    ]);
+    await assert.rejects(
+      client.query(
+        `INSERT INTO cutting_worksheet_employees (worksheet_id,employee_id,employee_name,employee_initials)
+         VALUES ($1,$2,'Nobody','NB')`,
+        [worksheet, randomUUID()],
+      ),
+      { code: '23503' },
+    );
+    await migrateRest();
+  },
+);
+
+test(
   '0037 gives each allocation its own blinds, and stops on blinds that nothing plans',
   { timeout: 60_000 },
   async (t) => {

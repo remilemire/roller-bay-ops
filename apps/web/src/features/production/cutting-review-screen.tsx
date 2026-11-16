@@ -27,6 +27,7 @@ import {
   worksheetDetail,
   productionKey,
   lookupCuttingLocations,
+  employeeNames,
 } from './production.api';
 /** Allocations' results form, composed by the route. */
 type Editor = { completionEditor: ComponentType<CompletionEditorProps> };
@@ -60,7 +61,7 @@ function ReviewQueue({ completionEditor }: Editor) {
               <thead>
                 <tr>
                   <th>Order</th>
-                  <th>Started by</th>
+                  <th>Cutters</th>
                   <th>Started</th>
                   <th>Results</th>
                   <th>Action</th>
@@ -70,9 +71,7 @@ function ReviewQueue({ completionEditor }: Editor) {
                 {query.data.map((s) => (
                   <tr key={s.id}>
                     <td>{s.orderNumber}</td>
-                    <td>
-                      {s.employeeName} ({s.employeeInitials})
-                    </td>
+                    <td>{employeeNames(s.employees)}</td>
                     <td>{dateTimeLabel(s.startedAt)}</td>
                     <td>{s.submittedAt ? 'Awaiting review' : 'Incomplete'}</td>
                     <td>

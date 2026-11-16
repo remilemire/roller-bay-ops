@@ -3,9 +3,10 @@ import type {
   LocationQuery,
   UpdateLocation,
 } from '@roller-bay/shared/locations';
-import { and, asc, count, eq, getTableColumns, ilike, or } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../../database/database-executor.js';
-import { containsPattern, locationsQuery } from '../locations.persistence.js';
+import { locationsQuery } from '../locations.persistence.js';
+import { matchesLocationAddress } from '../locations.search.js';
 import { locationSections } from '../sections/location-sections.table.js';
 import { locationZones } from '../zones/location-zones.table.js';
 import { locations } from './location-levels.table.js';
@@ -13,12 +14,12 @@ export class LocationLevelsRepository {
   constructor(private readonly db: DatabaseExecutor) {}
   list(query: LocationQuery) {
     const where = and(
-      // A level is shown as zone / section / label; match any of the three.
       query.search
-        ? or(
-            ilike(locations.label, containsPattern(query.search)),
-            ilike(locationSections.label, containsPattern(query.search)),
-            ilike(locationZones.name, containsPattern(query.search)),
+        ? matchesLocationAddress(
+            query.search,
+            locationZones.name,
+            locationSections.label,
+            locations.label,
           )
         : undefined,
       query.sectionId ? eq(locations.sectionId, query.sectionId) : undefined,

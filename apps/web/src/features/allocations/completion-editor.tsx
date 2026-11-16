@@ -59,8 +59,8 @@ export type CompletionEditorProps = {
     lookupLocations: ComponentProps<typeof Lookup>['load'];
     saveDraft?: (form: CompletionForm) => Promise<void>;
     resolution?: boolean;
-    confirmationFields?: ReactNode;
-    submissionDisabled?: boolean;
+    /** Shown in the confirmation dialog, such as who submission credits. */
+    confirmationDetails?: ReactNode;
     dirty?: boolean;
     submit: (
       body: ReturnType<typeof completionFromForm>,
@@ -613,7 +613,7 @@ export function CompletionEditor({
             <li>The original cutting plan stays in history.</li>
           </ul>
         )}
-        {worksheet?.confirmationFields}
+        {worksheet?.confirmationDetails}
         {mutation.error && <ErrorNotice error={mutation.error} />}
         <div className="form-actions">
           <Button
@@ -630,7 +630,6 @@ export function CompletionEditor({
           </Button>
           <Button
             disabled={
-              worksheet?.submissionDisabled ||
               mutation.isPending ||
               saveDraft.isPending ||
               adding ||

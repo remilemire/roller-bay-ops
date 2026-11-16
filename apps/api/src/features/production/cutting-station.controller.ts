@@ -22,10 +22,12 @@ import type { z } from 'zod';
 import type { Request, Response } from 'express';
 import {
   worksheetBeginSchema,
+  worksheetEmployeesSchema,
   worksheetSaveSchema,
   worksheetSubmitSchema,
   worksheetReviewSchema,
   worksheetReturnSchema,
+  type WorksheetEmployees,
   type WorksheetSave,
   type WorksheetSubmit,
 } from '@roller-bay/shared/production';
@@ -66,11 +68,11 @@ export class CuttingStationController {
   @Post('orders/:id/worksheet') begin(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetBeginSchema))
-    body: { employeeId: string },
+    body: z.infer<typeof worksheetBeginSchema>,
     @Req() req: Request,
   ) {
     requireStation(req.currentUser!, 'cutting');
-    return this.workflow.begin(id, body.employeeId, req.currentUser!.id);
+    return this.workflow.begin(id, body.employeeIds, req.currentUser!.id);
   }
   @Get('worksheets/:id') get(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -86,6 +88,15 @@ export class CuttingStationController {
   ) {
     requireStation(req.currentUser!, 'cutting');
     return this.service.save(id, body);
+  }
+  @Put('worksheets/:id/employees') changeEmployees(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(worksheetEmployeesSchema))
+    body: WorksheetEmployees,
+    @Req() req: Request,
+  ) {
+    requireStation(req.currentUser!, 'cutting');
+    return this.service.changeEmployees(id, body, req.currentUser!.id);
   }
   @Post('worksheets/:id/submit') submit(
     @Param('id', new ParseUUIDPipe()) id: string,

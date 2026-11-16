@@ -21,8 +21,14 @@ const employeeIdsSchema = z
 export const completionInputSchema = z.strictObject({
   employeeIds: employeeIdsSchema,
 });
-// A cutting sheet is begun by one cutter.
-export const worksheetBeginSchema = z.strictObject({ employeeId: z.uuid() });
+// Whoever is working on a cutting sheet; submission credits them with the cut.
+export const worksheetBeginSchema = z.strictObject({
+  employeeIds: employeeIdsSchema,
+});
+export const worksheetEmployeesSchema = z.strictObject({
+  expectedRevision: z.number().int().positive(),
+  employeeIds: employeeIdsSchema,
+});
 export const milestoneCorrectionSchema = z
   .strictObject({
     expectedRevision: z.number().int().positive(),
@@ -109,7 +115,6 @@ export const worksheetSaveSchema = z.strictObject({
   draft: cuttingDraftSchema,
 });
 export const worksheetSubmitSchema = z.strictObject({
-  employeeIds: employeeIdsSchema,
   expectedRevision: z.number().int().positive(),
   results: completeAllocationSchema,
   draft: cuttingDraftSchema.optional(),
@@ -133,9 +138,7 @@ export const worksheetSchema = z.object({
   workOrderId: z.uuid(),
   orderNumber: z.string(),
   revision: z.number().int().positive(),
-  employeeId: z.uuid(),
-  employeeName: z.string(),
-  employeeInitials: z.string(),
+  employees: z.array(completionEmployeeSchema).min(1),
   startedAt: z.iso.datetime(),
   abandonedAt: z.iso.datetime().nullable().default(null),
   skippedAt: z.iso.datetime().nullable().default(null),
@@ -157,5 +160,6 @@ export type StationQuery = z.infer<typeof stationQuerySchema>;
 export type Worksheet = z.infer<typeof worksheetSchema>;
 export type CuttingDraft = z.infer<typeof cuttingDraftSchema>;
 export type WorksheetSave = z.infer<typeof worksheetSaveSchema>;
+export type WorksheetEmployees = z.infer<typeof worksheetEmployeesSchema>;
 export type WorksheetSubmit = z.infer<typeof worksheetSubmitSchema>;
 export type MilestoneCorrection = z.infer<typeof milestoneCorrectionSchema>;

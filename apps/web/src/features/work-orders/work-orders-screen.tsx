@@ -47,6 +47,7 @@ export function WorkOrdersScreen() {
       </PageHeading>
       {adding && (
         <OrderCreateDialog
+          orderNumber={view === 'list' || view === 'week' ? params.search : ''}
           close={() => setAdding(false)}
           onCreated={() => setAdding(false)}
         />

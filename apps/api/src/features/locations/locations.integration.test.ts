@@ -6,6 +6,9 @@ import request from 'supertest';
 import { startSignedInApp } from '../../testing/integration-app.js';
 import type { UserRole } from '@roller-bay/shared/users';
 import {
+  type Location,
+  type LocationSection,
+  type LocationZone,
   locationSchema,
   locationZoneSchema,
   locationSectionSchema,
@@ -430,6 +433,131 @@ test('locations integration', { timeout: 60_000 }, async (t) => {
       for (const row of [section, otherSection])
         await remove(`${sections}/${row.id}`).expect(204);
       for (const row of [zone, zone2])
+        await remove(`${zones}/${row.id}`).expect(204);
+    },
+  );
+  await t.test(
+    'searches compact addresses across the tree and location picker',
+    async () => {
+      await role('admin');
+      const zoneRows: LocationZone[] = [];
+      const sectionRows: LocationSection[] = [];
+      const levelRows: Location[] = [];
+      for (const name of ['North warehouse', 'South warehouse']) {
+        const zone = locationZoneSchema.parse(
+          (await post(zones, { name }).expect(201)).body,
+        );
+        zoneRows.push(zone);
+        for (const label of ['ABC', 'DEF']) {
+          const section = locationSectionSchema.parse(
+            (await post(sections, { zoneId: zone.id, label }).expect(201)).body,
+          );
+          sectionRows.push(section);
+          for (const label of ['1', '2']) {
+            levelRows.push(
+              locationSchema.parse(
+                (
+                  await post(levels, { sectionId: section.id, label }).expect(
+                    201,
+                  )
+                ).body,
+              ),
+            );
+          }
+        }
+      }
+      const matchingLevels = levelRows.filter(
+        (row) => row.sectionLabel === 'ABC' && row.label === '1',
+      );
+      const matchingSections = sectionRows.filter((row) => row.label === 'ABC');
+      for (const search of ['abc1', 'ABC 1', 'aBc/1', 'ABC - 1']) {
+        for (const [path, rows] of [
+          [zones, zoneRows],
+          [sections, matchingSections],
+          [levels, matchingLevels],
+        ] as const) {
+          const result = (
+            await get(`${path}?search=${encodeURIComponent(search)}`).expect(
+              200,
+            )
+          ).body;
+          assert.equal(result.total, rows.length, `${path}: ${search}`);
+          assert.deepEqual(
+            new Set(result.items.map((row: { id: string }) => row.id)),
+            new Set(rows.map((row) => row.id)),
+          );
+        }
+      }
+      const north = zoneRows[0]!;
+      const scoped = (
+        await get(`${levels}?search=abc1&zoneId=${north.id}&pageSize=1`).expect(
+          200,
+        )
+      ).body;
+      assert.equal(scoped.total, 1);
+      assert.equal(scoped.items[0].zoneId, north.id);
+      for (const path of paths) {
+        const result = (
+          await get(`${path}?search=northwarehouseabc1`).expect(200)
+        ).body;
+        assert.equal(result.total, 1);
+        for (const search of ['abc12', 'abc%251', 'abc_1', 'abc%5C1']) {
+          assert.equal(
+            (await get(`${path}?search=${search}`).expect(200)).body.total,
+            0,
+          );
+        }
+      }
+      const firstPage = (
+        await get(`${levels}?search=abc1&pageSize=1`).expect(200)
+      ).body;
+      const secondPage = (
+        await get(`${levels}?search=abc1&pageSize=1&page=2`).expect(200)
+      ).body;
+      assert.equal(secondPage.total, 2);
+      assert.equal(secondPage.items.length, 1);
+      assert.notEqual(secondPage.items[0].id, firstPage.items[0].id);
+      const shelf = locationZoneSchema.parse(
+        (await post(zones, { name: 'Primary Shelf' }).expect(201)).body,
+      );
+      zoneRows.push(shelf);
+      const overflow = locationSectionSchema.parse(
+        (
+          await post(sections, { zoneId: shelf.id, label: 'Overflow' }).expect(
+            201,
+          )
+        ).body,
+      );
+      sectionRows.push(overflow);
+      const overflowLevel = locationSchema.parse(
+        (await post(levels, { sectionId: overflow.id, label: '4' }).expect(201))
+          .body,
+      );
+      levelRows.push(overflowLevel);
+      for (const search of [
+        'flow 4',
+        'shelf overflow',
+        'PRIMARYshelfOVERFLOW4',
+      ]) {
+        for (const [path, expectedId] of [
+          [zones, shelf.id],
+          [sections, overflow.id],
+          [levels, overflowLevel.id],
+        ] as const) {
+          const result = (
+            await get(`${path}?search=${encodeURIComponent(search)}`).expect(
+              200,
+            )
+          ).body;
+          assert.equal(result.total, 1);
+          assert.equal(result.items[0].id, expectedId);
+        }
+      }
+      for (const row of levelRows)
+        await remove(`${levels}/${row.id}`).expect(204);
+      for (const row of sectionRows)
+        await remove(`${sections}/${row.id}`).expect(204);
+      for (const row of zoneRows)
         await remove(`${zones}/${row.id}`).expect(204);
     },
   );

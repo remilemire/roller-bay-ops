@@ -3,31 +3,22 @@ import type {
   LocationZoneQuery,
   UpdateLocationZone,
 } from '@roller-bay/shared/locations';
-import {
-  and,
-  asc,
-  count,
-  eq,
-  exists,
-  getTableColumns,
-  ilike,
-  or,
-} from 'drizzle-orm';
+import { and, asc, count, eq, exists, getTableColumns, or } from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../../database/database-executor.js';
 import { locations } from '../levels/location-levels.table.js';
-import { containsPattern, locationsQuery } from '../locations.persistence.js';
+import { locationsQuery } from '../locations.persistence.js';
+import { matchesLocationAddress } from '../locations.search.js';
 import { locationSections } from '../sections/location-sections.table.js';
 import { locationZones } from './location-zones.table.js';
 export class LocationZonesRepository {
   constructor(private readonly db: DatabaseExecutor) {}
   list(query: LocationZoneQuery) {
-    const pattern = containsPattern(query.search ?? '');
     const where = and(
       // The locations tree searches every level at once, so a zone also
       // matches through any of its sections or their levels.
       query.search
         ? or(
-            ilike(locationZones.name, pattern),
+            matchesLocationAddress(query.search, locationZones.name),
             exists(
               this.db
                 .select({ id: locationSections.id })
@@ -39,9 +30,11 @@ export class LocationZonesRepository {
                 .where(
                   and(
                     eq(locationSections.zoneId, locationZones.id),
-                    or(
-                      ilike(locationSections.label, pattern),
-                      ilike(locations.label, pattern),
+                    matchesLocationAddress(
+                      query.search,
+                      locationZones.name,
+                      locationSections.label,
+                      locations.label,
                     ),
                   ),
                 ),

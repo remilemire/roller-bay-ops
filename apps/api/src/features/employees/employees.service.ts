@@ -19,12 +19,6 @@ export class EmployeesService {
     private readonly repository: EmployeesRepository,
     private readonly audit: AuditService,
   ) {}
-  async requireActive(context: UnitOfWorkContext, id: string) {
-    const row = await context.employees.find(id, true);
-    if (!row?.isActive)
-      throw new ConflictException('Choose an active employee.');
-    return presentEmployee(row);
-  }
   /** Resolves every id, in the requested order, or rejects the whole list. */
   async requireActiveMany(context: UnitOfWorkContext, ids: string[]) {
     const rows = await context.employees.findMany(ids, true);

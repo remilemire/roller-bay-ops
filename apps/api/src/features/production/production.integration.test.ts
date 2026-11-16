@@ -407,7 +407,7 @@ test(
         await role('production', ['cutting']);
         const begin = (id: string) =>
           post(`/api/production/cutting/orders/${id}/worksheet`, {
-            employeeId: other.id,
+            employeeIds: [other.id],
           });
         const current = (id: string) =>
           get(`/api/production/cutting/orders/${id}/worksheet`);
@@ -489,7 +489,6 @@ test(
         };
         const submit = (id: string, revision: number, body: object) =>
           post(`/api/production/cutting/worksheets/${id}/submit`, {
-            employeeIds: [other.id],
             expectedRevision: revision,
             results: body,
           });
@@ -630,13 +629,13 @@ test(
         assert.ok((await fixtures.workOrder(manual.workOrderId)).cut_at);
         await post(
           `/api/production/cutting/orders/${manual.workOrderId}/worksheet`,
-          { employeeId: other.id },
+          { employeeIds: [other.id] },
         ).expect(409);
         const allocation = await create(await input(await seed()));
         const sheet = (
           await post(
             `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
-            { employeeId: other.id },
+            { employeeIds: [other.id] },
           ).expect(201)
         ).body;
         const path = `/api/production/cutting/worksheets/${sheet.id}/submit`;
@@ -646,9 +645,41 @@ test(
             initials: 'SC',
           }).expect(201)
         ).body;
-        const body = {
+        // Whoever is on the sheet at submission is credited; submission itself
+        // names no employees.
+        const employeesPath = `/api/production/cutting/worksheets/${sheet.id}/employees`;
+        await put(employeesPath, {
+          expectedRevision: sheet.revision,
+          employeeIds: [],
+        }).expect(400);
+        await put(employeesPath, {
+          expectedRevision: sheet.revision,
+          employeeIds: [randomUUID()],
+        }).expect(409);
+        const staffed = worksheetSchema.parse(
+          (
+            await put(employeesPath, {
+              expectedRevision: sheet.revision,
+              employeeIds: [helper.id, other.id],
+            }).expect(200)
+          ).body,
+        );
+        assert.deepEqual(
+          staffed.employees.map((e) => e.employeeId).sort(),
+          [other.id, helper.id].sort(),
+        );
+        assert.equal(staffed.revision, sheet.revision + 1);
+        // A retry of the same change is harmless; a stale different one is not.
+        await put(employeesPath, {
           expectedRevision: sheet.revision,
           employeeIds: [other.id, helper.id],
+        }).expect(200);
+        await put(employeesPath, {
+          expectedRevision: sheet.revision,
+          employeeIds: [helper.id],
+        }).expect(409);
+        const body = {
+          expectedRevision: staffed.revision,
           results: {
             expectedRevision: allocation.revision,
             items: [
@@ -664,8 +695,7 @@ test(
             ],
           },
         };
-        await post(path, { ...body, employeeIds: [] }).expect(400);
-        await post(path, { ...body, employeeIds: [randomUUID()] }).expect(409);
+        await post(path, { ...body, employeeIds: [other.id] }).expect(400);
         assert.equal(
           (await get(`/api/production/cutting/worksheets/${sheet.id}`)).body
             .submittedAt,
@@ -722,15 +752,70 @@ test(
             .sort(),
           [other.id, helper.id].sort(),
         );
-        const history = (
-          await get(`/api/work-orders/${allocation.workOrderId}/history`)
-        ).body;
+        const history = historySchema.parse(
+          (await get(`/api/work-orders/${allocation.workOrderId}/history`))
+            .body,
+        );
         assert.equal(
-          history.items.filter(
-            (e: { action: string }) => e.action === 'order.cutting.completed',
-          ).length,
+          history.items.filter((e) => e.action === 'order.cutting.completed')
+            .length,
           1,
         );
+        const changed = history.items.find(
+          (e) => e.action === 'cutting.employees-changed',
+        )!.changes[0]!;
+        assert.deepEqual(
+          [changed.before, changed.after].map(
+            (v) => v?.type === 'cutting-worksheets' && v.value.employees.length,
+          ),
+          [1, 2],
+        );
+        // Snapshots recorded while a sheet named only the employee who began
+        // it still read as one-employee lists.
+        const unstaffed: Partial<typeof staffed> = { ...staffed };
+        delete unstaffed.employees;
+        const legacy = await pool.query(
+          `INSERT INTO audit_events (actor_id,actor_name,action) VALUES ($1,'Legacy','cutting.started') RETURNING id`,
+          [userId],
+        );
+        await pool.query(
+          `INSERT INTO audit_changes (event_id,position,record_type,record_id,before,after) VALUES ($1,0,'cutting-worksheets',$2,NULL,$3)`,
+          [
+            legacy.rows[0].id,
+            sheet.id,
+            {
+              type: 'cutting-worksheets',
+              value: {
+                ...unstaffed,
+                employeeId: other.id,
+                employeeName: 'Avery Ross',
+                employeeInitials: 'AR',
+              },
+            },
+          ],
+        );
+        const replayed = historySchema
+          .parse(
+            (await get(`/api/work-orders/${allocation.workOrderId}/history`))
+              .body,
+          )
+          .items.find(
+            (e) => e.action === 'cutting.started' && e.actorName === 'Legacy',
+          )!.changes[0]!.after!;
+        assert.deepEqual(
+          replayed.type === 'cutting-worksheets' && replayed.value.employees,
+          [
+            {
+              employeeId: other.id,
+              employeeName: 'Avery Ross',
+              employeeInitials: 'AR',
+            },
+          ],
+        );
+        await put(employeesPath, {
+          expectedRevision: submitted.revision,
+          employeeIds: [other.id],
+        }).expect(409);
         const returned = (
           await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
             expectedRevision: submitted.revision,
@@ -738,6 +823,11 @@ test(
           }).expect(201)
         ).body;
         assert.deepEqual((await get(completionPath)).body, completed);
+        // The cut is credited; a returned sheet keeps the employees it credited.
+        await put(employeesPath, {
+          expectedRevision: returned.revision,
+          employeeIds: [other.id],
+        }).expect(409);
         const resubmitted = (
           await post(path, {
             ...body,
@@ -787,7 +877,7 @@ test(
           };
           const sheet = (
             await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
-              employeeId: other.id,
+              employeeIds: [other.id],
             }).expect(201)
           ).body;
           assert.equal((await queueOrder()).hasCuttingWorksheet, true);
@@ -795,7 +885,6 @@ test(
             await post(
               `/api/production/cutting/worksheets/${sheet.id}/submit`,
               {
-                employeeIds: [other.id],
                 expectedRevision: sheet.revision,
                 results: {
                   expectedRevision: allocation.revision,
@@ -872,7 +961,7 @@ test(
         const begin = () =>
           post(
             `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
-            { employeeId: other.id },
+            { employeeIds: [other.id] },
           );
         const sheet = (await begin().expect(201)).body;
         await post(`/api/production/cutting/worksheets/${sheet.id}/abandon`, {
@@ -901,7 +990,6 @@ test(
         };
         const submitted = (
           await post(`/api/production/cutting/worksheets/${fresh.id}/submit`, {
-            employeeIds: [other.id],
             expectedRevision: fresh.revision,
             results,
           }).expect(201)
@@ -983,12 +1071,11 @@ test(
         const sheet = (
           await post(
             `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
-            { employeeId: other.id },
+            { employeeIds: [other.id] },
           ).expect(201)
         ).body;
         const submitted = (
           await post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
-            employeeIds: [other.id],
             expectedRevision: sheet.revision,
             results: {
               expectedRevision: allocation.revision,
@@ -1094,6 +1181,54 @@ test(
     );
 
     await t.test(
+      'fabric reported consumed cannot be cut again until the office settles the report',
+      async () => {
+        await role('admin');
+        const stock = await seed();
+        const first = await create(await input(stock));
+        const second = await create(await input(stock));
+        const begin = (orderId: string) =>
+          post(`/api/production/cutting/orders/${orderId}/worksheet`, {
+            employeeIds: [other.id],
+          });
+        const sheet = (await begin(first.workOrderId).expect(201)).body;
+        const submit = (revision: number, outcome: object) =>
+          post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
+            expectedRevision: revision,
+            results: {
+              expectedRevision: first.revision,
+              items: [{ stockItemId: stock, expectedRevision: 1, ...outcome }],
+            },
+          }).expect(201);
+        const consumed = (
+          await submit(sheet.revision, { outcome: 'consumed', scraps: [] })
+        ).body;
+        const blocked = await begin(second.workOrderId).expect(409);
+        assert.match(
+          blocked.body.message,
+          new RegExp(`^Order ${first.orderNumber} reported this fabric`),
+        );
+        // Returning the report lets the cutter correct it; the other order
+        // can begin once it is resubmitted.
+        const returned = (
+          await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
+            expectedRevision: consumed.revision,
+            reason: 'Roll was returned, not used up',
+          }).expect(201)
+        ).body;
+        await begin(second.workOrderId).expect(409);
+        await submit(returned.revision, {
+          outcome: 'returned-roll',
+          radialDepthMm: 10,
+          tubeOuterDiameterMm: 50,
+          locationId: ids.location,
+          scraps: [],
+        });
+        await begin(second.workOrderId).expect(201);
+      },
+    );
+
+    await t.test(
       'a physical resolution breaks revision propagation to older captured successor observations',
       async () => {
         await role('admin');
@@ -1103,7 +1238,7 @@ test(
         const begin = async (orderId: string) =>
           (
             await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
-              employeeId: other.id,
+              employeeIds: [other.id],
             }).expect(201)
           ).body;
         const results = (
@@ -1127,7 +1262,6 @@ test(
         const a = await begin(first.workOrderId);
         const sa = (
           await post(`/api/production/cutting/worksheets/${a.id}/submit`, {
-            employeeIds: [other.id],
             expectedRevision: a.revision,
             results: results(first.revision, 10),
           }).expect(201)
@@ -1135,7 +1269,6 @@ test(
         const b = await begin(second.workOrderId);
         const sb = (
           await post(`/api/production/cutting/worksheets/${b.id}/submit`, {
-            employeeIds: [other.id],
             expectedRevision: b.revision,
             results: results(second.revision, 8),
           }).expect(201)

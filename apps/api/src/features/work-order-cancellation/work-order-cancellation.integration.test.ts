@@ -51,7 +51,7 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
   const begin = async (orderId: string) =>
     (
       await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
-        employeeId: employee.id,
+        employeeIds: [employee.id],
       }).expect(201)
     ).body;
   const results = (a: Awaited<ReturnType<typeof create>>, stockId: string) => ({
@@ -147,7 +147,6 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const a = await create(await input(stockId));
       const sheet = await begin(a.workOrderId);
       await post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
-        employeeIds: [employee.id],
         expectedRevision: sheet.revision,
         results: results(a, stockId),
       }).expect(201);
@@ -177,7 +176,6 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       assert.equal(closed.reviewedAt, null);
       assert.equal(closed.abandonedAt, null);
       await post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
-        employeeIds: [employee.id],
         expectedRevision: sheet.revision,
         results: results(a, stockId),
       }).expect(409);
@@ -193,7 +191,6 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
         await post(
           `/api/production/cutting/worksheets/${nextSheet.id}/submit`,
           {
-            employeeIds: [employee.id],
             expectedRevision: nextSheet.revision,
             results: results(next, stockId),
           },
@@ -419,7 +416,6 @@ test('order cancellation workflows', { timeout: 120_000 }, async (t) => {
       const race = await Promise.all([
         cancel(a.workOrderId, body),
         post(`/api/production/cutting/worksheets/${sheet.id}/submit`, {
-          employeeIds: [employee.id],
           expectedRevision: sheet.revision,
           results: results(a, stockId),
         }),

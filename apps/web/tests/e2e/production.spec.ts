@@ -45,10 +45,17 @@ test('worksheet submission records cutting and sends measurements for office rev
     role: 'production',
     stations: ['cutting'],
   });
+  state.employees.push({
+    ...state.employees[0]!,
+    id: '11111111-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    name: 'Sam Lee',
+    initials: 'SL',
+  });
   await page.goto(`/stations/cutting/${ids.order}`);
   await page.getByRole('button', { name: 'Begin cutting' }).click();
-  await pickEmployee(page, 'Alex Reed', 'Started by');
+  await pickEmployee(page, 'Alex Reed', 'Cutters');
   await page.getByRole('button', { name: 'Start worksheet' }).click();
+  await expect(page.getByText(/Cutters: Alex Reed \(AR\)/)).toBeVisible();
   await page.getByLabel('Cut 1 done').check();
   await expect(page.getByRole('button', { name: 'Sign off only' })).toHaveCount(
     0,
@@ -75,17 +82,39 @@ test('worksheet submission records cutting and sends measurements for office rev
     path: testInfo.outputPath('digital-cutting-sheet.png'),
     fullPage: true,
   });
+  // Whoever is on the sheet at submission is credited with the cut.
+  await page.getByRole('button', { name: 'Change cutters' }).click();
+  const cutters = page.getByRole('dialog', { name: 'Change cutters' });
+  await pickEmployee(cutters, 'Sam Lee', 'Cutters');
+  await cutters.getByRole('button', { name: 'Save cutters' }).click();
+  await expect(cutters).toHaveCount(0);
+  await expect(
+    page.getByText(/Cutters: Alex Reed \(AR\), Sam Lee \(SL\)/),
+  ).toBeVisible();
+  // Changing cutters advances the revision; the draft still saves.
+  await page.getByLabel('Radial depth (mm)').fill('11');
+  await page.getByRole('button', { name: 'Save progress' }).click();
+  await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.getByRole('button', { name: 'Review and submit results' }).click();
   await expect(
-    page.getByRole('button', { name: 'Submit results', exact: true }),
-  ).toBeDisabled();
-  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
+    page
+      .getByRole('dialog')
+      .getByText('Credited to Alex Reed (AR), Sam Lee (SL).'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('dialog').getByRole('combobox', { name: 'Completed by' }),
+  ).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
   expect(state.worksheets[0]!.reviewedAt).toBeNull();
-  await expect(page.getByText('Cut by Alex Reed (AR)')).toBeVisible();
+  await expect(
+    page.getByText('Cut by Alex Reed (AR), Sam Lee (SL)'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Change cutters' }),
+  ).toHaveCount(0);
   const cutAt = state.orders[0]!.cutAt;
   expect(cutAt).not.toBeNull();
   expect(state.completionRequests).toHaveLength(0);
@@ -109,10 +138,6 @@ test('worksheet submission records cutting and sends measurements for office rev
   await page.reload();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('12');
   await page.getByRole('button', { name: 'Review and submit results' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Submit results', exact: true }),
-  ).toBeDisabled();
-  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
@@ -166,9 +191,13 @@ function submittedSheet(state: Awaited<ReturnType<typeof mockApi>>): Worksheet {
     workOrderId: state.allocation.workOrderId,
     orderNumber: state.allocation.orderNumber,
     revision: 2,
-    employeeId: employee.id,
-    employeeName: employee.name,
-    employeeInitials: employee.initials,
+    employees: [
+      {
+        employeeId: employee.id,
+        employeeName: employee.name,
+        employeeInitials: employee.initials,
+      },
+    ],
     startedAt: '2026-09-16T12:00:00.000Z',
     abandonedAt: null,
     skippedAt: null,
@@ -513,10 +542,17 @@ test('a started worksheet can be signed manually and resumed without losing save
     role: 'production',
     stations: ['cutting'],
   });
+  state.employees.push({
+    ...state.employees[0]!,
+    id: '11111111-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    name: 'Sam Lee',
+    initials: 'SL',
+  });
   await page.goto(`/stations/cutting/${ids.order}`);
   await page.getByRole('button', { name: 'Begin cutting' }).click();
-  await pickEmployee(page, 'Alex Reed', 'Started by');
+  await pickEmployee(page, 'Alex Reed', 'Cutters');
   await page.getByRole('button', { name: 'Start worksheet' }).click();
+  await expect(page.getByText(/Cutters: Alex Reed \(AR\)/)).toBeVisible();
   await page.getByLabel('Cut 1 done').check();
   await page
     .getByLabel('What happened to this stock item?')
@@ -551,10 +587,6 @@ test('a started worksheet can be signed manually and resumed without losing save
   await expect(page.getByLabel('Cut 1 done')).toBeChecked();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('10');
   await page.getByRole('button', { name: 'Review and submit results' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Submit results', exact: true }),
-  ).toBeDisabled();
-  await pickEmployee(page.getByRole('dialog'), 'Alex Reed');
   await page
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();

@@ -21,7 +21,7 @@ test(
     const sheet = (
       await post(
         `/api/production/cutting/orders/${order.workOrderId}/worksheet`,
-        { employeeId: employee.id },
+        { employeeIds: [employee.id] },
       ).expect(201)
     ).body;
     await post(`/api/production/cutting/worksheets/${sheet.id}/abandon`, {
