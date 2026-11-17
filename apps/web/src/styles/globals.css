@@ -437,8 +437,7 @@ textarea {
     var(--primary-soft) 24%,
     var(--control-background)
   );
-  --selection-shadow: 0 3px 12px -6px
-    color-mix(in srgb, var(--foreground) 24%, transparent);
+  --selection-shadow: 0 1px 3px #0003;
 }
 .sliding-selection {
   position: relative;
@@ -1652,6 +1651,11 @@ label.detail-label {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* Give the calendar's step controls a small contact shadow at rest and on
+   hover, without reintroducing raised styling for every secondary action. */
+.calendar-nav > .button {
+  box-shadow: 0 2px 5px -2px #0003;
 }
 .calendar-nav h2 {
   margin-left: 8px;

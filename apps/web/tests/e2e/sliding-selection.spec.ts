@@ -37,6 +37,11 @@ test('theme selection slides between options and follows keyboard input', async 
   await group.getByRole('button', { name: 'Dark mode' }).click();
   await expectAligned(group);
   expect((await pill.boundingBox())!.x).toBeGreaterThan(initial!.x);
+  await expect(pill).toHaveCSS(
+    'box-shadow',
+    'rgba(0, 0, 0, 0.2) 0px 1px 3px 0px',
+  );
+  await page.screenshot({ path: info.outputPath('glass-switch-dark.png') });
   const system = group.getByRole('button', { name: 'System theme' });
   await system.focus();
   await system.press('Space');
