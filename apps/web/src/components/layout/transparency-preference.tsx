@@ -2,9 +2,10 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useHydrated } from '@/lib/use-hydrated';
 import {
-  reducedTransparencySnapshot,
-  setReducedTransparency,
+  transparencyPreferenceSnapshot,
+  setTransparencyPreference,
   subscribeTransparency,
+  type TransparencyPreference,
 } from '@/lib/transparency';
 
 // Keep other tabs in sync even when Settings is not mounted.
@@ -15,27 +16,36 @@ export function TransparencyPreferenceSync() {
 
 export function TransparencySetting() {
   const hydrated = useHydrated();
-  const reduced = useSyncExternalStore(
+  const preference = useSyncExternalStore(
     subscribeTransparency,
-    reducedTransparencySnapshot,
-    () => false,
+    transparencyPreferenceSnapshot,
+    () => 'system' as const,
   );
   return (
     <div className="transparency-setting">
       <div>
         <label htmlFor="reduce-transparency">Reduce transparency</label>
         <p id="transparency-description" className="muted">
-          Use solid panels and turn off blur. Saved in this browser.
+          Use solid panels and turn off blur. System follows your device
+          settings.
         </p>
       </div>
-      <input
+      <select
         id="reduce-transparency"
-        type="checkbox"
+        className="input select"
         aria-describedby="transparency-description"
-        checked={reduced}
+        value={preference}
         disabled={!hydrated}
-        onChange={(event) => setReducedTransparency(event.target.checked)}
-      />
+        onChange={(event) =>
+          setTransparencyPreference(
+            event.target.value as TransparencyPreference,
+          )
+        }
+      >
+        <option value="system">System</option>
+        <option value="on">On</option>
+        <option value="off">Off</option>
+      </select>
     </div>
   );
 }

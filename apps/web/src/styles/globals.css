@@ -502,6 +502,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  flex-wrap: wrap;
   padding: 18px 0;
   border-top: 1px solid var(--border);
 }
@@ -513,12 +514,9 @@ textarea {
   margin-top: 4px;
   font-size: 12px;
 }
-.transparency-setting input {
-  width: 24px;
-  height: 24px;
+.transparency-setting select {
+  width: 140px;
   flex-shrink: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
 }
 .color-theme-picker legend {
   padding: 0;

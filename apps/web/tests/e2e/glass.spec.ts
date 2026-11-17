@@ -191,11 +191,10 @@ test('reduced transparency survives navigation and reload and syncs while Settin
   page.on('pageerror', (error) => errors.push(error.message));
   await mockApi(page);
   await page.goto('/settings');
-  const setting = page.getByRole('checkbox', { name: 'Reduce transparency' });
-  await expect(setting).not.toBeChecked();
-  await setting.focus();
-  await setting.press('Space');
-  await expect(setting).toBeChecked();
+  const setting = page.getByRole('combobox', { name: 'Reduce transparency' });
+  await expect(setting).toHaveValue('system');
+  await setting.selectOption('on');
+  await expect(setting).toHaveValue('on');
   await expect(page.locator('html')).toHaveAttribute(
     'data-reduce-transparency',
     'true',
@@ -229,15 +228,22 @@ test('reduced transparency survives navigation and reload and syncs while Settin
   await mockApi(other);
   await other.goto('/settings');
   await expect(
-    other.getByRole('checkbox', { name: 'Reduce transparency' }),
-  ).toBeChecked();
-  await other.getByRole('checkbox', { name: 'Reduce transparency' }).uncheck();
+    other.getByRole('combobox', { name: 'Reduce transparency' }),
+  ).toHaveValue('on');
+  await other
+    .getByRole('combobox', { name: 'Reduce transparency' })
+    .selectOption('off');
   await expect(page.locator('html')).toHaveAttribute(
     'data-reduce-transparency',
     'false',
   );
   await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
-  await other.evaluate(() => localStorage.clear());
+  await other
+    .getByRole('combobox', { name: 'Reduce transparency' })
+    .selectOption('system');
+  await expect(
+    other.getByRole('combobox', { name: 'Reduce transparency' }),
+  ).toHaveValue('system');
   await expect(page.locator('html')).not.toHaveAttribute(
     'data-reduce-transparency',
   );
@@ -287,16 +293,30 @@ test('system transparency preference is the default and an explicit choice overr
   });
   await mockApi(page);
   await page.goto('/settings');
-  const setting = page.getByRole('checkbox', { name: 'Reduce transparency' });
-  await expect(setting).toBeChecked();
+  const setting = page.getByRole('combobox', { name: 'Reduce transparency' });
+  await expect(setting).toHaveValue('system');
   await expect(page.locator('.workspace-main')).toHaveCSS(
     'backdrop-filter',
     'none',
   );
-  await setting.uncheck();
+  await setting.selectOption('off');
   await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
   await page.reload();
-  await expect(setting).not.toBeChecked();
+  await expect(setting).toHaveValue('off');
+  await setting.selectOption('system');
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-reduce-transparency',
+  );
+  await expect(page.locator('body')).toHaveCSS('background-image', 'none');
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-transparency', value: 'no-preference' },
+    ],
+  });
+  await expect(setting).toHaveValue('system');
+  await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
+  await page.reload();
+  await expect(setting).toHaveValue('system');
   await cdp.detach();
 });
 
