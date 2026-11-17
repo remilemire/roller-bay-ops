@@ -27,7 +27,12 @@ test('station login, whole-order attribution, and employee directory', async ({
   await pickEmployee(page, 'Alex Reed');
   await page.getByRole('button', { name: 'Record completion' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
-  await expect(page.getByText(/assembled · Alex Reed/)).toBeVisible();
+  await page.locator('.station-order-history summary').first().click();
+  await expect(
+    page
+      .locator('.station-history-row')
+      .filter({ has: page.getByText('Assembly', { exact: true }) }),
+  ).toContainText('Alex Reed');
   expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.orders[0]!.shipDate).toBeNull();
   await page.goto('/stock-items');
@@ -121,9 +126,17 @@ test('worksheet submission records cutting and sends measurements for office rev
   state.role = 'admin';
   await page.goto('/stations/review');
   await page.getByRole('button', { name: 'Open', exact: true }).click();
-  await page
-    .getByLabel('Reason for returning or resolving results')
-    .fill('Confirm measured depth');
+  const reconcile = page.getByRole('button', {
+    name: 'Accept and reconcile inventory',
+    exact: true,
+  });
+  const buttonBounds = await reconcile.boundingBox();
+  const panelBounds = await reconcile
+    .locator('xpath=ancestor::section[1]')
+    .boundingBox();
+  expect(buttonBounds!.width).toBeLessThan(panelBounds!.width / 2);
+
+  await page.getByLabel('Reason for correction').fill('Confirm measured depth');
   await page
     .getByRole('button', { name: 'Return for correction', exact: true })
     .click();
@@ -274,7 +287,12 @@ test('completion rejection permits another employee and a lost response can be r
     .getByRole('button', { name: 'Retry original completion' })
     .click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
-  await expect(page.getByText(/assembled · Robin Park/)).toBeVisible();
+  await page.locator('.station-order-history summary').first().click();
+  await expect(
+    page
+      .locator('.station-history-row')
+      .filter({ has: page.getByText('Assembly', { exact: true }) }),
+  ).toContainText('Robin Park');
   expect(attempts[2]).toEqual(attempts[1]);
   expect(attempts[1]!.key).not.toEqual(attempts[0]!.key);
 });
@@ -338,11 +356,9 @@ test('review order switches protect unsaved resolution measurements', async ({
     orderNumber: '104802',
   });
   await page.goto(`/stations/review?worksheet=${first.id}`);
+  await page.getByLabel('Reason for correction').fill('Measured again');
   await page
-    .getByLabel('Reason for returning or resolving results')
-    .fill('Measured again');
-  await page
-    .getByRole('button', { name: 'Resolve with current measurements' })
+    .getByRole('button', { name: 'Replace with new measurements' })
     .click();
   await page
     .getByLabel('What happened to this stock item?')
@@ -394,10 +410,10 @@ test('reconciliation retries the original keyed resolution after reload even whe
   );
   await page.goto(`/stations/review?worksheet=${sheet.id}`);
   await page
-    .getByLabel('Reason for returning or resolving results')
+    .getByLabel('Reason for correction')
     .fill('Fresh physical measurements');
   await page
-    .getByRole('button', { name: 'Resolve with current measurements' })
+    .getByRole('button', { name: 'Replace with new measurements' })
     .click();
   await page
     .getByLabel('What happened to this stock item?')
@@ -494,7 +510,12 @@ test('cutting station offers manual completion without starting a worksheet', as
   ).toBeVisible();
   await manual.click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
-  await expect(page.getByText(/cut · Alex Reed/)).toBeVisible();
+  await page.locator('.station-order-history summary').first().click();
+  await expect(
+    page
+      .locator('.station-history-row')
+      .filter({ has: page.getByText('Cutting', { exact: true }) }),
+  ).toContainText('Alex Reed');
   expect(state.worksheets).toHaveLength(0);
   expect(state.orders[0]!.cutAt).not.toBeNull();
 });
@@ -523,7 +544,12 @@ test('a cleared cut can be recorded manually while keeping the previous workshee
   );
   await page.getByRole('button', { name: 'Sign off only' }).click();
   await page.getByRole('button', { name: 'All allocated orders' }).click();
-  await expect(page.getByText(/cut · Alex Reed/)).toBeVisible();
+  await page.locator('.station-order-history summary').first().click();
+  await expect(
+    page
+      .locator('.station-history-row')
+      .filter({ has: page.getByText('Cutting', { exact: true }) }),
+  ).toContainText('Alex Reed');
   expect(state.worksheets).toEqual([sheet]);
   await expect(
     page.getByRole('button', { name: 'Record cutting', exact: true }),
@@ -627,4 +653,104 @@ test('completion attribution belongs to the selected order and cancelled forms d
     'abababab-abab-4bab-8bab-abababababab',
   );
   expect(state.orders[0]!.assembledAt).toBeNull();
+});
+
+test('manual allocation results link only to an existing worksheet and protect unsaved input', async ({
+  page,
+}, info) => {
+  const state = await mockApi(page);
+  await page.goto(
+    `/allocations/${ids.allocation}?action=record-cutting-results`,
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Reconcile 104801', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Open cutting worksheet', exact: true }),
+  ).toHaveCount(0);
+  const sheet = submittedSheet(state);
+  sheet.submittedAt = null;
+  sheet.results = null;
+  state.worksheets.push(sheet);
+  await page.reload();
+  const shortcut = page.getByRole('link', {
+    name: 'Open cutting worksheet',
+    exact: true,
+  });
+  await expect(shortcut).toBeVisible();
+  await expect(shortcut).toHaveAttribute(
+    'href',
+    `/stations/cutting/${ids.order}`,
+  );
+  await page
+    .getByLabel('What happened to this stock item?')
+    .first()
+    .selectOption('returned-roll');
+  await page.getByLabel('Tube outer diameter (mm)').first().fill('55');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await shortcut.click();
+  await expect(page).toHaveURL(/record-cutting-results/);
+  await expect(page.getByLabel('Tube outer diameter (mm)').first()).toHaveValue(
+    '55',
+  );
+  page.once('dialog', (dialog) => dialog.accept());
+  await shortcut.click();
+  await expect(page).toHaveURL(new RegExp(`/stations/cutting/${ids.order}$`));
+  expect(state.worksheets).toHaveLength(1);
+  await page.screenshot({
+    path: info.outputPath('existing-cutting-worksheet.png'),
+    fullPage: true,
+  });
+});
+
+test('review summarizes empty remnants and separates replacement measurements from acceptance', async ({
+  page,
+}, info) => {
+  const state = await mockApi(page);
+  const sheet = submittedSheet(state);
+  sheet.results!.items[0] = {
+    stockItemId: ids.stock,
+    expectedRevision: 1,
+    outcome: 'consumed',
+    scraps: [],
+  };
+  state.worksheets.push(sheet);
+  await page.goto(`/stations/review?worksheet=${sheet.id}`);
+  const results = page.locator('.cutting-review-results');
+  await expect(
+    results.getByText('Fully consumed', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    results.getByText('No retained remnants.', { exact: true }),
+  ).toBeVisible();
+  await expect(results.getByText('Scraps', { exact: true })).toHaveCount(0);
+  await expect(results.locator('.review-help').first()).toHaveCSS(
+    'font-size',
+    '12px',
+  );
+  await page
+    .getByLabel('Reason for correction')
+    .fill('Verified stock after a measurement error.');
+  await page
+    .getByRole('button', {
+      name: 'Replace with new measurements',
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Replace submitted measurements',
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(state.worksheetReviewRequests).toHaveLength(0);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Breadcrumb', exact: true })
+      .locator('[aria-current="page"]'),
+  ).toHaveText('Review cutting results');
+  await page.screenshot({
+    path: info.outputPath('readable-cutting-review.png'),
+    fullPage: true,
+  });
 });

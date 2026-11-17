@@ -15,12 +15,13 @@ import { Button } from '@/components/ui/button';
 export const PageTitleContext = createContext<(title: string | null) => void>(
   () => {},
 );
-export function usePageTitle(title: string) {
+export function usePageTitle(title: string, enabled = true) {
   const setTitle = useContext(PageTitleContext);
   useEffect(() => {
+    if (!enabled) return;
     setTitle(title);
     return () => setTitle(null);
-  }, [setTitle, title]);
+  }, [enabled, setTitle, title]);
 }
 
 type Section = { href: string; label: string };

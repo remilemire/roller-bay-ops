@@ -51,6 +51,7 @@ export type CompletionEditorProps = {
   allocation: AllocationDetail;
   close: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  actions?: ReactNode;
   /** Recording at a cutting station, whose sheet owns drafts and submission. */
   worksheet?: {
     initialForm: CompletionForm | null;
@@ -73,6 +74,7 @@ export function CompletionEditor({
   close,
   worksheet,
   onDirtyChange,
+  actions,
 }: CompletionEditorProps) {
   const user = useCurrentUser();
   // Pin the units this form opened with: a session refetch must not relabel
@@ -197,6 +199,7 @@ export function CompletionEditor({
   return (
     <>
       <PageHeading
+        registerPageTitle={!worksheet}
         eyebrow="AFTER CUTTING"
         title={`${worksheet && !worksheet.resolution ? 'Cutting results' : 'Reconcile'} ${allocation.orderNumber}`}
         description={
@@ -204,7 +207,9 @@ export function CompletionEditor({
             ? 'Save measurements as you work, then submit them for office review.'
             : 'Record what actually remains. Measurements update stock and any affected reservations.'
         }
-      />
+      >
+        {actions}
+      </PageHeading>
       <form
         onSubmit={form.handleSubmit((value) => {
           try {

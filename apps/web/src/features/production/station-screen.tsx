@@ -24,7 +24,6 @@ import {
   Loading,
   ErrorNotice,
   Pagination,
-  Status,
 } from '@/components/ui/feedback';
 import {
   productionOrders,
@@ -33,6 +32,7 @@ import {
   employeeNames,
 } from './production.api';
 import { CompletionAction } from './completion-action';
+import { StationOrderGrid } from './station-order-grid';
 export function StationsScreen() {
   const user = useCurrentUser();
   const canManage = useCanManage();
@@ -161,7 +161,7 @@ function StationQueue({ station }: { station: Station }) {
     shipping: 'shippedAt',
   } as const;
   return (
-    <div className="stack">
+    <div className="stack station-queue">
       <SearchToolbar
         search={params.search}
         onSearch={(search) =>
@@ -188,51 +188,97 @@ function StationQueue({ station }: { station: Station }) {
         <ErrorNotice error={query.error} retry={() => void query.refetch()} />
       ) : (
         <>
-          {!query.data.items.length && <p>No matching orders.</p>}
-          {query.data.items.map((order) => (
-            <section className="panel" key={order.id}>
-              <div className="panel-heading">
-                <h2>{order.orderNumber}</h2>
-                <Status value={order.status} />
-              </div>
-              <div className="panel-body stack">
-                <p>
-                  {order.quantity} blinds ·{' '}
-                  {order.shipDate
-                    ? `Ships ${calendarDateLabel(order.shipDate)}`
-                    : 'Unscheduled'}
-                </p>
-                {order.note && <p>{order.note}</p>}
-                {order.completions.length > 0 && (
-                  <div className="record-list">
-                    {order.completions.map((c) => (
-                      <p key={c.station}>
-                        {completionLabels[c.station]} ·{' '}
-                        {employeeNames(c.employees)} ·{' '}
-                        {dateTimeLabel(c.completedAt)}
-                      </p>
-                    ))}
+          <StationOrderGrid>
+            {!query.data.items.length && <p>No matching orders.</p>}
+            {query.data.items.map((order) => (
+              <section
+                className="panel station-order"
+                key={order.id}
+                aria-label={`Order ${order.orderNumber}`}
+              >
+                <div className="station-order-header">
+                  <div className="station-order-summary">
+                    <div className="station-order-identity">
+                      <h2>{order.orderNumber}</h2>
+                      <span className="station-order-state">
+                        {stationLabels[station]}{' '}
+                        {order[stamp[station]] ? 'recorded' : 'not recorded'}
+                      </span>
+                    </div>
+                    <p className="station-order-meta">
+                      {count(order.quantity)}{' '}
+                      {order.quantity === 1 ? 'blind' : 'blinds'} ·{' '}
+                      {order.shipDate
+                        ? `Ships ${calendarDateLabel(order.shipDate)}`
+                        : 'Unscheduled'}
+                    </p>
                   </div>
-                )}
-                {station === 'cutting' ? (
-                  !order.cutAt && (
-                    <CuttingChoice
+                  {station === 'cutting' ? (
+                    !order.cutAt && (
+                      <CuttingChoice
+                        orderId={order.id}
+                        orderNumber={order.orderNumber}
+                        hasWorksheet={order.hasCuttingWorksheet}
+                      />
+                    )
+                  ) : (
+                    <CompletionAction
+                      station={station}
                       orderId={order.id}
                       orderNumber={order.orderNumber}
-                      hasWorksheet={order.hasCuttingWorksheet}
+                      done={!!order[stamp[station]]}
                     />
-                  )
-                ) : (
-                  <CompletionAction
-                    station={station}
-                    orderId={order.id}
-                    orderNumber={order.orderNumber}
-                    done={!!order[stamp[station]]}
-                  />
+                  )}
+                </div>
+                {order.note && (
+                  <p className="station-order-note">
+                    <span>Note</span> {order.note}
+                  </p>
                 )}
-              </div>
-            </section>
-          ))}
+                <details className="station-order-history">
+                  <summary>
+                    Production details ·{' '}
+                    {order.completions.length
+                      ? stationSchema.options
+                          .filter((stage) =>
+                            order.completions.some((c) => c.station === stage),
+                          )
+                          .map((stage) => completionLabels[stage])
+                          .join(', ')
+                      : 'No stages recorded'}
+                  </summary>
+                  <dl className="station-history">
+                    {/* Stages are independent: never infer an earlier completion
+                        from a later one or turn this into a progress bar. */}
+                    {stationSchema.options.map((stage) => {
+                      const completion = order.completions.find(
+                        (c) => c.station === stage,
+                      );
+                      return (
+                        <div className="station-history-row" key={stage}>
+                          <dt>{stationLabels[stage]}</dt>
+                          <dd>
+                            {completion ? (
+                              <>
+                                <span>
+                                  {employeeNames(completion.employees)}
+                                </span>
+                                <time dateTime={completion.completedAt}>
+                                  {dateTimeLabel(completion.completedAt)}
+                                </time>
+                              </>
+                            ) : (
+                              <span className="muted">Not recorded</span>
+                            )}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </details>
+              </section>
+            ))}
+          </StationOrderGrid>
           <Pagination
             page={params.page}
             total={query.data.total}
@@ -287,7 +333,7 @@ function CuttingChoice({
               worksheet also marks the order cut.
             </p>
             <div className="inline-actions">
-              <Button asChild variant="outline">
+              <Button asChild>
                 <Link href={`/stations/cutting/${orderId}`}>
                   {hasWorksheet ? 'Continue worksheet' : 'Use worksheet'}
                 </Link>

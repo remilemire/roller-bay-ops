@@ -306,7 +306,7 @@ test('print removes the scene and the glass pane', async ({ page }) => {
 });
 
 for (const mode of ['light', 'dark']) {
-  test(`secondary actions remain distinct on a solid ${mode} dialog`, async ({
+  test(`worksheet uses the standard primary action in a ${mode} dialog`, async ({
     page,
   }, info) => {
     await mockApi(page, { role: 'production', stations: ['cutting'] });
@@ -364,9 +364,78 @@ for (const mode of ['light', 'dark']) {
       (Math.min(buttonLuminance, dialogLuminance) + 0.05);
     expect(contrast).toBeGreaterThan(1.1);
     expect(fills.action[3]).toBeGreaterThan(200);
-    expect(fills.shadow).toBe('none');
+    await expect(action).toHaveClass(/button-primary/);
+    const standardShadow = await page
+      .locator('.station-order .button-primary')
+      .first()
+      .evaluate((element) => getComputedStyle(element).boxShadow);
+    expect(fills.shadow).toBe(standardShadow);
     await page.screenshot({
       path: info.outputPath(`secondary-action-${mode}.png`),
     });
   });
+}
+
+for (const mode of ['light', 'dark']) {
+  for (const preference of ['saved', 'system', 'off']) {
+    test(`${mode} ${preference} transparency gives secondary buttons a visible solid fill without shadows`, async ({
+      page,
+      context,
+    }, info) => {
+      await mockApi(page);
+      await page.addInitScript(
+        ({ mode, preference }) => {
+          localStorage.setItem('roller-bay-theme', mode);
+          if (preference === 'saved')
+            localStorage.setItem('roller-bay-reduce-transparency', 'true');
+        },
+        { mode, preference },
+      );
+      if (preference === 'system') {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Emulation.setEmulatedMedia', {
+          features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+        });
+      }
+      await page.goto('/stations?station=cutting');
+      const button = page.getByRole('link', {
+        name: 'Change station',
+        exact: true,
+      });
+      await expect(button).toBeVisible();
+      const fills = await button.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const root = getComputedStyle(document.documentElement);
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext('2d')!;
+        const rgba = (color: string) => {
+          context.clearRect(0, 0, 1, 1);
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          return Array.from(context.getImageData(0, 0, 1, 1).data);
+        };
+        return {
+          fill: rgba(style.backgroundColor),
+          surface: rgba(root.getPropertyValue('--surface').trim()),
+          expected: rgba(root.getPropertyValue('--muted-surface').trim()),
+        };
+      });
+      expect(fills.fill).toEqual(fills.expected);
+      expect(fills.fill).not.toEqual(fills.surface);
+      expect(fills.fill[3]).toBe(255);
+      await expect(button).toHaveCSS('box-shadow', 'none');
+      await button.hover();
+      await expect(button).toHaveCSS('box-shadow', 'none');
+      const primary = page
+        .getByRole('button', { name: 'Record cutting', exact: true })
+        .first();
+      await expect(primary).toHaveCSS('box-shadow', 'none');
+      await primary.hover();
+      await expect(primary).toHaveCSS('box-shadow', 'none');
+      await page.screenshot({
+        path: info.outputPath(`reduced-buttons-${mode}-${preference}.png`),
+      });
+    });
+  }
 }

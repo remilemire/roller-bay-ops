@@ -80,13 +80,16 @@ export function PageHeading({
   title,
   description,
   children,
+  registerPageTitle = true,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   children?: ReactNode;
+  /** Embedded forms leave breadcrumb ownership with the outer page. */
+  registerPageTitle?: boolean;
 }) {
-  usePageTitle(title);
+  usePageTitle(title, registerPageTitle);
   return (
     <div className="page-heading">
       <div>

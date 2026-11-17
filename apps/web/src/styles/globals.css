@@ -36,6 +36,11 @@
     var(--surface) calc(100% - var(--material-transparency) * 0.28),
     transparent
   );
+  --dialog-background: color-mix(
+    in srgb,
+    var(--surface) calc(100% - var(--material-transparency) * 0.18),
+    transparent
+  );
   --control-background: color-mix(
     in srgb,
     var(--surface) calc(100% - var(--material-transparency) * 0.38),
@@ -49,11 +54,6 @@
   --accent-background: color-mix(
     in srgb,
     var(--primary-soft) calc(100% - var(--material-transparency) * 0.24),
-    transparent
-  );
-  --secondary-action-background: color-mix(
-    in srgb,
-    var(--primary-soft) calc(100% - var(--material-transparency) * 0.12),
     transparent
   );
   --action-background: color-mix(
@@ -681,21 +681,20 @@ textarea {
   background: var(--action-background);
   color: var(--primary-foreground);
   border-color: transparent;
-  box-shadow: 0 4px 10px -7px
-    color-mix(in srgb, var(--primary) 55%, transparent);
+  box-shadow: none;
 }
 .button-primary:hover:not(:disabled) {
   background: var(--primary);
 }
 .button-outline {
   border-color: transparent;
-  background: var(--control-background);
+  background: var(--muted-surface);
   color: var(--foreground);
   box-shadow: none;
 }
 .button-outline:hover:not(:disabled) {
-  background: var(--content-background);
-  box-shadow: var(--shadow);
+  background: var(--primary-soft);
+  box-shadow: none;
 }
 .button-ghost {
   background: transparent;
@@ -1339,7 +1338,7 @@ td strong {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: #07161066;
+  background: #0004;
   z-index: 50;
   animation: fade-in 0.15s ease;
 }
@@ -1351,19 +1350,15 @@ td strong {
   max-height: 90dvh;
   overflow-y: auto;
   width: min(94vw, 640px);
-  background: var(--surface);
+  background: var(--dialog-background);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 25px;
   z-index: 51;
-  box-shadow: 0 25px 90px #0004;
-}
-/* Solid dialogs need separation that the scene already gives glass panels. */
-.dialog-content .button-outline {
-  background: var(--secondary-action-background);
-}
-.dialog-content .button-outline:hover:not(:disabled) {
-  background: var(--primary-soft);
+  /* Blur only the open modal, keeping its form controls unfiltered. */
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: 0 18px 56px -20px #0005;
 }
 .dialog-heading {
   display: flex;
@@ -2649,6 +2644,113 @@ label.detail-label {
   color: var(--primary);
   transform: translateX(3px);
 }
+.station-orders {
+  display: grid;
+  /* Fit a second card only when both retain room for the summary and action.
+     The workspace's maximum content width keeps the queue at two columns. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  align-items: start;
+  gap: var(--field-gap);
+}
+.station-orders[data-packed='true'] {
+  grid-auto-rows: 1px;
+  row-gap: 0;
+}
+.station-order {
+  padding: 18px 20px;
+}
+.station-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--field-gap);
+}
+.station-order-summary {
+  min-width: 0;
+}
+.station-order-identity {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.station-order-state,
+.station-order-meta,
+.station-order-history {
+  color: var(--muted);
+  font-size: 12px;
+}
+.station-order-meta {
+  margin-top: 4px;
+}
+.station-order-note {
+  margin-top: 12px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.station-order-note > span {
+  margin-right: 8px;
+  color: var(--muted);
+}
+.station-order-history {
+  margin-top: 6px;
+}
+.station-order-history > summary {
+  padding-block: 10px;
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+.station-order-history > summary:hover {
+  color: var(--foreground);
+}
+.station-history {
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+}
+.station-history-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  padding-block: var(--record-padding);
+}
+.station-history-row dt {
+  font-weight: 550;
+}
+.station-history-row dd {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  overflow-wrap: anywhere;
+}
+.station-history-row time {
+  color: var(--muted);
+}
+.station-queue > .pagination {
+  padding: 0;
+  border-top: 0;
+  background: transparent;
+}
+@media (max-width: 600px) {
+  .station-order {
+    padding: 16px;
+  }
+  .station-order-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .station-history-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .station-history-row dd {
+    flex-direction: column;
+  }
+}
 /* Keep station entry fields comfortable for repeated tablet input. */
 .station-workspace .input {
   min-height: 48px;
@@ -2816,4 +2918,92 @@ tbody tr:has(.flag-warning) > td:first-child {
   border: 0;
   padding: 0;
   margin: 0;
+}
+
+/* Review results are a task summary, rather than a raw audit record. */
+.cutting-review-results,
+.review-accept,
+.review-corrections,
+.submitted-cutting-results {
+  display: grid;
+  gap: 16px;
+}
+.review-accept {
+  gap: 10px;
+}
+.review-corrections {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.review-help,
+.submitted-remnant-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+.cutting-review-results .inline-actions > .button {
+  white-space: normal;
+}
+.submitted-stock-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.submitted-stock-heading h4,
+.submitted-remnants h4,
+.review-corrections h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.submitted-stock-heading h4 > a {
+  margin-left: 6px;
+  color: var(--primary);
+}
+.submitted-stock-heading > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.submitted-stock-result + .submitted-stock-result {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.submitted-stock-measurements {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.submitted-stock-measurements:empty {
+  display: none;
+}
+.submitted-stock-measurements > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 160px) minmax(0, 1fr);
+  gap: 8px;
+  padding-block: 4px;
+}
+.submitted-stock-measurements dt {
+  color: var(--muted);
+}
+.submitted-stock-measurements dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.submitted-remnant-empty {
+  margin-top: 10px;
+}
+.submitted-remnants {
+  margin-top: 12px;
+}
+.submitted-remnants ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.submitted-remnants li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 12px;
+  padding-block: 4px;
 }
