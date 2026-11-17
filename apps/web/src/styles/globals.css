@@ -63,19 +63,25 @@
   );
   --material-edge: 0 1px 0
     color-mix(in srgb, var(--glass-highlight) 50%, transparent) inset;
-  /* Soft gradient stops provide static diffusion without a live full-screen blur. */
+  /* Slightly darker bars in light mode keep the glass distinct. Wider stops
+     soften their edges without adding a persistent full-screen blur. */
+  --scene-bar: color-mix(in srgb, var(--scene-deep) 97%, var(--foreground));
   --scene-background:
     radial-gradient(ellipse at 85% 10%, var(--scene-light), transparent 55%),
     linear-gradient(0deg, var(--scene-mid), transparent 40%),
     linear-gradient(
       90deg,
-      var(--scene-deep) 0% 13%,
-      var(--scene-mid) 15% 37%,
-      var(--scene-deep) 39% 51%,
-      var(--scene-mid) 53% 74%,
-      var(--scene-light) 76% 80%,
-      var(--scene-mid) 82%
+      var(--scene-bar) 0% 12.5%,
+      var(--scene-mid) 15.5% 36.5%,
+      var(--scene-bar) 39.5% 50.5%,
+      var(--scene-mid) 53.5% 73.5%,
+      var(--scene-light) 76.5% 79.5%,
+      var(--scene-mid) 82.5%
     );
+}
+/* Lift the dark-mode bars a little rather than deepening their shadows. */
+:root.dark {
+  --scene-bar: color-mix(in srgb, var(--scene-deep) 86%, var(--scene-mid));
 }
 @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
   :root {

@@ -94,7 +94,13 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         const alpha = pane[3]! / 255;
         const muted = Math.min(
           ...['deep', 'mid', 'light'].map((tone) => {
-            const scene = rgba(root.getPropertyValue(`--scene-${tone}`).trim());
+            const scene = rgba(
+              root
+                .getPropertyValue(
+                  tone === 'deep' ? '--scene-bar' : `--scene-${tone}`,
+                )
+                .trim(),
+            );
             const background = luminance(
               scene.map(
                 (value, index) => value * (1 - alpha) + pane[index]! * alpha,
@@ -113,7 +119,13 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         const actionText = luminance(rgba(action.color));
         const actionContrast = Math.min(
           ...['deep', 'mid', 'light'].map((tone) => {
-            const scene = rgba(root.getPropertyValue(`--scene-${tone}`).trim());
+            const scene = rgba(
+              root
+                .getPropertyValue(
+                  tone === 'deep' ? '--scene-bar' : `--scene-${tone}`,
+                )
+                .trim(),
+            );
             const background = luminance(
               scene.map((value, index) => {
                 const shell = value * (1 - alpha) + pane[index]! * alpha;
