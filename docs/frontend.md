@@ -123,3 +123,7 @@ Allocation forms collect finished blind sizes and quantities. Edge trimming, reu
 ## Corrections and history
 
 Stock, submitted receipts and completed allocations expose admin correction actions and employee-readable history. Forms pin their opening revisions and units, require a reason and review, preserve input on conflicts, and retain the exact payload/key for uncertain retries. Receipt and completion contexts explain blocked records and link to related orders. Voided stock has a separate list filter; corrected printed allocation details identify their correction date. See [corrections and audit](corrections-and-audit.md) for operational rules and schema rollout.
+
+### Company identity
+
+The sidebar, sign-in and pending-access screens use a compact vector adaptation of the supplied BBV Vertican logo. Its lettering, maple leaf and red rule are preserved; the tiny company tagline is omitted and the vertical framing tightened for app sizes. Foreground and cutout colors follow the active theme, with a brighter red in dark mode. Roller Bay remains the application name. The browser icon uses the original BBV monogram. The untouched source artwork is retained at `apps/web/public/branding/bbv-logo-original.svg`.

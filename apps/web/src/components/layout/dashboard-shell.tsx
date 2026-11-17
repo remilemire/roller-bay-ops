@@ -30,6 +30,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
 import { ThemeSwitch } from './theme-switch';
+import { CompanyLogo } from './company-logo';
 const navigation = [
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
   { href: '/stock-items', label: 'Fabric stock', Icon: Layers3 },
@@ -73,9 +74,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     return (
       <main className="login-page">
         <section className="login-panel glass">
-          <div className="brand-symbol">
-            <Layers3 size={27} />
-          </div>
+          <CompanyLogo />
           <div className="eyebrow">ROLLER BAY · OPERATIONS</div>
           <h1>Access pending</h1>
           <p>
@@ -100,14 +99,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <Link
         href={productionOnly ? '/stations' : '/'}
         className="brand"
+        aria-label={
+          productionOnly ? 'Roller Bay stations' : 'Roller Bay overview'
+        }
         onClick={() => setMobileOpen(false)}
       >
-        <span className="brand-symbol">
-          <Layers3 size={23} />
-        </span>
-        <span>
-          roller bay<span className="brand-caption">OPERATIONS</span>
-        </span>
+        <CompanyLogo />
+        <span className="brand-caption">ROLLER BAY OPS</span>
       </Link>
       <nav aria-label="Main navigation">
         {navigation

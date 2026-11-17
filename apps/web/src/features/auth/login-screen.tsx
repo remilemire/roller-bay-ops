@@ -1,5 +1,5 @@
 'use client';
-import { Layers3 } from 'lucide-react';
+import { CompanyLogo } from '@/components/layout/company-logo';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -35,9 +35,7 @@ export function LoginScreen({ loginError }: { loginError?: LoginErrorCode }) {
         <ThemeSwitch />
       </div>
       <section className="login-panel glass">
-        <div className="brand-symbol">
-          <Layers3 size={27} />
-        </div>
+        <CompanyLogo />
         <div className="eyebrow">ROLLER BAY · OPERATIONS</div>
         <h1>Sign in</h1>
         <p>Use your company Microsoft account.</p>

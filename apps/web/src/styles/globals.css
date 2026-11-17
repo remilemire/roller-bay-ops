@@ -238,32 +238,31 @@ textarea {
 }
 .brand {
   display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: 23px;
-  font-weight: 650;
-  letter-spacing: -1px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   padding: 0 8px;
-  margin-bottom: 39px;
+  margin-bottom: 22px;
 }
-.brand-caption {
+.company-logo {
+  --logo-cutout: var(--background);
+  --logo-red: #d23125;
   display: block;
-  letter-spacing: 1.55px;
-  font-size: 7.8px;
-  margin-top: 1px;
-  font-weight: 650;
-  color: var(--muted);
-}
-.brand-symbol {
-  height: 42px;
-  width: 42px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  height: auto;
+  color: var(--foreground);
   flex-shrink: 0;
 }
+.dark .company-logo {
+  --logo-red: #f07b70;
+}
+.brand-caption {
+  letter-spacing: 1.5px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .nav-link {
   display: flex;
   align-items: center;
@@ -1396,7 +1395,8 @@ td strong {
   max-width: 440px;
   width: 100%;
 }
-.login-panel > .brand-symbol {
+.login-panel > .company-logo {
+  width: min(100%, 280px);
   margin-bottom: 24px;
 }
 .login-panel h1 {
@@ -2037,7 +2037,10 @@ label.detail-label {
   color: var(--muted);
 }
 .mobile-nav .brand {
-  display: none;
+  display: flex;
+  width: 188px;
+  padding: 0;
+  margin-bottom: 20px;
 }
 .mobile-nav .sidebar-bottom {
   margin-top: 16px;
