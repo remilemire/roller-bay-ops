@@ -71,16 +71,12 @@
     linear-gradient(0deg, var(--scene-mid), transparent 40%),
     linear-gradient(
       90deg,
-      var(--scene-bar) 0% 5%,
-      var(--scene-mid) 8% 20%,
-      var(--scene-bar) 23% 38%,
-      var(--scene-mid) 41% 55%,
-      var(--scene-light) 58% 60%,
-      var(--scene-mid) 63% 71%,
-      var(--scene-bar) 74% 80%,
-      var(--scene-mid) 83% 89%,
-      var(--scene-light) 92% 94%,
-      var(--scene-mid) 97%
+      var(--scene-bar) 0% 12.5%,
+      var(--scene-mid) 15.5% 36.5%,
+      var(--scene-bar) 39.5% 50.5%,
+      var(--scene-mid) 53.5% 73.5%,
+      var(--scene-light) 76.5% 79.5%,
+      var(--scene-mid) 82.5%
     );
 }
 /* Lift the dark-mode bars a little rather than deepening their shadows. */
