@@ -701,7 +701,7 @@ textarea {
   box-shadow: none;
 }
 .button-outline:hover:not(:disabled) {
-  background: var(--primary-soft);
+  background: color-mix(in srgb, var(--muted-surface) 96%, var(--foreground));
   box-shadow: none;
 }
 .button-ghost {
@@ -773,9 +773,7 @@ textarea {
   gap: 16px;
   margin: 23px 0;
 }
-.stat {
-  padding: 20px 22px;
-  position: relative;
+.summary-glass {
   background: var(--summary-background);
   color: var(--foreground);
   /* Keep summary surfaces and their text synchronized during theme changes. */
@@ -784,10 +782,14 @@ textarea {
     0 1px 0 color-mix(in srgb, var(--glass-highlight) 50%, transparent) inset,
     0 6px 18px -14px color-mix(in srgb, var(--foreground) 30%, transparent);
 }
-:where(.dark) .stat {
+:where(.dark) .summary-glass {
   box-shadow:
     var(--material-edge),
     0 2px 6px -4px #0003;
+}
+.stat {
+  padding: 20px 22px;
+  position: relative;
 }
 .stat-label {
   display: flex;

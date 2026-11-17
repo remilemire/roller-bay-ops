@@ -111,7 +111,7 @@ function StationChoice({ station }: { station: Station }) {
   return (
     <Link
       href={`/stations?station=${station}`}
-      className="panel station-choice"
+      className="panel station-choice summary-glass"
     >
       <span className="stat-icon">
         <Icon size={20} />
