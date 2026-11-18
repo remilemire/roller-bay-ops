@@ -64,7 +64,7 @@ function ReviewQueue({ completionEditor }: Editor) {
                   <th>Cutters</th>
                   <th>Started</th>
                   <th>Results</th>
-                  <th>Action</th>
+                  <th className="table-actions">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -74,9 +74,10 @@ function ReviewQueue({ completionEditor }: Editor) {
                     <td>{employeeNames(s.employees)}</td>
                     <td>{dateTimeLabel(s.startedAt)}</td>
                     <td>{s.submittedAt ? 'Awaiting review' : 'Incomplete'}</td>
-                    <td>
+                    <td className="table-actions">
                       <Button
-                        variant="outline"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           if (s.id === selected) return;
                           if (

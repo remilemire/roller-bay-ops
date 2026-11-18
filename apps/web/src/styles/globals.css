@@ -468,7 +468,12 @@ textarea {
   border-radius: 0;
 }
 .sidebar-navigation > .selection-pill {
-  background: var(--accent-background);
+  /* Keep the tint consistent at the top and bottom of the vertical scene. */
+  background: color-mix(
+    in srgb,
+    var(--primary-soft) calc(100% - var(--material-transparency) * 0.06),
+    transparent
+  );
   border-radius: 10px;
   box-shadow: none;
 }

@@ -16,6 +16,7 @@ import {
   Scissors,
   Settings2,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { api, noContent } from '@/lib/api';
 import {
@@ -43,6 +44,33 @@ const navigation = [
   { href: '/users', label: 'Users', Icon: Users, manageOnly: true },
 ];
 const sections = [...navigation, { href: '/settings', label: 'Settings' }];
+function SidebarLink({
+  href,
+  label,
+  Icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+  onNavigate: () => void;
+}) {
+  const pathname = usePathname();
+  const active =
+    pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
+  return (
+    <Link
+      href={href}
+      className={`nav-link ${active ? 'active' : ''}`}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
+    >
+      <Icon size={20} />
+      <span>{label}</span>
+      {active && <span className="nav-dot" />}
+    </Link>
+  );
+}
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -114,34 +142,23 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               ? item.href === '/stations'
               : !item.manageOnly || canManage,
           )
-          .map(({ href, label, Icon }) => {
-            const active =
-              href === '/' ? pathname === href : pathname.startsWith(href);
-            return (
-              <Link
-                href={href}
-                key={href}
-                className={`nav-link ${active ? 'active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <Icon size={20} />
-                <span>{label}</span>
-                {active && <span className="nav-dot" />}
-              </Link>
-            );
-          })}
+          .map(({ href, label, Icon }) => (
+            <SidebarLink
+              href={href}
+              key={href}
+              label={label}
+              Icon={Icon}
+              onNavigate={() => setMobileOpen(false)}
+            />
+          ))}
       </nav>
       <div className="sidebar-bottom">
-        <Link
-          className={`nav-link ${pathname === '/settings' ? 'active' : ''}`}
+        <SidebarLink
           href="/settings"
-          aria-current={pathname === '/settings' ? 'page' : undefined}
-          onClick={() => setMobileOpen(false)}
-        >
-          <Settings2 size={20} />
-          Settings
-        </Link>
+          label="Settings"
+          Icon={Settings2}
+          onNavigate={() => setMobileOpen(false)}
+        />
         <button
           className="user-card"
           type="button"

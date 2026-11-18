@@ -101,10 +101,29 @@ test('sidebar selection follows routes and Settings, including mobile navigation
     track.getByRole('link', { name: 'Fabric stock', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
   await expectAligned(track);
+  const stockLink = track.getByRole('link', {
+    name: 'Fabric stock',
+    exact: true,
+  });
+  await expect(stockLink.locator('.nav-dot')).toBeVisible();
+  const stockFill = await track
+    .locator('.selection-pill')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
   await track.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/settings/);
   await openMobile();
   await expectAligned(track);
+  const settingsLink = track.getByRole('link', {
+    name: 'Settings',
+    exact: true,
+  });
+  await expect(settingsLink).toHaveAttribute('aria-current', 'page');
+  await expect(settingsLink.locator('.nav-dot')).toBeVisible();
+  await expect(stockLink.locator('.nav-dot')).toHaveCount(0);
+  await expect(track.locator('.selection-pill')).toHaveCSS(
+    'background-color',
+    stockFill,
+  );
   const pill = await track.locator('.selection-pill').boundingBox();
   const stock = await track
     .getByRole('link', { name: 'Fabric stock', exact: true })
