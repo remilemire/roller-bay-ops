@@ -5,7 +5,10 @@ export const colorCodeSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z0-9./-]{1,10}$/);
+  .regex(
+    /^[A-Z0-9./-]{1,10}$/,
+    'Use 1–10 letters (A–Z), digits, periods, slashes, or hyphens.',
+  );
 export const thicknessMmSchema = z
   .number()
   .positive()
