@@ -439,7 +439,15 @@ export async function mockApi(
       return send(sheet, 201);
     }
     if (path === '/production/cutting/worksheets')
-      return send(state.worksheets.filter((w) => !w.reviewedAt));
+      return send(
+        state.worksheets.filter(
+          (w) =>
+            !w.reviewedAt &&
+            !w.skippedAt &&
+            !w.abandonedAt &&
+            (state.role !== 'staff' || w.submittedAt),
+        ),
+      );
     const sheetPath = path.match(
       /^\/production\/cutting\/worksheets\/([^/]+)(?:\/(draft|employees|submit|review|return))?$/,
     );

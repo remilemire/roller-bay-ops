@@ -135,14 +135,18 @@ test('worksheet submission records cutting and sends measurements for office rev
   const cutAt = state.orders[0]!.cutAt;
   expect(cutAt).not.toBeNull();
   expect(state.completionRequests).toHaveLength(0);
-  state.role = 'admin';
-  await page.goto('/stations/review');
+  state.role = 'staff';
+  await page.goto('/stations');
+  await page.getByRole('link', { name: 'Review cutting results' }).click();
   await page.getByRole('link', { name: 'Open', exact: true }).click();
   const reconcile = page.getByRole('button', {
     name: 'Accept and reconcile inventory',
     exact: true,
   });
   await expect(reconcile).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Replace with new measurements' }),
+  ).toHaveCount(0);
 
   await page.getByLabel('Reason for correction').fill('Confirm measured depth');
   await page
@@ -151,6 +155,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await expect(
     page.getByRole('button', { name: 'Accept and reconcile inventory' }),
   ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Abandon unused sheet' }),
+  ).toHaveCount(0);
   state.role = 'production';
   await page.goto(`/stations/cutting/${ids.order}`);
   await page.getByLabel('Radial depth (mm)').fill('12');
@@ -163,7 +170,7 @@ test('worksheet submission records cutting and sends measurements for office rev
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
-  state.role = 'admin';
+  state.role = 'staff';
   await page.goto('/stations/review');
   await page.getByRole('link', { name: 'Open', exact: true }).click();
   await page
@@ -679,7 +686,7 @@ test('completion attribution belongs to the selected order and cancelled forms d
 test('manual reconciliation links to submitted results and protects unsaved measurements', async ({
   page,
 }, info) => {
-  const state = await mockApi(page);
+  const state = await mockApi(page, { role: 'staff' });
   const shortcut = page.getByRole('link', {
     name: 'Review submitted worksheet',
     exact: true,

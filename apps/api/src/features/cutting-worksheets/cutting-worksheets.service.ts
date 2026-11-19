@@ -81,10 +81,12 @@ export class CuttingWorksheetsService {
       true,
     );
   }
-  list() {
+  list(options: { includeIncomplete: boolean }) {
     return this.operation(
       async (context) =>
-        (await context.cuttingWorksheets.list()).map(presentWorksheetSummary),
+        (await context.cuttingWorksheets.list(options)).map(
+          presentWorksheetSummary,
+        ),
       true,
     );
   }

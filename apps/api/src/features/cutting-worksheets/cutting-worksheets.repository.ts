@@ -1,4 +1,13 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import {
   cuttingWorksheetEmployees,
@@ -77,13 +86,16 @@ export class CuttingWorksheetsRepository {
         .orderBy(desc(cuttingWorksheets.startedAt)),
     );
   }
-  async list() {
+  async list({ includeIncomplete }: { includeIncomplete: boolean }) {
     return this.withEmployees(
       await this.db
         .select()
         .from(cuttingWorksheets)
         .where(
           and(
+            includeIncomplete
+              ? undefined
+              : isNotNull(cuttingWorksheets.submittedAt),
             isNull(cuttingWorksheets.reviewedAt),
             isNull(cuttingWorksheets.abandonedAt),
             isNull(cuttingWorksheets.skippedAt),

@@ -3,7 +3,10 @@ import {
   type AllocationDetail,
 } from '@roller-bay/shared/allocations';
 import { historySchema } from '@roller-bay/shared/audit';
-import { worksheetSchema } from '@roller-bay/shared/production';
+import {
+  worksheetListSchema,
+  worksheetSchema,
+} from '@roller-bay/shared/production';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -542,6 +545,10 @@ test(
         await post(`/api/production/cutting/worksheets/${sheet.id}/review`, {
           expectedRevision: submitted.revision,
         }).expect(403);
+        await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
+          expectedRevision: submitted.revision,
+          reason: 'Verify the measurements',
+        }).expect(403);
         const next = worksheetSchema.parse(
           (await begin(second.workOrderId).expect(201)).body,
         );
@@ -552,7 +559,12 @@ test(
         const submittedNext = worksheetSchema.parse(
           (await submit(next.id, next.revision, nextResults).expect(201)).body,
         );
-        await role('admin');
+        await role('staff');
+        const queue = worksheetListSchema.parse(
+          (await get('/api/production/cutting/worksheets').expect(200)).body,
+        );
+        assert.ok(queue.some((row) => row.id === sheet.id));
+        assert.ok(queue.every((row) => row.submittedAt));
         await h
           .put(first.id, {
             expectedRevision: first.revision,
@@ -824,6 +836,7 @@ test(
           expectedRevision: submitted.revision,
           employeeIds: [other.id],
         }).expect(409);
+        await role('staff');
         const returned = (
           await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
             expectedRevision: submitted.revision,
@@ -843,6 +856,7 @@ test(
           }).expect(201)
         ).body;
         assert.deepEqual((await get(completionPath)).body, completed);
+        await role('admin');
         const returnedAgain = (
           await post(`/api/production/cutting/worksheets/${sheet.id}/return`, {
             expectedRevision: resubmitted.revision,
@@ -979,10 +993,21 @@ test(
             { employeeIds: [other.id] },
           );
         const sheet = (await begin().expect(201)).body;
-        await post(`/api/production/cutting/worksheets/${sheet.id}/abandon`, {
-          expectedRevision: sheet.revision,
-          reason: 'Wrong order selected; no fabric cut',
-        }).expect(201);
+        const queue = async () =>
+          worksheetListSchema.parse(
+            (await get('/api/production/cutting/worksheets').expect(200)).body,
+          );
+        const abandon = () =>
+          post(`/api/production/cutting/worksheets/${sheet.id}/abandon`, {
+            expectedRevision: sheet.revision,
+            reason: 'Wrong order selected; no fabric cut',
+          });
+        await role('staff');
+        assert.ok(!(await queue()).some((entry) => entry.id === sheet.id));
+        await abandon().expect(403);
+        await role('admin');
+        assert.ok((await queue()).some((entry) => entry.id === sheet.id));
+        await abandon().expect(201);
         await get(
           `/api/production/cutting/orders/${allocation.workOrderId}/worksheet`,
         ).expect(204);
@@ -1021,18 +1046,27 @@ test(
             .state,
           'active',
         );
-        await post(`/api/production/cutting/worksheets/${fresh.id}/review`, {
-          expectedRevision: submitted.revision,
-          resolution: {
-            reason: 'Physically remeasured after correction',
-            results: {
-              ...results,
-              items: [
-                { ...results.items[0], expectedRevision: 2, radialDepthMm: 9 },
-              ],
+        const replaceMeasurements = () =>
+          post(`/api/production/cutting/worksheets/${fresh.id}/review`, {
+            expectedRevision: submitted.revision,
+            resolution: {
+              reason: 'Physically remeasured after correction',
+              results: {
+                ...results,
+                items: [
+                  {
+                    ...results.items[0],
+                    expectedRevision: 2,
+                    radialDepthMm: 9,
+                  },
+                ],
+              },
             },
-          },
-        }).expect(201);
+          });
+        await role('staff');
+        await replaceMeasurements().expect(403);
+        await role('admin');
+        await replaceMeasurements().expect(201);
         assert.ok((await fixtures.workOrder(allocation.workOrderId)).cut_at);
       },
     );

@@ -1,7 +1,6 @@
 'use client';
 import { use } from 'react';
 import { AllocationDetailScreen } from '@/features/allocations/allocation-detail-screen';
-import { useCanManage } from '@/features/auth';
 import { History } from '@/features/audit/history';
 import { CancellationReview } from '@/features/work-order-cancellation/cancellation-review';
 import { WorksheetReviewLink } from '@/features/production';
@@ -15,20 +14,17 @@ export default function Page({
 }) {
   const { id } = use(params);
   const { action } = use(searchParams);
-  const canReview = useCanManage();
   return (
     <AllocationDetailScreen
       id={id}
       recordResults={action === 'record-cutting-results'}
       history={<History type="allocations" id={id} />}
-      completionActions={(allocation) =>
-        canReview && (
-          <WorksheetReviewLink
-            orderId={allocation.workOrderId}
-            allocationId={allocation.id}
-          />
-        )
-      }
+      completionActions={(allocation) => (
+        <WorksheetReviewLink
+          orderId={allocation.workOrderId}
+          allocationId={allocation.id}
+        />
+      )}
       cancellation={(close) => (
         <CancellationReview id={id} kind="allocation" close={close} />
       )}

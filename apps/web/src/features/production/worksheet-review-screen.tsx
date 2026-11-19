@@ -12,7 +12,7 @@ import {
 } from '@roller-bay/shared/production';
 import type { z } from 'zod';
 import { useProductionWrite } from './use-production-write';
-import { useCurrentUser } from '@/features/auth';
+import { useCanManage, useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
 import { api } from '@/lib/api';
 import { SubmittedCuttingResults } from './submitted-cutting-results';
@@ -33,11 +33,13 @@ export function WorksheetReviewScreen({
   id: string;
 } & Editor) {
   const user = useCurrentUser();
+  const canManage = useCanManage();
   const query = useQuery(worksheetDetail(id));
   const units = useMeasurementUnits();
   const client = useQueryClient();
   const [reason, setReason] = useState('');
-  const [resolving, setResolving] = useState(false);
+  const [editingResolution, setEditingResolution] = useState(false);
+  const resolving = canManage && editingResolution;
   const abandon = useMutation({
     mutationFn: () =>
       api(`/production/cutting/worksheets/${id}/abandon`, worksheetSchema, {
@@ -60,7 +62,7 @@ export function WorksheetReviewScreen({
     inputSchema: worksheetReviewSchema,
     outputSchema: worksheetSchema,
     onSuccess: async () => {
-      setResolving(false);
+      setEditingResolution(false);
       await Promise.all([
         client.invalidateQueries({ queryKey: productionKey }),
         client.invalidateQueries({ queryKey: ['allocations'] }),
@@ -74,6 +76,11 @@ export function WorksheetReviewScreen({
       <ErrorNotice error={query.error} retry={() => void query.refetch()} />
     );
   const sheet = query.data;
+  const canCorrect =
+    !sheet.reviewedAt &&
+    !sheet.abandonedAt &&
+    !sheet.skippedAt &&
+    (!!sheet.submittedAt || canManage);
   return (
     <section className="stack">
       <PageHeading title={`Cutting results · ${sheet.orderNumber}`} />
@@ -142,13 +149,13 @@ export function WorksheetReviewScreen({
           </div>
           {review.isSuccess && <p role="status">Inventory reconciled.</p>}
         </div>
-        {!sheet.reviewedAt && !sheet.skippedAt && (
+        {canCorrect && (
           <div className="review-corrections">
             <h4>Correct these results</h4>
             <p className="review-help">
-              Return the sheet to the cutter, or enter newly verified physical
-              measurements to replace the submitted results. The original
-              submission stays in history.
+              {canManage
+                ? 'Return the sheet to the cutter, or replace the results with verified measurements.'
+                : 'Give the cutter a reason to correct and resubmit the worksheet.'}
             </p>
             <TextField
               label="Reason for correction"
@@ -158,14 +165,12 @@ export function WorksheetReviewScreen({
             {returnResults.error && <ErrorNotice error={returnResults.error} />}
             {abandon.error && <ErrorNotice error={abandon.error} />}
             <div className="inline-actions">
-              {!sheet.submittedAt && (
+              {canManage && !sheet.submittedAt && (
                 <Button
                   variant="outline"
                   disabled={
                     !reason.trim() ||
                     abandon.isPending ||
-                    !!sheet.abandonedAt ||
-                    !!sheet.skippedAt ||
                     !!review.pending ||
                     review.isPending ||
                     resolving
@@ -189,18 +194,20 @@ export function WorksheetReviewScreen({
               >
                 Return for correction
               </Button>
-              <Button
-                variant="outline"
-                disabled={
-                  !sheet.submittedAt ||
-                  !reason.trim() ||
-                  !!review.pending ||
-                  review.isPending
-                }
-                onClick={() => setResolving(true)}
-              >
-                Replace with new measurements
-              </Button>
+              {canManage && (
+                <Button
+                  variant="outline"
+                  disabled={
+                    !sheet.submittedAt ||
+                    !reason.trim() ||
+                    !!review.pending ||
+                    review.isPending
+                  }
+                  onClick={() => setEditingResolution(true)}
+                >
+                  Replace with new measurements
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -212,7 +219,7 @@ export function WorksheetReviewScreen({
           reason={reason}
           completionEditor={completionEditor}
           submit={(body) => review.mutateAsync(body).then(() => undefined)}
-          close={() => setResolving(false)}
+          close={() => setEditingResolution(false)}
         />
       )}
     </section>

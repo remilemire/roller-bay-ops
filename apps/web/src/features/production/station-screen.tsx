@@ -48,11 +48,13 @@ export function StationsScreen() {
     allowed.length > 1 ? allowed : [],
   );
   const station = allowed.length === 1 ? allowed[0] : remembered.value;
-  const manage = canManage && (
+  const officeActions = (user.role === 'staff' || canManage) && (
     <>
-      <Button asChild variant="outline">
-        <Link href="/stations/employees">Manage employees</Link>
-      </Button>
+      {canManage && (
+        <Button asChild variant="outline">
+          <Link href="/stations/employees">Manage employees</Link>
+        </Button>
+      )}
       <Button asChild variant="outline">
         <Link href="/stations/review">Review cutting results</Link>
       </Button>
@@ -69,7 +71,7 @@ export function StationsScreen() {
   if (!station)
     return (
       <div className="station-workspace">
-        <PageHeading title="Stations">{manage}</PageHeading>
+        <PageHeading title="Stations">{officeActions}</PageHeading>
         <nav className="station-choices" aria-label="Choose station">
           {stationSchema.options
             .filter((value) => allowed.includes(value))
@@ -89,7 +91,7 @@ export function StationsScreen() {
             </Link>
           </Button>
         )}
-        {manage}
+        {officeActions}
       </PageHeading>
       <StationQueue key={station} station={station} />
     </div>
