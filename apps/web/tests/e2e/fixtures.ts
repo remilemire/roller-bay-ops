@@ -206,6 +206,10 @@ export async function mockApi(
     page: Number(url.searchParams.get('page') ?? 1),
     pageSize: Number(url.searchParams.get('pageSize') ?? 25),
   });
+  const plans = new Map<
+    string,
+    ReturnType<typeof allocationOptimizationSchema.parse>
+  >();
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -817,53 +821,57 @@ export async function mockApi(
       state.allocationRequests.push({ path, body: request.postDataJSON() });
     const orderOf = (workOrderId: string) =>
       state.orders.find((row) => row.id === workOrderId)!;
-    if (path === '/allocations/optimize') {
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'GET')
+      return send({ status: 'finished', result: plans.get(path) });
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'DELETE')
+      return send(undefined, 204);
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'PUT') {
       const requirement = request.postDataJSON().requirements[0]!;
-      return send(
-        allocationOptimizationSchema.parse({
-          status: 'feasible',
-          stockItems: [stock],
-          plan: {
-            cuts: [
-              {
-                ...allocation.plan.cuts[0],
-                lengthMm: 2540,
-                items: [{ requirementId: requirement.id, quantity: 1 }],
-              },
-            ],
-          },
-          summary: {
-            leftovers: [
-              {
-                stockItemId: ids.stock,
-                cutIndex: 0,
-                kind: 'left-edge',
-                widthMm: 25.4,
-                lengthMm: 2540,
-                quantity: 1,
-                reusable: false,
-              },
-              {
-                stockItemId: ids.stock,
-                cutIndex: 0,
-                kind: 'right-edge',
-                widthMm: 1600.2,
-                lengthMm: 2540,
-                quantity: 1,
-                reusable: true,
-              },
-            ],
-            reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2540 }],
-            inputAreaMm2: (2997.2 * 2540).toFixed(6),
-            requiredAreaMm2: (1371.6 * 2540).toFixed(6),
-            reusableAreaMm2: (1600.2 * 2540).toFixed(6),
-            wasteAreaMm2: (25.4 * 2540).toFixed(6),
-            cutCount: 1,
-            stockItemCount: 1,
-            newRollCount: 1,
-          },
-        }),
-      );
+      const result = allocationOptimizationSchema.parse({
+        status: 'feasible',
+        stockItems: [stock],
+        plan: {
+          cuts: [
+            {
+              ...allocation.plan.cuts[0],
+              lengthMm: 2540,
+              items: [{ requirementId: requirement.id, quantity: 1 }],
+            },
+          ],
+        },
+        summary: {
+          leftovers: [
+            {
+              stockItemId: ids.stock,
+              cutIndex: 0,
+              kind: 'left-edge',
+              widthMm: 25.4,
+              lengthMm: 2540,
+              quantity: 1,
+              reusable: false,
+            },
+            {
+              stockItemId: ids.stock,
+              cutIndex: 0,
+              kind: 'right-edge',
+              widthMm: 1600.2,
+              lengthMm: 2540,
+              quantity: 1,
+              reusable: true,
+            },
+          ],
+          reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2540 }],
+          inputAreaMm2: (2997.2 * 2540).toFixed(6),
+          requiredAreaMm2: (1371.6 * 2540).toFixed(6),
+          reusableAreaMm2: (1600.2 * 2540).toFixed(6),
+          wasteAreaMm2: (25.4 * 2540).toFixed(6),
+          cutCount: 1,
+          stockItemCount: 1,
+          newRollCount: 1,
+        },
+      });
+      plans.set(path, result);
+      return send({ status: 'refining', result }, 202);
     }
     if (path === `/allocations/${ids.allocation}/draft` && method === 'PUT') {
       const input: AllocationDraftInput = request.postDataJSON().data;

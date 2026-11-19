@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mockApi, ids, pickEmployee, unallocatedOrderId } from './fixtures';
 
 test('station completion errors remain readable and the action stays retryable', async ({
@@ -37,24 +37,15 @@ test('generation can be cancelled while the request is pending', async ({
   page,
 }, testInfo) => {
   await mockApi(page);
-  let release!: () => void;
-  await page.route('**/api/allocations/optimize', async (route) => {
-    await new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await route.abort('failed').catch(() => {});
+  let cancelled = false;
+  await page.route('**/api/allocations/planning-jobs/*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      cancelled = true;
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({ json: { status: 'searching' } });
   });
-  await page.goto(`/allocations/new?workOrder=${unallocatedOrderId}`);
-  // A plan is generated for the blinds entered.
-  await page.getByRole('button', { name: 'Add blind', exact: true }).click();
-  await page.getByLabel('Color · blind 1', { exact: true }).click();
-  await page
-    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
-    .click();
-  await page.getByLabel('Width (in)', { exact: true }).fill('54');
-  await page.getByLabel('Finished drop (in)').fill('90');
-  await page.getByLabel('Quantity', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Generate plan' }).click();
+  await generateCuttingPlan(page);
   const banner = page
     .getByRole('status')
     .filter({ hasText: 'Generating a cutting plan' });
@@ -69,5 +60,67 @@ test('generation can be cancelled while the request is pending', async ({
   await expect(
     page.getByRole('button', { name: 'Generate plan', exact: true }),
   ).toBeEnabled();
-  release();
+  expect(cancelled).toBe(true);
+});
+
+async function generateCuttingPlan(page: Page) {
+  await page.goto(`/allocations/new?workOrder=${unallocatedOrderId}`);
+  // A plan is generated for the blinds entered.
+  await page.getByRole('button', { name: 'Add blind', exact: true }).click();
+  await page.getByLabel('Color · blind 1', { exact: true }).click();
+  await page
+    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
+    .click();
+  await page.getByLabel('Width (in)', { exact: true }).fill('54');
+  await page.getByLabel('Finished drop (in)').fill('90');
+  await page.getByLabel('Quantity', { exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Generate plan' }).click();
+}
+
+test('a ready cutting plan can be used while refinement is in progress', async ({
+  page,
+}) => {
+  await mockApi(page);
+  // Keep refinement pending long enough to choose the already validated plan.
+  await page.route('**/api/allocations/planning-jobs/*', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ json: { status: 'searching' } })
+      : route.fallback(),
+  );
+  await generateCuttingPlan(page);
+  await page.getByRole('button', { name: 'Use available plan' }).click();
+  await expect(
+    page.getByText('Valid cutting plan', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Quantity in this cut', { exact: true }),
+  ).toHaveValue('1');
+});
+
+test('reopening the order resumes the same search and restores its unsaved blinds', async ({
+  page,
+}) => {
+  await mockApi(page);
+  const submissions: string[] = [];
+  await page.route('**/api/allocations/planning-jobs/*', (route) => {
+    if (route.request().method() === 'PUT') {
+      submissions.push(route.request().url());
+      if (submissions.length > 1) return route.fallback();
+    }
+    return route.fulfill({ json: { status: 'searching' } });
+  });
+  await generateCuttingPlan(page);
+  await expect.poll(() => submissions.length).toBe(1);
+  await page.reload();
+  await page
+    .getByRole('button', { name: 'Resume previous cutting search' })
+    .click();
+  await page.getByRole('button', { name: 'Use available plan' }).click();
+  await expect(page.getByLabel('Width (in)', { exact: true })).toHaveValue(
+    '54',
+  );
+  await expect(
+    page.getByText('Valid cutting plan', { exact: true }),
+  ).toBeVisible();
+  expect(submissions).toEqual([submissions[0], submissions[0]]);
 });
