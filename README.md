@@ -10,7 +10,7 @@ The [locations API](docs/locations.md) manages zones, sections, and storage leve
 
 The [work orders API](docs/work-orders.md) lists production orders with ship dates and a status derived from their milestones.
 
-The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, shared Zod contracts, and a standalone Python solver. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning, [station production tracking and digital cutting sheets](docs/production.md). The [allocation API](docs/allocations.md) supplies validation, bounded optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership). API failures share one [error envelope](docs/errors.md). [Testing](docs/testing.md) describes the suites and how to run them.
+The current implementation is a TypeScript monorepo with a Next.js App Router frontend, a NestJS API, shared Zod contracts, and a standalone Python solver. User profiles, Microsoft authentication, the fabric catalog API, and [stock lookup and admin CRUD](docs/stock-items.md) are implemented in the backend. [Stock-receipt receiving](docs/stock-receipts.md) is also implemented in the backend. The [frontend workspace](docs/frontend.md) includes Microsoft sign-in, light/dark themes, reference-data management, stock lookup and corrections, receipt drafts, and allocation planning, [station production tracking and digital cutting sheets](docs/production.md). The [allocation API](docs/allocations.md) supplies complete cutting-plan search, optional waste optimization, reservations, and completion. See the [catalog endpoints and permissions](docs/fabric-catalog.md) and [user activation](docs/authentication.md#user-activation), and [roles and ownership](docs/authentication.md#roles-and-ownership). API failures share one [error envelope](docs/errors.md). [Testing](docs/testing.md) describes the suites and how to run them.
 
 ## Get started
 
@@ -28,7 +28,7 @@ npm run db:migrate
 
 Before starting the applications, fill in the Microsoft and session settings in `apps/api/.env` using the [authentication setup](docs/authentication.md). Required values are intentionally blank in the example. API startup rejects incomplete configuration.
 
-Complete the [local solver setup](docs/solver.md#run-locally), including its Python environment and matching API key, then run `npm run dev`. The root command starts the frontend, API, and solver. To run without optimization, use `npx turbo watch dev --filter=@roller-bay/web --filter=@roller-bay/api`; manual allocation workflows remain available.
+Complete the [local solver setup](docs/solver.md#run-locally), including its Python environment and matching API key, then run `npm run dev`. The root command starts the frontend, API, and solver. To run without waste refinement, use `npx turbo watch dev --filter=@roller-bay/web --filter=@roller-bay/api`; plan generation and manual allocation workflows remain available.
 
 - Frontend: <http://localhost:3000>
 - API liveness: <http://localhost:3001/api/health>
