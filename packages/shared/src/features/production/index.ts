@@ -152,6 +152,9 @@ export const worksheetSchema = z.object({
   draft: cuttingDraftSchema.nullable(),
   results: completeAllocationSchema.nullable(),
 });
+export const worksheetDetailSchema = worksheetSchema.extend({
+  locationLabels: z.record(z.uuid(), z.string()).default({}),
+});
 export const worksheetListSchema = z.array(
   worksheetSchema.omit({ snapshot: true, draft: true, results: true }),
 );

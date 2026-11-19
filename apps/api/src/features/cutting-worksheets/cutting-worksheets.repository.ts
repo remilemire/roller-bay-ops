@@ -15,6 +15,11 @@ import {
   type WorksheetEmployee,
   type WorksheetRecord,
 } from './cutting-worksheets.table.js';
+import {
+  locations,
+  locationSections,
+  locationZones,
+} from '../locations/tables.js';
 type WorksheetRow = typeof cuttingWorksheets.$inferSelect;
 export class CuttingWorksheetsRepository {
   constructor(private readonly db: DatabaseExecutor) {}
@@ -56,6 +61,26 @@ export class CuttingWorksheetsRepository {
       .from(cuttingWorksheets)
       .where(eq(cuttingWorksheets.id, id));
     return this.first(await (lock ? q.for('no key update') : q));
+  }
+  async locationLabels(ids: string[]): Promise<Record<string, string>> {
+    if (!ids.length) return {};
+    const rows = await this.db
+      .select({
+        id: locations.id,
+        zone: locationZones.name,
+        section: locationSections.label,
+        level: locations.label,
+      })
+      .from(locations)
+      .innerJoin(locationSections, eq(locationSections.id, locations.sectionId))
+      .innerJoin(locationZones, eq(locationZones.id, locationSections.zoneId))
+      .where(inArray(locations.id, ids));
+    return Object.fromEntries(
+      rows.map((row) => [
+        row.id,
+        `${row.zone} / ${row.section} / ${row.level}`,
+      ]),
+    );
   }
   async forAllocation(id: string) {
     return this.first(

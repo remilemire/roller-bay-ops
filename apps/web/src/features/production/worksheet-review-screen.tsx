@@ -100,7 +100,11 @@ export function WorksheetReviewScreen({
       <section className="panel panel-body cutting-review-results">
         <h3>Submitted measurements</h3>
         {sheet.results ? (
-          <SubmittedCuttingResults units={units} items={sheet.results.items} />
+          <SubmittedCuttingResults
+            units={units}
+            locationLabels={sheet.locationLabels}
+            items={sheet.results.items}
+          />
         ) : (
           <p>The cutter has not submitted complete measurements yet.</p>
         )}

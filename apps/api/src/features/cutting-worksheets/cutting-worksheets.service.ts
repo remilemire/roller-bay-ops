@@ -75,11 +75,20 @@ export class CuttingWorksheetsService {
     }, true);
   }
   find(id: string) {
-    return this.operation(
-      async (context) =>
-        presentWorksheet(await this.requireRecord(context, id)),
-      true,
-    );
+    return this.operation(async (context) => {
+      const sheet = presentWorksheet(await this.requireRecord(context, id));
+      const destinations = new Set<string>();
+      for (const item of sheet.results?.items ?? []) {
+        if ('locationId' in item) destinations.add(item.locationId);
+        for (const scrap of item.scraps) destinations.add(scrap.locationId);
+      }
+      return {
+        ...sheet,
+        locationLabels: await context.cuttingWorksheets.locationLabels([
+          ...destinations,
+        ]),
+      };
+    }, true);
   }
   list(options: { includeIncomplete: boolean }) {
     return this.operation(

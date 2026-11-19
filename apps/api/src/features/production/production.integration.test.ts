@@ -523,6 +523,12 @@ test(
         const submitted = worksheetSchema.parse(
           (await submit(sheet.id, saved.revision, results).expect(201)).body,
         );
+        const detail = await get(
+          `/api/production/cutting/worksheets/${sheet.id}`,
+        ).expect(200);
+        assert.deepEqual(detail.body.locationLabels, {
+          [ids.location]: 'Fixture warehouse / A / 1',
+        });
         assert.deepEqual(
           (await get(`/api/production/orders/${first.workOrderId}/completions`))
             .body,
@@ -976,7 +982,10 @@ test(
           assert.ok((await fixtures.workOrder(orderId)).cut_at);
           assert.deepEqual(
             (await get(`/api/production/cutting/worksheets/${sheet.id}`)).body,
-            saved,
+            {
+              ...saved,
+              locationLabels: { [ids.location]: 'Fixture warehouse / A / 1' },
+            },
           );
           assert.deepEqual(
             (
