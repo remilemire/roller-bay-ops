@@ -13,6 +13,7 @@ import {
   isNull,
   lt,
   not,
+  or,
   sql,
 } from 'drizzle-orm';
 import { allocations } from '../allocations/tables.js';
@@ -33,7 +34,7 @@ export class ProductionRepository {
   async list(station: Station, query: StationQuery) {
     const stamp = workOrders[milestoneTimestampField[station]];
     // A released plan's sheet is history, even when the same order is allocated again.
-    const hasWorksheet = (submittedOnly: boolean) =>
+    const hasWorksheet = (state: 'any' | 'submitted' | 'returned') =>
       exists(
         this.db
           .select({ id: cuttingWorksheets.id })
@@ -49,7 +50,13 @@ export class ProductionRepository {
               isNull(allocations.releasedAt),
               isNull(cuttingWorksheets.abandonedAt),
               isNull(cuttingWorksheets.skippedAt),
-              submittedOnly
+              state === 'returned'
+                ? isNotNull(cuttingWorksheets.results)
+                : undefined,
+              state === 'returned'
+                ? isNull(cuttingWorksheets.submittedAt)
+                : undefined,
+              state === 'submitted'
                 ? isNotNull(cuttingWorksheets.submittedAt)
                 : undefined,
             ),
@@ -63,10 +70,15 @@ export class ProductionRepository {
         ? ilike(workOrders.orderNumber, `%${query.search}%`)
         : undefined,
       query.view === 'queue'
-        ? and(
-            isNull(stamp),
-            isNull(workOrders.shippedAt),
-            station === 'cutting' ? not(hasWorksheet(true)) : undefined,
+        ? or(
+            station === 'cutting' ? hasWorksheet('returned') : undefined,
+            and(
+              isNull(stamp),
+              isNull(workOrders.shippedAt),
+              station === 'cutting'
+                ? not(hasWorksheet('submitted'))
+                : undefined,
+            ),
           )
         : undefined,
       query.view === 'completed'
@@ -76,7 +88,8 @@ export class ProductionRepository {
     const rows = await this.db
       .select({
         id: workOrders.id,
-        hasCuttingWorksheet: sql<boolean>`${hasWorksheet(false)}`,
+        hasCuttingWorksheet: sql<boolean>`${hasWorksheet('any')}`,
+        worksheetNeedsCorrection: sql<boolean>`${hasWorksheet('returned')}`,
       })
       .from(workOrders)
       .where(where)

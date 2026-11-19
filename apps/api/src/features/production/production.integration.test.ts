@@ -944,6 +944,12 @@ test(
                 },
               ).expect(201)
             ).body;
+          const beforeCorrection = await stationOrders('queue');
+          assert.equal(beforeCorrection.total, state === 'returned' ? 1 : 0);
+          assert.equal(
+            (await stationOrders('all')).items[0].worksheetNeedsCorrection,
+            state === 'returned',
+          );
           const order = (await get(`/api/work-orders/${orderId}`)).body;
           await post(`/api/production/cutting/orders/${orderId}/corrections`, {
             expectedRevision: order.revision,

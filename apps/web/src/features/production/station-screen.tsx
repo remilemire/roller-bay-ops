@@ -216,12 +216,20 @@ function StationQueue({ station }: { station: Station }) {
                     </p>
                   </div>
                   {station === 'cutting' ? (
-                    !order.cutAt && (
-                      <CuttingChoice
-                        orderId={order.id}
-                        orderNumber={order.orderNumber}
-                        hasWorksheet={order.hasCuttingWorksheet}
-                      />
+                    order.cutAt && order.worksheetNeedsCorrection ? (
+                      <Button asChild>
+                        <Link href={`/stations/cutting/${order.id}`}>
+                          Correct returned worksheet
+                        </Link>
+                      </Button>
+                    ) : (
+                      !order.cutAt && (
+                        <CuttingChoice
+                          orderId={order.id}
+                          orderNumber={order.orderNumber}
+                          hasWorksheet={order.hasCuttingWorksheet}
+                        />
+                      )
                     )
                   ) : (
                     <CompletionAction
