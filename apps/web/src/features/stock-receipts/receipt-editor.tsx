@@ -143,6 +143,13 @@ export function ReceiptEditor({
     },
     onError: (error) => showIssues(error),
     onSuccess: async (record) => {
+      // A new receipt has no detail observer yet. Navigation must load the
+      // submitted detail instead of mounting an editor from the cached draft.
+      client.removeQueries({
+        queryKey: receiptDetail(record.id).queryKey,
+        exact: true,
+        type: 'inactive',
+      });
       form.reset(form.getValues());
       await refresh();
       onSubmitted?.();
