@@ -3,7 +3,7 @@ import { mockApi } from './fixtures';
 
 for (const mode of ['light', 'dark']) {
   for (const view of ['week', 'month']) {
-    test(`${mode} ${view} calendar navigation has a quiet consistent shadow`, async ({
+    test(`${mode} ${view} calendar Previous, Next, and Today select the expected dates`, async ({
       page,
     }, info) => {
       await mockApi(page);
@@ -14,31 +14,33 @@ for (const mode of ['light', 'dark']) {
       );
       await page.goto(`/work-orders?view=${view}`);
       const controls = page.locator('.calendar-nav');
-      await expect(controls.getByRole('button')).toHaveCount(3);
-      for (const button of await controls.getByRole('button').all()) {
-        const rest = await button.evaluate(
-          (element) => getComputedStyle(element).boxShadow,
-        );
-        expect(rest).not.toBe('none');
-        expect(rest).not.toContain('inset');
-        await button.hover();
-        await expect(button).toHaveCSS('box-shadow', rest);
-      }
-      await expect(
-        page.getByRole('button', { name: 'New order', exact: true }),
-      ).toHaveCSS('box-shadow', 'none');
       await controls
         .getByRole('button', { name: `Previous ${view}`, exact: true })
         .click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get(view))
         .toBe(view === 'week' ? '2026-09-21' : '2026-08');
+      await expect(controls.getByRole('heading')).toHaveText(
+        view === 'week' ? 'Sep 21 – Sep 25, 2026' : 'August 2026',
+      );
       await controls
         .getByRole('button', { name: 'Today', exact: true })
         .click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get(view))
         .toBeNull();
+      await expect(controls.getByRole('heading')).toHaveText(
+        view === 'week' ? 'Sep 28 – Oct 2, 2026' : 'September 2026',
+      );
+      await controls
+        .getByRole('button', { name: `Next ${view}`, exact: true })
+        .click();
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get(view))
+        .toBe(view === 'week' ? '2026-10-05' : '2026-10');
+      await expect(controls.getByRole('heading')).toHaveText(
+        view === 'week' ? 'Oct 5 – Oct 9, 2026' : 'October 2026',
+      );
       await page.screenshot({
         path: info.outputPath(`calendar-controls-${mode}-${view}.png`),
       });

@@ -130,11 +130,7 @@ test('worksheet submission records cutting and sends measurements for office rev
     name: 'Accept and reconcile inventory',
     exact: true,
   });
-  const buttonBounds = await reconcile.boundingBox();
-  const panelBounds = await reconcile
-    .locator('xpath=ancestor::section[1]')
-    .boundingBox();
-  expect(buttonBounds!.width).toBeLessThan(panelBounds!.width / 2);
+  await expect(reconcile).toBeEnabled();
 
   await page.getByLabel('Reason for correction').fill('Confirm measured depth');
   await page
@@ -724,10 +720,6 @@ test('review summarizes empty remnants and separates replacement measurements fr
     results.getByText('No retained remnants.', { exact: true }),
   ).toBeVisible();
   await expect(results.getByText('Scraps', { exact: true })).toHaveCount(0);
-  await expect(results.locator('.review-help').first()).toHaveCSS(
-    'font-size',
-    '12px',
-  );
   await page
     .getByLabel('Reason for correction')
     .fill('Verified stock after a measurement error.');

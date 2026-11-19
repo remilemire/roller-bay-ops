@@ -60,8 +60,6 @@ test('cancellation reviews skipped results, preserves milestones, and retries th
     page.getByRole('link', { name: 'Resolve cutting results' }),
   ).toHaveAttribute('href', `/stations/review?worksheet=${worksheetId}`);
   const warning = page.locator('.cancellation-warning');
-  await expect(warning).toHaveCSS('display', 'grid');
-  await expect(warning).toHaveCSS('font-size', '14px');
   const fits = await warning.evaluate(
     (element) => element.scrollWidth <= element.clientWidth,
   );

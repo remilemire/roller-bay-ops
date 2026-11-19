@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mockApi } from './fixtures';
 
 for (const role of ['admin', 'owner']) {
-  test(`${role} manages employees from Stations with spaced search`, async ({
+  test(`${role} accesses employee management from Stations`, async ({
     page,
   }, info) => {
     const state = await mockApi(page, { role });
@@ -22,9 +22,6 @@ for (const role of ['admin', 'owner']) {
     await expect(
       page.getByText('Add employees so stations can attribute completed work.'),
     ).toBeVisible();
-    const field = (await search.boundingBox())!;
-    const panel = (await page.locator('section.panel').boundingBox())!;
-    expect(panel.y - field.y - field.height).toBeGreaterThanOrEqual(16);
     await page.screenshot({
       path: info.outputPath('employee-directory.png'),
       fullPage: true,

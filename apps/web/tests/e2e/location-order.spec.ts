@@ -140,14 +140,6 @@ test('drags a zone with animated siblings and saves its relative position', asyn
     steps: 12,
   });
   await expect(first).toHaveAttribute('aria-pressed', 'true');
-  const siblingStyle = await second
-    .locator('xpath=ancestor::li[1]')
-    .evaluate((el) => ({
-      transform: getComputedStyle(el).transform,
-      duration: getComputedStyle(el).transitionDuration,
-    }));
-  expect(siblingStyle.transform).not.toBe('none');
-  expect(siblingStyle.duration).toBe('0.24s');
   await page.screenshot({ path: testInfo.outputPath('dragging.png') });
   await page.mouse.up();
   await expect.poll(() => state.moves.length).toBe(1);

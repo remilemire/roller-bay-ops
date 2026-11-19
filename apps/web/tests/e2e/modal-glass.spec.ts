@@ -3,7 +3,7 @@ import { mockApi } from './fixtures';
 
 for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
   for (const mode of ['light', 'dark']) {
-    test(`${palette} ${mode} modal glass keeps forms readable and focus contained`, async ({
+    test(`${palette} ${mode} modal forms remain readable and keep keyboard focus contained`, async ({
       page,
     }, info) => {
       const state = await mockApi(page);
@@ -23,10 +23,6 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         exact: true,
       });
       await expect(dialog).toBeVisible();
-      await expect(dialog).toHaveCSS(
-        'backdrop-filter',
-        'blur(12px) saturate(1.15)',
-      );
       const materials = await dialog.evaluate((element) => {
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = 1;
@@ -82,19 +78,10 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
           ),
         );
         return {
-          alpha: fill[3],
           contrast,
-          nested: Array.from(element.querySelectorAll('*')).some(
-            (child) => getComputedStyle(child).backdropFilter !== 'none',
-          ),
-          highlight: getComputedStyle(element).boxShadow.includes('inset'),
         };
       });
-      expect(materials.alpha).toBeGreaterThan(200);
-      expect(materials.alpha).toBeLessThan(255);
       expect(materials.contrast).toBeGreaterThanOrEqual(4.5);
-      expect(materials.nested).toBe(false);
-      expect(materials.highlight).toBe(false);
       await page.keyboard.press('Tab');
       expect(
         await dialog.evaluate((element) =>

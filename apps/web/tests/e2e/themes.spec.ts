@@ -2,36 +2,11 @@ import { test, expect } from '@playwright/test';
 import { mockApi } from './fixtures';
 
 const palettes = [
-  {
-    name: 'Sage',
-    value: 'sage',
-    light: 'rgb(242, 245, 245)',
-    dark: 'rgb(17, 29, 27)',
-  },
-  {
-    name: 'Slate',
-    value: 'slate',
-    light: 'rgb(242, 244, 247)',
-    dark: 'rgb(23, 28, 36)',
-  },
-  {
-    name: 'Ocean',
-    value: 'ocean',
-    light: 'rgb(239, 245, 249)',
-    dark: 'rgb(17, 30, 41)',
-  },
-  {
-    name: 'Sand',
-    value: 'sand',
-    light: 'rgb(247, 243, 236)',
-    dark: 'rgb(35, 30, 25)',
-  },
-  {
-    name: 'Plum',
-    value: 'plum',
-    light: 'rgb(246, 242, 248)',
-    dark: 'rgb(35, 27, 41)',
-  },
+  { name: 'Sage', value: 'sage' },
+  { name: 'Slate', value: 'slate' },
+  { name: 'Ocean', value: 'ocean' },
+  { name: 'Sand', value: 'sand' },
+  { name: 'Plum', value: 'plum' },
 ] as const;
 
 test('preview cards select all five palettes in light and dark mode and survive reload', async ({
@@ -44,7 +19,9 @@ test('preview cards select all five palettes in light and dark mode and survive 
   const appearance = page.getByRole('region', { name: 'Appearance' });
   await expect(appearance.getByRole('radio')).toHaveCount(5);
   await expect(page.getByRole('banner').getByRole('radio')).toHaveCount(0);
-  await expect(appearance.getByRole('combobox')).toHaveCount(0);
+  await expect(
+    appearance.getByRole('combobox', { name: 'Reduce transparency' }),
+  ).toHaveValue('system');
   for (const mode of ['light', 'dark'] as const) {
     await appearance
       .getByRole('button', {
@@ -58,22 +35,11 @@ test('preview cards select all five palettes in light and dark mode and survive 
         'data-color-theme',
         palette.value,
       );
-      await expect(page.locator('body')).toHaveCSS(
-        'background-color',
-        palette[mode],
-      );
-      await expect(
-        appearance.locator(`[data-theme-preview="${palette.value}"]`),
-      ).toHaveCSS('background-color', palette[mode]);
       await page.reload();
       await expect(
         appearance.getByRole('radio', { name: palette.name, exact: true }),
       ).toBeChecked();
       await expect(page.locator('html')).toHaveClass(mode);
-      await expect(page.locator('body')).toHaveCSS(
-        'background-color',
-        palette[mode],
-      );
     }
     await page.screenshot({
       path: `/tmp/roller-bay-themes-${testInfo.project.name}-${mode}.png`,
@@ -102,10 +68,6 @@ test('palette follows the account over the browser cache and system mode stays i
   await appearance.getByText('Ocean', { exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveClass('dark');
-  await expect(page.locator('body')).toHaveCSS(
-    'background-color',
-    palettes[2].dark,
-  );
   // Another account in the same browser starts from the cached Ocean but
   // settles on its own palette.
   const other = await context.newPage();

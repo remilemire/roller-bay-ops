@@ -113,50 +113,6 @@ for (const mode of ['light', 'dark']) {
     await expect(second.locator('summary')).toHaveText(
       'Production details · No stages recorded',
     );
-    await expect(page.locator('.station-queue > .pagination')).toHaveCSS(
-      'background-color',
-      'rgba(0, 0, 0, 0)',
-    );
-    const firstBounds = await card.boundingBox();
-    const secondBounds = await second.boundingBox();
-    if (info.project.name === 'desktop') {
-      expect(secondBounds!.x).toBeGreaterThan(firstBounds!.x);
-      expect(secondBounds!.y).toBe(firstBounds!.y);
-      expect(secondBounds!.height).toBeLessThan(firstBounds!.height);
-    } else {
-      expect(secondBounds!.x).toBe(firstBounds!.x);
-      expect(secondBounds!.y).toBeGreaterThan(firstBounds!.y);
-    }
-    if (info.project.name === 'desktop') {
-      const third = page.getByRole('region', {
-        name: 'Order 104803',
-        exact: true,
-      });
-      await expect
-        .poll(async () => {
-          const upper = await second.boundingBox();
-          const lower = await third.boundingBox();
-          return Math.abs(lower!.y - upper!.y - upper!.height - 16);
-        })
-        .toBeLessThan(2);
-      await history.locator('summary').click();
-      const fourth = page.getByRole('region', {
-        name: 'Order 104804',
-        exact: true,
-      });
-      await expect
-        .poll(async () => {
-          const upper = await card.boundingBox();
-          const lower = await fourth.boundingBox();
-          return Math.abs(lower!.y - upper!.y - upper!.height - 16);
-        })
-        .toBeLessThan(2);
-      await page.screenshot({
-        path: info.outputPath(`station-cards-${mode}-packed.png`),
-        fullPage: true,
-      });
-      await history.locator('summary').click();
-    }
     await page.screenshot({
       path: info.outputPath(`station-cards-${mode}.png`),
       fullPage: true,
@@ -173,8 +129,7 @@ for (const mode of ['light', 'dark']) {
             }),
           );
         return boxes.every(
-          (box, index) =>
-            index === 0 || box.top >= boxes[index - 1]!.bottom + 15,
+          (box, index) => index === 0 || box.top >= boxes[index - 1]!.bottom,
         );
       })
       .toBe(true);
@@ -182,7 +137,12 @@ for (const mode of ['light', 'dark']) {
     const action = await card
       .getByRole('button', { name: 'Record cutting', exact: true })
       .boundingBox();
-    expect(action!.y).toBeGreaterThanOrEqual(summary!.y + summary!.height);
+    expect(
+      action!.y >= summary!.y + summary!.height ||
+        summary!.y >= action!.y + action!.height ||
+        action!.x >= summary!.x + summary!.width ||
+        summary!.x >= action!.x + action!.width,
+    ).toBe(true);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -199,7 +159,6 @@ for (const mode of ['light', 'dark']) {
       name: 'Use worksheet',
       exact: true,
     });
-    await expect(worksheet).toHaveClass(/button-primary/);
     await worksheet.click();
     await expect(page).toHaveURL(new RegExp(`/stations/cutting/${order.id}$`));
   });

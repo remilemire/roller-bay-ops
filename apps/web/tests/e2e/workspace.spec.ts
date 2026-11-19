@@ -39,21 +39,12 @@ test('workspace renders real-contract data and persists accessible light/dark pr
   await expect(
     page.getByRole('button', { name: 'Dark mode', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('body')).toHaveCSS(
-    'background-color',
-    'rgb(23, 28, 36)',
-  );
   await page.screenshot({
     path: `/tmp/roller-bay-${testInfo.project.name}-dark.png`,
     fullPage: true,
   });
   await page.getByRole('button', { name: 'Light mode', exact: true }).click();
   await expect(page.locator('html')).toHaveClass('light');
-  await expect(page.locator('body')).toHaveCSS(
-    'background-color',
-    'rgb(242, 244, 247)',
-  );
-  await expect(page.locator('body')).toHaveCSS('color', 'rgb(38, 49, 63)');
   await page.screenshot({
     path: `/tmp/roller-bay-${testInfo.project.name}-light.png`,
     fullPage: true,

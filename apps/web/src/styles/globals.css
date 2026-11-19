@@ -701,7 +701,6 @@ textarea {
 }
 .button-outline:hover:not(:disabled) {
   background: color-mix(in srgb, var(--muted-surface) 96%, var(--foreground));
-  box-shadow: none;
 }
 .button-ghost {
   background: transparent;
