@@ -152,7 +152,18 @@ test('work orders reach attributed shipping through station navigation', async (
   const dialog = page.getByRole('dialog');
   await pickEmployee(dialog, 'Alex Reed');
   await dialog.getByRole('button', { name: 'Record completion' }).click();
-  await expect(page.getByText(/shipped · Alex Reed/)).toBeVisible();
+  const card = page.getByRole('region', { name: 'Order 104801', exact: true });
+  await expect(
+    card.getByText('Shipping recorded', { exact: true }),
+  ).toBeVisible();
+  await card.locator('summary').click();
+  const shipping = card.locator('.station-history-row').filter({
+    has: page.getByText('Shipping', { exact: true }),
+  });
+  await expect(
+    shipping.getByText('Alex Reed (AR)', { exact: true }),
+  ).toBeVisible();
+  await expect(shipping.locator('time')).toHaveAttribute('datetime', /.+/);
   expect(state.orders.find((o) => o.id === ids.order)!.cutAt).toBeNull();
 });
 

@@ -18,7 +18,7 @@ import { useCanManage, useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
 import { api } from '@/lib/api';
 import { dateTimeLabel } from '@/lib/format';
-import { RecordValues } from '@/components/records/record-values';
+import { SubmittedCuttingResults } from './submitted-cutting-results';
 import { Button } from '@/components/ui/button';
 import { PageHeading, ErrorNotice, Loading } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
@@ -64,7 +64,7 @@ function ReviewQueue({ completionEditor }: Editor) {
                   <th>Cutters</th>
                   <th>Started</th>
                   <th>Results</th>
-                  <th>Action</th>
+                  <th className="table-actions">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -74,9 +74,10 @@ function ReviewQueue({ completionEditor }: Editor) {
                     <td>{employeeNames(s.employees)}</td>
                     <td>{dateTimeLabel(s.startedAt)}</td>
                     <td>{s.submittedAt ? 'Awaiting review' : 'Incomplete'}</td>
-                    <td>
+                    <td className="table-actions">
                       <Button
-                        variant="outline"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           if (s.id === selected) return;
                           if (
@@ -179,10 +180,10 @@ function ReviewWorksheet({
         units={sheet.draft?.units ?? units}
         checked={sheet.draft?.checkedCuts ?? []}
       />
-      <section className="panel panel-body stack">
+      <section className="panel panel-body cutting-review-results">
         <h3>Submitted measurements</h3>
         {sheet.results ? (
-          <RecordValues units={units} value={sheet.results.items} />
+          <SubmittedCuttingResults units={units} items={sheet.results.items} />
         ) : (
           <p>The cutter has not submitted complete measurements yet.</p>
         )}
@@ -193,42 +194,56 @@ function ReviewWorksheet({
               The previous reconciliation has an uncertain result. Retry its
               saved measurements and reason before making another change.
             </p>
-            <Button
-              variant="outline"
-              disabled={review.isPending}
-              onClick={() => review.mutate(review.pending!)}
-            >
-              Retry original reconciliation
-            </Button>
+            <div className="inline-actions">
+              <Button
+                variant="outline"
+                disabled={review.isPending}
+                onClick={() => review.mutate(review.pending!)}
+              >
+                Retry original reconciliation
+              </Button>
+            </div>
           </>
         )}
-        <p>
-          Accepting updates stock and creates retained remnants. It does not
-          change production milestones.
-        </p>
-        <Button
-          disabled={
-            !sheet.submittedAt ||
-            !!sheet.reviewedAt ||
-            !!sheet.abandonedAt ||
-            !!sheet.skippedAt ||
-            review.isPending ||
-            !!review.pending ||
-            resolving
-          }
-          onClick={() => review.mutate({ expectedRevision: sheet.revision })}
-        >
-          {sheet.reviewedAt
-            ? 'Inventory reconciled'
-            : review.isPending
-              ? 'Reconciling…'
-              : 'Accept and reconcile inventory'}
-        </Button>
-        {review.isSuccess && <p role="status">Inventory reconciled.</p>}
+        <div className="review-accept">
+          <p className="review-help">
+            Accept these measurements to update stock and save any retained
+            remnants. Production milestones stay unchanged.
+          </p>
+          <div className="inline-actions">
+            <Button
+              disabled={
+                !sheet.submittedAt ||
+                !!sheet.reviewedAt ||
+                !!sheet.abandonedAt ||
+                !!sheet.skippedAt ||
+                review.isPending ||
+                !!review.pending ||
+                resolving
+              }
+              onClick={() =>
+                review.mutate({ expectedRevision: sheet.revision })
+              }
+            >
+              {sheet.reviewedAt
+                ? 'Inventory reconciled'
+                : review.isPending
+                  ? 'Reconciling…'
+                  : 'Accept and reconcile inventory'}
+            </Button>
+          </div>
+          {review.isSuccess && <p role="status">Inventory reconciled.</p>}
+        </div>
         {!sheet.reviewedAt && !sheet.skippedAt && (
-          <>
+          <div className="review-corrections">
+            <h4>Correct these results</h4>
+            <p className="review-help">
+              Return the sheet to the cutter, or enter newly verified physical
+              measurements to replace the submitted results. The original
+              submission stays in history.
+            </p>
             <TextField
-              label="Reason for returning or resolving results"
+              label="Reason for correction"
               value={reason}
               onChange={setReason}
             />
@@ -276,10 +291,10 @@ function ReviewWorksheet({
                 }
                 onClick={() => setResolving(true)}
               >
-                Resolve with current measurements
+                Replace with new measurements
               </Button>
             </div>
-          </>
+          </div>
         )}
       </section>
       {resolving && (
@@ -327,7 +342,7 @@ function ResolveWorksheet({
     return <p>This allocation is no longer active.</p>;
   return (
     <section className="panel panel-body stack">
-      <h3>Resolve inventory discrepancy</h3>
+      <h3>Replace submitted measurements</h3>
       <p>
         Enter current physical measurements for every source. These explicitly
         replace the earlier observations for reconciliation. Original

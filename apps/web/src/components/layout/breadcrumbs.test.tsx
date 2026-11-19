@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Breadcrumbs, breadcrumbTrail } from './breadcrumbs';
+import { Breadcrumbs, breadcrumbTrail, PageTitleContext } from './breadcrumbs';
+import { PageHeading } from '@/components/ui/feedback';
 
 const nav = vi.hoisted(() => ({ pathname: '/', back: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -67,4 +68,15 @@ describe('Breadcrumbs', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Back' }));
     expect(nav.back).not.toHaveBeenCalled();
   });
+});
+
+it('embedded form headings leave the owning page breadcrumb title intact', () => {
+  const publish = vi.fn();
+  render(
+    <PageTitleContext value={publish}>
+      <PageHeading title="Review cutting results" />
+      <PageHeading title="Reconcile 104801" registerPageTitle={false} />
+    </PageTitleContext>,
+  );
+  expect(publish).toHaveBeenCalledExactlyOnceWith('Review cutting results');
 });

@@ -16,6 +16,7 @@ import {
   Scissors,
   Settings2,
   Users,
+  type LucideIcon,
 } from 'lucide-react';
 import { api, noContent } from '@/lib/api';
 import {
@@ -25,10 +26,12 @@ import {
   sessionKey,
 } from '@/features/auth';
 import { Button } from '@/components/ui/button';
+import { SlidingSelection } from '@/components/ui/sliding-selection';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
 import { Breadcrumbs, PageTitleContext } from './breadcrumbs';
 import { ThemeSwitch } from './theme-switch';
+import { CompanyLogo } from './company-logo';
 const navigation = [
   { href: '/', label: 'Overview', Icon: LayoutDashboard },
   { href: '/stock-items', label: 'Fabric stock', Icon: Layers3 },
@@ -41,6 +44,33 @@ const navigation = [
   { href: '/users', label: 'Users', Icon: Users, manageOnly: true },
 ];
 const sections = [...navigation, { href: '/settings', label: 'Settings' }];
+function SidebarLink({
+  href,
+  label,
+  Icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+  onNavigate: () => void;
+}) {
+  const pathname = usePathname();
+  const active =
+    pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
+  return (
+    <Link
+      href={href}
+      className={`nav-link ${active ? 'active' : ''}`}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
+    >
+      <Icon size={20} />
+      <span>{label}</span>
+      {active && <span className="nav-dot" />}
+    </Link>
+  );
+}
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -72,9 +102,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     return (
       <main className="login-page">
         <section className="login-panel glass">
-          <div className="brand-symbol">
-            <Layers3 size={27} />
-          </div>
+          <CompanyLogo />
           <div className="eyebrow">ROLLER BAY · OPERATIONS</div>
           <h1>Access pending</h1>
           <p>
@@ -99,14 +127,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <Link
         href={productionOnly ? '/stations' : '/'}
         className="brand"
+        aria-label={
+          productionOnly ? 'Roller Bay stations' : 'Roller Bay overview'
+        }
         onClick={() => setMobileOpen(false)}
       >
-        <span className="brand-symbol">
-          <Layers3 size={23} />
-        </span>
-        <span>
-          roller bay<span className="brand-caption">OPERATIONS</span>
-        </span>
+        <CompanyLogo />
+        <span className="brand-caption">ROLLER BAY OPS</span>
       </Link>
       <nav aria-label="Main navigation">
         {navigation
@@ -115,34 +142,23 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               ? item.href === '/stations'
               : !item.manageOnly || canManage,
           )
-          .map(({ href, label, Icon }) => {
-            const active =
-              href === '/' ? pathname === href : pathname.startsWith(href);
-            return (
-              <Link
-                href={href}
-                key={href}
-                className={`nav-link ${active ? 'active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <Icon size={20} />
-                <span>{label}</span>
-                {active && <span className="nav-dot" />}
-              </Link>
-            );
-          })}
+          .map(({ href, label, Icon }) => (
+            <SidebarLink
+              href={href}
+              key={href}
+              label={label}
+              Icon={Icon}
+              onNavigate={() => setMobileOpen(false)}
+            />
+          ))}
       </nav>
       <div className="sidebar-bottom">
-        <Link
-          className={`nav-link ${pathname === '/settings' ? 'active' : ''}`}
+        <SidebarLink
           href="/settings"
-          aria-current={pathname === '/settings' ? 'page' : undefined}
-          onClick={() => setMobileOpen(false)}
-        >
-          <Settings2 size={20} />
-          Settings
-        </Link>
+          label="Settings"
+          Icon={Settings2}
+          onNavigate={() => setMobileOpen(false)}
+        />
         <button
           className="user-card"
           type="button"
@@ -173,9 +189,25 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <a href="#workspace-content" className="skip-link">
         Skip to content
       </a>
-      <aside className="sidebar glass">{nav}</aside>
+      <aside className="sidebar glass">
+        <SlidingSelection
+          className="sidebar-navigation"
+          label="Sidebar"
+          value={pathname}
+          selection="page"
+        >
+          {nav}
+        </SlidingSelection>
+      </aside>
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen} title="Navigation">
-        <div className="mobile-nav">{nav}</div>
+        <SlidingSelection
+          className="mobile-nav sidebar-navigation"
+          label="Sidebar"
+          value={pathname}
+          selection="page"
+        >
+          {nav}
+        </SlidingSelection>
       </Dialog>
       <div className="workspace-main glass">
         <header className="topbar">

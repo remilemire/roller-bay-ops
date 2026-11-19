@@ -1,6 +1,6 @@
 export const transparencyStorageKey = 'roller-bay-reduce-transparency';
 const changeEvent = 'roller-bay-transparency-change';
-const mediaQuery = '(prefers-reduced-transparency: reduce)';
+export type TransparencyPreference = 'system' | 'on' | 'off';
 
 function applyStoredPreference(value: string | null) {
   if (value === 'true' || value === 'false')
@@ -8,19 +8,19 @@ function applyStoredPreference(value: string | null) {
   else document.documentElement.removeAttribute('data-reduce-transparency');
 }
 
-export function reducedTransparencySnapshot() {
+export function transparencyPreferenceSnapshot(): TransparencyPreference {
   const value = document.documentElement.getAttribute(
     'data-reduce-transparency',
   );
-  return value === null
-    ? (window.matchMedia?.(mediaQuery).matches ?? false)
-    : value === 'true';
+  return value === 'true' ? 'on' : value === 'false' ? 'off' : 'system';
 }
 
-export function setReducedTransparency(reduced: boolean) {
-  applyStoredPreference(String(reduced));
+export function setTransparencyPreference(preference: TransparencyPreference) {
+  const value = preference === 'system' ? null : String(preference === 'on');
+  applyStoredPreference(value);
   try {
-    localStorage.setItem(transparencyStorageKey, String(reduced));
+    if (value === null) localStorage.removeItem(transparencyStorageKey);
+    else localStorage.setItem(transparencyStorageKey, value);
   } catch {
     // The control still works for this tab when browser storage is blocked.
   }
@@ -28,7 +28,6 @@ export function setReducedTransparency(reduced: boolean) {
 }
 
 export function subscribeTransparency(listener: () => void) {
-  const media = window.matchMedia?.(mediaQuery);
   const storageChanged = (event: StorageEvent) => {
     if (event.key !== transparencyStorageKey && event.key !== null) return;
     applyStoredPreference(event.newValue);
@@ -36,11 +35,9 @@ export function subscribeTransparency(listener: () => void) {
   };
   window.addEventListener(changeEvent, listener);
   window.addEventListener('storage', storageChanged);
-  media?.addEventListener('change', listener);
   return () => {
     window.removeEventListener(changeEvent, listener);
     window.removeEventListener('storage', storageChanged);
-    media?.removeEventListener('change', listener);
   };
 }
 

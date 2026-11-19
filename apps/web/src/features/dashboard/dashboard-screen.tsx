@@ -113,7 +113,7 @@ export function DashboardScreen() {
       </PageHeading>
       <div className="stats-grid">
         {stats.map(({ label, value, Icon, error, href }) => (
-          <Link href={href} className="panel stat" key={label}>
+          <Link href={href} className="panel stat summary-glass" key={label}>
             <div className="stat-label">
               <span>{label}</span>
               <span className="stat-icon">

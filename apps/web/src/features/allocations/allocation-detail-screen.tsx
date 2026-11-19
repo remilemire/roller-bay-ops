@@ -34,6 +34,7 @@ import { CompletionEditor } from './completion-editor';
 /** Other features' sections of an allocation, composed by the route. */
 type AllocationSections = {
   history: ReactNode;
+  completionActions?: (allocation: AllocationDetail) => ReactNode;
   /** Admin cancellation review, which reports cutting results to resolve. */
   cancellation: (close: () => void) => ReactNode;
   /** The add-order modal a draft's order picker offers. */
@@ -73,6 +74,7 @@ function AllocationRecord({
   history,
   cancellation,
   addOrder,
+  completionActions,
 }: {
   allocation: z.infer<typeof allocationRecordSchema>;
   recordResults: boolean;
@@ -128,6 +130,7 @@ function AllocationRecord({
     return (
       <CompletionEditor
         allocation={editingRecord}
+        actions={completionActions?.(editingRecord)}
         close={() => {
           setMode('read');
           if (recordResults) router.replace(`/allocations/${id}`);

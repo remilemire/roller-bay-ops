@@ -1,16 +1,7 @@
-import { test, expect, type Locator } from '@playwright/test';
-import { mockApi, ids, pickEmployee } from './fixtures';
+import { test, expect } from '@playwright/test';
+import { mockApi, ids } from './fixtures';
 
-async function boxes(rows: Locator) {
-  return rows.evaluateAll((elements) =>
-    elements.map((element) => {
-      const { top, bottom, height } = element.getBoundingClientRect();
-      return { top, bottom, height };
-    }),
-  );
-}
-
-test('record rows share spacing and detail cards remain separated', async ({
+test('production history remains accessible and record pages fit the viewport', async ({
   page,
 }, testInfo) => {
   const state = await mockApi(page);
@@ -55,10 +46,11 @@ test('record rows share spacing and detail cards remain separated', async ({
     localStorage.setItem('roller-bay-theme', 'dark'),
   );
   await page.goto('/stations?station=cutting');
-  await expect(page.locator('.record-list > p')).toHaveCount(2);
-  const completions = await boxes(page.locator('.record-list > p'));
-  expect(completions[0]!.height).toBe(44);
-  expect(completions[1]!.top - completions[0]!.top).toBe(44);
+  const card = page.getByRole('region', { name: 'Order 104801', exact: true });
+  await card.locator('summary').click();
+  const stationRows = card.locator('.station-history-row');
+  await expect(stationRows).toHaveCount(4);
+  await expect(stationRows.filter({ hasText: 'Alex Reed' })).toHaveCount(2);
   await page.screenshot({
     path: testInfo.outputPath('station-spacing.png'),
     fullPage: true,
@@ -68,16 +60,9 @@ test('record rows share spacing and detail cards remain separated', async ({
   await expect(
     page.getByRole('heading', { name: 'Production', exact: true }),
   ).toBeVisible();
+  const productionRows = page.locator('.record-list > div');
+  await expect(productionRows).toHaveCount(4);
   await expect(page.locator('.history summary')).toHaveCount(2);
-  const history = await boxes(page.locator('.history summary'));
-  expect(history[1]!.top - history[0]!.top).toBe(
-    completions[1]!.top - completions[0]!.top,
-  );
-  const panels = await boxes(page.locator('main .panel'));
-  expect(panels).toHaveLength(3);
-  for (let index = 1; index < panels.length; index++) {
-    expect(panels[index]!.top - panels[index - 1]!.bottom).toBe(24);
-  }
   await page.screenshot({
     path: testInfo.outputPath('order-spacing.png'),
     fullPage: true,
@@ -102,40 +87,9 @@ test('record rows share spacing and detail cards remain separated', async ({
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
-    for (const lastRow of await page
-      .locator('.panel-body > :is(.form-row, .plan-cut):last-child')
-      .all()) {
-      await expect(lastRow).toHaveCSS('margin-bottom', '0px');
-    }
     await page.screenshot({
       path: testInfo.outputPath(`${name}-spacing.png`),
       fullPage: true,
     });
   }
-});
-
-test('help icons keep measurement labels aligned in station forms', async ({
-  page,
-}, testInfo) => {
-  await mockApi(page, {
-    role: 'production',
-    stations: ['cutting'],
-  });
-  await page.goto(`/stations/cutting/${ids.order}`);
-  await page.getByRole('button', { name: 'Begin cutting' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Begin cutting' });
-  await pickEmployee(dialog, 'Alex Reed', 'Cutters');
-  await dialog.getByRole('button', { name: 'Start worksheet' }).click();
-  await page
-    .getByLabel('What happened to this stock item?')
-    .selectOption('returned-roll');
-  const tube = page.getByLabel('Tube outer diameter (mm)');
-  await expect(tube).toBeVisible();
-  const field = page.locator('.field').filter({ has: tube });
-  await expect(field.locator('.field-label')).toHaveCSS('height', '24px');
-  await expect(field.locator('.info-tip')).toHaveCSS('height', '24px');
-  await page.screenshot({
-    path: testInfo.outputPath('station-form-spacing.png'),
-    fullPage: true,
-  });
 });

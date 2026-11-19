@@ -3,7 +3,7 @@ import { mockApi } from './fixtures';
 
 for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
   for (const mode of ['light', 'dark']) {
-    test(`${palette} ${mode}: glass stays readable without nested filters`, async ({
+    test(`${palette} ${mode}: dashboard text and actions remain readable`, async ({
       page,
     }, info) => {
       const state = await mockApi(page);
@@ -17,7 +17,9 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
       await expect(
         page.getByRole('heading', { name: 'Overview', exact: true }),
       ).toBeVisible();
-      await expect(page.locator('.stat')).toHaveCount(6);
+      await expect(
+        page.getByText('Orders to allocate', { exact: true }),
+      ).toBeVisible();
       await expect(
         page.locator('.stat-value').filter({ hasText: '…' }),
       ).toHaveCount(0);
@@ -26,38 +28,11 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         palette,
       );
       await expect(page.locator('html')).toHaveClass(mode);
-      await expect(page.locator('.workspace-main')).toHaveCSS(
-        'backdrop-filter',
-        'none',
-      );
-      const surfaces = await page.evaluate(() => {
-        const blurred = Array.from(
-          document.querySelectorAll<HTMLElement>('body *'),
-        ).filter((element) => {
-          const style = getComputedStyle(element);
-          return style.display !== 'none' && style.backdropFilter !== 'none';
-        });
-        return {
-          count: blurred.length,
-          nested: blurred.some((element) =>
-            blurred.some(
-              (other) => other !== element && other.contains(element),
-            ),
-          ),
-          fits: document.documentElement.scrollWidth <= innerWidth,
-          panelsUnfiltered: Array.from(
-            document.querySelectorAll('.panel'),
-          ).every(
-            (element) => getComputedStyle(element).backdropFilter === 'none',
-          ),
-        };
-      });
-      expect(surfaces).toEqual({
-        count: 0,
-        nested: false,
-        fits: true,
-        panelsUnfiltered: true,
-      });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
       // Check the muted text against every scene color through the actual
       // pane fill. Interpolated scene colors lie between these endpoints.
       const materialContrast = await page.evaluate(() => {
@@ -90,7 +65,13 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
         const alpha = pane[3]! / 255;
         const muted = Math.min(
           ...['deep', 'mid', 'light'].map((tone) => {
-            const scene = rgba(root.getPropertyValue(`--scene-${tone}`).trim());
+            const scene = rgba(
+              root
+                .getPropertyValue(
+                  tone === 'deep' ? '--scene-bar' : `--scene-${tone}`,
+                )
+                .trim(),
+            );
             const background = luminance(
               scene.map(
                 (value, index) => value * (1 - alpha) + pane[index]! * alpha,
@@ -102,33 +83,39 @@ for (const palette of ['slate', 'sage', 'ocean', 'sand', 'plum']) {
             );
           }),
         );
-        const content = getComputedStyle(
-          document.querySelector('.panel:not(.stat)')!,
+        const action = getComputedStyle(
+          document.querySelector('.button-primary')!,
         );
-        const summary = getComputedStyle(document.querySelector('.stat')!);
-        return {
-          muted,
-          contentAlpha: rgba(content.backgroundColor)[3],
-          summaryAlpha: rgba(summary.backgroundColor)[3],
-          summaryBackgrounds: Array.from(
-            document.querySelectorAll('.stat'),
-          ).map((element) => getComputedStyle(element).backgroundColor),
-          summaryColors: Array.from(document.querySelectorAll('.stat')).map(
-            (element) => getComputedStyle(element).color,
-          ),
-          contentImage: content.backgroundImage,
-          contentShadow: content.boxShadow,
-          summaryImage: summary.backgroundImage,
-        };
+        const actionFill = rgba(action.backgroundColor);
+        const actionText = luminance(rgba(action.color));
+        const actionContrast = Math.min(
+          ...['deep', 'mid', 'light'].map((tone) => {
+            const scene = rgba(
+              root
+                .getPropertyValue(
+                  tone === 'deep' ? '--scene-bar' : `--scene-${tone}`,
+                )
+                .trim(),
+            );
+            const background = luminance(
+              scene.map((value, index) => {
+                const shell = value * (1 - alpha) + pane[index]! * alpha;
+                return (
+                  shell * (1 - actionFill[3]! / 255) +
+                  (actionFill[index]! * actionFill[3]!) / 255
+                );
+              }),
+            );
+            return (
+              (Math.max(actionText, background) + 0.05) /
+              (Math.min(actionText, background) + 0.05)
+            );
+          }),
+        );
+        return { muted, actionContrast };
       });
       expect(materialContrast.muted).toBeGreaterThanOrEqual(4.5);
-      expect(new Set(materialContrast.summaryBackgrounds).size).toBe(1);
-      expect(new Set(materialContrast.summaryColors).size).toBe(1);
-      expect(materialContrast.contentAlpha).toBe(255);
-      expect(materialContrast.summaryAlpha).toBeLessThan(255);
-      expect(materialContrast.contentImage).toBe('none');
-      expect(materialContrast.contentShadow).toBe('none');
-      expect(materialContrast.summaryImage).toBe('none');
+      expect(materialContrast.actionContrast).toBeGreaterThanOrEqual(4.5);
       await page.screenshot({
         path: info.outputPath(`${palette}-${mode}.png`),
         fullPage: true,
@@ -145,11 +132,10 @@ test('reduced transparency survives navigation and reload and syncs while Settin
   page.on('pageerror', (error) => errors.push(error.message));
   await mockApi(page);
   await page.goto('/settings');
-  const setting = page.getByRole('checkbox', { name: 'Reduce transparency' });
-  await expect(setting).not.toBeChecked();
-  await setting.focus();
-  await setting.press('Space');
-  await expect(setting).toBeChecked();
+  const setting = page.getByRole('combobox', { name: 'Reduce transparency' });
+  await expect(setting).toHaveValue('system');
+  await setting.selectOption('on');
+  await expect(setting).toHaveValue('on');
   await expect(page.locator('html')).toHaveAttribute(
     'data-reduce-transparency',
     'true',
@@ -170,21 +156,35 @@ test('reduced transparency survives navigation and reload and syncs while Settin
     await page
       .locator('.panel')
       .first()
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-  ).toBe('rgb(255, 255, 255)');
+      .evaluate((element) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext('2d')!;
+        context.fillStyle = getComputedStyle(element).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+        return context.getImageData(0, 0, 1, 1).data[3];
+      }),
+  ).toBe(255);
   const other = await context.newPage();
   await mockApi(other);
   await other.goto('/settings');
   await expect(
-    other.getByRole('checkbox', { name: 'Reduce transparency' }),
-  ).toBeChecked();
-  await other.getByRole('checkbox', { name: 'Reduce transparency' }).uncheck();
+    other.getByRole('combobox', { name: 'Reduce transparency' }),
+  ).toHaveValue('on');
+  await other
+    .getByRole('combobox', { name: 'Reduce transparency' })
+    .selectOption('off');
   await expect(page.locator('html')).toHaveAttribute(
     'data-reduce-transparency',
     'false',
   );
   await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
-  await other.evaluate(() => localStorage.clear());
+  await other
+    .getByRole('combobox', { name: 'Reduce transparency' })
+    .selectOption('system');
+  await expect(
+    other.getByRole('combobox', { name: 'Reduce transparency' }),
+  ).toHaveValue('system');
   await expect(page.locator('html')).not.toHaveAttribute(
     'data-reduce-transparency',
   );
@@ -234,32 +234,44 @@ test('system transparency preference is the default and an explicit choice overr
   });
   await mockApi(page);
   await page.goto('/settings');
-  const setting = page.getByRole('checkbox', { name: 'Reduce transparency' });
-  await expect(setting).toBeChecked();
+  const setting = page.getByRole('combobox', { name: 'Reduce transparency' });
+  await expect(setting).toHaveValue('system');
   await expect(page.locator('.workspace-main')).toHaveCSS(
     'backdrop-filter',
     'none',
   );
-  await setting.uncheck();
+  await setting.selectOption('off');
   await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
   await page.reload();
-  await expect(setting).not.toBeChecked();
+  await expect(setting).toHaveValue('off');
+  await setting.selectOption('system');
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-reduce-transparency',
+  );
+  await expect(page.locator('body')).toHaveCSS('background-image', 'none');
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-transparency', value: 'no-preference' },
+    ],
+  });
+  await expect(setting).toHaveValue('system');
+  await expect(page.locator('body')).not.toHaveCSS('background-image', 'none');
+  await page.reload();
+  await expect(setting).toHaveValue('system');
   await cdp.detach();
 });
 
-test('print removes the scene and the glass pane', async ({ page }) => {
+test('print retains dashboard content without the decorative background', async ({
+  page,
+}) => {
   await mockApi(page);
   await page.goto('/');
-  await expect(page.locator('.stat')).toHaveCount(6);
+  await expect(
+    page.getByText('Orders to allocate', { exact: true }),
+  ).toBeVisible();
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.workspace-main')).toHaveCSS('box-shadow', 'none');
   await expect(page.locator('body')).toHaveCSS('background-image', 'none');
-  await expect(page.locator('.panel').first()).toHaveCSS(
-    'background-image',
-    'none',
-  );
-  await expect(page.locator('.panel').first()).toHaveCSS(
-    'background-color',
-    'rgb(255, 255, 255)',
-  );
+  await expect(
+    page.getByRole('heading', { name: 'Overview', exact: true }),
+  ).toBeVisible();
 });

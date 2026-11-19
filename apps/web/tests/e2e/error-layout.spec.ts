@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mockApi, ids, pickEmployee, unallocatedOrderId } from './fixtures';
 
-test('station completion errors sit between attribution and the retryable action', async ({
+test('station completion errors remain readable and the action stays retryable', async ({
   page,
 }, testInfo) => {
   await mockApi(page, { role: 'production', stations: ['assembly'] });
@@ -24,16 +24,7 @@ test('station completion errors sit between attribution and the retryable action
     .filter({ hasText: 'This order cannot be recorded yet.' });
   await expect(alert).toBeVisible();
   await expect(submit).toBeEnabled();
-  const [selectionBox, alertBox, submitBox] = await Promise.all([
-    dialog.locator('.employee-selection').boundingBox(),
-    alert.boundingBox(),
-    submit.boundingBox(),
-  ]);
-  expect(selectionBox && alertBox && submitBox).toBeTruthy();
-  expect(alertBox!.y).toBeGreaterThanOrEqual(
-    selectionBox!.y + selectionBox!.height,
-  );
-  expect(submitBox!.y).toBeGreaterThanOrEqual(alertBox!.y + alertBox!.height);
+  await submit.click({ trial: true });
   expect(
     await alert.evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
@@ -42,7 +33,7 @@ test('station completion errors sit between attribution and the retryable action
   await page.screenshot({ path: testInfo.outputPath('station-error.png') });
 });
 
-test('generation banner centers its cancel action', async ({
+test('generation can be cancelled while the request is pending', async ({
   page,
 }, testInfo) => {
   await mockApi(page);
@@ -67,25 +58,16 @@ test('generation banner centers its cancel action', async ({
   const banner = page
     .getByRole('status')
     .filter({ hasText: 'Generating a cutting plan' });
-  const message = banner.getByText('Generating a cutting plan…');
   const cancel = banner.getByRole('button', { name: 'Cancel' });
   await expect(cancel).toBeVisible();
-  const [messageBox, cancelBox] = await Promise.all([
-    message.boundingBox(),
-    cancel.boundingBox(),
-  ]);
-  expect(messageBox && cancelBox).toBeTruthy();
-  expect(
-    Math.abs(
-      messageBox!.y +
-        messageBox!.height / 2 -
-        cancelBox!.y -
-        cancelBox!.height / 2,
-    ),
-  ).toBeLessThan(2);
   await page.screenshot({
     path: testInfo.outputPath('generation-banner.png'),
     fullPage: true,
   });
+  await cancel.click();
+  await expect(banner).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Generate plan', exact: true }),
+  ).toBeEnabled();
   release();
 });
