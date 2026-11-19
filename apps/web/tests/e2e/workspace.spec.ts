@@ -165,6 +165,37 @@ test('receipt drafts preserve partial imperial input and unsaved edits on confli
   ).toBeVisible();
   await expect(page.getByLabel('Purchase-order number')).toHaveValue('26049');
 });
+test('submitting a new receipt opens its submitted detail without reloading', async ({
+  page,
+}) => {
+  const state = await mockApi(page);
+  await page.goto('/stock-receipts/new');
+  await page.getByLabel('Purchase-order number').fill('26048');
+  await page.getByRole('combobox', { name: 'Color', exact: true }).click();
+  await page
+    .getByRole('option', { name: 'C1-000 · Linen voile', exact: true })
+    .click();
+  await page.getByLabel('Width (in)', { exact: true }).fill('54');
+  await page.getByLabel('Length per roll (yd)').fill('2.5');
+  await page.getByLabel('Quantity', { exact: true }).fill('2');
+  await page.getByRole('combobox', { name: 'Destination' }).click();
+  await page.getByRole('option', { name: /Warehouse \/ A \// }).click();
+  await page
+    .getByRole('button', { name: 'Submit receipt', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Submit receipt', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: '2 rolls received' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Discard draft' })).toHaveCount(
+    0,
+  );
+  expect(state.stockCreations).toBe(1);
+});
+
 test('receipt submission retries the same saved revision after an uncertain response', async ({
   page,
 }) => {
@@ -445,7 +476,17 @@ test('catalog editing normalizes color codes and retains thousandth-mm thickness
       exact: true,
     })
     .click();
-  await page.getByLabel('Color code', { exact: true }).fill('c2-001');
+  const code = page.getByLabel('Color code', { exact: true });
+  await code.fill('C2 001');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Save record' })
+    .click();
+  await expect(code).toHaveAccessibleDescription(
+    'Use 1–10 letters (A–Z), digits, periods, slashes, or hyphens.',
+  );
+  expect(state.catalogWrites).toHaveLength(0);
+  await code.fill('c2-001');
   await page.getByLabel('Thickness (mm)').fill('0.357');
   await page
     .getByRole('dialog')
