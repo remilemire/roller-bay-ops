@@ -48,7 +48,11 @@ export const createStockItemSchema = z
           'tubeOuterDiameterMm',
           'Unused rolls cannot have a tube diameter.',
         );
-      if (value.isUsed && value.tubeOuterDiameterMm === null)
+      if (
+        value.isUsed &&
+        value.consumedAt === null &&
+        value.tubeOuterDiameterMm === null
+      )
         issue('tubeOuterDiameterMm', 'Used rolls require a tube diameter.');
       if (value.explicitLengthMm !== null)
         issue('explicitLengthMm', 'Explicit length is reserved for remnants.');

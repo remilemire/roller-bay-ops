@@ -124,7 +124,7 @@ export const stockItems = pgTable(
       ) OR (
         NOT ${table.isRemnant} AND (
           (NOT ${table.isUsed} AND ${table.tubeOuterDiameterMm} IS NULL)
-          OR (${table.isUsed} AND ${table.tubeOuterDiameterMm} IS NOT NULL)
+          OR (${table.isUsed} AND (${table.tubeOuterDiameterMm} IS NOT NULL OR ${table.consumedAt} IS NOT NULL))
         )
       )`,
     ),

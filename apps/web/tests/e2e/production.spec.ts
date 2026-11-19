@@ -70,8 +70,20 @@ test('worksheet submission records cutting and sends measurements for office rev
   await page
     .getByLabel('What happened to this stock item?')
     .selectOption('returned-roll');
-  await page.getByLabel('Tube outer diameter (mm)').fill('50');
+  const tube = page.getByLabel('Tube outer diameter (mm)');
   await page.getByLabel('Radial depth (mm)').fill('10');
+  await page.getByRole('button', { name: 'Review and submit results' }).click();
+  await expect(tube).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save progress' }).click();
+  await expect(page.getByText('Progress saved.')).toBeVisible();
+  const outcome = page.getByLabel('What happened to this stock item?');
+  await outcome.selectOption('consumed');
+  await page.getByRole('button', { name: 'Review and submit results' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await outcome.selectOption('returned-roll');
+  await tube.fill('50');
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();
   await page.reload();

@@ -33,7 +33,7 @@ The correction endpoint accepts `changes` containing a nonempty subset of `isUse
 Dimensions are JSON numbers in millimetres with at most three decimal places, up to 999,999,999.999. Width and initial length must be positive. Tube diameter must be positive. Explicit length and radial depth may be zero.
 
 - Remnants require explicit length and cannot have roll depth or a tube diameter, regardless of `isUsed`. A new remnant starts unused independently of its source.
-- Unused rolls (`isUsed: false`) cannot have a tube diameter or depth. Used rolls (`isUsed: true`) require a tube diameter. Submit `isUsed` and the tube diameter together when first recording use. No first-use date is required or stored.
+- Unused rolls (`isUsed: false`) cannot have a tube diameter or depth. Used rolls still in inventory (`isUsed: true`) require a tube diameter. Submit `isUsed` and the tube diameter together when first recording use. No first-use date is required or stored.
 - Every item requires a location. Consumed items retain their last assigned location.
 - Rolls cannot have explicit length. Before measurement, remaining length equals initial length.
 - A measured roll must be marked used and requires radial depth and tube diameter. The API copies the current catalog thickness into `measurementThicknessMm`; PostgreSQL calculates remaining length.

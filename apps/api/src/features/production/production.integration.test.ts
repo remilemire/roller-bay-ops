@@ -509,6 +509,14 @@ test(
             .draft,
           saved.draft,
         );
+        const missingTube = await submit(sheet.id, saved.revision, {
+          ...results,
+          items: results.items.map((item) => ({
+            ...item,
+            tubeOuterDiameterMm: undefined,
+          })),
+        }).expect(400);
+        assert.match(missingTube.body.message, /tube outer diameter/i);
         const submitted = worksheetSchema.parse(
           (await submit(sheet.id, saved.revision, results).expect(201)).body,
         );

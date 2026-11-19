@@ -331,7 +331,14 @@ export function CompletionEditor({
                             onChange={(tube) => change(index, { ...row, tube })}
                             error={fieldError(`items.${index}.tube`)}
                             disabled={stock.tubeOuterDiameterMm !== null}
-                            hint="Required after first use."
+                            required={
+                              row.outcome === 'returned-roll' &&
+                              stock.tubeOuterDiameterMm === null
+                            }
+                            optional={
+                              row.outcome === 'consumed' &&
+                              stock.tubeOuterDiameterMm === null
+                            }
                           />
                         )}
                         {row.outcome === 'returned-roll' && (

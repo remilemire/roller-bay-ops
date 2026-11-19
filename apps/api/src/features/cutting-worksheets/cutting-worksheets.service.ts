@@ -287,6 +287,23 @@ export class CuttingWorksheetsService {
       throw new BadRequestException(
         'Results must match the saved cutting sheet and stock revisions.',
       );
+    for (const [index, item] of input.results.items.entries()) {
+      if (
+        item.outcome !== 'returned-roll' ||
+        item.tubeOuterDiameterMm !== undefined
+      )
+        continue;
+      const saved = row.snapshot.items.find(
+        (planned) => planned.stockItemId === item.stockItemId,
+      );
+      if (saved?.stockItem.tubeOuterDiameterMm == null) {
+        const message = 'Enter the tube outer diameter for the returned roll.';
+        throw new BadRequestException({
+          message,
+          issues: [{ path: ['items', index, 'tubeOuterDiameterMm'], message }],
+        });
+      }
+    }
     const result = presentWorksheet(
       await context.cuttingWorksheets.update(id, {
         results: input.results,

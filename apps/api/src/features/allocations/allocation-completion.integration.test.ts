@@ -161,7 +161,14 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
       }).expect(400);
       await post(`${path}/${allocation.id}/complete`, {
         expectedRevision: 1,
-        items: [consumed],
+        items: [
+          {
+            ...consumed,
+            outcome: 'returned-roll',
+            radialDepthMm: 10,
+            locationId: allocation.items[0]!.stockItem.locationId,
+          },
+        ],
       }).expect(400);
       await post(`${path}/${allocation.id}/complete`, {
         expectedRevision: 1,
@@ -179,7 +186,7 @@ test('allocation completion integration', { timeout: 60_000 }, async (t) => {
       }).expect(409);
       const complete = await post(`${path}/${allocation.id}/complete`, {
         expectedRevision: 1,
-        items: [{ ...consumed, tubeOuterDiameterMm: 50 }],
+        items: [consumed],
       }).expect(200);
       assert.equal(complete.body.items[0].stockItem.remainingLengthMm, 0);
       const remnantId = await seed(1000, true);

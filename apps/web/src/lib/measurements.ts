@@ -169,7 +169,7 @@ export const measurementHelp = {
   edgeTrim:
     "Width removed from each outside edge of the fabric before blinds are placed. Applied once per edge, not per blind. Applied automatically; it can't be changed on the order.",
   tubeDiameter:
-    "The outside diameter of the cardboard tube the fabric is wound on, not its hollow centre. Record it after a roll's first cut; it stays the same for that roll.",
+    'The outside diameter of the cardboard tube the fabric is wound on, not its hollow centre. Record it the first time the roll returns to storage after cutting.',
   radialDepth:
     'Distance from the tube surface to the outside of the fabric, measured on one side only: (roll diameter − tube diameter) ÷ 2. Used to calculate the remaining length.',
 } satisfies Partial<Record<MeasurementField, string>>;

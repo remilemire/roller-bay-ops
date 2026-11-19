@@ -92,7 +92,7 @@ export function CuttingInstructions({
                   <dt className="detail-label">Tube outer diameter</dt>
                   <dd className="detail-value">
                     {item.stockItem.tubeOuterDiameterMm === null
-                      ? 'New roll: measure after the first cut.'
+                      ? 'Measure if returning this roll to storage.'
                       : fieldLabel(
                           units,
                           'tubeDiameter',

@@ -122,7 +122,7 @@ Completion takes `{ expectedRevision, items, unusedStockItemIds? }`. For each pl
 
 - `outcome: "returned-roll"`: positive `radialDepthMm`, `locationId`, and `tubeOuterDiameterMm` if not already known. Depth is the one-sided reading `(outer − tube) / 2`. The current catalog thickness is saved with the measurement and the database calculates remaining length.
 - `outcome: "returned-remnant"`: positive `widthMm`, `explicitLengthMm`, and `locationId`. Width cannot exceed the original width. Roll measurement fields are not accepted.
-- `outcome: "consumed"`: marks the existing stock item consumed. A previously unused roll still requires its tube diameter, including when fully consumed, to satisfy the established used-roll invariant. Its remaining length becomes zero; its last location remains recorded.
+- `outcome: "consumed"`: marks the existing stock item consumed. The tube diameter is optional when the roll is fully consumed. Its remaining length becomes zero; its last location remains recorded.
 - `scraps`: retained pieces, each with positive `widthMm`, `lengthMm`, `locationId`, and optional `quantity` (default 1). Each piece becomes a distinct used remnant with the source fabric color and `sourceStockItemId`. At most 1,000 pieces may be created by one completion.
 
 Known tube diameters cannot change through completion and must be positive. To turn a remaining roll into flat pieces, mark the roll consumed and enter the pieces as scraps. Estimated cut lengths are never subtracted from measured balances, and calculated plan leftovers are never automatically added to inventory.

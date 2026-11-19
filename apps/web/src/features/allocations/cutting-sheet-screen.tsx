@@ -251,7 +251,7 @@ function StockPanel({
                   label={`Tube outer diameter (${fieldSuffix(units, 'tubeDiameter')})`}
                   hint={
                     stock.tubeOuterDiameterMm === null
-                      ? 'New roll: measure after the first cut.'
+                      ? 'Measure if returning this roll to storage.'
                       : undefined
                   }
                 >
