@@ -305,6 +305,16 @@ export async function mockApi(
     );
     if (productionList) {
       const station = productionList[1] as Station;
+      const worksheetFor = (orderId: string) =>
+        state.worksheets.find(
+          (sheet) =>
+            sheet.workOrderId === orderId &&
+            sheet.allocationId === state.allocation.id &&
+            !state.allocation.releasedAt &&
+            !state.allocation.cancelledAt &&
+            !sheet.abandonedAt &&
+            !sheet.skippedAt,
+        );
       const view = url.searchParams.get('view');
       const search = url.searchParams.get('search') ?? '';
       return send(
@@ -316,15 +326,16 @@ export async function mockApi(
                 o.orderNumber.includes(search) &&
                 (view !== 'queue' ||
                   (!o.shippedAt &&
+                    !(
+                      station === 'cutting' && worksheetFor(o.id)?.submittedAt
+                    ) &&
                     !state.productionCompletions.some(
                       (c) => c.workOrderId === o.id && c.station === station,
                     ))),
             )
             .map((o) => ({
               ...o,
-              hasCuttingWorksheet: state.worksheets.some(
-                (w) => w.workOrderId === o.id && !w.abandonedAt && !w.skippedAt,
-              ),
+              hasCuttingWorksheet: !!worksheetFor(o.id),
               completions: state.productionCompletions.filter(
                 (c) => c.workOrderId === o.id,
               ),

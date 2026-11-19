@@ -233,7 +233,7 @@ function CancellationForm({
                 className="text-link"
                 href={
                   original.worksheet
-                    ? `/stations/review?worksheet=${original.worksheet.id}`
+                    ? `/stations/review/${original.worksheet.id}`
                     : `/allocations/${original.allocation!.id}`
                 }
               >

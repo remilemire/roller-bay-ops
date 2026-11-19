@@ -871,24 +871,24 @@ test(
         for (const state of ['submitted', 'returned', 'reviewed']) {
           const allocation = await create(await input(await seed()));
           const orderId = allocation.workOrderId;
-          const queueOrder = async () => {
-            const order = (await get(`/api/work-orders/${orderId}`).expect(200))
-              .body;
-            const queue = (
+          const stationOrders = async (
+            view: 'queue' | 'all',
+            station = 'cutting',
+          ) =>
+            (
               await get(
-                `/api/production/cutting/orders?search=${order.orderNumber}`,
+                `/api/production/${station}/orders?view=${view}&search=${allocation.orderNumber}`,
               ).expect(200)
             ).body;
-            return queue.items.find(
-              (item: { id: string }) => item.id === orderId,
-            );
-          };
           const sheet = (
             await post(`/api/production/cutting/orders/${orderId}/worksheet`, {
               employeeIds: [other.id],
             }).expect(201)
           ).body;
-          assert.equal((await queueOrder()).hasCuttingWorksheet, true);
+          assert.equal(
+            (await stationOrders('queue')).items[0].hasCuttingWorksheet,
+            true,
+          );
           let saved = (
             await post(
               `/api/production/cutting/worksheets/${sheet.id}/submit`,
@@ -937,7 +937,14 @@ test(
             completedAt: null,
             reason: 'Remove mistaken milestone',
           }).expect(201);
-          assert.equal((await queueOrder()).hasCuttingWorksheet, true);
+          const queue = await stationOrders('queue');
+          assert.equal(queue.total, state === 'returned' ? 1 : 0);
+          assert.equal(queue.items.length, queue.total);
+          assert.equal(
+            (await stationOrders('all')).items[0].hasCuttingWorksheet,
+            true,
+          );
+          assert.equal((await stationOrders('queue', 'assembly')).total, 1);
           const stockBefore = (
             await pool.query('SELECT * FROM fabric_stock_items WHERE id=$1', [
               allocation.items[0]!.stockItemId,

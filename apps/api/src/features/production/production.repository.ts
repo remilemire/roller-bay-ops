@@ -5,14 +5,17 @@ import {
   asc,
   count,
   eq,
+  exists,
   gte,
   ilike,
   inArray,
   isNotNull,
   isNull,
   lt,
+  not,
   sql,
 } from 'drizzle-orm';
+import { allocations } from '../allocations/tables.js';
 import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { milestoneTimestampField, workOrders } from '../work-orders/tables.js';
@@ -29,6 +32,29 @@ export class ProductionRepository {
   /** A page of the station's orders by id, with the station's own data. */
   async list(station: Station, query: StationQuery) {
     const stamp = workOrders[milestoneTimestampField[station]];
+    // A released plan's sheet is history, even when the same order is allocated again.
+    const hasWorksheet = (submittedOnly: boolean) =>
+      exists(
+        this.db
+          .select({ id: cuttingWorksheets.id })
+          .from(cuttingWorksheets)
+          .innerJoin(
+            allocations,
+            eq(allocations.id, cuttingWorksheets.allocationId),
+          )
+          .where(
+            and(
+              eq(cuttingWorksheets.workOrderId, workOrders.id),
+              isNull(allocations.cancelledAt),
+              isNull(allocations.releasedAt),
+              isNull(cuttingWorksheets.abandonedAt),
+              isNull(cuttingWorksheets.skippedAt),
+              submittedOnly
+                ? isNotNull(cuttingWorksheets.submittedAt)
+                : undefined,
+            ),
+          ),
+      );
     const where = and(
       isNull(workOrders.deletedAt),
       isNull(workOrders.cancelledAt),
@@ -37,7 +63,11 @@ export class ProductionRepository {
         ? ilike(workOrders.orderNumber, `%${query.search}%`)
         : undefined,
       query.view === 'queue'
-        ? and(isNull(stamp), isNull(workOrders.shippedAt))
+        ? and(
+            isNull(stamp),
+            isNull(workOrders.shippedAt),
+            station === 'cutting' ? not(hasWorksheet(true)) : undefined,
+          )
         : undefined,
       query.view === 'completed'
         ? and(gte(stamp, new Date(query.from!)), lt(stamp, new Date(query.to!)))
@@ -46,9 +76,7 @@ export class ProductionRepository {
     const rows = await this.db
       .select({
         id: workOrders.id,
-        // Qualify the outer id explicitly: select-field SQL otherwise loses table
-        // qualifiers and the subquery compares worksheet.work_order_id to its own id.
-        hasCuttingWorksheet: sql<boolean>`EXISTS (SELECT 1 FROM ${cuttingWorksheets} WHERE ${cuttingWorksheets.workOrderId} = ${sql.identifier('work_orders')}.${sql.identifier('id')} AND ${cuttingWorksheets.abandonedAt} IS NULL AND ${cuttingWorksheets.skippedAt} IS NULL)`,
+        hasCuttingWorksheet: sql<boolean>`${hasWorksheet(false)}`,
       })
       .from(workOrders)
       .where(where)

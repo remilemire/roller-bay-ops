@@ -137,7 +137,7 @@ test('worksheet submission records cutting and sends measurements for office rev
   expect(state.completionRequests).toHaveLength(0);
   state.role = 'admin';
   await page.goto('/stations/review');
-  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByRole('link', { name: 'Open', exact: true }).click();
   const reconcile = page.getByRole('button', {
     name: 'Accept and reconcile inventory',
     exact: true,
@@ -165,7 +165,7 @@ test('worksheet submission records cutting and sends measurements for office rev
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
   state.role = 'admin';
   await page.goto('/stations/review');
-  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByRole('link', { name: 'Open', exact: true }).click();
   await page
     .getByRole('button', { name: 'Accept and reconcile inventory' })
     .click();
@@ -314,6 +314,8 @@ test('clean cutter follows office returns while background refresh preserves dir
   });
   state.worksheets.push(submittedSheet(state));
   await page.goto('/stations');
+  await expect(page.getByText('No matching orders.')).toBeVisible();
+  await page.getByRole('button', { name: 'All allocated orders' }).click();
   await page
     .getByRole('button', { name: 'Record cutting', exact: true })
     .click();
@@ -353,7 +355,7 @@ test('clean cutter follows office returns while background refresh preserves dir
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('20');
 });
 
-test('review order switches protect unsaved resolution measurements', async ({
+test('leaving a worksheet review protects unsaved replacement measurements', async ({
   page,
 }) => {
   const state = await mockApi(page);
@@ -364,6 +366,12 @@ test('review order switches protect unsaved resolution measurements', async ({
     orderNumber: '104802',
   });
   await page.goto(`/stations/review?worksheet=${first.id}`);
+  await expect(page).toHaveURL(`/stations/review/${first.id}`);
+  await expect(page.getByRole('row', { name: /104802/ })).toHaveCount(0);
+  const queue = page.getByRole('link', {
+    name: 'Review cutting results',
+    exact: true,
+  });
   await page.getByLabel('Reason for correction').fill('Measured again');
   await page
     .getByRole('button', { name: 'Replace with new measurements' })
@@ -373,19 +381,22 @@ test('review order switches protect unsaved resolution measurements', async ({
     .selectOption('returned-roll');
   await page.getByLabel('Radial depth (mm)').fill('12');
   page.once('dialog', (dialog) => dialog.dismiss());
-  await page
-    .getByRole('row', { name: /104802/ })
-    .getByRole('button', { name: 'Open' })
-    .click();
+  await queue.click();
   await expect(page.getByLabel('Radial depth (mm)')).toHaveValue('12');
   await expect(page).toHaveURL(new RegExp(first.id));
   page.once('dialog', (dialog) => dialog.accept());
+  await queue.click();
+  await expect(page).toHaveURL('/stations/review');
   await page
     .getByRole('row', { name: /104802/ })
-    .getByRole('button', { name: 'Open' })
+    .getByRole('link', { name: 'Open' })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Order 104802' }),
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Cutting results · 104802',
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -416,7 +427,7 @@ test('reconciliation retries the original keyed resolution after reload even whe
       });
     },
   );
-  await page.goto(`/stations/review?worksheet=${sheet.id}`);
+  await page.goto(`/stations/review/${sheet.id}`);
   await page
     .getByLabel('Reason for correction')
     .fill('Fresh physical measurements');
@@ -540,6 +551,8 @@ test('a cleared cut can be recorded manually while keeping the previous workshee
   state.worksheets.push(sheet);
   state.orders[0]!.cutAt = null;
   await page.goto('/stations');
+  await expect(page.getByText('No matching orders.')).toBeVisible();
+  await page.getByRole('button', { name: 'All allocated orders' }).click();
   await page
     .getByRole('button', { name: 'Record cutting', exact: true })
     .click();
@@ -663,32 +676,39 @@ test('completion attribution belongs to the selected order and cancelled forms d
   expect(state.orders[0]!.assembledAt).toBeNull();
 });
 
-test('manual allocation results link only to an existing worksheet and protect unsaved input', async ({
+test('manual reconciliation links to submitted results and protects unsaved measurements', async ({
   page,
 }, info) => {
   const state = await mockApi(page);
-  await page.goto(
-    `/allocations/${ids.allocation}?action=record-cutting-results`,
-  );
-  await expect(
-    page.getByRole('heading', { name: 'Reconcile 104801', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: 'Open cutting worksheet', exact: true }),
-  ).toHaveCount(0);
-  const sheet = submittedSheet(state);
-  sheet.submittedAt = null;
-  sheet.results = null;
-  state.worksheets.push(sheet);
-  await page.reload();
   const shortcut = page.getByRole('link', {
-    name: 'Open cutting worksheet',
+    name: 'Review submitted worksheet',
     exact: true,
   });
-  await expect(shortcut).toBeVisible();
+  const openManualResults = async () => {
+    const response = page.waitForResponse((r) =>
+      r.url().endsWith(`/orders/${ids.order}/worksheet`),
+    );
+    await page.goto(
+      `/allocations/${ids.allocation}?action=record-cutting-results`,
+    );
+    await response;
+    await expect(
+      page.getByRole('heading', { name: 'Reconcile 104801', exact: true }),
+    ).toBeVisible();
+  };
+  await openManualResults();
+  await expect(shortcut).toHaveCount(0);
+  const sheet = submittedSheet(state);
+  const submittedAt = sheet.submittedAt;
+  sheet.submittedAt = null;
+  state.worksheets.push(sheet);
+  await openManualResults();
+  await expect(shortcut).toHaveCount(0);
+  sheet.submittedAt = submittedAt;
+  await openManualResults();
   await expect(shortcut).toHaveAttribute(
     'href',
-    `/stations/cutting/${ids.order}`,
+    `/stations/review/${sheet.id}`,
   );
   await page
     .getByLabel('What happened to this stock item?')
@@ -703,7 +723,14 @@ test('manual allocation results link only to an existing worksheet and protect u
   );
   page.once('dialog', (dialog) => dialog.accept());
   await shortcut.click();
-  await expect(page).toHaveURL(new RegExp(`/stations/cutting/${ids.order}$`));
+  await expect(page).toHaveURL(`/stations/review/${sheet.id}`);
+  await expect(
+    page.getByRole('button', { name: 'Accept and reconcile inventory' }),
+  ).toBeEnabled();
+  await page.getByLabel('Reason for correction').fill('Verify roll depth');
+  await expect(
+    page.getByRole('button', { name: 'Return for correction' }),
+  ).toBeEnabled();
   expect(state.worksheets).toHaveLength(1);
   await page.screenshot({
     path: info.outputPath('existing-cutting-worksheet.png'),
@@ -723,7 +750,7 @@ test('review summarizes empty remnants and separates replacement measurements fr
     scraps: [],
   };
   state.worksheets.push(sheet);
-  await page.goto(`/stations/review?worksheet=${sheet.id}`);
+  await page.goto(`/stations/review/${sheet.id}`);
   const results = page.locator('.cutting-review-results');
   await expect(
     results.getByText('Fully consumed', { exact: true }),
@@ -752,7 +779,7 @@ test('review summarizes empty remnants and separates replacement measurements fr
     page
       .getByRole('navigation', { name: 'Breadcrumb', exact: true })
       .locator('[aria-current="page"]'),
-  ).toHaveText('Review cutting results');
+  ).toHaveText('Cutting results · 104801');
   await page.screenshot({
     path: info.outputPath('readable-cutting-review.png'),
     fullPage: true,
