@@ -170,6 +170,18 @@ test('worksheet submission records cutting and sends measurements for office rev
     .getByRole('button', { name: 'Submit results', exact: true })
     .click();
   await expect(page.getByText(/Results awaiting office review/)).toBeVisible();
+  const affectedId = '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  state.allocation = {
+    ...state.allocation,
+    state: 'completed',
+    completedAt: cutAt,
+    completion: {
+      submittedByUserId: ids.user,
+      items: state.worksheets[0]!.results!.items,
+      createdStockItemIds: [],
+      affectedAllocationIds: [affectedId],
+    },
+  };
   state.role = 'staff';
   await page.goto('/stations/review');
   await page.getByRole('link', { name: 'Open', exact: true }).click();
@@ -179,6 +191,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await expect(
     page.getByRole('button', { name: 'Inventory reconciled', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'View allocation 11111111' }),
+  ).toHaveAttribute('href', `/allocations/${affectedId}`);
   expect(state.worksheets[0]!.reviewedAt).not.toBeNull();
   expect(state.orders[0]!.cutAt).toBe(cutAt);
   expect(

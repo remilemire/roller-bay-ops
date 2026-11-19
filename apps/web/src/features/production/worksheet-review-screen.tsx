@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import { shortId } from '@/lib/format';
 import { TextField } from '@/components/ui/field';
 import {
   allocationDetail,
@@ -148,6 +150,9 @@ export function WorksheetReviewScreen({
             </Button>
           </div>
           {review.isSuccess && <p role="status">Inventory reconciled.</p>}
+          {sheet.reviewedAt && (
+            <ReplanningNotice allocationId={sheet.allocationId} />
+          )}
         </div>
         {canCorrect && (
           <div className="review-corrections">
@@ -223,6 +228,38 @@ export function WorksheetReviewScreen({
         />
       )}
     </section>
+  );
+}
+
+function ReplanningNotice({ allocationId }: { allocationId: string }) {
+  const query = useQuery(allocationDetail(allocationId));
+  if (query.isPending) return <Loading />;
+  if (query.error)
+    return (
+      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+    );
+  const affected =
+    query.data.state === 'completed'
+      ? query.data.completion?.affectedAllocationIds
+      : undefined;
+  if (!affected?.length) return null;
+  return (
+    <div className="notice notice-warning" role="status">
+      <div>
+        <strong>
+          Allocations flagged for replanning by this reconciliation
+        </strong>
+        <ul>
+          {affected.map((id) => (
+            <li key={id}>
+              <Link className="text-link" href={`/allocations/${id}`}>
+                View allocation {shortId(id)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 
