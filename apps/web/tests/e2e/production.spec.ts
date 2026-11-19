@@ -159,7 +159,8 @@ test('worksheet submission records cutting and sends measurements for office rev
     page.getByRole('button', { name: 'Abandon unused sheet' }),
   ).toHaveCount(0);
   state.role = 'production';
-  await page.goto(`/stations/cutting/${ids.order}`);
+  await page.goto('/stations?station=cutting');
+  await page.getByRole('link', { name: 'Correct returned worksheet' }).click();
   await page.getByLabel('Radial depth (mm)').fill('12');
   await page.getByRole('button', { name: 'Save progress' }).click();
   await expect(page.getByText('Progress saved.')).toBeVisible();

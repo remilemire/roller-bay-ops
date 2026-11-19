@@ -315,6 +315,10 @@ export async function mockApi(
             !sheet.abandonedAt &&
             !sheet.skippedAt,
         );
+      const needsCorrection = (id: string) => {
+        const sheet = worksheetFor(id);
+        return !!sheet?.results && !sheet.submittedAt;
+      };
       const view = url.searchParams.get('view');
       const search = url.searchParams.get('search') ?? '';
       return send(
@@ -325,6 +329,7 @@ export async function mockApi(
                 o.allocatedAt &&
                 o.orderNumber.includes(search) &&
                 (view !== 'queue' ||
+                  (station === 'cutting' && needsCorrection(o.id)) ||
                   (!o.shippedAt &&
                     !(
                       station === 'cutting' && worksheetFor(o.id)?.submittedAt
@@ -336,6 +341,7 @@ export async function mockApi(
             .map((o) => ({
               ...o,
               hasCuttingWorksheet: !!worksheetFor(o.id),
+              worksheetNeedsCorrection: needsCorrection(o.id),
               completions: state.productionCompletions.filter(
                 (c) => c.workOrderId === o.id,
               ),
