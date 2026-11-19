@@ -9,6 +9,7 @@ import { validateCuttingPlan } from '../cutting-plan/cutting-plan.validator.js';
 import type { CuttingModel } from './cutting-model.js';
 import type { ValidatedCuttingPlan } from './cutting-plan-optimizer.types.js';
 import { CuttingOptimizationError } from './optimization.errors.js';
+import { cuttingPlanScore } from './cutting-plan-score.js';
 
 type Solution = Extract<SolveResult, { status: 'optimal' | 'feasible' }>;
 
@@ -52,12 +53,7 @@ export function decodeSolution(
   const validated = validateCuttingPlan(context, plan);
   if (!validated.valid) return fail();
   const { summary } = validated;
-  const expected = [
-    BigInt(summary.wasteAreaMm2.replace('.', '')),
-    BigInt(summary.newRollCount),
-    BigInt(summary.cutCount),
-    BigInt(summary.stockItemCount),
-  ];
+  const expected = cuttingPlanScore(summary);
   for (const [index, terms] of model.objectives.entries()) {
     let value = 0n;
     for (const term of terms) {
@@ -65,7 +61,7 @@ export function decodeSolution(
       if (count === undefined || !Number.isSafeInteger(count)) fail();
       value += BigInt(term.coefficient) * BigInt(count!);
     }
-    if (index === 0) value *= model.wasteUnit;
+    if (index === 1) value *= model.wasteUnit;
     if (value !== expected[index]) fail();
   }
   return { status: 'feasible', plan, summary };

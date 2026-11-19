@@ -15,21 +15,14 @@ import {
   parseOptimizationContext,
   parseOptimizationOptions,
 } from './optimization.input.js';
+import { cuttingPlanScore } from './cutting-plan-score.js';
 
-function score({ summary }: ValidatedCuttingPlan) {
-  return [
-    BigInt(summary.wasteAreaMm2.replace('.', '')),
-    BigInt(summary.newRollCount),
-    BigInt(summary.cutCount),
-    BigInt(summary.stockItemCount),
-  ];
-}
 function improves(
   candidate: ValidatedCuttingPlan,
   baseline: ValidatedCuttingPlan,
 ) {
-  const current = score(baseline);
-  for (const [i, value] of score(candidate).entries()) {
+  const current = cuttingPlanScore(baseline.summary);
+  for (const [i, value] of cuttingPlanScore(candidate.summary).entries()) {
     if (value !== current[i]) return value < current[i]!;
   }
   return false;
@@ -82,7 +75,7 @@ export class CuttingPlanOptimizer {
       await this.refinement.optimize(
         context,
         { signal, maxTimeSeconds: seconds },
-        first.plan,
+        first,
         (candidate) => {
           if (improves(candidate, best)) best = candidate;
         },

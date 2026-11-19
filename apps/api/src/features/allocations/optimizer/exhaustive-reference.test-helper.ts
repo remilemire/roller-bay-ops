@@ -10,8 +10,8 @@ import {
   toMillimetres,
 } from '../cutting-plan/cutting-dimensions.js';
 export const score = (summary: CuttingPlanSummary) => [
-  BigInt(summary.wasteAreaMm2.replace('.', '')),
   BigInt(summary.newRollCount),
+  BigInt(summary.wasteAreaMm2.replace('.', '')),
   BigInt(summary.cutCount),
   BigInt(summary.stockItemCount),
 ];

@@ -22,7 +22,12 @@ export interface ModeledAssignment extends PatternAssignment {
 export interface CuttingModel {
   model: SolverModel;
   assignments: ModeledAssignment[];
-  objectives: readonly [Terms, Terms, Terms, Terms];
+  objectives: readonly [
+    opened: Terms,
+    waste: Terms,
+    cuts: Terms,
+    handled: Terms,
+  ];
   wasteUnit: bigint;
   complete: boolean;
 }
@@ -232,8 +237,8 @@ function compile(
   const wasteUnit =
     waste.reduce((unit, item) => gcd(unit, item.coefficient), 0n) || 1n;
   const objectives: CuttingModel['objectives'] = [
-    builder.terms(waste, wasteUnit),
     builder.terms(opened),
+    builder.terms(waste, wasteUnit),
     builder.terms(
       assignments.map((item) => ({ variable: item.variable, coefficient: 1n })),
     ),

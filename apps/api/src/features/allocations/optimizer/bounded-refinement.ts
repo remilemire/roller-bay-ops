@@ -1,14 +1,11 @@
 /**
- * Builds bounded cutting candidates, then minimizes waste, new rolls, cuts, and
+ * Builds bounded cutting candidates, then minimizes new rolls, waste, cuts, and
  * stock handling in successive solver passes. Only proven objective values are
  * locked. Every incumbent is decoded and independently validated before return.
  */
 import { planningDefaults } from '../../../config/planning.js';
 import { setImmediate } from 'node:timers/promises';
-import type {
-  CuttingContext,
-  CuttingPlan,
-} from '@roller-bay/shared/allocations';
+import type { CuttingContext } from '@roller-bay/shared/allocations';
 import type { SolverClient } from '../../../solver/solver.client.js';
 import { SolverError } from '../../../solver/solver.errors.js';
 import { solverModelSchema } from '../../../solver/solver.contracts.js';
@@ -41,16 +38,23 @@ export class BoundedRefinement {
   async optimize(
     context: CuttingContext,
     optionsInput: CuttingOptimizationOptions = {},
-    seed?: CuttingPlan,
+    seed?: ValidatedCuttingPlan,
     onValidated?: (result: ValidatedCuttingPlan) => void,
   ): Promise<BoundedOptimizationResult> {
     const options = parseOptimizationOptions(optionsInput);
     checkCancellation(options.signal);
     const candidates = await generatePatterns(
-      context,
+      seed?.summary.newRollCount === 0
+        ? {
+            ...context,
+            stockItems: context.stockItems.filter(
+              (stock) => stock.isUsed || stock.isRemnant,
+            ),
+          }
+        : context,
       options.signal,
       this.limits,
-      seed,
+      seed?.plan,
     );
     if (candidates.impossible) return { status: 'infeasible' };
     const compiled = buildCuttingModel(context, candidates);
@@ -60,7 +64,19 @@ export class BoundedRefinement {
     let remaining =
       options.maxTimeSeconds ?? planningDefaults.CUTTING_REFINEMENT_SECONDS;
     let incumbent: ValidatedCuttingPlan | undefined;
-    for (const terms of compiled.objectives) {
+    // Feasibility has already proved the exact opening count on the full
+    // inventory. Lock it before spending any solver time on waste.
+    if (seed) {
+      compiled.model.constraints.push({
+        terms: compiled.objectives[0],
+        operator: '==',
+        rhs: seed.summary.newRollCount,
+      });
+    }
+    const objectives = seed
+      ? compiled.objectives.slice(1)
+      : compiled.objectives;
+    for (const terms of objectives) {
       checkCancellation(options.signal);
       if (remaining <= 0) break;
       if (incumbent && !terms.length) continue;

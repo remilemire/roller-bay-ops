@@ -39,6 +39,80 @@ test('backtracks past a failed first fit and proves an equal-area shortage', asy
     status: 'infeasible',
   });
 });
+test('backtracks on used stock before opening a sealed roll even when the sealed layout is simpler', async () => {
+  const context = tight([2, 6, 3, 2, 1, 5, 9, 2]);
+  const used = context.stockItems[0]!;
+  used.remainingLengthMm = 9;
+  context.stockItems.push({ ...used, id: id(21), widthMm: 32, isUsed: false });
+  const counts = { placements: 0, backtracks: 0 };
+  const result = await findFeasiblePlan(context, undefined, counts);
+  assert.equal(result.status, 'feasible');
+  if (result.status !== 'feasible') return;
+  assert.ok(counts.backtracks > 0);
+  assert.equal(result.summary.newRollCount, 0);
+  assert.deepEqual(
+    new Set(result.plan.cuts.map((c) => c.stockItemId)),
+    new Set([used.id]),
+  );
+});
+
+test('a necessary roll must fit the whole color allocation within the minimum number of openings', async () => {
+  const context = tight([8, 4, 4]);
+  const base = context.stockItems[0]!;
+  context.stockItems = [
+    {
+      ...base,
+      widthMm: 10,
+      remainingLengthMm: 3,
+      reservedLengthMm: 1,
+      isRemnant: true,
+    },
+    { ...base, id: id(21), widthMm: 6, remainingLengthMm: 9, isUsed: false },
+    { ...base, id: id(22), widthMm: 10, remainingLengthMm: 6, isUsed: false },
+    {
+      ...base,
+      id: id(23),
+      widthMm: 10,
+      remainingLengthMm: 6,
+      reservedLengthMm: 3,
+      isUsed: false,
+    },
+  ];
+  const result = await findFeasiblePlan(context);
+  assert.equal(result.status, 'feasible');
+  if (result.status !== 'feasible') return;
+  assert.equal(result.summary.newRollCount, 1);
+  assert.deepEqual(
+    new Set(result.plan.cuts.map((c) => c.stockItemId)),
+    new Set([id(22)]),
+  );
+});
+
+test('512 blinds use sixteen opened items before exactly the necessary extra rolls', async () => {
+  const context = fixture();
+  const base = context.stockItems[0]!;
+  context.stockItems = Array.from({ length: 207 }, (_, i) => ({
+    ...base,
+    id: id(20 + i),
+    remainingLengthMm: i < 16 ? 24 : 96,
+    isRemnant: i < 8,
+    isUsed: i >= 8 && i < 16,
+  }));
+  // Two blinds per cut. Open stock carries 256 blinds and each sealed roll 64.
+  for (const [quantity, openings] of [
+    [256, 0],
+    [257, 1],
+    [512, 4],
+  ] as const) {
+    context.requirements[0]!.quantity = quantity;
+    const result = await new CuttingPlanOptimizer(null).optimize(context);
+    assert.equal(result.status, 'feasible');
+    if (result.status !== 'feasible') return;
+    assert.equal(result.summary.newRollCount, openings);
+    assert.ok(validateCuttingPlan(context, result.plan).valid);
+  }
+});
+
 test('agrees with independent exhaustive partitions on 1000 seeded small orders', async () => {
   let seed = 4219,
     feasible = 0;
@@ -51,7 +125,7 @@ test('agrees with independent exhaustive partitions on 1000 seeded small orders'
     context.requirements = Array.from({ length: 1 + random(4) }, (_, j) => ({
       ...context.requirements[0]!,
       id: id(j + 1),
-      fabricColorId: id(10 + random(2)),
+      fabricColorId: id(10 + (i % 2 ? 0 : random(2))),
       widthMm: 1 + random(6),
       lengthMm: 1 + random(5),
       lengthAllowanceMm: random(2) * 0.125,
@@ -60,14 +134,15 @@ test('agrees with independent exhaustive partitions on 1000 seeded small orders'
     context.stockItems = Array.from({ length: 2 + random(2) }, (_, j) => ({
       ...context.stockItems[0]!,
       id: id(20 + j),
-      fabricColorId: id(10 + (j % 2)),
+      fabricColorId: id(10 + (i % 2 ? 0 : j % 2)),
       isRemnant: random(4) === 0,
+      isUsed: random(2) === 0,
       voidedAt: random(16) === 0 ? '2026-11-01T00:00:00Z' : null,
       reservedLengthMm: random(3),
       widthMm: 3 + random(9),
       remainingLengthMm: 2 + random(12),
     }));
-    const expected = exhaustiveReference(context) !== null;
+    const expected = exhaustiveReference(context);
     const actual = await findFeasiblePlan(context);
     assert.equal(
       actual.status,
@@ -76,6 +151,11 @@ test('agrees with independent exhaustive partitions on 1000 seeded small orders'
     );
     if (actual.status === 'feasible') {
       feasible++;
+      assert.equal(
+        BigInt(actual.summary.newRollCount),
+        expected![0],
+        `opening count for fixture ${i}`,
+      );
       assert.ok(validateCuttingPlan(context, actual.plan).valid);
     }
   }

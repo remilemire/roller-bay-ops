@@ -46,18 +46,65 @@ test('cutting optimizer against the real solver service', async (t) => {
     },
   );
   await t.test(
-    'less waste wins even when it requires opening a new roll',
+    'both the first and refined plan preserve a sealed roll even when opening it wastes less',
+    async () => {
+      for (const isRemnant of [false, true]) {
+        const context = fixture();
+        Object.assign(context.stockItems[0]!, {
+          widthMm: 7,
+          remainingLengthMm: 6,
+          isRemnant,
+        });
+        context.stockItems.push({
+          ...context.stockItems[0]!,
+          id: id(21),
+          widthMm: 10,
+          isUsed: false,
+          isRemnant: false,
+        });
+        const freshOnly = await compare({
+          ...context,
+          stockItems: context.stockItems.slice(1),
+        });
+        assert.equal(freshOnly?.summary.wasteAreaMm2, '6.000000');
+        const expected = exhaustiveReference(context);
+        const first: number[] = [];
+        const result = await optimizer.optimize(context, {}, async (plan) => {
+          first.push(plan.summary.newRollCount);
+        });
+        assert.deepEqual(first, [0]);
+        assert.equal(result.status, 'feasible');
+        if (result.status !== 'feasible') return;
+        assert.deepEqual(score(result.summary), expected);
+        assert.equal(result.summary.newRollCount, 0);
+        assert.equal(result.summary.wasteAreaMm2, '18.000000');
+      }
+    },
+  );
+  await t.test(
+    'when one opening is necessary, waste savings cannot justify a second opening',
     async () => {
       const context = fixture();
-      context.stockItems[0]!.widthMm = 7;
-      context.stockItems.push({
-        ...context.stockItems[0]!,
-        id: id(21),
-        widthMm: 10,
-        isUsed: false,
+      context.requirements[0]!.quantity = 3;
+      const used = context.stockItems[0]!;
+      Object.assign(used, { widthMm: 7, remainingLengthMm: 3 });
+      for (const value of [21, 22]) {
+        context.stockItems.push({
+          ...used,
+          id: id(value),
+          widthMm: 10,
+          isUsed: false,
+        });
+      }
+      const extraOpening = await compare({
+        ...context,
+        stockItems: context.stockItems.slice(1),
       });
-      const result = await compare(context);
-      assert.equal(result?.summary.newRollCount, 1);
+      assert.equal(extraOpening?.summary.newRollCount, 2);
+      assert.equal(extraOpening?.summary.wasteAreaMm2, '9.000000');
+      const chosen = await compare(context);
+      assert.equal(chosen?.summary.newRollCount, 1);
+      assert.equal(chosen?.summary.wasteAreaMm2, '15.000000');
     },
   );
   await t.test(

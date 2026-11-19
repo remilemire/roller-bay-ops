@@ -12,7 +12,7 @@ import { PlanningJobsService } from './planning-jobs.service.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 
 test(
-  'a 512-line plan goes from background search through validation, draft save and confirmation',
+  'a 512-line plan uses an available remnant through background search, draft save and confirmation',
   { timeout: 60000 },
   async (t) => {
     const { app, fixtures, seed, ids, put, get, post, path } =
@@ -24,7 +24,8 @@ test(
       local.optimize.bind(local),
     );
     const order = await fixtures.createWorkOrder('899990', 512);
-    const stockId = await seed(600000);
+    await seed(600000);
+    const stockId = await seed(512000, true);
     const requirements = Array.from({ length: 512 }, (_, i) => ({
       id: randomUUID(),
       fabricColorId: ids.color,
@@ -50,6 +51,7 @@ test(
         items,
       })),
     };
+    assert.equal(state.result.summary.newRollCount, 0);
     assert.equal(plan.cuts.length, 512);
     assert.ok(
       Buffer.byteLength(JSON.stringify({ requirements, plan })) > 100 * 1024,
