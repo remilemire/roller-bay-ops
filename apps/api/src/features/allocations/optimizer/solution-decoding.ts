@@ -7,7 +7,7 @@ import type { SolveResult } from '../../../solver/solver.contracts.js';
 import { toMillimetres } from '../cutting-plan/cutting-dimensions.js';
 import { validateCuttingPlan } from '../cutting-plan/cutting-plan.validator.js';
 import type { CuttingModel } from './cutting-model.js';
-import type { CuttingOptimizationResult } from './cutting-plan-optimizer.types.js';
+import type { ValidatedCuttingPlan } from './cutting-plan-optimizer.types.js';
 import { CuttingOptimizationError } from './optimization.errors.js';
 
 type Solution = Extract<SolveResult, { status: 'optimal' | 'feasible' }>;
@@ -16,13 +16,17 @@ export function decodeSolution(
   context: CuttingContext,
   model: CuttingModel,
   solution: Solution,
-): Extract<CuttingOptimizationResult, { status: 'feasible' }> {
+): ValidatedCuttingPlan {
   const fail = (): never => {
     throw new CuttingOptimizationError(
       'invalid_solution',
       'Solver solution does not match a valid cutting plan and its accounting.',
     );
   };
+  const maxCuts = context.requirements.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
   const plan: CuttingPlan = { cuts: [] };
   for (const assignment of model.assignments) {
     const count = solution.values[assignment.variable];
@@ -34,7 +38,7 @@ export function decodeSolution(
     )
       fail();
     for (let i = 0; i < count!; i++) {
-      if (plan.cuts.length >= 100) fail();
+      if (plan.cuts.length >= maxCuts) fail();
       plan.cuts.push({
         stockItemId: assignment.stock.id,
         lengthMm: toMillimetres(assignment.pattern.length),

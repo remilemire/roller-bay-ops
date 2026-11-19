@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { PlanningJobsService } from './planning-jobs.service.js';
+import { Module, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { Environment } from '../../config/environment.js';
 import { DatabaseModule } from '../../database/database.module.js';
@@ -51,12 +52,45 @@ import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
     AllocationDetailsService,
     AllocationsService,
     AllocationPlanningService,
+    PlanningJobsService,
     CompletionCorrectionsService,
     {
       provide: CuttingPlanOptimizer,
-      inject: [SolverClient],
-      useFactory: (client: SolverClient | null) =>
-        client ? new CuttingPlanOptimizer(client) : null,
+      inject: [SolverClient, ConfigService],
+      useFactory: (
+        client: SolverClient | null,
+        config: ConfigService<Environment, true>,
+      ) =>
+        new CuttingPlanOptimizer(
+          client,
+          {
+            CUTTING_MAX_BLINDS: config.getOrThrow('CUTTING_MAX_BLINDS', {
+              infer: true,
+            }),
+            CUTTING_REFINEMENT_SECONDS: config.getOrThrow(
+              'CUTTING_REFINEMENT_SECONDS',
+              { infer: true },
+            ),
+            CUTTING_MAX_PATTERNS: config.getOrThrow('CUTTING_MAX_PATTERNS', {
+              infer: true,
+            }),
+            CUTTING_MAX_PATTERN_NODES: config.getOrThrow(
+              'CUTTING_MAX_PATTERN_NODES',
+              { infer: true },
+            ),
+            CUTTING_MAX_ASSIGNMENTS: config.getOrThrow(
+              'CUTTING_MAX_ASSIGNMENTS',
+              { infer: true },
+            ),
+          },
+          (error) =>
+            Logger.warn(
+              error instanceof Error
+                ? error.message
+                : 'Cutting refinement failed',
+              CuttingPlanOptimizer.name,
+            ),
+        ),
     },
   ],
 })

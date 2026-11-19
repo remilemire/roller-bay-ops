@@ -1,3 +1,4 @@
+import { useAllocationBodyParser } from './config/allocation-body.js';
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,10 @@ async function bootstrap() {
   // Leading slash required: Nest mounts its JSON not-found handler at the raw
   // prefix, and Express 5 never matches a mount path without one.
   app.setGlobalPrefix('/api');
+  useAllocationBodyParser(
+    app,
+    config.getOrThrow('ALLOCATION_BODY_LIMIT_BYTES', { infer: true }),
+  );
   app.set('trust proxy', config.get('TRUSTED_PROXY_IPS', { infer: true }));
   app.enableCors({
     origin: config.get('WEB_ORIGIN', { infer: true }),

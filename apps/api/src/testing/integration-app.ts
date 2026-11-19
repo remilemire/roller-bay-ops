@@ -1,3 +1,4 @@
+import { useAllocationBodyParser } from '../config/allocation-body.js';
 import { WorkOrderCancellationModule } from '../features/work-order-cancellation/index.js';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
@@ -47,6 +48,7 @@ import { testDatabaseUrl, testRedisUrl } from './test-services.js';
  * integration files are independent and can run in parallel.
  */
 export async function startIntegrationApp(t: TestContext) {
+  const queueName = `cutting-test-${randomUUID()}`;
   const rateLimitPrefix = `roller-bay:test:rate-limit:${randomUUID()}:`;
   const database = await createTestDatabase(testDatabaseUrl);
   const keys = new Set<string>();
@@ -56,15 +58,22 @@ export async function startIntegrationApp(t: TestContext) {
   // works: the database can only be dropped once its connections are closed.
   t.after(async () => {
     const redis = started.app?.get(RedisService);
-    if (redis?.client.isReady) {
-      for await (const batch of redis.client.scanIterator({
-        MATCH: `${rateLimitPrefix}*`,
-      })) {
-        if (batch.length) await redis.client.del(batch);
+    const cleanup = redis?.client.isReady
+      ? redis.client.duplicate()
+      : undefined;
+    try {
+      await cleanup?.connect();
+      await started.app?.close();
+      if (cleanup) {
+        for (const pattern of [`${rateLimitPrefix}*`, `bull:${queueName}:*`]) {
+          for await (const batch of cleanup.scanIterator({ MATCH: pattern }))
+            if (batch.length) await cleanup.del(batch);
+        }
+        if (keys.size) await cleanup.del([...keys]);
       }
-      if (keys.size) await redis.client.del([...keys]);
+    } finally {
+      if (cleanup?.isOpen) cleanup.destroy();
     }
-    await started.app?.close();
     if (started.pool) await endPool(started.pool);
     await database.drop();
   });
@@ -75,6 +84,7 @@ export async function startIntegrationApp(t: TestContext) {
   started.pool = pool;
   const config = environmentSchema.parse({
     NODE_ENV: 'test',
+    CUTTING_QUEUE_NAME: queueName,
     CUTTING_EDGE_TRIM_MM: 1,
     CUTTING_MINIMUM_REMNANT_WIDTH_MM: 100,
     CUTTING_MINIMUM_REMNANT_LENGTH_MM: 100,
@@ -159,6 +169,7 @@ export async function startIntegrationApp(t: TestContext) {
   );
   started.app = app;
   app.setGlobalPrefix('/api');
+  useAllocationBodyParser(app, config.ALLOCATION_BODY_LIMIT_BYTES);
   app.enableCors({ origin: config.WEB_ORIGIN, credentials: true });
   // Keep one listener for the file; Supertest must not close it between requests.
   await app.listen(0, '127.0.0.1');

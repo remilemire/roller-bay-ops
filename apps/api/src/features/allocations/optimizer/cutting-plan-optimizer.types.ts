@@ -6,7 +6,13 @@ export interface CuttingOptimizationOptions {
   signal?: AbortSignal;
 }
 
+export type ValidatedCuttingPlan = {
+  status: 'feasible';
+  plan: CuttingPlan;
+  summary: CuttingPlanSummary;
+};
 export type CuttingOptimizationResult =
-  | { status: 'feasible'; plan: CuttingPlan; summary: CuttingPlanSummary }
-  | { status: 'infeasible' }
+  ValidatedCuttingPlan | { status: 'infeasible' };
+export type BoundedOptimizationResult =
+  | CuttingOptimizationResult
   | { status: 'unknown'; reason: 'search_limit' | 'model_limit' };

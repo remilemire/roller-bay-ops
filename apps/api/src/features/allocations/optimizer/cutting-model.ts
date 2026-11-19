@@ -137,6 +137,10 @@ function compile(
   }));
   const opened: BigTerm[] = [];
   const selected: BigTerm[] = [];
+  const blindCount = context.requirements.reduce(
+    (sum, item) => sum + BigInt(item.quantity),
+    0n,
+  );
   const minWidth = toLengthUnits(context.settings.minimumRemnantWidthMm);
   const minLength = toLengthUnits(context.settings.minimumRemnantLengthMm);
   for (const [index, group] of [...stockGroups.values()].entries()) {
@@ -151,7 +155,11 @@ function compile(
     }));
     // Stock is selected exactly when at least one of its patterns is cut.
     builder.rule([...counts, { variable: used, coefficient: -1n }], '>=', 0n);
-    builder.rule([...counts, { variable: used, coefficient: -100n }], '<=', 0n);
+    builder.rule(
+      [...counts, { variable: used, coefficient: -blindCount }],
+      '<=',
+      0n,
+    );
     const available =
       toLengthUnits(stock.remainingLengthMm) -
       toLengthUnits(stock.reservedLengthMm);
