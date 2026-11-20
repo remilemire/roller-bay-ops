@@ -108,8 +108,11 @@ export function StockScreen() {
                         </span>
                         <span>
                           <strong>{item.fabricColorCode}</strong>
-                          <small>
-                            {shortId(item.id)} · {item.materialName}
+                          <small className="table-cell-wrap">
+                            <span className="single-line">
+                              {shortId(item.id)}
+                            </span>{' '}
+                            · {item.materialName}
                           </small>
                         </span>
                       </Link>
@@ -118,7 +121,7 @@ export function StockScreen() {
                     <td>
                       {fieldLabel(units, 'rollLength', item.remainingLengthMm)}
                     </td>
-                    <td>
+                    <td className="table-cell-wrap">
                       {item.zoneName}
                       <small>
                         {item.sectionLabel} / {item.locationLabel}

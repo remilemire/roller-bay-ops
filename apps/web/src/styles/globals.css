@@ -659,6 +659,10 @@ textarea {
   gap: 24px;
   margin-bottom: var(--section-gap);
 }
+.page-heading > div:first-child {
+  min-width: 0;
+  max-width: 100%;
+}
 .page-heading p {
   margin-top: 8px;
   color: var(--muted);
@@ -848,6 +852,25 @@ td {
   border-top: 1px solid var(--border);
   font-size: 12px;
   vertical-align: middle;
+}
+/* Keep compact values together. Prose and mixed-content cells can reflow. */
+.data-table-wrap td {
+  white-space: nowrap;
+}
+.data-table-wrap .table-cell-wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.single-line {
+  white-space: nowrap;
+}
+.record-identifier {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
 }
 .table-actions {
   width: 1%;
@@ -2229,6 +2252,7 @@ label.detail-label {
 }
 .arrival-row > span:nth-child(2) {
   flex: 1;
+  min-width: 0;
 }
 .arrival-row strong {
   font-size: 12px;

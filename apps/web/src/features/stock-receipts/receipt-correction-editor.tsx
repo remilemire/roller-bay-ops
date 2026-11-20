@@ -173,7 +173,10 @@ function ReceiptCorrectionForm({
                 return (
                   <section className="panel" key={line.key}>
                     <div className="panel-body stack">
-                      <h3>
+                      <h3
+                        className="record-identifier"
+                        title={record?.stockItems[0]?.fabricColorCode}
+                      >
                         {record?.stockItems[0]?.fabricColorCode ??
                           'New receipt line'}
                       </h3>

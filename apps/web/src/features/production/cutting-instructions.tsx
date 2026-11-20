@@ -50,7 +50,13 @@ export function CuttingInstructions({
         <section className="panel" key={item.stockItem.id}>
           <div className="panel-heading">
             <h2>
-              {item.stockItem.fabricColorCode} · {shortId(item.stockItem.id)}
+              <span
+                className="record-identifier"
+                title={item.stockItem.fabricColorCode}
+              >
+                {item.stockItem.fabricColorCode}
+              </span>{' '}
+              · {shortId(item.stockItem.id)}
             </h2>
             <span>{item.stockItem.isRemnant ? 'Remnant' : 'Roll'}</span>
           </div>

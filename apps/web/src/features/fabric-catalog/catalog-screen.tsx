@@ -254,7 +254,9 @@ function CatalogNode({
         ) : (
           <div className={`${styles.label} ${styles.leaf}`}>
             <Icon size={18} />
-            <strong>{row.name}</strong>
+            <strong className="record-identifier" title={row.name}>
+              {row.name}
+            </strong>
             <span className={styles.kind}>
               color
               {row.thicknessMm !== null &&

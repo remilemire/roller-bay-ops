@@ -113,7 +113,7 @@ export function OrderListView({ canManage }: { canManage: boolean }) {
                       <Status value={order.status} />
                       <AllocationWarning order={order} />
                     </td>
-                    <td>{order.note}</td>
+                    <td className="table-cell-wrap">{order.note}</td>
                     <td className="table-actions">
                       <div className="inline-actions">
                         {/* Planning fabric is open to everyone; the rest of

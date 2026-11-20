@@ -31,7 +31,15 @@ export function Lookup({
     search: string,
     page: number,
     signal: AbortSignal,
-  ) => Promise<{ items: { id: string; label: string }[]; total: number }>;
+  ) => Promise<{
+    items: {
+      id: string;
+      label: string;
+      /** The prefix of the label that must stay on one line. */
+      leadingIdentifier?: string;
+    }[];
+    total: number;
+  }>;
   selectedLabel?: string;
   error?: string;
   optional?: boolean;
@@ -236,7 +244,19 @@ export function Lookup({
               onMouseEnter={() => setActive(index)}
               onClick={() => pick(item)}
             >
-              {item.label}
+              {item.leadingIdentifier ? (
+                <>
+                  <span
+                    className="record-identifier"
+                    title={item.leadingIdentifier}
+                  >
+                    {item.leadingIdentifier}
+                  </span>
+                  {item.label.slice(item.leadingIdentifier.length)}
+                </>
+              ) : (
+                item.label
+              )}
             </li>
           ))}
           {creating && (

@@ -169,7 +169,10 @@ function StockPanel({
       <div className="panel-heading">
         <div>
           <h2>
-            {stock.fabricColorCode} · {shortId(stock.id)}
+            <span className="record-identifier" title={stock.fabricColorCode}>
+              {stock.fabricColorCode}
+            </span>{' '}
+            · {shortId(stock.id)}
           </h2>
           <p>
             {kind} · {stock.materialName} · {stock.manufacturerName} ·{' '}

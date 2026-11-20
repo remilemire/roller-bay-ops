@@ -81,12 +81,32 @@ export function RecordValues({
   if (value === null || value === undefined) return <span>—</span>;
   if (typeof value === 'number')
     return (
-      <span>{measurement ? fieldLabel(units, measurement, value) : value}</span>
+      <span className={measurement ? 'single-line' : undefined}>
+        {measurement ? fieldLabel(units, measurement, value) : value}
+      </span>
     );
   if (typeof value === 'boolean') return <span>{value ? 'Yes' : 'No'}</span>;
   if (typeof value === 'string') {
-    if (referenceLabels[value])
-      return <span title={value}>{referenceLabels[value]}</span>;
+    if (referenceLabels[value]) {
+      const label = referenceLabels[value];
+      return field === 'fabricColorId' ? (
+        <span className="record-identifier" title={label}>
+          {label}
+        </span>
+      ) : (
+        <span title={value}>{label}</span>
+      );
+    }
+    if (
+      ['orderNumber', 'purchaseOrderNumber', 'purchaseOrderNumbers'].includes(
+        field,
+      )
+    )
+      return (
+        <span className="record-identifier" title={value}>
+          {value}
+        </span>
+      );
     if (field === 'stockItemId' || field === 'sourceStockItemId')
       return <Link href={`/stock-items/${value}`}>{shortId(value)}</Link>;
     if (field.endsWith('Id') || field === 'id')
@@ -109,6 +129,7 @@ export function RecordValues({
             <RecordValues
               units={units}
               section={section}
+              field={field === 'purchaseOrderNumbers' ? field : undefined}
               referenceLabels={referenceLabels}
               value={v}
             />

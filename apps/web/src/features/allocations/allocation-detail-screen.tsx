@@ -224,8 +224,14 @@ function AllocationRecord({
                 <div className="plan-cut" key={index}>
                   <div className="form-row-header">
                     <h3>
-                      Cut {index + 1} · {stock?.fabricColorCode} ·{' '}
-                      {fieldLabel(units, 'cutLength', cut.lengthMm)}
+                      Cut {index + 1} ·{' '}
+                      <span
+                        className="record-identifier"
+                        title={stock?.fabricColorCode}
+                      >
+                        {stock?.fabricColorCode}
+                      </span>{' '}
+                      · {fieldLabel(units, 'cutLength', cut.lengthMm)}
                       <InfoTip text={measurementHelp.cutLength} />
                     </h3>
                     <Link
@@ -428,7 +434,7 @@ function AllocationRecord({
                               ? 'Returned roll'
                               : 'Returned remnant'}
                         </td>
-                        <td>
+                        <td className="table-cell-wrap">
                           {outcome.outcome === 'returned-roll' ? (
                             <>
                               Depth{' '}

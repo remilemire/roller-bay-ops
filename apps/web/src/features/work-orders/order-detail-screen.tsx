@@ -3,7 +3,7 @@ import { AllocationWarning } from './allocation-warning';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   orderQuantitySchema,
   type WorkOrder,
@@ -160,26 +160,34 @@ function OrderRecord({
               ['Assembled', milestone(order.assembledAt)],
               ['Checked', milestone(order.checkedAt)],
               ['Shipped', milestone(order.shippedAt)],
-              // Kept after allocation, as a record of where the fabric came from.
-              ...(order.backOrder
-                ? [
-                    [
-                      'Back-order POs',
-                      order.backOrder.purchaseOrderNumbers
-                        .map(
-                          (number) =>
-                            `${number} (${order.backOrder!.awaitingPurchaseOrderNumbers.includes(number) ? 'awaited' : 'received'})`,
-                        )
-                        .join(', '),
-                    ],
-                  ]
-                : []),
             ].map(([label, value]) => (
               <div key={label}>
                 <div className="detail-label">{label}</div>
                 <div className="detail-value">{value}</div>
               </div>
             ))}
+            {order.backOrder && (
+              <div>
+                <div className="detail-label">Back-order POs</div>
+                <div className="detail-value">
+                  {order.backOrder.purchaseOrderNumbers.map((number, index) => (
+                    <Fragment key={number}>
+                      {index > 0 && ', '}
+                      <span className="record-identifier" title={number}>
+                        {number}
+                      </span>{' '}
+                      (
+                      {order.backOrder?.awaitingPurchaseOrderNumbers.includes(
+                        number,
+                      )
+                        ? 'awaited'
+                        : 'received'}
+                      )
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+            )}
             <OrderField
               order={order}
               field="note"

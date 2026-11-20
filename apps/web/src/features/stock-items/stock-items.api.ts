@@ -43,6 +43,7 @@ export const lookupStock =
       total: data.total,
       items: data.items.map((i) => ({
         id: i.id,
+        leadingIdentifier: i.fabricColorCode,
         label: `${i.fabricColorCode} · ${measurementLabel(i.widthMm, widthUnit)} · ${i.id.slice(0, 8).toUpperCase()}`,
       })),
     };

@@ -36,7 +36,9 @@ export function CuttingReviewScreen() {
                 {query.data.map((s) => (
                   <tr key={s.id}>
                     <td>{s.orderNumber}</td>
-                    <td>{employeeNames(s.employees)}</td>
+                    <td className="table-cell-wrap">
+                      {employeeNames(s.employees)}
+                    </td>
                     <td>{dateTimeLabel(s.startedAt)}</td>
                     <td>{s.submittedAt ? 'Awaiting review' : 'Incomplete'}</td>
                     <td className="table-actions">

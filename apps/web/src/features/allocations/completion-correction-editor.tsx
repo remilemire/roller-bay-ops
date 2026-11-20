@@ -320,8 +320,16 @@ function CompletionCorrectionForm({
                         update(index, { selected: e.target.checked })
                       }
                     />
-                    {row.additional ? 'Add usage for' : 'Correct'}{' '}
-                    {stock.fabricColorCode} · {shortId(row.id)}
+                    <span>
+                      {row.additional ? 'Add usage for' : 'Correct'}{' '}
+                      <span
+                        className="record-identifier"
+                        title={stock.fabricColorCode}
+                      >
+                        {stock.fabricColorCode}
+                      </span>{' '}
+                      · {shortId(row.id)}
+                    </span>
                   </label>
                   <Blockers items={eligibility} />
                   {row.selected && !row.additional && (

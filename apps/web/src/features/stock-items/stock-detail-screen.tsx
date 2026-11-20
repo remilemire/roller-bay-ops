@@ -73,6 +73,7 @@ export function StockDetailScreen({
       <PageHeading
         eyebrow={`STOCK ITEM · ${shortId(item.id)}`}
         title={item.fabricColorCode}
+        titleIsIdentifier
         description={item.id}
       >
         {admin && !item.voidedAt && (
