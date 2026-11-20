@@ -1,4 +1,3 @@
-import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 /**
  * Preview snapshots are read consistently, then released before solver work.
  * They reserve nothing; confirmation must revalidate availability under stock locks.
@@ -6,16 +5,19 @@ import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
-  allocationOptimizationSchema,
+  allocationPlanningResultSchema,
   allocationValidationSchema,
   type OptimizeAllocation,
+  type AllocationPlanningResult,
+  type CuttingContext,
   type ValidateAllocation,
 } from '@roller-bay/shared/allocations';
+import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
+import type { StockItem } from '@roller-bay/shared/stock-items';
 import { SolverError } from '../../solver/solver.errors.js';
 import { StockItemsService } from '../stock-items/index.js';
 import { buildCuttingContext } from './allocation-cutting-context.js';
@@ -28,20 +30,21 @@ import {
 } from './cutting-rules.service.js';
 import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
+export interface PlanningSnapshot {
+  context: CuttingContext;
+  stock: StockItem[];
+  maxTimeSeconds?: number;
+}
+
 @Injectable()
 export class AllocationPlanningService {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly stockItems: StockItemsService,
-    @Inject(CuttingPlanOptimizer)
-    private readonly optimizer: CuttingPlanOptimizer | null,
+    private readonly optimizer: CuttingPlanOptimizer,
     private readonly cuttingRules: CuttingRulesService,
   ) {}
-  async optimize(input: OptimizeAllocation, signal?: AbortSignal) {
-    if (!this.optimizer)
-      throw new ServiceUnavailableException(
-        'Configure SOLVER_API_KEY to enable optimization.',
-      );
+  async prepare(input: OptimizeAllocation): Promise<PlanningSnapshot> {
     const snapshot = await this.snapshot(input);
     // Over-reserved stock is unavailable, not malformed user input. Replanning
     // excludes this allocation's own reservation before applying this filter.
@@ -49,19 +52,45 @@ export class AllocationPlanningService {
       (item) => item.reservedLengthMm <= item.remainingLengthMm,
     );
     try {
-      const result = await this.optimizer.optimize(snapshot.context, {
+      return {
+        ...snapshot,
+        context: this.optimizer.prepare(snapshot.context),
         maxTimeSeconds: input.maxTimeSeconds,
-        signal,
-      });
-      return allocationOptimizationSchema.parse({
+      };
+    } catch (error) {
+      if (
+        error instanceof CuttingOptimizationError &&
+        error.code === 'invalid_input'
+      )
+        throw new BadRequestException(error.message, { cause: error });
+      throw error;
+    }
+  }
+  async solve(
+    snapshot: PlanningSnapshot,
+    signal?: AbortSignal,
+    onFeasible?: (result: AllocationPlanningResult) => Promise<void>,
+  ) {
+    const present = (
+      result: Awaited<ReturnType<CuttingPlanOptimizer['optimize']>>,
+    ) => {
+      const ids = new Set(
+        result.status === 'feasible'
+          ? result.plan.cuts.map((cut) => cut.stockItemId)
+          : [],
+      );
+      return allocationPlanningResultSchema.parse({
         ...result,
-        stockItems:
-          result.status === 'feasible'
-            ? snapshot.stock.filter((item) =>
-                result.plan.cuts.some((cut) => cut.stockItemId === item.id),
-              )
-            : [],
+        stockItems: snapshot.stock.filter((stock) => ids.has(stock.id)),
       });
+    };
+    try {
+      const result = await this.optimizer.optimize(
+        snapshot.context,
+        { maxTimeSeconds: snapshot.maxTimeSeconds, signal },
+        onFeasible && ((result) => onFeasible(present(result))),
+      );
+      return present(result);
     } catch (error) {
       // Only order-level codes carry text meant for the requester. Schema,
       // model, and solver faults keep their detail in the cause for the log.

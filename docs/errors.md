@@ -39,7 +39,7 @@ Unknown routes under `/api` return a 404 envelope; the global prefix keeps its l
 - Throw Nest `HttpException`s with literal, curated messages and `{ cause }`. Never interpolate driver, provider, schema, or user-supplied text into a message.
 - Keep domain-to-HTTP mapping inside the feature (`operation()` wrappers, `allocationOperation`, and similar). The global filter is a safety net, not the home of feature messages.
 - Structured details belong in `issues` as `{ code, path, message }`.
-- Optimization: only `invalid_input` and `numeric_range` describe the order and return 400 with their message. Schema failures on server-built options or context, invalid models or solutions, and solver transport faults return 503 `Optimization is unavailable.` with the detail logged.
+- Allocation planning rejects out-of-range order sizes with 400. A finished search reports infeasibility only when the snapshot cannot fulfill the order. A background worker failure has its own failed state. Refinement failures are logged and preserve any validated plan. A reused planning job ID with different input returns 409.
 
 ## Frontend
 

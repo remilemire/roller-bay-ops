@@ -32,6 +32,8 @@ Use the root `render.yaml` Blueprint. It defines only the API and solver; provid
 
 The API builds from the repository root because it depends on `packages/shared`. Render uses Node 24 from `.nvmrc`. The build explicitly installs development tools needed to compile the API and run Drizzle migrations. Its start command converts Render's solver `host:port` reference into `SOLVER_URL` and starts Node directly.
 
+The API uses Redis for background cutting jobs. API replicas serving the same inventory must share a Redis database and `CUTTING_QUEUE_NAME`. Set `CUTTING_JOB_CONCURRENCY` per API instance. The API keeps CPU-intensive search cooperative and the solver admits one refinement per instance. Measure API, solver and Redis memory separately at the intended concurrency. See [cutting planner settings](allocations.md#api-settings).
+
 The solver builds from `apps/solver`, installs the pinned `requirements.txt`, and uses Python 3.14 from `.python-version`. Its start command maps Render's `PORT` to the existing `SOLVER_PORT`. Both services listen on `0.0.0.0`; Render owns process restart and shutdown handling. The solver key is shared through a Render service reference.
 
 Supply the API settings from [authentication](authentication.md) and `apps/api/.env.example`. In particular:

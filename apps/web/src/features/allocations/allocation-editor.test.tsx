@@ -105,10 +105,10 @@ vi.mock('@/features/work-orders/work-orders.api', async (original) => {
     createOrder,
   };
 });
+vi.mock('./planning-job', () => ({ generatePlan: optimize }));
 vi.mock('./allocations.api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./allocations.api')>()),
   replaceAllocation: replace,
-  optimizeAllocation: optimize,
   createAllocationDraft: createDraft,
   saveAllocationDraft: saveDraft,
   submitAllocation: submit,
@@ -256,6 +256,7 @@ it('offers generating a plan or hand-building one, and reports planning in one p
   );
   // The API plans the blinds the form sends.
   expect(optimize).toHaveBeenCalledWith(
+    expect.any(String),
     {
       requirements: [
         {
@@ -267,7 +268,8 @@ it('offers generating a plan or hand-building one, and reports planning in one p
         },
       ],
     },
-    expect.anything(),
+    expect.any(AbortSignal),
+    expect.any(Function),
   );
   const save = screen.getByRole('button', { name: 'Save draft' });
   const above = (element: HTMLElement) =>
@@ -441,7 +443,10 @@ it('leaves the confirmed allocation, not the draft saved on the way, for the pag
   submit.mockResolvedValue({ ...allocation, revision: 2 });
   // The generated plan cuts the blind the form sent.
   optimize.mockImplementation(
-    async ({ requirements }: { requirements: { id: string }[] }) => ({
+    async (
+      _scope: string,
+      { requirements }: { requirements: { id: string }[] },
+    ) => ({
       status: 'feasible',
       plan: {
         cuts: [

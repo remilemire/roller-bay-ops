@@ -1,7 +1,9 @@
 'use client';
+import { useHydrated } from '@/lib/use-hydrated';
 import { ApiError } from '@/lib/api';
 import { RequirementsEditor } from './requirements-editor';
 import { CutPlanEditor } from './cut-plan-editor';
+import { generatePlan } from './planning-job';
 import { PlanPreview } from './plan-preview';
 import { useRef, useState, useEffect, type ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -11,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import type { ErrorIssue } from '@roller-bay/shared/errors';
 import {
+  optimizeAllocationSchema,
   allocationDraftSchema,
   allocationDraftInputSchema,
   createAllocationSchema,
@@ -58,7 +61,6 @@ import {
   submitAllocation,
   replaceAllocation,
   deleteAllocationDraft,
-  optimizeAllocation,
   validateAllocation,
   allocationKey,
 } from './allocations.api';
@@ -147,10 +149,13 @@ export function AllocationEditor({
   const [adding, setAdding] = useState<string | null>(null);
   // Whether a confirmation was tried: the count is checked from then on.
   const [countChecked, setCountChecked] = useState(false);
+  const [readyPlan, setReadyPlan] = useState<AllocationOptimization | null>(
+    null,
+  );
   const abort = useRef<AbortController | null>(null);
   const client = useQueryClient();
   const router = useRouter();
-  useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => () => abort.current?.abort('detach'), []);
   // The order, for its number and the blind count its allocation must match.
   const orderQuery = useQuery({
     ...orderDetail(values.workOrderId),
@@ -242,10 +247,15 @@ export function AllocationEditor({
       router.push('/allocations?state=draft');
     },
   });
+  const target = active ?? saved;
+  const planningScope = `cutting:${user.id}:${target?.id ?? values.workOrderId}`;
+  const hydrated = useHydrated();
+  const priorSearch = optimizeAllocationSchema.safeParse(
+    hydrated ? pendingPayload(planningScope) : undefined,
+  );
   const planning = useMutation({
-    mutationFn: async (mode: 'optimize' | 'validate') => {
+    mutationFn: async (mode: 'optimize' | 'resume' | 'validate') => {
       const data = allocationFromForm(form.getValues(), units);
-      const target = active ?? saved;
       // The API plans the blinds it is sent, so they must be complete.
       const context = {
         requirements: data.requirements,
@@ -256,10 +266,19 @@ export function AllocationEditor({
       if (mode === 'validate')
         return validateAllocation({ ...context, plan: data.plan });
       abort.current = new AbortController();
-      return optimizeAllocation(context, abort.current.signal);
+      setReadyPlan(null);
+      return generatePlan(
+        planningScope,
+        mode === 'resume'
+          ? optimizeAllocationSchema.parse(pendingPayload(planningScope))
+          : context,
+        abort.current.signal,
+        setReadyPlan,
+      );
     },
     onError: (error) => showIssues(error),
     onSuccess: (result) => {
+      if (!result) return;
       setPreview(result);
       showIssues('valid' in result && !result.valid ? result.issues : []);
       if ('status' in result && result.status === 'feasible') {
@@ -444,22 +463,66 @@ export function AllocationEditor({
             />
           </div>
         </fieldset>
+        {!busy &&
+          priorSearch.success &&
+          priorSearch.data.expectedRevision === target?.revision && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (
+                  (values.cuts.length || values.requirements.length) &&
+                  !window.confirm(
+                    'Restore the blinds from the previous search and replace the current cuts?',
+                  )
+                )
+                  return;
+                const restored = allocationToForm(
+                  {
+                    workOrderId: values.workOrderId,
+                    requirements: priorSearch.data.requirements,
+                    plan: { cuts: [] },
+                  },
+                  units,
+                );
+                form.setValue('requirements', restored.requirements, {
+                  shouldDirty: true,
+                });
+                form.setValue('cuts', [], { shouldDirty: true });
+                setPreview(null);
+                planning.mutate('resume');
+              }}
+            >
+              Resume previous cutting search
+            </Button>
+          )}
         {/* One slot for planning feedback keeps the actions below from moving
             between the request and its result. It sits outside the fieldset
             so a running generation can still be cancelled. */}
         {planning.isPending ? (
           <div className="notice notice-info notice-action" role="status">
             <span>
-              {planning.variables === 'optimize'
-                ? 'Generating a cutting plan…'
+              {planning.variables !== 'validate'
+                ? readyPlan
+                  ? 'Plan ready. Checking for less waste…'
+                  : 'Generating a cutting plan…'
                 : 'Validating the plan…'}
             </span>
-            {planning.variables === 'optimize' && (
+            {planning.variables !== 'validate' && readyPlan && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => abort.current?.abort('use')}
+              >
+                Use available plan
+              </Button>
+            )}
+            {planning.variables !== 'validate' && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => abort.current?.abort()}
+                onClick={() => abort.current?.abort('cancel')}
               >
                 Cancel
               </Button>

@@ -407,7 +407,7 @@ test('allocation optimization is a preview until the shared draft is confirmed',
   ).toHaveValue('1');
   expect(state.allocationRequests).toMatchObject([
     {
-      path: '/allocations/optimize',
+      path: expect.stringMatching(/^\/allocations\/planning-jobs\//),
       body: {
         requirements: [{ widthMm: 1371.6, lengthMm: 2286, quantity: 1 }],
       },

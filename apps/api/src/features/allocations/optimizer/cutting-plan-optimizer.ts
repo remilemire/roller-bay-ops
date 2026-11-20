@@ -1,112 +1,92 @@
-/**
- * Builds bounded cutting candidates, then minimizes waste, new rolls, cuts, and
- * stock handling in successive solver passes. Only proven objective values are
- * locked. Every incumbent is decoded and independently validated before return.
- */
-import { setImmediate } from 'node:timers/promises';
 import type { CuttingContext } from '@roller-bay/shared/allocations';
+import {
+  planningDefaults,
+  type PlanningSettings,
+} from '../../../config/planning.js';
 import type { SolverClient } from '../../../solver/solver.client.js';
-import { SolverError } from '../../../solver/solver.errors.js';
-import { solverModelSchema } from '../../../solver/solver.contracts.js';
+import { BoundedRefinement } from './bounded-refinement.js';
 import type {
   CuttingOptimizationOptions,
-  CuttingOptimizationResult,
+  ValidatedCuttingPlan,
 } from './cutting-plan-optimizer.types.js';
+import { findFeasiblePlan } from './feasibility-search.js';
+import { checkCancellation } from './optimization.errors.js';
 import {
   parseOptimizationContext,
   parseOptimizationOptions,
 } from './optimization.input.js';
-import { generatePatterns } from './pattern-generation.js';
-import { buildCuttingModel, modelFitsTransport } from './cutting-model.js';
-import { decodeSolution } from './solution-decoding.js';
-import {
-  checkCancellation,
-  CuttingOptimizationError,
-} from './optimization.errors.js';
+import { cuttingPlanScore } from './cutting-plan-score.js';
+
+function improves(
+  context: CuttingContext,
+  candidate: ValidatedCuttingPlan,
+  baseline: ValidatedCuttingPlan,
+) {
+  const current = cuttingPlanScore(context, baseline);
+  for (const [i, value] of cuttingPlanScore(context, candidate).entries()) {
+    if (value !== current[i]) return value < current[i]!;
+  }
+  return false;
+}
 
 export class CuttingPlanOptimizer {
-  constructor(private readonly solver: SolverClient) {}
+  private readonly refinement: BoundedRefinement | null;
+  constructor(
+    solver: SolverClient | null,
+    private readonly settings: Pick<
+      PlanningSettings,
+      | 'CUTTING_MAX_BLINDS'
+      | 'CUTTING_REFINEMENT_SECONDS'
+      | 'CUTTING_MAX_PATTERNS'
+      | 'CUTTING_MAX_PATTERN_NODES'
+      | 'CUTTING_MAX_ASSIGNMENTS'
+    > = planningDefaults,
+    private readonly reportRefinementFailure?: (error: unknown) => void,
+  ) {
+    this.refinement =
+      solver &&
+      new BoundedRefinement(solver, {
+        patterns: settings.CUTTING_MAX_PATTERNS,
+        nodes: settings.CUTTING_MAX_PATTERN_NODES,
+        assignments: settings.CUTTING_MAX_ASSIGNMENTS,
+      });
+  }
+
+  prepare(context: CuttingContext) {
+    return parseOptimizationContext(context, this.settings.CUTTING_MAX_BLINDS);
+  }
 
   async optimize(
-    contextInput: CuttingContext,
-    optionsInput: CuttingOptimizationOptions = {},
-  ): Promise<CuttingOptimizationResult> {
-    const options = parseOptimizationOptions(optionsInput);
-    checkCancellation(options.signal);
-    const context = parseOptimizationContext(contextInput);
-    const candidates = await generatePatterns(context, options.signal);
-    if (candidates.impossible) return { status: 'infeasible' };
-    const compiled = buildCuttingModel(context, candidates);
-    await setImmediate();
-    checkCancellation(options.signal);
-    if (!compiled) return { status: 'unknown', reason: 'model_limit' };
-    let remaining = options.maxTimeSeconds;
-    let incumbent:
-      Extract<CuttingOptimizationResult, { status: 'feasible' }> | undefined;
-    for (const terms of compiled.objectives) {
-      checkCancellation(options.signal);
-      if (remaining <= 0) break;
-      if (incumbent && !terms.length) continue;
-      const model = {
-        ...compiled.model,
-        objective: { direction: 'minimize' as const, terms },
-      };
-      if (!modelFitsTransport(model, remaining))
-        return incumbent ?? { status: 'unknown', reason: 'model_limit' };
-      const parsed = solverModelSchema.safeParse(model);
-      if (!parsed.success)
-        throw new CuttingOptimizationError(
-          'invalid_model',
-          'Generated cutting model failed validation.',
-          { cause: parsed.error },
-        );
-      let result;
-      try {
-        result = await this.solver.solve(model, {
-          maxTimeSeconds: remaining,
-          signal: options.signal,
-        });
-      } catch (error) {
-        checkCancellation(options.signal);
-        if (error instanceof SolverError && error.code === 'timeout')
-          return incumbent ?? { status: 'unknown', reason: 'search_limit' };
-        throw error;
-      }
-      checkCancellation(options.signal);
-      // This is a shared search budget, not an end-to-end HTTP deadline.
-      remaining -= result.wallTimeSeconds;
-      if (result.status === 'model_invalid')
-        throw new CuttingOptimizationError(
-          'invalid_model',
-          'Solver rejected the generated cutting model.',
-        );
-      if (result.status === 'infeasible') {
-        if (incumbent)
-          throw new CuttingOptimizationError(
-            'invalid_solution',
-            'Solver contradicted a previously validated incumbent.',
-          );
-        // Failure in a truncated candidate set cannot establish that the order is impossible.
-        return compiled.complete
-          ? { status: 'infeasible' }
-          : { status: 'unknown', reason: 'search_limit' };
-      }
-      if (result.status === 'unknown') break;
-      incumbent = decodeSolution(context, compiled, result);
-      if (result.status !== 'optimal') break;
-      if (result.objectiveValue === null)
-        throw new CuttingOptimizationError(
-          'invalid_solution',
-          'Solver omitted the objective value.',
-        );
-      // Lock only proven optima: later preferences must never trade away an
-      // earlier objective. A merely feasible result ends the search instead.
-      compiled.model.constraints.push({
-        terms,
-        operator: '==',
-        rhs: result.objectiveValue,
-      });
+    input: CuttingContext,
+    options: CuttingOptimizationOptions = {},
+    onFeasible?: (result: ValidatedCuttingPlan) => Promise<void>,
+  ) {
+    const { signal, maxTimeSeconds } = parseOptimizationOptions(options);
+    const context = this.prepare(input);
+    const first = await findFeasiblePlan(context, signal);
+    if (first.status === 'infeasible') return first;
+    await onFeasible?.(first);
+    const seconds = Math.min(
+      maxTimeSeconds ?? this.settings.CUTTING_REFINEMENT_SECONDS,
+      this.settings.CUTTING_REFINEMENT_SECONDS,
+    );
+    if (!this.refinement || seconds === 0) return first;
+    let best = first;
+    try {
+      await this.refinement.optimize(
+        context,
+        { signal, maxTimeSeconds: seconds },
+        first,
+        (candidate) => {
+          if (improves(context, candidate, best)) best = candidate;
+        },
+      );
+    } catch (error) {
+      checkCancellation(signal);
+      // Transport, numeric range and invalid solver output affect refinement
+      // only. Preserve the independently validated plan and log the cause.
+      this.reportRefinementFailure?.(error);
     }
-    return incumbent ?? { status: 'unknown', reason: 'search_limit' };
+    return best;
   }
 }

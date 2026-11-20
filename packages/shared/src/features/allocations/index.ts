@@ -164,7 +164,7 @@ const previewRevision = (value: {
 export const optimizeAllocationSchema = z
   .strictObject({
     ...previewFields,
-    maxTimeSeconds: z.number().positive().max(60).default(5),
+    maxTimeSeconds: z.number().positive().max(60).optional(),
   })
   .refine(
     previewRevision,
@@ -459,20 +459,42 @@ export const allocationValidationSchema = z.discriminatedUnion('valid', [
     stockItems: planningStock,
   }),
 ]);
-export const allocationOptimizationSchema = z.discriminatedUnion('status', [
-  z.object({
-    status: z.literal('feasible'),
-    plan: cuttingPlanSchema,
-    summary: cuttingPlanSummarySchema,
-    stockItems: planningStock,
-  }),
+const feasibleOptimizationSchema = z.object({
+  status: z.literal('feasible'),
+  plan: cuttingPlanSchema,
+  summary: cuttingPlanSummarySchema,
+  stockItems: planningStock,
+});
+export const allocationPlanningResultSchema = z.discriminatedUnion('status', [
+  feasibleOptimizationSchema,
   z.object({ status: z.literal('infeasible'), stockItems: planningStock }),
+]);
+export type AllocationPlanningResult = z.infer<
+  typeof allocationPlanningResultSchema
+>;
+// Older synchronous API responses can include a bounded search result.
+export const allocationOptimizationSchema = z.discriminatedUnion('status', [
+  ...allocationPlanningResultSchema.options,
   z.object({
     status: z.literal('unknown'),
     reason: z.enum(['search_limit', 'model_limit']),
     stockItems: planningStock,
   }),
 ]);
+export const allocationPlanningJobSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('searching') }),
+  z.object({
+    status: z.literal('refining'),
+    result: feasibleOptimizationSchema,
+  }),
+  z.object({
+    status: z.literal('finished'),
+    result: allocationPlanningResultSchema,
+  }),
+  z.object({ status: z.literal('cancelled') }),
+  z.object({ status: z.literal('failed') }),
+]);
+export type AllocationPlanningJob = z.infer<typeof allocationPlanningJobSchema>;
 export type AllocationDetail = z.infer<typeof allocationDetailSchema>;
 export type AllocationList = z.infer<typeof allocationListSchema>;
 export type AllocationValidation = z.infer<typeof allocationValidationSchema>;

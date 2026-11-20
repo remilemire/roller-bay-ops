@@ -22,7 +22,13 @@ export interface ModeledAssignment extends PatternAssignment {
 export interface CuttingModel {
   model: SolverModel;
   assignments: ModeledAssignment[];
-  objectives: readonly [Terms, Terms, Terms, Terms];
+  objectives: readonly [
+    opened: Terms,
+    remnantBlinds: Terms,
+    waste: Terms,
+    cuts: Terms,
+    handled: Terms,
+  ];
   wasteUnit: bigint;
   complete: boolean;
 }
@@ -137,6 +143,10 @@ function compile(
   }));
   const opened: BigTerm[] = [];
   const selected: BigTerm[] = [];
+  const blindCount = context.requirements.reduce(
+    (sum, item) => sum + BigInt(item.quantity),
+    0n,
+  );
   const minWidth = toLengthUnits(context.settings.minimumRemnantWidthMm);
   const minLength = toLengthUnits(context.settings.minimumRemnantLengthMm);
   for (const [index, group] of [...stockGroups.values()].entries()) {
@@ -151,7 +161,11 @@ function compile(
     }));
     // Stock is selected exactly when at least one of its patterns is cut.
     builder.rule([...counts, { variable: used, coefficient: -1n }], '>=', 0n);
-    builder.rule([...counts, { variable: used, coefficient: -100n }], '<=', 0n);
+    builder.rule(
+      [...counts, { variable: used, coefficient: -blindCount }],
+      '<=',
+      0n,
+    );
     const available =
       toLengthUnits(stock.remainingLengthMm) -
       toLengthUnits(stock.reservedLengthMm);
@@ -224,8 +238,18 @@ function compile(
   const wasteUnit =
     waste.reduce((unit, item) => gcd(unit, item.coefficient), 0n) || 1n;
   const objectives: CuttingModel['objectives'] = [
-    builder.terms(waste, wasteUnit),
     builder.terms(opened),
+    builder.terms(
+      assignments
+        .filter((item) => item.stock.isRemnant)
+        .map((item) => ({
+          variable: item.variable,
+          coefficient: -BigInt(
+            item.pattern.items.reduce((sum, entry) => sum + entry.quantity, 0),
+          ),
+        })),
+    ),
+    builder.terms(waste, wasteUnit),
     builder.terms(
       assignments.map((item) => ({ variable: item.variable, coefficient: 1n })),
     ),

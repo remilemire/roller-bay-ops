@@ -1,102 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type {
-  CuttingContext,
-  CuttingPlan,
-} from '@roller-bay/shared/allocations';
+import type { CuttingContext } from '@roller-bay/shared/allocations';
 import { SolverClient } from '../../../solver/solver.client.js';
 import { startSolver } from '../../../testing/live-solver.js';
 import { validateCuttingPlan } from '../cutting-plan/cutting-plan.validator.js';
-import {
-  toLengthUnits,
-  toMillimetres,
-} from '../cutting-plan/cutting-dimensions.js';
 import { CuttingPlanOptimizer } from './cutting-plan-optimizer.js';
 import { allocatorFixture, fixture, id } from './optimizer.fixtures.js';
-import type { CuttingPlanSummary } from '../cutting-plan/cutting-plan.types.js';
-
-const score = (summary: CuttingPlanSummary) => [
-  BigInt(summary.wasteAreaMm2.replace('.', '')),
-  BigInt(summary.newRollCount),
-  BigInt(summary.cutCount),
-  BigInt(summary.stockItemCount),
-];
-const better = (a: bigint[], b: bigint[]) => {
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i]! < b[i]!;
-  return false;
-};
-
-// Independently partitions individual blinds into cuts, tries all stock choices,
-// and scores only complete plans through the domain validator (no pattern/model reuse).
-function exhaustiveReference(context: CuttingContext): bigint[] | null {
-  const blinds = context.requirements.flatMap((item) =>
-    Array.from({ length: item.quantity }, () => item),
-  );
-  assert.ok(blinds.length <= 5);
-  let best: bigint[] | null = null;
-  const cuts: CuttingPlan['cuts'] = [];
-  const consumed = new Map<string, bigint>();
-  const trim = toLengthUnits(context.settings.edgeTrimMm);
-  function visit(mask: number): void {
-    if (mask === 0) {
-      const result = validateCuttingPlan(context, { cuts });
-      if (result.valid) {
-        const value = score(result.summary);
-        if (!best || better(value, best)) best = value;
-      }
-      return;
-    }
-    const first = mask & -mask;
-    for (let subset = mask; subset; subset = (subset - 1) & mask) {
-      if (!(subset & first)) continue;
-      const selected = blinds.filter((_, index) => subset & (1 << index));
-      const color = selected[0]!.fabricColorId;
-      if (selected.some((item) => item.fabricColorId !== color)) continue;
-      const width = selected.reduce(
-        (sum, item) => sum + toLengthUnits(item.widthMm),
-        0n,
-      );
-      const length = selected.reduce((max, item) => {
-        const value =
-          toLengthUnits(item.lengthMm) + toLengthUnits(item.lengthAllowanceMm);
-        return value > max ? value : max;
-      }, 0n);
-      const quantities = new Map<string, number>();
-      for (const item of selected)
-        quantities.set(item.id, (quantities.get(item.id) ?? 0) + 1);
-      for (const stock of context.stockItems) {
-        if (
-          stock.fabricColorId !== color ||
-          stock.consumedAt !== null ||
-          (stock.isRemnant && stock.reservedLengthMm > 0) ||
-          width + 2n * trim > toLengthUnits(stock.widthMm)
-        )
-          continue;
-        const used = consumed.get(stock.id) ?? 0n;
-        if (
-          used + length >
-          toLengthUnits(stock.remainingLengthMm) -
-            toLengthUnits(stock.reservedLengthMm)
-        )
-          continue;
-        consumed.set(stock.id, used + length);
-        cuts.push({
-          stockItemId: stock.id,
-          lengthMm: toMillimetres(length),
-          items: [...quantities].map(([requirementId, quantity]) => ({
-            requirementId,
-            quantity,
-          })),
-        });
-        visit(mask ^ subset);
-        cuts.pop();
-        consumed.set(stock.id, used);
-      }
-    }
-  }
-  visit((1 << blinds.length) - 1);
-  return best;
-}
+import {
+  exhaustiveReference,
+  score,
+} from './exhaustive-reference.test-helper.js';
 
 test('cutting optimizer against the real solver service', async (t) => {
   const client = new SolverClient(await startSolver(t));
@@ -111,7 +24,7 @@ test('cutting optimizer against the real solver service', async (t) => {
     }
     assert.equal(actual.status, 'feasible');
     if (actual.status !== 'feasible') throw new Error(JSON.stringify(actual));
-    assert.deepEqual(score(actual.summary), expected);
+    assert.deepEqual(score(context, actual.plan, actual.summary), expected);
     assert.equal(validateCuttingPlan(context, actual.plan).valid, true);
     return actual;
   }
@@ -133,18 +46,108 @@ test('cutting optimizer against the real solver service', async (t) => {
     },
   );
   await t.test(
-    'less waste wins even when it requires opening a new roll',
+    'both the first and refined plan preserve a sealed roll even when opening it wastes less',
+    async () => {
+      for (const isRemnant of [false, true]) {
+        const context = fixture();
+        Object.assign(context.stockItems[0]!, {
+          widthMm: 7,
+          remainingLengthMm: 6,
+          isRemnant,
+        });
+        context.stockItems.push({
+          ...context.stockItems[0]!,
+          id: id(21),
+          widthMm: 10,
+          isUsed: false,
+          isRemnant: false,
+        });
+        const freshOnly = await compare({
+          ...context,
+          stockItems: context.stockItems.slice(1),
+        });
+        assert.equal(freshOnly?.summary.wasteAreaMm2, '6.000000');
+        const expected = exhaustiveReference(context);
+        const first: number[] = [];
+        const result = await optimizer.optimize(context, {}, async (plan) => {
+          first.push(plan.summary.newRollCount);
+        });
+        assert.deepEqual(first, [0]);
+        assert.equal(result.status, 'feasible');
+        if (result.status !== 'feasible') return;
+        assert.deepEqual(score(context, result.plan, result.summary), expected);
+        assert.equal(result.summary.newRollCount, 0);
+        assert.equal(result.summary.wasteAreaMm2, '18.000000');
+      }
+    },
+  );
+  await t.test(
+    'first and refined plans use all the blinds a remnant can supply, even when a used roll wastes less',
+    async () => {
+      for (const [remnantLength, requested, remnantPieces] of [
+        [6, 2, 2],
+        [3, 3, 1],
+      ] as const) {
+        const context = fixture();
+        context.requirements[0]!.quantity = requested;
+        const used = context.stockItems[0]!;
+        const rollOnly = await compare(context);
+        const remnant = {
+          ...used,
+          id: id(21),
+          widthMm: 7,
+          remainingLengthMm: remnantLength,
+          isRemnant: true,
+        };
+        context.stockItems.push(remnant, {
+          ...used,
+          id: id(22),
+          isUsed: false,
+        });
+        const expected = exhaustiveReference(context);
+        const first: bigint[][] = [];
+        const final = await optimizer.optimize(context, {}, async (result) => {
+          first.push(score(context, result.plan, result.summary));
+        });
+        assert.equal(final.status, 'feasible');
+        if (final.status !== 'feasible') return;
+        assert.deepEqual(
+          first.map((value) => value.slice(0, 2)),
+          [[0n, -BigInt(remnantPieces)]],
+        );
+        assert.deepEqual(score(context, final.plan, final.summary), expected);
+        assert.deepEqual(expected!.slice(0, 2), [0n, -BigInt(remnantPieces)]);
+        assert.ok(
+          Number(final.summary.wasteAreaMm2) >
+            Number(rollOnly?.summary.wasteAreaMm2),
+        );
+      }
+    },
+  );
+  await t.test(
+    'when one opening is necessary, waste savings cannot justify a second opening',
     async () => {
       const context = fixture();
-      context.stockItems[0]!.widthMm = 7;
-      context.stockItems.push({
-        ...context.stockItems[0]!,
-        id: id(21),
-        widthMm: 10,
-        isUsed: false,
+      context.requirements[0]!.quantity = 3;
+      const used = context.stockItems[0]!;
+      Object.assign(used, { widthMm: 7, remainingLengthMm: 3 });
+      for (const value of [21, 22]) {
+        context.stockItems.push({
+          ...used,
+          id: id(value),
+          widthMm: 10,
+          isUsed: false,
+        });
+      }
+      const extraOpening = await compare({
+        ...context,
+        stockItems: context.stockItems.slice(1),
       });
-      const result = await compare(context);
-      assert.equal(result?.summary.newRollCount, 1);
+      assert.equal(extraOpening?.summary.newRollCount, 2);
+      assert.equal(extraOpening?.summary.wasteAreaMm2, '9.000000');
+      const chosen = await compare(context);
+      assert.equal(chosen?.summary.newRollCount, 1);
+      assert.equal(chosen?.summary.wasteAreaMm2, '15.000000');
     },
   );
   await t.test(
