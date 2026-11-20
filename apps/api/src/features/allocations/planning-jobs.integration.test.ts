@@ -15,7 +15,7 @@ test(
   'a 512-line plan uses an available remnant through background search, draft save and confirmation',
   { timeout: 60000 },
   async (t) => {
-    const { app, fixtures, seed, ids, put, get, post, path } =
+    const { app, fixtures, seed, ids, put, get, post, path, pool } =
       await startAllocationsApp(t);
     const local = new CuttingPlanOptimizer(null);
     t.mock.method(
@@ -25,6 +25,11 @@ test(
     );
     const order = await fixtures.createWorkOrder('899990', 512);
     await seed(600000);
+    const usedRollId = await seed(600000);
+    await pool.query(
+      'UPDATE fabric_stock_items SET width_mm = 1100, is_used = true, tube_outer_diameter_mm = 50 WHERE id = $1',
+      [usedRollId],
+    );
     const stockId = await seed(512000, true);
     const requirements = Array.from({ length: 512 }, (_, i) => ({
       id: randomUUID(),
@@ -68,6 +73,7 @@ test(
       expectedRevision: draft.revision,
     }).expect(200);
     assert.equal(confirmed.plan.cuts.length, 512);
+    assert.equal(confirmed.items.length, 1);
     assert.equal(confirmed.items[0].stockItemId, stockId);
     assert.equal(confirmed.items[0].reservedLengthMm, 512000);
   },

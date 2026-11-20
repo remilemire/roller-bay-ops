@@ -18,11 +18,12 @@ import {
 import { cuttingPlanScore } from './cutting-plan-score.js';
 
 function improves(
+  context: CuttingContext,
   candidate: ValidatedCuttingPlan,
   baseline: ValidatedCuttingPlan,
 ) {
-  const current = cuttingPlanScore(baseline.summary);
-  for (const [i, value] of cuttingPlanScore(candidate.summary).entries()) {
+  const current = cuttingPlanScore(context, baseline);
+  for (const [i, value] of cuttingPlanScore(context, candidate).entries()) {
     if (value !== current[i]) return value < current[i]!;
   }
   return false;
@@ -77,7 +78,7 @@ export class CuttingPlanOptimizer {
         { signal, maxTimeSeconds: seconds },
         first,
         (candidate) => {
-          if (improves(candidate, best)) best = candidate;
+          if (improves(context, candidate, best)) best = candidate;
         },
       );
     } catch (error) {

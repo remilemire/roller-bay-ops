@@ -24,6 +24,7 @@ export interface CuttingModel {
   assignments: ModeledAssignment[];
   objectives: readonly [
     opened: Terms,
+    remnantBlinds: Terms,
     waste: Terms,
     cuts: Terms,
     handled: Terms,
@@ -238,6 +239,16 @@ function compile(
     waste.reduce((unit, item) => gcd(unit, item.coefficient), 0n) || 1n;
   const objectives: CuttingModel['objectives'] = [
     builder.terms(opened),
+    builder.terms(
+      assignments
+        .filter((item) => item.stock.isRemnant)
+        .map((item) => ({
+          variable: item.variable,
+          coefficient: -BigInt(
+            item.pattern.items.reduce((sum, entry) => sum + entry.quantity, 0),
+          ),
+        })),
+    ),
     builder.terms(waste, wasteUnit),
     builder.terms(
       assignments.map((item) => ({ variable: item.variable, coefficient: 1n })),

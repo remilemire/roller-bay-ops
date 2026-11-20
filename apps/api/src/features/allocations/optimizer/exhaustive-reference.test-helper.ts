@@ -9,8 +9,22 @@ import {
   toLengthUnits,
   toMillimetres,
 } from '../cutting-plan/cutting-dimensions.js';
-export const score = (summary: CuttingPlanSummary) => [
+export const score = (
+  context: CuttingContext,
+  plan: CuttingPlan,
+  summary: CuttingPlanSummary,
+) => [
   BigInt(summary.newRollCount),
+  -BigInt(
+    plan.cuts
+      .filter(
+        (cut) =>
+          context.stockItems.find((stock) => stock.id === cut.stockItemId)!
+            .isRemnant,
+      )
+      .flatMap((cut) => cut.items)
+      .reduce((sum, item) => sum + item.quantity, 0),
+  ),
   BigInt(summary.wasteAreaMm2.replace('.', '')),
   BigInt(summary.cutCount),
   BigInt(summary.stockItemCount),
@@ -35,7 +49,7 @@ export function exhaustiveReference(context: CuttingContext): bigint[] | null {
     if (mask === 0) {
       const result = validateCuttingPlan(context, { cuts });
       if (result.valid) {
-        const value = score(result.summary);
+        const value = score(context, { cuts }, result.summary);
         if (!best || better(value, best)) best = value;
       }
       return;
@@ -62,6 +76,7 @@ export function exhaustiveReference(context: CuttingContext): bigint[] | null {
         if (
           stock.fabricColorId !== color ||
           stock.consumedAt !== null ||
+          stock.voidedAt ||
           (stock.isRemnant && stock.reservedLengthMm > 0) ||
           width + 2n * trim > toLengthUnits(stock.widthMm)
         )

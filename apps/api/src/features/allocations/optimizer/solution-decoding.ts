@@ -53,7 +53,8 @@ export function decodeSolution(
   const validated = validateCuttingPlan(context, plan);
   if (!validated.valid) return fail();
   const { summary } = validated;
-  const expected = cuttingPlanScore(summary);
+  const decoded = { status: 'feasible' as const, plan, summary };
+  const expected = cuttingPlanScore(context, decoded);
   for (const [index, terms] of model.objectives.entries()) {
     let value = 0n;
     for (const term of terms) {
@@ -61,8 +62,8 @@ export function decodeSolution(
       if (count === undefined || !Number.isSafeInteger(count)) fail();
       value += BigInt(term.coefficient) * BigInt(count!);
     }
-    if (index === 1) value *= model.wasteUnit;
+    if (index === 2) value *= model.wasteUnit;
     if (value !== expected[index]) fail();
   }
-  return { status: 'feasible', plan, summary };
+  return decoded;
 }

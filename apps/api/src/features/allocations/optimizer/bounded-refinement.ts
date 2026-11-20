@@ -1,5 +1,5 @@
 /**
- * Builds bounded cutting candidates, then minimizes new rolls, waste, cuts, and
+ * Ranks bounded candidates by fresh rolls, remnant coverage, waste, cuts, and
  * stock handling in successive solver passes. Only proven objective values are
  * locked. Every incumbent is decoded and independently validated before return.
  */
@@ -28,6 +28,7 @@ import {
   checkCancellation,
   CuttingOptimizationError,
 } from './optimization.errors.js';
+import { remnantBlindCount } from './cutting-plan-score.js';
 
 export class BoundedRefinement {
   constructor(
@@ -64,17 +65,23 @@ export class BoundedRefinement {
     let remaining =
       options.maxTimeSeconds ?? planningDefaults.CUTTING_REFINEMENT_SECONDS;
     let incumbent: ValidatedCuttingPlan | undefined;
-    // Feasibility has already proved the exact opening count on the full
-    // inventory. Lock it before spending any solver time on waste.
+    // Preserve both stock priorities established on the full inventory.
     if (seed) {
-      compiled.model.constraints.push({
-        terms: compiled.objectives[0],
-        operator: '==',
-        rhs: seed.summary.newRollCount,
-      });
+      compiled.model.constraints.push(
+        {
+          terms: compiled.objectives[0],
+          operator: '==',
+          rhs: seed.summary.newRollCount,
+        },
+        {
+          terms: compiled.objectives[1],
+          operator: '==',
+          rhs: -remnantBlindCount(context, seed.plan),
+        },
+      );
     }
     const objectives = seed
-      ? compiled.objectives.slice(1)
+      ? compiled.objectives.slice(2)
       : compiled.objectives;
     for (const terms of objectives) {
       checkCancellation(options.signal);

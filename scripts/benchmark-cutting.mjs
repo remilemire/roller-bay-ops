@@ -74,9 +74,16 @@ try {
   const start = Date.now(),
     clock = performance.now();
   let firstMs, firstSummary;
+  const remnants = new Set(
+    stockItems.filter((stock) => stock.isRemnant).map((stock) => stock.id),
+  );
   const metrics = ({ cuts }, s) => ({
     cuts: cuts.length,
     newRolls: s.newRollCount,
+    remnantBlinds: cuts
+      .filter((cut) => remnants.has(cut.stockItemId))
+      .flatMap((cut) => cut.items)
+      .reduce((sum, item) => sum + item.quantity, 0),
     items: s.stockItemCount,
     wasteAreaMm2: s.wasteAreaMm2,
   });

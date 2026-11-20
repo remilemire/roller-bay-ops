@@ -12,179 +12,16 @@ import {
   CuttingOptimizationError,
   checkCancellation,
 } from './optimization.errors.js';
+import { preferRemnants } from './remnant-allocation.js';
+import {
+  compareDimensions,
+  fittingBlinds,
+  packWithinLimit,
+  type Blind,
+  type Stock,
+  type SearchCounts,
+} from './packing-search.js';
 import type { CuttingOptimizationResult } from './cutting-plan-optimizer.types.js';
-
-type Blind = { id: string; width: bigint; drop: bigint };
-type Stock = { id: string; width: bigint; length: bigint; opened: boolean };
-type Cut = { stock: Stock; drop: bigint; spare: bigint; blinds: Blind[] };
-type Placement = { cut: Cut } | { stock: Stock };
-export type SearchCounts = { placements: number; backtracks: number };
-
-const compare = (a: bigint, b: bigint) => (a < b ? -1 : a > b ? 1 : 0);
-
-// Drops are nonincreasing. Adding a blind to any existing cut therefore costs
-// no roll length. Equal spare widths have identical future feasibility, even
-// when the cuts belong to different rolls. Likewise opening a cut only depends
-// on the roll's usable width, remaining length and whether it costs an opening.
-function* placements(
-  blind: Blind,
-  cuts: Cut[],
-  stocks: Stock[],
-  openingsLeft: number,
-): Generator<Placement | null> {
-  const widths = new Set<bigint>();
-  for (const cut of cuts) {
-    if (cut.spare >= blind.width && !widths.has(cut.spare)) {
-      widths.add(cut.spare);
-      yield { cut };
-    } else yield null;
-  }
-  const capacities = new Set<string>();
-  for (const stock of stocks) {
-    if (
-      (stock.opened || openingsLeft > 0) &&
-      stock.width >= blind.width &&
-      stock.length >= blind.drop
-    ) {
-      const key = `${stock.width}/${stock.length}/${stock.opened}`;
-      if (!capacities.has(key)) {
-        capacities.add(key);
-        yield { stock };
-        continue;
-      }
-    }
-    yield null;
-  }
-}
-
-// Check every color before spending time backtracking on any of them. Sweeping
-// from widest to narrowest finds the longest eligible roll for each width.
-function individuallyFits(blinds: Blind[], stocks: Stock[]) {
-  const widest = [...stocks].sort((a, b) => compare(b.width, a.width));
-  const demands = [...new Set(blinds)].sort((a, b) =>
-    compare(b.width, a.width),
-  );
-  let next = 0;
-  let longest = 0n;
-  for (const blind of demands) {
-    while (next < widest.length && widest[next]!.width >= blind.width) {
-      const length = widest[next++]!.length;
-      if (length > longest) longest = length;
-    }
-    if (blind.drop > longest) return false;
-  }
-  return true;
-}
-
-type Frame = {
-  choices: Generator<Placement | null>;
-  undo?: () => void;
-};
-
-// The depth-first search stops at the first fit within this opening limit.
-// A failed search restores every stock and cut before the next limit is tried.
-async function packWithinLimit(
-  blinds: Blind[],
-  stocks: Stock[],
-  openingsLeft: number,
-  slack: bigint,
-  minimumWidth: bigint,
-  minimumDrop: bigint,
-  signal: AbortSignal | undefined,
-  counts: SearchCounts,
-) {
-  const widths = new Set(blinds.map((blind) => blind.width));
-  const distinctWidths = [...widths];
-  const cuts: Cut[] = [];
-  const stack: Frame[] = [
-    { choices: placements(blinds[0]!, cuts, stocks, openingsLeft) },
-  ];
-  let steps = 0;
-  while (stack.length) {
-    // Count scanned alternatives too. Even a frame with no fits must yield.
-    if (++steps % 2048 === 0) {
-      await setImmediate();
-      checkCancellation(signal);
-    }
-    const frame = stack.at(-1)!;
-    const next = frame.choices.next();
-    if (next.done) {
-      stack.pop();
-      frame.undo?.();
-      counts.backtracks++;
-      continue;
-    }
-    if (!next.value) continue;
-    const blind = blinds[stack.length - 1]!;
-    const choice = next.value;
-    const newCut = 'stock' in choice;
-    const drop = newCut ? blind.drop : choice.cut.drop;
-    const spare =
-      (newCut ? choice.stock.width : choice.cut.spare) - blind.width;
-    let loss = blind.width * (drop - blind.drop);
-    // A strip narrower than every blind, or a roll tail shorter than every
-    // drop, can never carry another blind in this order. Charge it once.
-    if (spare < minimumWidth) loss += spare * drop;
-    if (newCut) {
-      const tail = choice.stock.length - blind.drop;
-      if (tail < minimumDrop) loss += tail * choice.stock.width;
-    }
-    if (loss > slack) continue;
-    // An exact-fill strip that can hold at most two further blinds must
-    // equal one requested width or the sum of a pair. Considering widths
-    // already placed is a safe relaxation and keeps this check inexpensive.
-    if (
-      loss === slack &&
-      spare >= minimumWidth &&
-      spare < 3n * minimumWidth &&
-      !widths.has(spare)
-    ) {
-      if (
-        spare < 2n * minimumWidth ||
-        !distinctWidths.some((width) => widths.has(spare - width))
-      )
-        continue;
-    }
-    const opensRoll = 'stock' in choice && !choice.stock.opened;
-    let cut: Cut;
-    if ('stock' in choice) {
-      cut = {
-        stock: choice.stock,
-        drop: blind.drop,
-        spare: choice.stock.width,
-        blinds: [],
-      };
-      cuts.push(cut);
-      cut.stock.length -= blind.drop;
-      if (opensRoll) {
-        cut.stock.opened = true;
-        openingsLeft--;
-      }
-    } else cut = choice.cut;
-    slack -= loss;
-    cut.spare -= blind.width;
-    cut.blinds.push(blind);
-    counts.placements++;
-    if (stack.length === blinds.length) return cuts;
-    stack.push({
-      choices: placements(blinds[stack.length]!, cuts, stocks, openingsLeft),
-      undo: () => {
-        cut.blinds.pop();
-        cut.spare += blind.width;
-        slack += loss;
-        if ('stock' in choice) {
-          cut.stock.length += blind.drop;
-          if (opensRoll) {
-            cut.stock.opened = false;
-            openingsLeft++;
-          }
-          cuts.pop();
-        }
-      },
-    });
-  }
-  return null;
-}
 
 async function packColor(
   blinds: Blind[],
@@ -194,8 +31,8 @@ async function packColor(
 ) {
   blinds.sort(
     (a, b) =>
-      compare(b.drop, a.drop) ||
-      compare(b.width, a.width) ||
+      compareDimensions(b.drop, a.drop) ||
+      compareDimensions(b.width, a.width) ||
       a.id.localeCompare(b.id),
   );
   const minimumWidth = blinds.reduce(
@@ -212,23 +49,27 @@ async function packColor(
     .filter((s) => s.opened)
     .sort(
       (a, b) =>
-        compare(a.width, b.width) ||
-        compare(a.length, b.length) ||
+        Number(b.isRemnant) - Number(a.isRemnant) ||
+        compareDimensions(a.width, b.width) ||
+        compareDimensions(a.length, b.length) ||
         a.id.localeCompare(b.id),
     );
   const sealed = usable
     .filter((s) => !s.opened)
     .sort(
       (a, b) =>
-        compare(b.length, a.length) ||
-        compare(b.width, a.width) ||
+        compareDimensions(b.length, a.length) ||
+        compareDimensions(b.width, a.width) ||
         a.id.localeCompare(b.id),
     );
-  const areas = sealed.map(area).sort((a, b) => compare(b, a));
-  const capacities = sealed.map(capacity).sort((a, b) => compare(b, a));
+  const areas = sealed.map(area).sort((a, b) => compareDimensions(b, a));
+  const capacities = sealed
+    .map(capacity)
+    .sort((a, b) => compareDimensions(b, a));
   const demand = blinds.reduce((sum, b) => sum + b.width * b.drop, 0n);
   let slack = opened.reduce((sum, s) => sum + area(s), 0n) - demand;
   let slots = opened.reduce((sum, s) => sum + capacity(s), 0n);
+
   const maximum = Math.min(blinds.length, sealed.length);
   let narrowestOfLongest = sealed[0]?.width ?? 0n;
   for (let limit = 0; limit <= maximum; limit++) {
@@ -260,18 +101,21 @@ async function packColor(
         }
       }
     }
-    if (!individuallyFits(blinds, eligible)) continue;
-    const cuts = await packWithinLimit(
-      blinds,
-      eligible,
-      limit,
-      slack,
-      minimumWidth,
-      minimumDrop,
-      signal,
-      counts,
-    );
-    if (cuts) return cuts;
+    if (fittingBlinds(blinds, eligible).length !== blinds.length) continue;
+    const pack = (pieces: Blind[], items: Stock[], spareArea: bigint) =>
+      packWithinLimit(
+        pieces,
+        items,
+        limit,
+        spareArea,
+        minimumWidth,
+        minimumDrop,
+        signal,
+        counts,
+      );
+    const first = await pack(blinds, eligible, slack);
+    if (first)
+      return preferRemnants(blinds, eligible, first, slack, pack, signal);
   }
   return null;
 }
@@ -318,11 +162,13 @@ export async function findFeasiblePlan(
         width,
         length,
         opened: stock.isUsed || stock.isRemnant,
+        isRemnant: stock.isRemnant,
       });
   }
   const plan: CuttingPlan = { cuts: [] };
   for (const { blinds, stocks } of colors.values()) {
-    if (!individuallyFits(blinds, stocks)) return { status: 'infeasible' };
+    if (fittingBlinds(blinds, stocks).length !== blinds.length)
+      return { status: 'infeasible' };
   }
   for (const { blinds, stocks } of colors.values()) {
     const cuts = await packColor(blinds, stocks, signal, counts);

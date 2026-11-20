@@ -10,7 +10,10 @@ import {
 import { validateCuttingPlan } from '../cutting-plan/cutting-plan.validator.js';
 import { CuttingPlanOptimizer } from './cutting-plan-optimizer.js';
 import { findFeasiblePlan } from './feasibility-search.js';
-import { exhaustiveReference } from './exhaustive-reference.test-helper.js';
+import {
+  exhaustiveReference,
+  score,
+} from './exhaustive-reference.test-helper.js';
 import { fixture, id } from './optimizer.fixtures.js';
 import { generatePatterns } from './pattern-generation.js';
 import { buildCuttingModel } from './cutting-model.js';
@@ -109,8 +112,98 @@ test('512 blinds use sixteen opened items before exactly the necessary extra rol
     assert.equal(result.status, 'feasible');
     if (result.status !== 'feasible') return;
     assert.equal(result.summary.newRollCount, openings);
+    assert.equal(-score(context, result.plan, result.summary)[1]!, 128n);
     assert.ok(validateCuttingPlan(context, result.plan).valid);
   }
+});
+
+test('assigns two smaller blinds to a remnant even when the first fit would put one larger blind on it', async () => {
+  const context = tight([6, 4, 4]);
+  const remnant = {
+    ...context.stockItems[0]!,
+    widthMm: 10,
+    remainingLengthMm: 3,
+    isRemnant: true,
+  };
+  const used = {
+    ...remnant,
+    id: id(21),
+    isRemnant: false,
+    remainingLengthMm: 6,
+  };
+  context.stockItems = [used, remnant];
+  const result = await findFeasiblePlan(context);
+  assert.equal(result.status, 'feasible');
+  if (result.status !== 'feasible') return;
+  assert.deepEqual(
+    result.plan.cuts
+      .filter((cut) => cut.stockItemId === remnant.id)
+      .flatMap((cut) => cut.items.map((item) => item.requirementId))
+      .sort(),
+    [id(2), id(3)],
+  );
+});
+
+test('tries another remnant selection when only the remnant can fit the widest blind', async () => {
+  const context = tight([7, 6, 3, 3, 2]);
+  const remnant = {
+    ...context.stockItems[0]!,
+    widthMm: 10,
+    remainingLengthMm: 6,
+    isRemnant: true,
+  };
+  context.stockItems = [
+    remnant,
+    { ...remnant, id: id(21), widthMm: 8, isRemnant: false },
+  ];
+  const result = await findFeasiblePlan(context);
+  assert.equal(result.status, 'feasible');
+  if (result.status !== 'feasible') return;
+  // The narrowest four leave a seven-wide blind for a six-wide used roll.
+  const remnantIds = result.plan.cuts
+    .filter((cut) => cut.stockItemId === remnant.id)
+    .flatMap((cut) => cut.items.map((item) => item.requirementId))
+    .sort();
+  assert.deepEqual(remnantIds, [id(1), id(3), id(4), id(5)]);
+  assert.deepEqual(
+    score(context, result.plan, result.summary).slice(0, 2),
+    exhaustiveReference(context)!.slice(0, 2),
+  );
+});
+
+test('extra remnant placements cannot justify opening a sealed roll', async () => {
+  const context = tight([8, 4, 4]);
+  const remnant = {
+    ...context.stockItems[0]!,
+    widthMm: 10,
+    remainingLengthMm: 3,
+    isRemnant: true,
+  };
+  const used = {
+    ...remnant,
+    id: id(21),
+    widthMm: 6,
+    remainingLengthMm: 6,
+    isRemnant: false,
+  };
+  const sealed = { ...remnant, id: id(22), isRemnant: false, isUsed: false };
+  context.stockItems = [remnant, used, sealed];
+  const result = await findFeasiblePlan(context);
+  assert.equal(result.status, 'feasible');
+  if (result.status !== 'feasible') return;
+  assert.equal(result.summary.newRollCount, 0);
+  assert.deepEqual(
+    result.plan.cuts
+      .filter((cut) => cut.stockItemId === remnant.id)
+      .flatMap((cut) => cut.items),
+    [{ requirementId: id(1), quantity: 1 }],
+  );
+  remnant.reservedLengthMm = 1;
+  const reserved = await findFeasiblePlan(context);
+  assert.equal(reserved.status, 'feasible');
+  if (reserved.status !== 'feasible') return;
+  assert.equal(reserved.summary.newRollCount, 1);
+  assert.ok(reserved.plan.cuts.every((cut) => cut.stockItemId !== remnant.id));
 });
 
 test('agrees with independent exhaustive partitions on 1000 seeded small orders', async () => {
@@ -151,10 +244,10 @@ test('agrees with independent exhaustive partitions on 1000 seeded small orders'
     );
     if (actual.status === 'feasible') {
       feasible++;
-      assert.equal(
-        BigInt(actual.summary.newRollCount),
-        expected![0],
-        `opening count for fixture ${i}`,
+      assert.deepEqual(
+        score(context, actual.plan, actual.summary).slice(0, 2),
+        expected!.slice(0, 2),
+        `stock priorities for fixture ${i}`,
       );
       assert.ok(validateCuttingPlan(context, actual.plan).valid);
     }

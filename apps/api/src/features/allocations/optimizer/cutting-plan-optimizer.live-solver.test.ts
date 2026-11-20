@@ -24,7 +24,7 @@ test('cutting optimizer against the real solver service', async (t) => {
     }
     assert.equal(actual.status, 'feasible');
     if (actual.status !== 'feasible') throw new Error(JSON.stringify(actual));
-    assert.deepEqual(score(actual.summary), expected);
+    assert.deepEqual(score(context, actual.plan, actual.summary), expected);
     assert.equal(validateCuttingPlan(context, actual.plan).valid, true);
     return actual;
   }
@@ -75,9 +75,52 @@ test('cutting optimizer against the real solver service', async (t) => {
         assert.deepEqual(first, [0]);
         assert.equal(result.status, 'feasible');
         if (result.status !== 'feasible') return;
-        assert.deepEqual(score(result.summary), expected);
+        assert.deepEqual(score(context, result.plan, result.summary), expected);
         assert.equal(result.summary.newRollCount, 0);
         assert.equal(result.summary.wasteAreaMm2, '18.000000');
+      }
+    },
+  );
+  await t.test(
+    'first and refined plans use all the blinds a remnant can supply, even when a used roll wastes less',
+    async () => {
+      for (const [remnantLength, requested, remnantPieces] of [
+        [6, 2, 2],
+        [3, 3, 1],
+      ] as const) {
+        const context = fixture();
+        context.requirements[0]!.quantity = requested;
+        const used = context.stockItems[0]!;
+        const rollOnly = await compare(context);
+        const remnant = {
+          ...used,
+          id: id(21),
+          widthMm: 7,
+          remainingLengthMm: remnantLength,
+          isRemnant: true,
+        };
+        context.stockItems.push(remnant, {
+          ...used,
+          id: id(22),
+          isUsed: false,
+        });
+        const expected = exhaustiveReference(context);
+        const first: bigint[][] = [];
+        const final = await optimizer.optimize(context, {}, async (result) => {
+          first.push(score(context, result.plan, result.summary));
+        });
+        assert.equal(final.status, 'feasible');
+        if (final.status !== 'feasible') return;
+        assert.deepEqual(
+          first.map((value) => value.slice(0, 2)),
+          [[0n, -BigInt(remnantPieces)]],
+        );
+        assert.deepEqual(score(context, final.plan, final.summary), expected);
+        assert.deepEqual(expected!.slice(0, 2), [0n, -BigInt(remnantPieces)]);
+        assert.ok(
+          Number(final.summary.wasteAreaMm2) >
+            Number(rollOnly?.summary.wasteAreaMm2),
+        );
       }
     },
   );
