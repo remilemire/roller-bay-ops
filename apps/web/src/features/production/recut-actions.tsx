@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Scissors } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import {
@@ -93,8 +92,7 @@ export function RequestRecut({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        <Scissors size={15} aria-hidden="true" />
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         Request recut
       </Button>
       <Dialog
@@ -187,7 +185,7 @@ export function RecutActions({
     setEdit({ action, task: recut });
   const close = () => setEdit(null);
   return (
-    <section className="stack">
+    <section className="station-recut">
       <div>
         <strong>
           Recut · {recut.quantity} × {recut.fabricColorCode}

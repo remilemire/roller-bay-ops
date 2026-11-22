@@ -199,22 +199,24 @@ function Worksheet({
                 ? 'Results awaiting office review'
                 : 'Results in progress'}
         </p>
-        {!sheet.submittedAt && !sheet.skippedAt && !sheet.abandonedAt && (
-          <RequestRecut
-            orderId={sheet.workOrderId}
-            orderNumber={sheet.orderNumber}
-          />
-        )}
-        {/* Submitted results credit the cut; an admin corrects it after that. */}
-        {!sheet.results && !sheet.skippedAt && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setChangingCutters(true)}
-          >
-            Change cutters
-          </Button>
-        )}
+        <div className="inline-actions worksheet-cutter-actions">
+          {!sheet.submittedAt && !sheet.skippedAt && !sheet.abandonedAt && (
+            <RequestRecut
+              orderId={sheet.workOrderId}
+              orderNumber={sheet.orderNumber}
+            />
+          )}
+          {/* Submitted results credit the cut; an admin corrects it after that. */}
+          {!sheet.results && !sheet.skippedAt && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setChangingCutters(true)}
+            >
+              Change cutters
+            </Button>
+          )}
+        </div>
       </div>
       {changingCutters && (
         <ChangeCutters

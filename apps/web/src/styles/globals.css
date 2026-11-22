@@ -2698,6 +2698,9 @@ label.detail-label {
   row-gap: 0;
 }
 .station-order {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   padding: 18px 20px;
 }
 .station-order-header {
@@ -2725,7 +2728,6 @@ label.detail-label {
   margin-top: 4px;
 }
 .station-order-note {
-  margin-top: 12px;
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2734,13 +2736,28 @@ label.detail-label {
   margin-right: 8px;
   color: var(--muted);
 }
+.station-recut {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--action-gap);
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.station-recut p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.station-recut > .inline-actions:empty,
+.worksheet-cutter-actions:empty {
+  display: none;
+}
 .station-order-footer {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px var(--field-gap);
-  margin-top: 12px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }

@@ -263,6 +263,11 @@ function StationQueue({ station }: { station: Station }) {
                     />
                   )}
                 </div>
+                {order.note && (
+                  <p className="station-order-note">
+                    <span>Note</span> {order.note}
+                  </p>
+                )}
                 {order.recuts
                   .filter((r) =>
                     view === 'recuts'
@@ -273,11 +278,6 @@ function StationQueue({ station }: { station: Station }) {
                   .map((r) => (
                     <RecutActions key={r.id} recut={r} station={station} />
                   ))}
-                {order.note && (
-                  <p className="station-order-note">
-                    <span>Note</span> {order.note}
-                  </p>
-                )}
                 <div className="station-order-footer">
                   <details className="station-order-history">
                     <summary>
