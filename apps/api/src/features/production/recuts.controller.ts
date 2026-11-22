@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -11,6 +12,7 @@ import {
 import {
   recutRequestSchema,
   recutAssignmentSchema,
+  recutSelectionSchema,
   recutSignoffSchema,
   recutWithdrawalSchema,
 } from '@roller-bay/shared/production';
@@ -66,6 +68,16 @@ export class RecutsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.recuts.candidates(id);
+  }
+  @Post('recuts/:id/stock-options')
+  @HttpCode(200)
+  @Roles('staff')
+  groupedCandidates(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(recutSelectionSchema))
+    input: z.infer<typeof recutSelectionSchema>,
+  ) {
+    return this.recuts.candidates(id, input);
   }
   @Post('recuts/:id/assign') @Roles('staff') assign(
     @Param('id', ParseUUIDPipe) id: string,

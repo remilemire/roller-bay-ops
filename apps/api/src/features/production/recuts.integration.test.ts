@@ -353,3 +353,182 @@ test('a cutter reports a shortage, staff assign another roll, and the last repla
   await submit(replacement);
   assert.equal((await order()).cutAt, finished.body.submittedAt);
 });
+
+test('three different-sized recuts share a reservation and worksheet and retain independent sign-offs', async (t) => {
+  const { get, post, input, create, seed, pool, userId } =
+    await startAllocationsApp(t);
+  await pool.query("UPDATE users SET role='admin' WHERE id=$1", [userId]);
+  const employeeIds = [
+    (
+      await post('/api/employees', { name: 'Cutter', initials: 'CT' }).expect(
+        201,
+      )
+    ).body.id,
+  ];
+  const stock = await seed();
+  const source = await input(stock);
+  const order = source.workOrderId;
+  await pool.query('UPDATE work_orders SET quantity=3 WHERE id=$1', [order]);
+  source.requirements = [200, 300, 400].map((widthMm, i) => ({
+    ...source.requirements[0]!,
+    id: randomUUID(),
+    widthMm,
+    lengthMm: 600 + 50 * i,
+  }));
+  source.plan.cuts = [
+    {
+      stockItemId: stock,
+      items: source.requirements.map((r) => ({
+        requirementId: r.id,
+        quantity: 1,
+      })),
+    },
+  ];
+  await create(source);
+  const base = '/api/production';
+  const path = `${base}/orders/${order}/recuts`;
+  const requests: { id: string; expectedRevision: number }[] = [];
+  for (const requirement of source.requirements) {
+    const result = (
+      await post(path, {
+        requirementId: requirement.id,
+        quantity: 1,
+        reason: `Flaw on ${requirement.widthMm}`,
+      }).expect(201)
+    ).body;
+    requests.push({ id: result.recordId, expectedRevision: result.revision });
+  }
+  const [first, ...additionalRecuts] = requests;
+  const action = `${base}/recuts/${first!.id}`;
+  const narrow = await seed(2000, true);
+  await pool.query('UPDATE fabric_stock_items SET width_mm=350 WHERE id=$1', [
+    narrow,
+  ]);
+  const replacement = await seed(1100, true);
+  const candidates = (
+    await post(`${action}/stock-options`, { additionalRecuts }).expect(200)
+  ).body as { id: string }[];
+  assert.ok(candidates.some((r) => r.id === replacement));
+  assert.ok(!candidates.some((r) => r.id === narrow));
+  const assignment = {
+    expectedRevision: 1,
+    additionalRecuts,
+    stockItemId: replacement,
+  };
+  await post(`${action}/assign`, { ...assignment, stockItemId: narrow }).expect(
+    409,
+  );
+  await post(`${action}/assign`, {
+    ...assignment,
+    additionalRecuts: [{ ...additionalRecuts[0], expectedRevision: 9 }],
+  }).expect(409);
+  const list = async () =>
+    (await get(path).expect(200)).body as {
+      id: string;
+      stage: string;
+      allocationId: string | null;
+      revision: number;
+    }[];
+  assert.ok(
+    (await list()).every(
+      (r) => r.stage === 'requested' && r.allocationId === null,
+    ),
+  );
+  const key = randomUUID();
+  const assigned = await post(`${action}/assign`, assignment, key).expect(201);
+  assert.deepEqual(
+    (await post(`${action}/assign`, assignment, key).expect(201)).body,
+    assigned.body,
+  );
+  const group = await list();
+  const plan = group[0]!.allocationId;
+  assert.ok(
+    plan &&
+      group.length === 3 &&
+      group.every((r) => r.allocationId === plan && r.stage === 'cutting'),
+  );
+  const sheet = worksheetSchema.parse(
+    (
+      await post(
+        `${base}/cutting/orders/${order}/recut-plans/${plan}/worksheet`,
+        { employeeIds },
+      ).expect(201)
+    ).body,
+  );
+  assert.equal(sheet.snapshot.items.length, 1);
+  assert.equal(sheet.snapshot.plan.cuts.length, 1);
+  assert.equal(sheet.snapshot.plan.cuts[0]!.items.length, 3);
+  await post(`${base}/cutting/worksheets/${sheet.id}/submit`, {
+    expectedRevision: sheet.revision,
+    results: {
+      expectedRevision: sheet.snapshot.revision,
+      items: [
+        {
+          stockItemId: replacement,
+          expectedRevision: sheet.snapshot.items[0]!.stockItem.revision,
+          outcome: 'consumed',
+          scraps: [],
+        },
+      ],
+    },
+  }).expect(201);
+  const cut = await list();
+  assert.ok(cut.every((r) => r.stage === 'assembly'));
+  await post(`${base}/assembly/recuts/${first!.id}/complete`, {
+    expectedRevision: cut.find((r) => r.id === first!.id)!.revision,
+    employeeIds,
+  }).expect(201);
+  assert.deepEqual((await list()).map((r) => r.stage).sort(), [
+    'assembly',
+    'assembly',
+    'checking',
+  ]);
+});
+
+test('withdrawing an unstarted shared cut frees the remnant and returns its other request to staff', async (t) => {
+  const { post, get, create, input, seed, pool } = await startAllocationsApp(t);
+  const planned = await input(await seed());
+  planned.requirements[0]!.quantity = 2;
+  planned.plan.cuts[0]!.items[0]!.quantity = 2;
+  await pool.query('UPDATE work_orders SET quantity=2 WHERE id=$1', [
+    planned.workOrderId,
+  ]);
+  await create(planned);
+  const base = '/api/production';
+  const requests = `${base}/orders/${planned.workOrderId}/recuts`;
+  const request = async (reason: string) =>
+    (
+      await post(requests, {
+        requirementId: planned.requirements[0]!.id,
+        quantity: 1,
+        reason,
+      }).expect(201)
+    ).body;
+  const first = await request('Flaw');
+  const peer = await request('Short cut');
+  const remnant = await seed(1100, true);
+  const firstPath = `${base}/recuts/${first.recordId}`;
+  const assigned = await post(`${firstPath}/assign`, {
+    expectedRevision: first.revision,
+    additionalRecuts: [{ id: peer.recordId, expectedRevision: peer.revision }],
+    stockItemId: remnant,
+  }).expect(201);
+  await post(`${firstPath}/withdraw`, {
+    expectedRevision: assigned.body.revision,
+    reason: 'Original blind passed checking',
+  }).expect(201);
+  const rows = (await get(requests).expect(200)).body as {
+    id: string;
+    stage: string;
+    allocationId: string | null;
+    revision: number;
+  }[];
+  const remaining = rows.find((r) => r.id === peer.recordId)!;
+  assert.equal(rows.find((r) => r.id === first.recordId)?.stage, 'withdrawn');
+  assert.equal(remaining.stage, 'requested');
+  assert.equal(remaining.allocationId, null);
+  await post(`${base}/recuts/${remaining.id}/assign`, {
+    expectedRevision: remaining.revision,
+    stockItemId: remnant,
+  }).expect(201);
+});

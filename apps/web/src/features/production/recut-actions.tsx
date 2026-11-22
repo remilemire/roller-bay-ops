@@ -11,6 +11,7 @@ import {
   recutStockSchema,
   recutWithdrawalSchema,
   type Recut,
+  type RecutSelection,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
 import { useCurrentUser } from '@/features/auth';
@@ -169,9 +170,11 @@ function RequestForm({
 type Task = Recut & { worksheetId: string | null; needsCorrection: boolean };
 export function RecutActions({
   recut,
+  orderRecuts,
   station,
 }: {
   recut: Task;
+  orderRecuts: Task[];
   station: Station;
 }) {
   const user = useCurrentUser();
@@ -180,9 +183,19 @@ export function RecutActions({
   const [edit, setEdit] = useState<{
     action: 'assign' | 'complete' | 'withdraw';
     task: Task;
+    eligible: Task[];
   } | null>(null);
   const open = (action: 'assign' | 'complete' | 'withdraw') =>
-    setEdit({ action, task: recut });
+    setEdit({
+      action,
+      task: recut,
+      eligible: orderRecuts.filter(
+        (r) =>
+          r.id !== recut.id &&
+          r.fabricColorCode === recut.fabricColorCode &&
+          r.stage === 'requested',
+      ),
+    });
   const close = () => setEdit(null);
   return (
     <section className="station-recut">
@@ -202,7 +215,11 @@ export function RecutActions({
         )}
         {station === 'cutting' &&
           recut.allocationId &&
-          (recut.stage === 'cutting' || recut.needsCorrection) && (
+          orderRecuts.find(
+            (r) =>
+              r.allocationId === recut.allocationId &&
+              (r.stage === 'cutting' || r.needsCorrection),
+          )?.id === recut.id && (
             <Button asChild>
               <Link
                 href={`/stations/cutting/${recut.workOrderId}?plan=${recut.allocationId}`}
@@ -247,6 +264,14 @@ export function RecutActions({
         >
           <RecutForm
             task={edit.task}
+            eligible={edit.eligible}
+            sharedUncut={
+              recut.stage === 'cutting' &&
+              orderRecuts.some(
+                (r) =>
+                  r.id !== recut.id && r.allocationId === recut.allocationId,
+              )
+            }
             action={edit.action}
             station={station}
             close={close}
@@ -258,28 +283,31 @@ export function RecutActions({
 }
 function RecutForm({
   task,
+  eligible,
+  sharedUncut,
   action,
   station,
   close,
 }: {
   task: Task;
+  eligible: Task[];
+  sharedUncut: boolean;
   action: 'assign' | 'complete' | 'withdraw';
   station: Station;
   close: () => void;
 }) {
-  const units = useMeasurementUnits();
-  const [stockItemId, setStock] = useState('');
   const [employeeIds, setEmployees] = useState<string[]>([]);
   const [reason, setReason] = useState('');
-  const stock = useQuery({
-    queryKey: [...productionKey, 'recut-stock', task.id],
-    queryFn: () => api(`/production/recuts/${task.id}/stock`, recutStockSchema),
-    enabled: action === 'assign',
-  });
   const expectedRevision = task.revision;
   if (action === 'withdraw')
     return (
       <div className="stack">
+        {sharedUncut && (
+          <p>
+            Withdrawing this request releases the shared reservation. The other
+            requests will return to Awaiting fabric.
+          </p>
+        )}
         <TextField
           label="Reason for withdrawal"
           value={reason}
@@ -310,14 +338,72 @@ function RecutForm({
         />
       </div>
     );
-  if (stock.isPending) return <Loading />;
-  if (stock.error)
-    return (
-      <ErrorNotice error={stock.error} retry={() => void stock.refetch()} />
-    );
+  return <AssignFabric task={task} eligible={eligible} close={close} />;
+}
+
+function AssignFabric({
+  task,
+  eligible,
+  close,
+}: {
+  task: Task;
+  eligible: Task[];
+  close: () => void;
+}) {
+  const units = useMeasurementUnits();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [stockItemId, setStock] = useState('');
+  const additionalRecuts = eligible
+    .filter((r) => selected.includes(r.id))
+    .map((r) => ({ id: r.id, expectedRevision: r.revision }));
+  const selection: RecutSelection = additionalRecuts.length
+    ? { additionalRecuts }
+    : {};
+  const stock = useQuery({
+    queryKey: [...productionKey, 'recut-stock', task.id, selection],
+    queryFn: ({ signal }) =>
+      additionalRecuts.length
+        ? api(`/production/recuts/${task.id}/stock-options`, recutStockSchema, {
+            method: 'POST',
+            body: selection,
+            signal,
+          })
+        : api(`/production/recuts/${task.id}/stock`, recutStockSchema, {
+            signal,
+          }),
+  });
   return (
     <div className="stack">
-      {stock.data.length ? (
+      {eligible.length > 0 && (
+        <fieldset className="form-fieldset">
+          <legend>Cut together on one worksheet</legend>
+          {[task, ...eligible].map((r) => (
+            <label className="correction-check" key={r.id}>
+              <input
+                type="checkbox"
+                disabled={r.id === task.id}
+                checked={r.id === task.id || selected.includes(r.id)}
+                onChange={(e) => {
+                  setStock('');
+                  setSelected(
+                    e.target.checked
+                      ? [...selected, r.id]
+                      : selected.filter((id) => id !== r.id),
+                  );
+                }}
+              />
+              {r.quantity} × {r.fabricColorCode} ·{' '}
+              {measurementLabel(r.widthMm, units.blindWidth)} ×{' '}
+              {measurementLabel(r.lengthMm, units.finishedDrop)} · {r.reason}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {stock.isPending ? (
+        <Loading />
+      ) : stock.error ? (
+        <ErrorNotice error={stock.error} retry={() => void stock.refetch()} />
+      ) : stock.data.length ? (
         <ChoiceField
           label={`Stock · ${task.fabricColorCode}`}
           value={stockItemId}
@@ -328,12 +414,15 @@ function RecutForm({
           }))}
         />
       ) : (
-        <p>No stock can fit this replacement quantity.</p>
+        <p>No stock can fit the selected replacements.</p>
       )}
       <Submit
         path={`/production/recuts/${task.id}/assign`}
         schema={recutAssignmentSchema}
-        body={{ expectedRevision, stockItemId }}
+        body={{ expectedRevision: task.revision, stockItemId, ...selection }}
+        disabled={
+          !stock.data?.some((s) => s.id === stockItemId) || !!stock.error
+        }
         label="Reserve fabric"
         close={close}
       />

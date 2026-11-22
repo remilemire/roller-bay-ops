@@ -100,7 +100,19 @@ export type Recut = z.infer<typeof recutSchema>;
 export const recutRevisionSchema = z.strictObject({
   expectedRevision: z.number().int().positive(),
 });
+export const recutSelectionSchema = z.strictObject({
+  additionalRecuts: z
+    .array(recutRevisionSchema.extend({ id: z.uuid() }))
+    .max(999)
+    .refine(
+      (items) => new Set(items.map((item) => item.id)).size === items.length,
+      'Select each request once.',
+    )
+    .optional(),
+});
+export type RecutSelection = z.infer<typeof recutSelectionSchema>;
 export const recutAssignmentSchema = recutRevisionSchema.extend({
+  ...recutSelectionSchema.shape,
   stockItemId: z.uuid(),
 });
 export const recutWithdrawalSchema = recutRevisionSchema.extend({

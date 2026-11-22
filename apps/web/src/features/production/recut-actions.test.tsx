@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 import { api } from '@/lib/api';
+import { RecutActions } from './recut-actions';
 import { OrderProduction } from './order-production';
 import { workOrderSchema } from '@roller-bay/shared/work-orders';
 vi.mock('@/features/auth', () => ({
@@ -98,5 +99,92 @@ it('staff can request a replacement from a shipped order with only the blind, qu
         reason: 'Flaw across face',
       },
     },
+  );
+});
+
+it('lets staff group pending requests for the same fabric and reselect stock that fits them together', async () => {
+  const task = {
+    id: crypto.randomUUID(),
+    requirementId: crypto.randomUUID(),
+    workOrderId: crypto.randomUUID(),
+    widthMm: 250,
+    lengthMm: 700,
+    quantity: 1,
+    fabricColorCode: 'LINEN',
+    reason: 'Face flaw',
+    stage: 'requested' as const,
+    revision: 1,
+    allocationId: null,
+    worksheetId: null,
+    needsCorrection: false,
+    needsAssembly: true,
+  };
+  const peer = {
+    ...task,
+    id: crypto.randomUUID(),
+    reason: 'Edge snag',
+    widthMm: 325,
+    revision: 3,
+  };
+  const third = {
+    ...task,
+    id: crypto.randomUUID(),
+    reason: 'Roll short',
+    widthMm: 275,
+  };
+  const otherFabric = {
+    ...task,
+    id: crypto.randomUUID(),
+    reason: 'Wrong fabric',
+    fabricColorCode: 'BLUE',
+  };
+  const small = {
+    id: crypto.randomUUID(),
+    isRemnant: true,
+    locationLabel: 'A1',
+    widthMm: 500,
+    availableLengthMm: 800,
+  };
+  const large = { ...small, id: crypto.randomUUID(), widthMm: 1200 };
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path.endsWith('/stock-options')) return [large];
+    if (path.endsWith('/stock')) return [small, large];
+    return { recordId: task.id, revision: 2 };
+  });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RecutActions
+        recut={task}
+        station="cutting"
+        orderRecuts={[task, peer, third, otherFabric]}
+      />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Assign fabric' }));
+  expect(screen.queryByRole('checkbox', { name: /Wrong fabric/ })).toBeNull();
+  await user.selectOptions(await screen.findByLabelText(/Stock ·/), small.id);
+  await user.click(screen.getByRole('checkbox', { name: /Edge snag/ }));
+  await user.click(screen.getByRole('checkbox', { name: /Roll short/ }));
+  const reserve = screen.getByRole('button', { name: 'Reserve fabric' });
+  expect(reserve).toBeDisabled();
+  const picker = await screen.findByLabelText(/Stock ·/);
+  expect(picker.querySelector(`option[value="${small.id}"]`)).toBeNull();
+  await user.selectOptions(picker, large.id);
+  await user.click(reserve);
+  const additionalRecuts = [peer, third].map((r) => ({
+    id: r.id,
+    expectedRevision: r.revision,
+  }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      `/production/recuts/${task.id}/assign`,
+      expect.anything(),
+      {
+        method: 'POST',
+        key: expect.any(String),
+        body: { expectedRevision: 1, stockItemId: large.id, additionalRecuts },
+      },
+    ),
   );
 });

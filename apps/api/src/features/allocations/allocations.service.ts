@@ -36,9 +36,13 @@ import {
   type AllocationQuery,
   type CompleteAllocationRequest,
   type CreateAllocation,
+  type CuttingContext,
   type ReplaceAllocation,
   requirementInput,
 } from '@roller-bay/shared/allocations';
+import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
+import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
+import { findFeasiblePlan } from './optimizer/feasibility-search.js';
 import { recutLayout } from './recut-plan.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { buildCuttingContext } from './allocation-cutting-context.js';
@@ -78,6 +82,7 @@ function requireOrderQuantity(
       ],
     });
 }
+const groupedRecutTimeoutMs = 5_000;
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 @Injectable()
@@ -90,55 +95,86 @@ export class AllocationsService {
     private readonly cuttingRules: CuttingRulesService,
     private readonly orders: WorkOrdersService,
     private readonly details: AllocationDetailsService,
+    private readonly optimizer: CuttingPlanOptimizer,
   ) {}
+  private async groupedRecutPlan(context: CuttingContext, signal: AbortSignal) {
+    try {
+      const result = await findFeasiblePlan(
+        this.optimizer.prepare(context),
+        signal,
+      );
+      return result.status === 'feasible' ? result.plan : null;
+    } catch (error) {
+      if (error instanceof CuttingOptimizationError) {
+        if (error.code === 'invalid_input')
+          throw new BadRequestException(error.message);
+        if (error.code === 'cancelled')
+          throw new ConflictException(
+            'The grouped layout took too long to check. Select fewer requests.',
+          );
+      }
+      throw error;
+    }
+  }
   async recutStock(
     context: UnitOfWorkContext,
     sourceId: string,
-    blind: {
-      fabricColorId: string;
-      widthMm: number;
-      lengthMm: number;
-      quantity: number;
-    },
+    blinds: CreateAllocation['requirements'],
   ) {
     const source = await context.allocations.findById(sourceId);
     if (!source) throw new NotFoundException('Original allocation not found.');
-    const { settings } = this.cuttingRules.apply([], source.settings);
+    const configured = this.cuttingRules.apply(blinds, source.settings);
+    const first = blinds[0]!;
     const stocks = await this.stockItems.findForAllocation(context, {
-      colorIds: [blind.fabricColorId],
+      colorIds: [first.fabricColorId],
     });
     const reserved = await context.allocations.reservations(
       stocks.map((s) => s.id),
     );
     const consumed = await this.worksheets.reportedConsumedStockIds(context);
-    return stocks.flatMap((s) => {
-      if (consumed.has(s.id)) return [];
-      const held = toLengthUnits(Number(reserved.get(s.id) ?? 0));
-      const available = toLengthUnits(s.remainingLengthMm) - held;
-      const layout = recutLayout(s.widthMm, blind, settings);
-      if (!layout || available < layout.length || (s.isRemnant && held > 0n))
-        return [];
-      return [
-        {
-          id: s.id,
-          widthMm: s.widthMm,
+    const candidates = [];
+    const signal = AbortSignal.timeout(groupedRecutTimeoutMs);
+    // Identical available rectangles have the same fit, independent of shelf or roll number.
+    const fits = new Map<string, boolean>();
+    for (const stock of stocks) {
+      const held = toLengthUnits(Number(reserved.get(stock.id) ?? 0));
+      const available = toLengthUnits(stock.remainingLengthMm) - held;
+      if (
+        available <= 0n ||
+        consumed.has(stock.id) ||
+        (stock.isRemnant && held > 0n)
+      )
+        continue;
+      const geometry = `${stock.widthMm}/${available}`;
+      let fit = fits.get(geometry);
+      if (fit === undefined) {
+        if (blinds.length === 1) {
+          const layout = recutLayout(stock.widthMm, first, configured.settings);
+          fit = layout !== null && available >= layout.length;
+        } else {
+          fit = !!(await this.groupedRecutPlan(
+            buildCuttingContext(configured, [stock], reserved),
+            signal,
+          ));
+        }
+        fits.set(geometry, fit);
+      }
+      if (fit)
+        candidates.push({
+          id: stock.id,
+          widthMm: stock.widthMm,
           availableLengthMm: Number(available) / 1000,
-          locationLabel: s.locationLabel,
-          isRemnant: s.isRemnant,
-        },
-      ];
-    });
+          locationLabel: stock.locationLabel,
+          isRemnant: stock.isRemnant,
+        });
+    }
+    return candidates;
   }
   async reserveRecut(
     context: UnitOfWorkContext,
     sourceId: string,
     workOrderId: string,
-    blind: {
-      fabricColorId: string;
-      widthMm: number;
-      lengthMm: number;
-      quantity: number;
-    },
+    blinds: CreateAllocation['requirements'],
     stockItemId: string,
     actor: string,
   ) {
@@ -163,23 +199,51 @@ export class AllocationsService {
       throw new ConflictException(
         'This stock was reported consumed. Select another roll or remnant.',
       );
-    const requirement = { ...blind, id: randomUUID() };
-    const { settings } = this.cuttingRules.apply([], source.settings);
-    const layout = recutLayout(stock.widthMm, blind, settings);
-    if (!layout)
-      throw new BadRequestException(
-        'The replacement is wider than the usable fabric.',
+    const { requirements, settings } = this.cuttingRules.apply(
+      blinds.map((blind) => ({ ...blind, id: randomUUID() })),
+      source.settings,
+    );
+    let cuts: CreateAllocation['plan']['cuts'];
+    if (requirements.length === 1) {
+      const requirement = requirements[0]!;
+      const layout = recutLayout(stock.widthMm, requirement, settings);
+      if (!layout)
+        throw new BadRequestException(
+          'The replacement is wider than the usable fabric.',
+        );
+      cuts = Array.from({ length: layout.rows }, (_, i) => ({
+        stockItemId,
+        items: [
+          {
+            requirementId: requirement.id,
+            quantity: Math.min(
+              layout.across,
+              requirement.quantity - i * layout.across,
+            ),
+          },
+        ],
+      }));
+    } else {
+      const reserved = await context.allocations.reservations([stockItemId]);
+      if (Number(reserved.get(stockItemId) ?? 0) >= stock.remainingLengthMm)
+        throw new ConflictException(
+          'The selected stock has no available length.',
+        );
+      const plan = await this.groupedRecutPlan(
+        buildCuttingContext({ requirements, settings }, [stock], reserved),
+        AbortSignal.timeout(groupedRecutTimeoutMs),
       );
-    const cuts = Array.from({ length: layout.rows }, (_, i) => ({
-      stockItemId,
-      items: [
-        {
-          requirementId: requirement.id,
-          quantity: Math.min(layout.across, blind.quantity - i * layout.across),
-        },
-      ],
-    }));
-    const input = this.configure([requirement], { cuts }, settings);
+      if (!plan)
+        throw new ConflictException(
+          'The selected stock cannot fit all selected recuts.',
+        );
+      cuts = plan.cuts;
+    }
+    const input = {
+      requirements,
+      settings,
+      plan: planCutLengths(requirements, { cuts }),
+    };
     const summary = await this.validateForWrite(context, input);
     const header = (await context.allocations.create({
       workOrderId,

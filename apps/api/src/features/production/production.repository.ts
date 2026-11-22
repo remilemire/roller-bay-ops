@@ -38,8 +38,8 @@ export class ProductionRepository {
   async findRecut(id: string) {
     return (await this.recutRows(eq(recuts.id, id)))[0];
   }
-  async recutForPlan(allocationId: string) {
-    return (await this.recutRows(eq(recuts.allocationId, allocationId)))[0];
+  recutsForPlan(allocationId: string) {
+    return this.recutRows(eq(recuts.allocationId, allocationId));
   }
   recutsForOrder(id: string) {
     return this.recutRows(eq(recuts.workOrderId, id));

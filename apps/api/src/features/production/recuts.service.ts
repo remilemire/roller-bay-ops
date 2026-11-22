@@ -8,6 +8,7 @@ import {
   recutSchema,
   recutBlindsSchema,
   type Recut,
+  type RecutSelection,
 } from '@roller-bay/shared/production';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
@@ -23,6 +24,13 @@ import { productionOperation } from './production.operation.js';
 import type { ProductionRepository } from './production.repository.js';
 
 type Row = Awaited<ReturnType<ProductionRepository['recutsForOrder']>>[number];
+const replacementBlind = ({
+  id,
+  fabricColorId,
+  widthMm,
+  lengthMm,
+  quantity,
+}: Row) => ({ id, fabricColorId, widthMm, lengthMm, quantity });
 type RequestInput = Pick<Recut, 'quantity' | 'reason' | 'requirementId'>;
 type Change = {
   row: Row;
@@ -47,7 +55,10 @@ type WriteTarget =
       kind: 'recut';
       id: string;
       expectedRevision: number;
-      apply: (context: UnitOfWorkContext, recut: Row) => Promise<Change>;
+      apply: (
+        context: UnitOfWorkContext,
+        recut: Row,
+      ) => Promise<Change | Change[]>;
     };
 const changeSnapshot = ({ row, before, employees }: Change): AuditChange => ({
   recordType: 'recuts',
@@ -90,11 +101,56 @@ export class RecutsService {
     if (!row) throw new NotFoundException('Recut not found.');
     return row;
   }
-  candidates(id: string) {
+  private async selectedRequests(
+    ctx: UnitOfWorkContext,
+    primary: Row,
+    input: RecutSelection,
+  ) {
+    if (primary.stage !== 'requested')
+      throw new ConflictException('This recut is no longer awaiting fabric.');
+    if (!input.additionalRecuts?.length) return [primary];
+    const pending = new Map(
+      (await ctx.production.openRecuts(primary.workOrderId)).map((r) => [
+        r.id,
+        r,
+      ]),
+    );
+    return [
+      primary,
+      ...input.additionalRecuts.map(({ id, expectedRevision }) => {
+        const row = pending.get(id);
+        if (
+          !row ||
+          row.stage !== 'requested' ||
+          row.revision !== expectedRevision
+        )
+          throw new ConflictException(
+            'A selected recut changed. Refresh the assignment.',
+          );
+        if (
+          id === primary.id ||
+          row.sourceId !== primary.sourceId ||
+          row.fabricColorId !== primary.fabricColorId
+        )
+          throw new BadRequestException(
+            'Select distinct requests for the same order and fabric.',
+          );
+        return row;
+      }),
+    ];
+  }
+  candidates(id: string, input: RecutSelection = {}) {
     return productionOperation(() =>
       this.uow.readOnlyTransaction(async (ctx) => {
         const row = await this.find(ctx, id);
-        return this.allocations.recutStock(ctx, row.sourceId, row);
+        const requests = input.additionalRecuts?.length
+          ? await this.selectedRequests(ctx, row, input)
+          : [row];
+        return this.allocations.recutStock(
+          ctx,
+          row.sourceId,
+          requests.map(replacementBlind),
+        );
       }),
     );
   }
@@ -132,7 +188,7 @@ export class RecutsService {
   }
   assign(
     id: string,
-    input: { expectedRevision: number; stockItemId: string },
+    input: RecutSelection & { expectedRevision: number; stockItemId: string },
     actor: string,
     key: string,
   ) {
@@ -141,30 +197,26 @@ export class RecutsService {
       id,
       expectedRevision: input.expectedRevision,
       apply: async (ctx, before) => {
-        if (before.stage !== 'requested')
-          throw new ConflictException(
-            'This recut already has a plan or is closed.',
-          );
+        const requests = await this.selectedRequests(ctx, before, input);
         const allocationId = await this.allocations.reserveRecut(
           ctx,
           before.sourceId,
           before.workOrderId,
-          {
-            fabricColorId: before.fabricColorId,
-            widthMm: before.widthMm,
-            lengthMm: before.lengthMm,
-            quantity: before.quantity,
-          },
+          requests.map(replacementBlind),
           input.stockItemId,
           actor,
         );
-        return {
-          before,
-          row: await ctx.production.updateRecut(id, {
-            stage: 'cutting',
-            allocationId,
-          }),
-        };
+        const changes: Change[] = [];
+        for (const request of requests) {
+          changes.push({
+            before: request,
+            row: await ctx.production.updateRecut(request.id, {
+              stage: 'cutting',
+              allocationId,
+            }),
+          });
+        }
+        return changes;
       },
     });
   }
@@ -181,13 +233,36 @@ export class RecutsService {
       apply: async (ctx, before) => {
         if (before.stage === 'accepted' || before.stage === 'withdrawn')
           throw new ConflictException('This recut is closed.');
-        if (before.allocationId)
+        const changes: Change[] = [];
+        if (before.allocationId) {
           await this.allocations.releaseUnusedRecut(ctx, before.allocationId);
-        return {
-          before,
-          row: await ctx.production.updateRecut(id, { stage: 'withdrawn' }),
-          reason: input.reason,
-        };
+          // Before a cut, the reservation covers the complete group. Release it
+          // and return its remaining requests to the picker in this transaction.
+          if (before.stage === 'cutting') {
+            const group = await ctx.production.recutsForPlan(
+              before.allocationId,
+            );
+            for (const other of group.filter(
+              (r) => r.id !== id && r.stage === 'cutting',
+            )) {
+              changes.push({
+                before: other,
+                row: await ctx.production.updateRecut(other.id, {
+                  stage: 'requested',
+                  allocationId: null,
+                }),
+              });
+            }
+          }
+        }
+        return [
+          {
+            before,
+            row: await ctx.production.updateRecut(id, { stage: 'withdrawn' }),
+            reason: input.reason,
+          },
+          ...changes,
+        ];
       },
     });
   }
@@ -232,17 +307,19 @@ export class RecutsService {
     );
   }
   async cut(ctx: UnitOfWorkContext, allocationId: string, actor: string) {
-    const before = await ctx.production.recutForPlan(allocationId);
-    if (!before || before.stage !== 'cutting')
+    const group = await ctx.production.recutsForPlan(allocationId);
+    if (!group.length || group.some((r) => r.stage !== 'cutting'))
       throw new ConflictException(
         'The replacement is no longer awaiting cutting.',
       );
-    const row = await ctx.production.updateRecut(before.id, {
-      stage: 'assembly',
-    });
-    await this.audit.record(ctx, actor, 'recut.cut', [
-      changeSnapshot({ before, row }),
-    ]);
+    const changes: AuditChange[] = [];
+    for (const before of group) {
+      const row = await ctx.production.updateRecut(before.id, {
+        stage: 'assembly',
+      });
+      changes.push(changeSnapshot({ before, row }));
+    }
+    await this.audit.record(ctx, actor, 'recut.cut', changes);
   }
   // All recut transitions and shipping serialize on the same order row. Take
   // an existing replacement allocation lock first, as worksheet submission does.
@@ -278,22 +355,24 @@ export class RecutsService {
           throw new ConflictException(
             'Allocate fabric before requesting a replacement.',
           );
-        let change: Change;
+        let result: Change | Change[];
         if (target.kind === 'order') {
-          change = await target.apply(ctx, order);
+          result = await target.apply(ctx, order);
         } else {
           const current = await this.find(ctx, target.id);
           if (current.revision !== target.expectedRevision)
             throw new ConflictException(
               'Recut changed. Refresh before submitting.',
             );
-          change = await target.apply(ctx, current);
+          result = await target.apply(ctx, current);
         }
+        const changes = Array.isArray(result) ? result : [result];
+        const change = changes[0]!;
         const eventId = await this.audit.record(
           ctx,
           actor,
           scope,
-          [changeSnapshot(change)],
+          changes.map(changeSnapshot),
           change.reason,
         );
         return this.audit.remember(

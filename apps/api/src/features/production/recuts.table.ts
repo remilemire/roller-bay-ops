@@ -25,9 +25,7 @@ export const recuts = pgTable(
     requirementId: uuid('requirement_id')
       .notNull()
       .references(() => allocationRequirements.id),
-    allocationId: uuid('allocation_id')
-      .unique()
-      .references(() => allocations.id),
+    allocationId: uuid('allocation_id').references(() => allocations.id),
     quantity: integer('quantity').notNull(),
     reason: varchar('reason', { length: 1000 }).notNull(),
     needsAssembly: boolean('needs_assembly').notNull(),
@@ -41,6 +39,7 @@ export const recuts = pgTable(
       .notNull(),
   },
   (t) => [
+    index('production_recuts_allocation_idx').on(t.allocationId),
     index('production_recuts_order_stage_idx').on(t.workOrderId, t.stage),
     check(
       'production_recuts_quantity_positive',

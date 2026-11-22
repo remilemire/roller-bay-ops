@@ -276,7 +276,12 @@ function StationQueue({ station }: { station: Station }) {
                         r.needsCorrection,
                   )
                   .map((r) => (
-                    <RecutActions key={r.id} recut={r} station={station} />
+                    <RecutActions
+                      key={r.id}
+                      recut={r}
+                      orderRecuts={order.recuts}
+                      station={station}
+                    />
                   ))}
                 <div className="station-order-footer">
                   <details className="station-order-history">

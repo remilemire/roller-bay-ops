@@ -64,12 +64,15 @@ test('replacement submission advances the recut once and completes only a deferr
         revision: 2,
         needsAssembly: scenario.needsAssembly,
       };
+      const tasks = [task, { ...task, id: randomUUID(), reason: 'Short roll' }];
       const context = {
         production: {
           hasUncutRecuts: async () => scenario.moreCuts,
-          recutForPlan: async () => ({ ...task }),
-          updateRecut: async (_id: string, change: Partial<Recut>) =>
-            Object.assign(task, change, { revision: task.revision + 1 }),
+          recutsForPlan: async () => tasks.map((row) => ({ ...row })),
+          updateRecut: async (id: string, change: Partial<Recut>) => {
+            const row = tasks.find((r) => r.id === id)!;
+            return Object.assign(row, change, { revision: row.revision + 1 });
+          },
         },
       };
       const id = randomUUID();
@@ -150,8 +153,10 @@ test('replacement submission advances the recut once and completes only a deferr
         const workflow = module.get(CuttingWorkflowService);
         await workflow.submit(id, input, actor);
         await workflow.submit(id, { ...input, expectedRevision: 3 }, actor);
-        assert.equal(task.stage, 'assembly');
-        assert.equal(task.revision, 3);
+        for (const replacement of tasks) {
+          assert.equal(replacement.stage, 'assembly');
+          assert.equal(replacement.revision, 3);
+        }
         assert.equal(recordCut.mock.callCount(), scenario.completions);
       } finally {
         await module.close();
