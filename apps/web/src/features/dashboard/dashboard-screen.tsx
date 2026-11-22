@@ -177,7 +177,7 @@ export function DashboardScreen() {
                       <td>
                         <Status value={item.status} />
                       </td>
-                      <td>{item.note}</td>
+                      <td className="table-cell-wrap">{item.note}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -271,7 +271,12 @@ export function DashboardScreen() {
                     <PackagePlus size={17} />
                   </span>
                   <span>
-                    <strong>{item.purchaseOrderNumber}</strong>
+                    <strong
+                      className="record-identifier"
+                      title={item.purchaseOrderNumber ?? undefined}
+                    >
+                      {item.purchaseOrderNumber}
+                    </strong>
                     <small>
                       {item.submittedAt ? dateLabel(item.submittedAt) : 'Draft'}
                     </small>

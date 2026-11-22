@@ -51,12 +51,6 @@ export const deleteAllocationDraft = (id: string, expectedRevision: number) =>
     method: 'DELETE',
     body: { expectedRevision },
   });
-export const optimizeAllocation = (body: unknown, signal?: AbortSignal) =>
-  api('/allocations/optimize', s.allocationOptimizationSchema, {
-    method: 'POST',
-    body: s.optimizeAllocationSchema.parse(body),
-    signal,
-  });
 export const validateAllocation = (body: unknown) =>
   api('/allocations/validate', s.allocationValidationSchema, {
     method: 'POST',

@@ -102,7 +102,7 @@ it('prints a known tube diameter instead of a blank', () => {
   expect(tube).toHaveTextContent('50');
   expect(tube.querySelector('.sheet-blank')).toBeNull();
   expect(
-    screen.queryByText(/measure after the first cut/),
+    screen.queryByText(/Measure if returning this roll/),
   ).not.toBeInTheDocument();
 });
 

@@ -1,3 +1,4 @@
+import { planningEnvironment } from './planning.js';
 import { z } from 'zod';
 import {
   cuttingSettingsSchema,
@@ -18,6 +19,7 @@ const httpUrl = z.url().refine((value) => {
 
 export const environmentSchema = z
   .object({
+    ...planningEnvironment,
     NODE_ENV: z
       .enum(['development', 'test', 'production'])
       .default('development'),

@@ -38,6 +38,12 @@ export function breadcrumbTrail(
   if (!section) return [{ label: 'Overview' }];
   const [record, child] = pathname.slice(section.href.length + 1).split('/');
   if (!record) return [{ label: section.label }];
+  if (section.href === '/stations' && record === 'review' && child)
+    return [
+      section,
+      { href: '/stations/review', label: 'Review cutting results' },
+      ...(title ? [{ label: title }] : []),
+    ];
   if (child === 'cutting-sheet')
     return [
       section,

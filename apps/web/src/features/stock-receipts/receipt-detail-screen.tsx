@@ -68,6 +68,7 @@ function ReceiptRecord({
       <PageHeading
         eyebrow="RECEIVED FABRIC"
         title={receipt.purchaseOrderNumber}
+        titleIsIdentifier
         description={`Submitted ${dateLabel(receipt.submittedAt)} · ${shortId(receipt.id)}`}
       >
         <Status value="submitted" />

@@ -3,7 +3,7 @@ import { use } from 'react';
 import { AllocationDetailScreen } from '@/features/allocations/allocation-detail-screen';
 import { History } from '@/features/audit/history';
 import { CancellationReview } from '@/features/work-order-cancellation/cancellation-review';
-import { ExistingCuttingWorksheetLink } from '@/features/production';
+import { WorksheetReviewLink } from '@/features/production';
 import { OrderCreateDialog } from '@/features/work-orders/order-create-dialog';
 export default function Page({
   params,
@@ -20,7 +20,7 @@ export default function Page({
       recordResults={action === 'record-cutting-results'}
       history={<History type="allocations" id={id} />}
       completionActions={(allocation) => (
-        <ExistingCuttingWorksheetLink
+        <WorksheetReviewLink
           orderId={allocation.workOrderId}
           allocationId={allocation.id}
         />

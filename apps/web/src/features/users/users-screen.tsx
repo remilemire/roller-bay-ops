@@ -167,7 +167,7 @@ function UserDirectory() {
               <tbody>
                 {query.data.items.map((row) => (
                   <tr key={row.id}>
-                    <td>
+                    <td className="table-cell-wrap">
                       <strong>{row.name}</strong>
                       <small>{row.email}</small>
                     </td>

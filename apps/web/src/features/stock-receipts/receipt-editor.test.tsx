@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { receiptDraft } from '../../../tests/fixtures';
 import { ReceiptEditor } from './receipt-editor';
 import { ReceiptDetailScreen } from './receipt-detail-screen';
-import { receiptKey } from './stock-receipts.api';
+import { receiptDetail, receiptKey } from './stock-receipts.api';
 import { ApiError } from '@/lib/api';
 import { receipt } from '../../../tests/fixtures';
 const { save, submit, replace } = vi.hoisted(() => ({
@@ -171,12 +171,11 @@ it('saves unsaved edits to the draft before submitting it', async () => {
   const user = userEvent.setup();
   save.mockResolvedValue({ ...receiptDraft, revision: 2 });
   submit.mockResolvedValue(receipt);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={client}>
       <ReceiptEditor initial={receiptDraft} />
     </QueryClientProvider>,
   );
@@ -191,6 +190,12 @@ it('saves unsaved edits to the draft before submitting it', async () => {
     within(dialog).getByRole('button', { name: 'Submit receipt' }),
   );
   await waitFor(() => expect(submit).toHaveBeenCalledWith(receiptDraft.id, 2));
+  await waitFor(() =>
+    expect(replace).toHaveBeenCalledWith(`/stock-receipts/${receipt.id}`),
+  );
+  expect(
+    client.getQueryData(receiptDetail(receipt.id).queryKey),
+  ).toBeUndefined();
   expect(save).toHaveBeenCalledWith(
     receiptDraft.id,
     1,

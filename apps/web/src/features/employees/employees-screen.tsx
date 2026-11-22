@@ -80,7 +80,7 @@ function EmployeeDirectory() {
               <tbody>
                 {employees.map((e) => (
                   <tr key={e.id}>
-                    <td>{e.name}</td>
+                    <td className="table-cell-wrap">{e.name}</td>
                     <td>{e.initials}</td>
                     <td>
                       <Status value={e.isActive ? 'active' : 'inactive'} />

@@ -119,6 +119,7 @@ export async function lookupColors(
     items: data.items.map((i) => ({
       id: i.id,
       label: `${i.name} · ${i.parent}`,
+      leadingIdentifier: i.name,
     })),
   };
 }

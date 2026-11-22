@@ -4,7 +4,10 @@
  * Completeness records whether every legal pattern and stock assignment was kept.
  */
 import { setImmediate } from 'node:timers/promises';
-import type { CuttingContext } from '@roller-bay/shared/allocations';
+import type {
+  CuttingContext,
+  CuttingPlan,
+} from '@roller-bay/shared/allocations';
 import type {
   ResolvedAssignment,
   Stock,
@@ -159,6 +162,7 @@ export async function generatePatterns(
   context: CuttingContext,
   signal?: AbortSignal,
   limits: CandidateLimits = OPTIMIZATION_LIMITS,
+  seed?: CuttingPlan,
 ): Promise<PatternCandidates> {
   checkCancellation(signal);
   const trim = toLengthUnits(context.settings.edgeTrimMm);
@@ -216,6 +220,9 @@ export async function generatePatterns(
   if (covered.size !== context.requirements.length)
     return { assignments: [], complete: true, impossible: true };
   const colors = [...requirements.keys()].sort();
+  const stockById = new Map(
+    context.stockItems.map((stock) => [stock.id, stock]),
+  );
   const assignments: PatternAssignment[] = [];
   let complete = true;
   let steps = 0;
@@ -253,8 +260,46 @@ export async function generatePatterns(
       group,
       iterator: combinations(group, trim),
     }));
-    const seen = new Set<string>();
+    const seen = new Map<string, CutPattern>();
     const patterns: { pattern: CutPattern; stocks: Stock[] }[] = [];
+    const keyOf = (group: WidthGroup, items: ResolvedAssignment[]) =>
+      `${group.width}:${items.map((item) => `${item.requirement.id}=${item.quantity}`).join(',')}`;
+    const seeded = new Map<CutPattern, Set<string>>();
+    let count = 0;
+    // Protect the known plan before spending a single slot on alternatives.
+    // A smaller configured refinement budget may exclude the model as a whole,
+    // but cannot invalidate the already returned feasibility result.
+    for (const cut of seed?.cuts ?? []) {
+      const stock = stockById.get(cut.stockItemId)!;
+      if (stock.fabricColorId !== color) continue;
+      const group = groups.get(`${color}:${toLengthUnits(stock.widthMm)}`)!;
+      const quantities = new Map(
+        cut.items.map((item) => [item.requirementId, item.quantity]),
+      );
+      const items = group.items
+        .filter((item) => quantities.has(item.requirement.id))
+        .map((item) => ({
+          ...item,
+          quantity: quantities.get(item.requirement.id)!,
+        }));
+      const key = keyOf(group, items);
+      let pattern = seen.get(key);
+      if (!pattern) {
+        pattern = scorePattern(group, items, context);
+        seen.set(key, pattern);
+        patterns.push({ pattern, stocks: group.stocks });
+      }
+      const stocks = seeded.get(pattern) ?? new Set<string>();
+      if (stocks.has(stock.id)) continue;
+      stocks.add(stock.id);
+      seeded.set(pattern, stocks);
+      if (++count > assignmentBudget || patterns.length > patternBudget)
+        return { assignments: [], complete: false, impossible: false };
+      const placement = placements(pattern, [stock]).next();
+      if (placement.done)
+        throw new Error('Validated cut has no matching stock placement.');
+      assignments.push(placement.value);
+    }
     let nodes = 0;
     generation: while (generators.length) {
       const next: typeof generators = [];
@@ -272,11 +317,12 @@ export async function generatePatterns(
         if (result.done) continue;
         next.push(entry);
         if (!result.value) continue;
-        const key = `${entry.group.width}:${result.value.map((item) => `${item.requirement.id}=${item.quantity}`).join(',')}`;
+        const key = keyOf(entry.group, result.value);
         if (seen.has(key)) continue;
-        seen.add(key);
+        const pattern = scorePattern(entry.group, result.value, context);
+        seen.set(key, pattern);
         patterns.push({
-          pattern: scorePattern(entry.group, result.value, context),
+          pattern,
           stocks: entry.group.stocks,
         });
       }
@@ -286,7 +332,6 @@ export async function generatePatterns(
     let placementIterators = patterns.map(({ pattern, stocks }) =>
       placements(pattern, stocks),
     );
-    let count = 0;
     placement: while (placementIterators.length) {
       const next: typeof placementIterators = [];
       for (const iterator of placementIterators) {
@@ -296,13 +341,15 @@ export async function generatePatterns(
         }
         const result = iterator.next();
         if (result.done) continue;
+        next.push(iterator);
+        if (seeded.get(result.value.pattern)?.has(result.value.stock.id))
+          continue;
         if (count >= assignmentBudget) {
           complete = false;
           break placement;
         }
         assignments.push(result.value);
         count++;
-        next.push(iterator);
       }
       placementIterators = next;
     }

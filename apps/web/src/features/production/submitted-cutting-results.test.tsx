@@ -8,6 +8,7 @@ const locationId = '22222222-2222-4333-8444-555555555555';
 it('explicitly describes empty retained remnants rather than rendering a blank array', () => {
   render(
     <SubmittedCuttingResults
+      locationLabels={{ [locationId]: 'North / Rack A / Upper' }}
       units={defaultMeasurementUnits}
       items={[
         { stockItemId, expectedRevision: 1, outcome: 'consumed', scraps: [] },
@@ -25,6 +26,7 @@ it('explicitly describes empty retained remnants rather than rendering a blank a
 it('preserves measured roll fields and retained quantities with unit labels', () => {
   render(
     <SubmittedCuttingResults
+      locationLabels={{ [locationId]: 'North / Rack A / Upper' }}
       units={defaultMeasurementUnits}
       items={[
         {
@@ -39,6 +41,7 @@ it('preserves measured roll fields and retained quantities with unit labels', ()
       ]}
     />,
   );
+  expect(screen.getAllByText('North / Rack A / Upper')).toHaveLength(2);
   expect(screen.getByText('Roll returned to stock')).toBeVisible();
   expect(screen.getByText('Radial depth')).toBeVisible();
   expect(screen.getByText('10 mm')).toBeVisible();
@@ -51,6 +54,7 @@ it('preserves measured roll fields and retained quantities with unit labels', ()
 it('renders returned-remnant dimensions without inventing roll measurements', () => {
   render(
     <SubmittedCuttingResults
+      locationLabels={{ [locationId]: 'North / Rack A / Upper' }}
       units={defaultMeasurementUnits}
       items={[
         {

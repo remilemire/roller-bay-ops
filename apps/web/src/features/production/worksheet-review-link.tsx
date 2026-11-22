@@ -5,18 +5,25 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { worksheetForOrder } from './production.api';
 
-export function ExistingCuttingWorksheetLink({
+export function WorksheetReviewLink({
   orderId,
   allocationId,
 }: {
   orderId: string;
   allocationId: string;
 }) {
-  const query = useQuery(worksheetForOrder(orderId));
-  if (!query.data || query.data.allocationId !== allocationId) return null;
+  const { data: sheet } = useQuery(worksheetForOrder(orderId));
+  if (
+    !sheet?.submittedAt ||
+    sheet.reviewedAt ||
+    sheet.allocationId !== allocationId
+  )
+    return null;
   return (
     <Button asChild variant="outline">
-      <Link href={`/stations/cutting/${orderId}`}>Open cutting worksheet</Link>
+      <Link href={`/stations/review/${sheet.id}`}>
+        Review submitted worksheet
+      </Link>
     </Button>
   );
 }

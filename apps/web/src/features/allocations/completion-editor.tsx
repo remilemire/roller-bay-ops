@@ -267,7 +267,13 @@ export function CompletionEditor({
                   <div className="panel-heading">
                     <div>
                       <h2>
-                        {stock.fabricColorCode} · {shortId(stock.id)}
+                        <span
+                          className="record-identifier"
+                          title={stock.fabricColorCode}
+                        >
+                          {stock.fabricColorCode}
+                        </span>{' '}
+                        · {shortId(stock.id)}
                       </h2>
                       <p>
                         {stock.isRemnant ? 'Remnant' : 'Roll'} ·{' '}
@@ -331,7 +337,14 @@ export function CompletionEditor({
                             onChange={(tube) => change(index, { ...row, tube })}
                             error={fieldError(`items.${index}.tube`)}
                             disabled={stock.tubeOuterDiameterMm !== null}
-                            hint="Required after first use."
+                            required={
+                              row.outcome === 'returned-roll' &&
+                              stock.tubeOuterDiameterMm === null
+                            }
+                            optional={
+                              row.outcome === 'consumed' &&
+                              stock.tubeOuterDiameterMm === null
+                            }
                           />
                         )}
                         {row.outcome === 'returned-roll' && (

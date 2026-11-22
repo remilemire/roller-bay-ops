@@ -2,20 +2,21 @@ import {
   cuttingContextSchema,
   type CuttingContext,
 } from '@roller-bay/shared/allocations';
+import { planningDefaults } from '../../../config/planning.js';
 import { z } from 'zod';
 import { toLengthUnits } from '../cutting-plan/cutting-dimensions.js';
 import { CuttingOptimizationError } from './optimization.errors.js';
 import type { CuttingOptimizationOptions } from './cutting-plan-optimizer.types.js';
 
 export const OPTIMIZATION_LIMITS = Object.freeze({
-  blinds: 100,
-  patterns: 2000,
-  nodes: 100000,
-  assignments: 6000,
+  blinds: planningDefaults.CUTTING_MAX_BLINDS,
+  patterns: planningDefaults.CUTTING_MAX_PATTERNS,
+  nodes: planningDefaults.CUTTING_MAX_PATTERN_NODES,
+  assignments: planningDefaults.CUTTING_MAX_ASSIGNMENTS,
 });
 
 const optionsSchema = z.strictObject({
-  maxTimeSeconds: z.number().positive().max(60).default(5),
+  maxTimeSeconds: z.number().positive().max(60).optional(),
   signal: z.instanceof(AbortSignal).optional(),
 });
 
@@ -34,6 +35,7 @@ export function parseOptimizationOptions(options: CuttingOptimizationOptions) {
 
 export function parseOptimizationContext(
   input: CuttingContext,
+  maxBlinds: number = OPTIMIZATION_LIMITS.blinds,
 ): CuttingContext {
   const result = cuttingContextSchema.safeParse(input);
   // The context is assembled by the server from validated input and stock rows;
@@ -48,11 +50,11 @@ export function parseOptimizationContext(
   const context = result.data;
   if (
     context.requirements.reduce((sum, item) => sum + item.quantity, 0) >
-    OPTIMIZATION_LIMITS.blinds
+    maxBlinds
   )
     throw new CuttingOptimizationError(
       'invalid_input',
-      'Orders support at most 100 individual blinds.',
+      `Orders support at most ${maxBlinds} individual blinds.`,
     );
   for (const items of [context.requirements, context.stockItems])
     if (new Set(items.map((item) => item.id)).size !== items.length)

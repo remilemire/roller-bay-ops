@@ -35,11 +35,12 @@ function optimizeWith(failure: unknown) {
     findForAllocation: async () => context.stockItems as unknown as StockItem[],
   } as unknown as StockItemsService;
   const optimizer = {
+    prepare: (input: typeof context) => input,
     optimize: async () => {
       throw failure;
     },
   } as unknown as CuttingPlanOptimizer;
-  return new AllocationPlanningService(
+  const planning = new AllocationPlanningService(
     unitOfWork,
     stockItems,
     optimizer,
@@ -51,11 +52,14 @@ function optimizeWith(failure: unknown) {
         CUTTING_DROP_ALLOWANCE_MM: 0,
       }),
     ),
-  ).optimize({
-    // The blinds planned are the request's.
-    requirements: context.requirements.map(requirementInput),
-    maxTimeSeconds: 5,
-  });
+  );
+  return planning
+    .prepare({
+      // The blinds planned are the request's.
+      requirements: context.requirements.map(requirementInput),
+      maxTimeSeconds: 5,
+    })
+    .then((snapshot) => planning.solve(snapshot));
 }
 
 function expectHttp<T extends HttpException>(

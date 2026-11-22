@@ -28,7 +28,7 @@ it('shows the saved stock lengths and new-roll instructions while retaining inte
   expect(value('Planned use')).toHaveTextContent('3 yd');
   expect(value('Estimated length after cutting')).toHaveTextContent('57 yd');
   expect(value('Tube outer diameter')).toHaveTextContent(
-    'New roll: measure after the first cut.',
+    'Measure if returning this roll to storage.',
   );
   expect(screen.getByText(/Allocation .*Plan revision/)).toHaveTextContent(
     'Created',

@@ -8,7 +8,7 @@ import type {
   SolveResult,
 } from '../../../solver/solver.contracts.js';
 import { solverModelSchema } from '../../../solver/solver.contracts.js';
-import { CuttingPlanOptimizer } from './cutting-plan-optimizer.js';
+import { BoundedRefinement } from './bounded-refinement.js';
 import { generatePatterns } from './pattern-generation.js';
 import { buildCuttingModel, modelFitsTransport } from './cutting-model.js';
 import { CuttingOptimizationError } from './optimization.errors.js';
@@ -92,7 +92,7 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
   const spy = t.mock.method(solver, 'solve', async () => {
     throw new Error('Must not solve');
   });
-  const optimizer = new CuttingPlanOptimizer(solver);
+  const optimizer = new BoundedRefinement(solver);
   const context = fixture();
   await assert.rejects(optimizer.optimize(context, { maxTimeSeconds: 61 }), {
     code: 'invalid_options',
@@ -103,7 +103,7 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
   );
   for (const change of [
     (c: ReturnType<typeof fixture>) => {
-      c.requirements[0]!.quantity = 101;
+      c.requirements[0]!.quantity = 513;
     },
     (c: ReturnType<typeof fixture>) => {
       c.requirements.push({ ...c.requirements[0]! });
@@ -117,7 +117,7 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
   ]) {
     const invalid = fixture();
     change(invalid);
-    await assert.rejects(optimizer.optimize(invalid), {
+    assert.throws(() => parseOptimizationContext(invalid), {
       code: 'invalid_input',
     });
   }
@@ -125,13 +125,16 @@ test('rejects invalid inputs/options and cancellation before contacting the solv
   // order-level problem: the code differs and the message carries no detail.
   const malformed = fixture();
   malformed.requirements[0]!.widthMm = 0.0001;
-  await assert.rejects(optimizer.optimize(malformed), (error: unknown) => {
-    assert.ok(error instanceof CuttingOptimizationError);
-    assert.equal(error.code, 'invalid_context');
-    assert.doesNotMatch(error.message, /widthMm|multiple/);
-    assert.ok(error.cause instanceof Error);
-    return true;
-  });
+  assert.throws(
+    () => parseOptimizationContext(malformed),
+    (error: unknown) => {
+      assert.ok(error instanceof CuttingOptimizationError);
+      assert.equal(error.code, 'invalid_context');
+      assert.doesNotMatch(error.message, /widthMm|multiple/);
+      assert.ok(error.cause instanceof Error);
+      return true;
+    },
+  );
   assert.equal(spy.mock.callCount(), 0);
 });
 
@@ -163,7 +166,7 @@ test('only necessary feasibility failures bypass solving; orientation, trims, co
   ]) {
     const context = fixture();
     change(context);
-    assert.deepEqual(await new CuttingPlanOptimizer(solver).optimize(context), {
+    assert.deepEqual(await new BoundedRefinement(solver).optimize(context), {
       status: 'infeasible',
     });
   }
@@ -243,7 +246,7 @@ test('successive passes lock proven values and share the search budget', async (
   const context = fixture();
   context.stockItems[0]!.isUsed = false;
   const before = structuredClone(context);
-  const result = await new CuttingPlanOptimizer(solver).optimize(context, {
+  const result = await new BoundedRefinement(solver).optimize(context, {
     maxTimeSeconds: 2,
   });
   assert.equal(result.status, 'feasible');
@@ -270,7 +273,7 @@ test('a feasible incumbent ends refinement; unknown or timeout preserves a previ
       return { status: 'unknown' as const, wallTimeSeconds: 0.1 };
     });
     assert.equal(
-      (await new CuttingPlanOptimizer(solver).optimize(fixture())).status,
+      (await new BoundedRefinement(solver).optimize(fixture())).status,
       'feasible',
     );
     assert.equal(calls, outcome === 'feasible' ? 1 : 2);
@@ -303,7 +306,7 @@ test('unknown, invalid models, invalid decoded output, operational failures, and
       if (result.status === 'optimal') result.values.x0 = 999;
       return result;
     });
-    const pending = new CuttingPlanOptimizer(solver).optimize(fixture(), {
+    const pending = new BoundedRefinement(solver).optimize(fixture(), {
       signal: abort.signal,
     });
     if (failure === 'unknown' || failure === 'timeout')
@@ -337,11 +340,11 @@ test('bounded candidate failure never claims infeasibility', async (t) => {
     status: 'infeasible' as const,
     wallTimeSeconds: 0,
   }));
-  assert.deepEqual(await new CuttingPlanOptimizer(solver).optimize(context), {
+  assert.deepEqual(await new BoundedRefinement(solver).optimize(context), {
     status: 'unknown',
     reason: 'search_limit',
   });
-  assert.deepEqual(await new CuttingPlanOptimizer(solver).optimize(fixture()), {
+  assert.deepEqual(await new BoundedRefinement(solver).optimize(fixture()), {
     status: 'infeasible',
   });
 });
@@ -428,7 +431,7 @@ test('model-size exhaustion returns unknown without contacting the solver', asyn
   const spy = t.mock.method(solver, 'solve', async () => {
     throw new Error('Must not solve');
   });
-  assert.deepEqual(await new CuttingPlanOptimizer(solver).optimize(context), {
+  assert.deepEqual(await new BoundedRefinement(solver).optimize(context), {
     status: 'unknown',
     reason: 'model_limit',
   });
@@ -443,7 +446,7 @@ test('search budget exhaustion keeps its incumbent and never starts another pass
   }));
   assert.equal(
     (
-      await new CuttingPlanOptimizer(solver).optimize(fixture(), {
+      await new BoundedRefinement(solver).optimize(fixture(), {
         maxTimeSeconds: 0.5,
       })
     ).status,
@@ -466,7 +469,7 @@ test('remnant accounting tampering is rejected even if the decoded cuts themselv
     }
     return result;
   });
-  await assert.rejects(new CuttingPlanOptimizer(solver).optimize(context), {
+  await assert.rejects(new BoundedRefinement(solver).optimize(context), {
     code: 'invalid_solution',
   });
 });

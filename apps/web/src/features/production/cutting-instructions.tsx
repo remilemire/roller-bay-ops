@@ -50,7 +50,13 @@ export function CuttingInstructions({
         <section className="panel" key={item.stockItem.id}>
           <div className="panel-heading">
             <h2>
-              {item.stockItem.fabricColorCode} · {shortId(item.stockItem.id)}
+              <span
+                className="record-identifier"
+                title={item.stockItem.fabricColorCode}
+              >
+                {item.stockItem.fabricColorCode}
+              </span>{' '}
+              · {shortId(item.stockItem.id)}
             </h2>
             <span>{item.stockItem.isRemnant ? 'Remnant' : 'Roll'}</span>
           </div>
@@ -92,7 +98,7 @@ export function CuttingInstructions({
                   <dt className="detail-label">Tube outer diameter</dt>
                   <dd className="detail-value">
                     {item.stockItem.tubeOuterDiameterMm === null
-                      ? 'New roll: measure after the first cut.'
+                      ? 'Measure if returning this roll to storage.'
                       : fieldLabel(
                           units,
                           'tubeDiameter',

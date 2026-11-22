@@ -3,6 +3,7 @@ import { CuttingWorkflowService } from './cutting-workflow.service.js';
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Param,
@@ -31,6 +32,7 @@ import {
   type WorksheetSave,
   type WorksheetSubmit,
 } from '@roller-bay/shared/production';
+import { hasAnyRole } from '../../common/authorization/roles.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
@@ -50,8 +52,10 @@ export class CuttingStationController {
     requireStation(req.currentUser!, 'cutting');
     return this.locations.list(query);
   }
-  @Get('worksheets') @Roles('admin') list() {
-    return this.service.list();
+  @Get('worksheets') @Roles('staff') list(@Req() req: Request) {
+    return this.service.list({
+      includeIncomplete: hasAnyRole(req.currentUser!.role, ['admin']),
+    });
   }
   @Get('orders/:id/worksheet') async forOrder(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -106,22 +110,27 @@ export class CuttingStationController {
     requireStation(req.currentUser!, 'cutting');
     return this.workflow.submit(id, body, req.currentUser!.id);
   }
-  @Post('worksheets/:id/review') @Roles('admin') review(
+  @Post('worksheets/:id/review') @Roles('staff') review(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetReviewSchema))
     body: z.infer<typeof worksheetReviewSchema>,
     @Headers('idempotency-key') key: string,
     @Req() req: Request,
   ) {
+    const actor = req.currentUser!;
+    if (body.resolution && !hasAnyRole(actor.role, ['admin']))
+      throw new ForbiddenException(
+        'Only admins and owners can replace submitted measurements.',
+      );
     return this.workflow.review(
       id,
       body.expectedRevision,
-      req.currentUser!.id,
+      actor.id,
       body.resolution,
       new ZodValidationPipe(correctionKeySchema).transform(key),
     );
   }
-  @Post('worksheets/:id/return') @Roles('admin') returnForCorrection(
+  @Post('worksheets/:id/return') @Roles('staff') returnForCorrection(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetReturnSchema))
     body: { expectedRevision: number; reason: string },

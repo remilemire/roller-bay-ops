@@ -5,6 +5,7 @@ import {
   stationOrderListSchema,
   worksheetSchema,
   worksheetListSchema,
+  worksheetDetailSchema,
   type StationQuery,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
@@ -63,7 +64,8 @@ export const worksheetForOrder = (id: string) => ({
 });
 export const worksheetDetail = (id: string) => ({
   queryKey: [...productionKey, 'worksheet', id],
-  queryFn: () => api(`/production/cutting/worksheets/${id}`, worksheetSchema),
+  queryFn: () =>
+    api(`/production/cutting/worksheets/${id}`, worksheetDetailSchema),
 });
 export const worksheets = () => ({
   queryKey: [...productionKey, 'review'],

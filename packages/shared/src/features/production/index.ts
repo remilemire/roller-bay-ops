@@ -69,6 +69,7 @@ export const stationQuerySchema = z
 export const stationOrderSchema = workOrderSchema.extend({
   completions: productionCompletionsSchema,
   hasCuttingWorksheet: z.boolean(),
+  worksheetNeedsCorrection: z.boolean().default(false),
 });
 export const stationOrderListSchema = z.object({
   items: z.array(stationOrderSchema),
@@ -150,6 +151,9 @@ export const worksheetSchema = z.object({
   snapshot: allocationDetailSchema,
   draft: cuttingDraftSchema.nullable(),
   results: completeAllocationSchema.nullable(),
+});
+export const worksheetDetailSchema = worksheetSchema.extend({
+  locationLabels: z.record(z.uuid(), z.string()).default({}),
 });
 export const worksheetListSchema = z.array(
   worksheetSchema.omit({ snapshot: true, draft: true, results: true }),

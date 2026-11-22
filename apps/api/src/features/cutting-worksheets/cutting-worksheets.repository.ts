@@ -1,4 +1,13 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import {
   cuttingWorksheetEmployees,
@@ -6,6 +15,11 @@ import {
   type WorksheetEmployee,
   type WorksheetRecord,
 } from './cutting-worksheets.table.js';
+import {
+  locations,
+  locationSections,
+  locationZones,
+} from '../locations/tables.js';
 type WorksheetRow = typeof cuttingWorksheets.$inferSelect;
 export class CuttingWorksheetsRepository {
   constructor(private readonly db: DatabaseExecutor) {}
@@ -48,6 +62,26 @@ export class CuttingWorksheetsRepository {
       .where(eq(cuttingWorksheets.id, id));
     return this.first(await (lock ? q.for('no key update') : q));
   }
+  async locationLabels(ids: string[]): Promise<Record<string, string>> {
+    if (!ids.length) return {};
+    const rows = await this.db
+      .select({
+        id: locations.id,
+        zone: locationZones.name,
+        section: locationSections.label,
+        level: locations.label,
+      })
+      .from(locations)
+      .innerJoin(locationSections, eq(locationSections.id, locations.sectionId))
+      .innerJoin(locationZones, eq(locationZones.id, locationSections.zoneId))
+      .where(inArray(locations.id, ids));
+    return Object.fromEntries(
+      rows.map((row) => [
+        row.id,
+        `${row.zone} / ${row.section} / ${row.level}`,
+      ]),
+    );
+  }
   async forAllocation(id: string) {
     return this.first(
       await this.db
@@ -77,13 +111,16 @@ export class CuttingWorksheetsRepository {
         .orderBy(desc(cuttingWorksheets.startedAt)),
     );
   }
-  async list() {
+  async list({ includeIncomplete }: { includeIncomplete: boolean }) {
     return this.withEmployees(
       await this.db
         .select()
         .from(cuttingWorksheets)
         .where(
           and(
+            includeIncomplete
+              ? undefined
+              : isNotNull(cuttingWorksheets.submittedAt),
             isNull(cuttingWorksheets.reviewedAt),
             isNull(cuttingWorksheets.abandonedAt),
             isNull(cuttingWorksheets.skippedAt),

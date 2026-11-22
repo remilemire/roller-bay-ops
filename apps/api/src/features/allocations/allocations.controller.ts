@@ -45,6 +45,7 @@ import {
 } from '@roller-bay/shared/allocations';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
 import { AllocationsService } from './allocations.service.js';
+import { PlanningJobsService } from './planning-jobs.service.js';
 import { AllocationPlanningService } from './allocation-planning.service.js';
 import { CompletionCorrectionsService } from './completion-corrections.service.js';
 
@@ -53,6 +54,7 @@ export class AllocationsController {
   constructor(
     private readonly service: AllocationsService,
     private readonly planning: AllocationPlanningService,
+    private readonly jobs: PlanningJobsService,
     private readonly corrections: CompletionCorrectionsService,
   ) {}
 
@@ -143,6 +145,31 @@ export class AllocationsController {
     return this.service.findById(id);
   }
 
+  @Put('planning-jobs/:id')
+  @HttpCode(202)
+  startPlanning(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(optimizeAllocationSchema))
+    input: OptimizeAllocation,
+    @Req() request: Request,
+  ) {
+    return this.jobs.start(this.userId(request), id, input);
+  }
+  @Get('planning-jobs/:id')
+  planningStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: Request,
+  ) {
+    return this.jobs.status(this.userId(request), id);
+  }
+  @Delete('planning-jobs/:id')
+  @HttpCode(204)
+  cancelPlanning(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: Request,
+  ) {
+    return this.jobs.cancel(this.userId(request), id);
+  }
   @Post('optimize')
   @HttpCode(200)
   async optimize(
@@ -159,7 +186,11 @@ export class AllocationsController {
     request.once('aborted', abort);
     response.once('close', close);
     try {
-      return await this.planning.optimize(input, controller.signal);
+      return await this.jobs.waitForPlan(
+        this.userId(request),
+        input,
+        controller.signal,
+      );
     } finally {
       request.off('aborted', abort);
       response.off('close', close);

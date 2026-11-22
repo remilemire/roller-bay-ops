@@ -81,9 +81,11 @@ export function PageHeading({
   description,
   children,
   registerPageTitle = true,
+  titleIsIdentifier = false,
 }: {
   eyebrow?: string;
   title: string;
+  titleIsIdentifier?: boolean;
   description?: string;
   children?: ReactNode;
   /** Embedded forms leave breadcrumb ownership with the outer page. */
@@ -94,7 +96,12 @@ export function PageHeading({
     <div className="page-heading">
       <div>
         {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
+        <h1
+          className={titleIsIdentifier ? 'record-identifier' : undefined}
+          title={titleIsIdentifier ? title : undefined}
+        >
+          {title}
+        </h1>
         {description && <p>{description}</p>}
       </div>
       {children && <div className="heading-actions">{children}</div>}

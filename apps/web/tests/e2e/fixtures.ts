@@ -206,6 +206,10 @@ export async function mockApi(
     page: Number(url.searchParams.get('page') ?? 1),
     pageSize: Number(url.searchParams.get('pageSize') ?? 25),
   });
+  const plans = new Map<
+    string,
+    ReturnType<typeof allocationOptimizationSchema.parse>
+  >();
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -305,6 +309,20 @@ export async function mockApi(
     );
     if (productionList) {
       const station = productionList[1] as Station;
+      const worksheetFor = (orderId: string) =>
+        state.worksheets.find(
+          (sheet) =>
+            sheet.workOrderId === orderId &&
+            sheet.allocationId === state.allocation.id &&
+            !state.allocation.releasedAt &&
+            !state.allocation.cancelledAt &&
+            !sheet.abandonedAt &&
+            !sheet.skippedAt,
+        );
+      const needsCorrection = (id: string) => {
+        const sheet = worksheetFor(id);
+        return !!sheet?.results && !sheet.submittedAt;
+      };
       const view = url.searchParams.get('view');
       const search = url.searchParams.get('search') ?? '';
       return send(
@@ -315,16 +333,19 @@ export async function mockApi(
                 o.allocatedAt &&
                 o.orderNumber.includes(search) &&
                 (view !== 'queue' ||
+                  (station === 'cutting' && needsCorrection(o.id)) ||
                   (!o.shippedAt &&
+                    !(
+                      station === 'cutting' && worksheetFor(o.id)?.submittedAt
+                    ) &&
                     !state.productionCompletions.some(
                       (c) => c.workOrderId === o.id && c.station === station,
                     ))),
             )
             .map((o) => ({
               ...o,
-              hasCuttingWorksheet: state.worksheets.some(
-                (w) => w.workOrderId === o.id && !w.abandonedAt && !w.skippedAt,
-              ),
+              hasCuttingWorksheet: !!worksheetFor(o.id),
+              worksheetNeedsCorrection: needsCorrection(o.id),
               completions: state.productionCompletions.filter(
                 (c) => c.workOrderId === o.id,
               ),
@@ -428,7 +449,15 @@ export async function mockApi(
       return send(sheet, 201);
     }
     if (path === '/production/cutting/worksheets')
-      return send(state.worksheets.filter((w) => !w.reviewedAt));
+      return send(
+        state.worksheets.filter(
+          (w) =>
+            !w.reviewedAt &&
+            !w.skippedAt &&
+            !w.abandonedAt &&
+            (state.role !== 'staff' || w.submittedAt),
+        ),
+      );
     const sheetPath = path.match(
       /^\/production\/cutting\/worksheets\/([^/]+)(?:\/(draft|employees|submit|review|return))?$/,
     );
@@ -792,53 +821,57 @@ export async function mockApi(
       state.allocationRequests.push({ path, body: request.postDataJSON() });
     const orderOf = (workOrderId: string) =>
       state.orders.find((row) => row.id === workOrderId)!;
-    if (path === '/allocations/optimize') {
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'GET')
+      return send({ status: 'finished', result: plans.get(path) });
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'DELETE')
+      return send(undefined, 204);
+    if (path.startsWith('/allocations/planning-jobs/') && method === 'PUT') {
       const requirement = request.postDataJSON().requirements[0]!;
-      return send(
-        allocationOptimizationSchema.parse({
-          status: 'feasible',
-          stockItems: [stock],
-          plan: {
-            cuts: [
-              {
-                ...allocation.plan.cuts[0],
-                lengthMm: 2540,
-                items: [{ requirementId: requirement.id, quantity: 1 }],
-              },
-            ],
-          },
-          summary: {
-            leftovers: [
-              {
-                stockItemId: ids.stock,
-                cutIndex: 0,
-                kind: 'left-edge',
-                widthMm: 25.4,
-                lengthMm: 2540,
-                quantity: 1,
-                reusable: false,
-              },
-              {
-                stockItemId: ids.stock,
-                cutIndex: 0,
-                kind: 'right-edge',
-                widthMm: 1600.2,
-                lengthMm: 2540,
-                quantity: 1,
-                reusable: true,
-              },
-            ],
-            reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2540 }],
-            inputAreaMm2: (2997.2 * 2540).toFixed(6),
-            requiredAreaMm2: (1371.6 * 2540).toFixed(6),
-            reusableAreaMm2: (1600.2 * 2540).toFixed(6),
-            wasteAreaMm2: (25.4 * 2540).toFixed(6),
-            cutCount: 1,
-            stockItemCount: 1,
-            newRollCount: 1,
-          },
-        }),
-      );
+      const result = allocationOptimizationSchema.parse({
+        status: 'feasible',
+        stockItems: [stock],
+        plan: {
+          cuts: [
+            {
+              ...allocation.plan.cuts[0],
+              lengthMm: 2540,
+              items: [{ requirementId: requirement.id, quantity: 1 }],
+            },
+          ],
+        },
+        summary: {
+          leftovers: [
+            {
+              stockItemId: ids.stock,
+              cutIndex: 0,
+              kind: 'left-edge',
+              widthMm: 25.4,
+              lengthMm: 2540,
+              quantity: 1,
+              reusable: false,
+            },
+            {
+              stockItemId: ids.stock,
+              cutIndex: 0,
+              kind: 'right-edge',
+              widthMm: 1600.2,
+              lengthMm: 2540,
+              quantity: 1,
+              reusable: true,
+            },
+          ],
+          reservations: [{ stockItemId: ids.stock, reservedLengthMm: 2540 }],
+          inputAreaMm2: (2997.2 * 2540).toFixed(6),
+          requiredAreaMm2: (1371.6 * 2540).toFixed(6),
+          reusableAreaMm2: (1600.2 * 2540).toFixed(6),
+          wasteAreaMm2: (25.4 * 2540).toFixed(6),
+          cutCount: 1,
+          stockItemCount: 1,
+          newRollCount: 1,
+        },
+      });
+      plans.set(path, result);
+      return send({ status: 'refining', result }, 202);
     }
     if (path === `/allocations/${ids.allocation}/draft` && method === 'PUT') {
       const input: AllocationDraftInput = request.postDataJSON().data;

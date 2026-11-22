@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mockApi, ids } from './fixtures';
+import { receipt } from '../fixtures';
 
 test('production history remains accessible and record pages fit the viewport', async ({
   page,
@@ -92,4 +93,54 @@ test('production history remains accessible and record pages fit the viewport', 
       fullPage: true,
     });
   }
+});
+
+test('receipt values stay on one line as stock links flow and the table scrolls', async ({
+  page,
+}) => {
+  await mockApi(page);
+  const line = receipt.items[0]!;
+  const fabricColorCode = 'CS204-SL';
+  const stockItems = Array.from({ length: 24 }, (_, index) => ({
+    ...line.stockItems[0]!,
+    id: `${String(index + 1).padStart(8, '0')}-3333-4333-8333-333333333333`,
+    fabricColorCode,
+  }));
+  await page.route(`**/api/stock-receipts/${ids.receipt}`, (route) =>
+    route.fulfill({
+      json: {
+        ...receipt,
+        items: [
+          {
+            ...line,
+            quantity: stockItems.length,
+            stockItems,
+            stockItemIds: stockItems.map(({ id }) => id),
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(`/stock-receipts/${ids.receipt}`);
+  const table = page.getByRole('table');
+  const fabric = table.getByRole('cell', { name: fabricColorCode });
+  const width = table.getByRole('cell', { name: '54 in' });
+  const links = table.getByRole('link');
+  await expect(links).toHaveCount(24);
+  await expect(fabric).toHaveCSS('white-space', 'nowrap');
+  await expect(width).toHaveCSS('white-space', 'nowrap');
+  expect((await links.last().boundingBox())!.y).toBeGreaterThan(
+    (await links.first().boundingBox())!.y,
+  );
+
+  await page.setViewportSize({ width: 360, height: 900 });
+  const wrapper = page.locator('.data-table-wrap').filter({ has: table });
+  expect(await wrapper.evaluate((el) => el.scrollWidth)).toBeGreaterThan(
+    await wrapper.evaluate((el) => el.clientWidth),
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });

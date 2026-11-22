@@ -13,8 +13,10 @@ const outcomeLabels: Record<StockCuttingOutcome['outcome'], string> = {
 
 export function SubmittedCuttingResults({
   items,
+  locationLabels,
   units,
 }: {
+  locationLabels: Record<string, string>;
   items: StockCuttingOutcome[];
   units: MeasurementUnits;
 }) {
@@ -76,6 +78,7 @@ export function SubmittedCuttingResults({
                   <RecordValues
                     value={item.locationId}
                     field="locationId"
+                    referenceLabels={locationLabels}
                     units={units}
                   />
                 </dd>
@@ -100,6 +103,7 @@ export function SubmittedCuttingResults({
                       <RecordValues
                         value={piece.locationId}
                         field="locationId"
+                        referenceLabels={locationLabels}
                         units={units}
                       />
                     </span>
