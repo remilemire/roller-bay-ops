@@ -23,7 +23,10 @@ import { cuttingSheetItems, type SheetItem } from './cutting-sheet';
  * The plan a cutting station froze when it began, if any. Production owns the
  * worksheet; the route supplies its query so this screen can print from it.
  */
-export type SavedWorksheetQuery = (workOrderId: string) => UseQueryOptions<{
+export type SavedWorksheetQuery = (
+  workOrderId: string,
+  planId?: string,
+) => UseQueryOptions<{
   allocationId: string;
   snapshot: AllocationDetail;
 } | null>;
@@ -54,7 +57,11 @@ function AvailableCuttingSheet({
   record: AllocationDetail | z.infer<typeof allocationDraftSchema>;
   savedWorksheet: SavedWorksheetQuery;
 }) {
-  const query = useQuery(savedWorksheet(record.workOrderId));
+  const query = useQuery(
+    record.state !== 'draft' && record.isRecut
+      ? savedWorksheet(record.workOrderId, record.id)
+      : savedWorksheet(record.workOrderId),
+  );
   if (query.data && query.data.allocationId === record.id)
     return <CuttingSheet allocation={query.data.snapshot} />;
   const id = record.id;
@@ -87,7 +94,7 @@ export function CuttingSheet({ allocation }: { allocation: AllocationDetail }) {
   return (
     <div className="sheet">
       <PageHeading
-        eyebrow={`CUTTING SHEET · ${shortId(allocation.id)}`}
+        eyebrow={`${allocation.isRecut ? 'REPLACEMENT WORKSHEET' : 'CUTTING SHEET'} · ${shortId(allocation.id)}`}
         title={allocation.orderNumber}
         description={`Revision ${allocation.revision} · Created ${dateLabel(allocation.createdAt)}${hydrated ? ` · Printed ${dateLabel(printedAt)}` : ''}`}
       >

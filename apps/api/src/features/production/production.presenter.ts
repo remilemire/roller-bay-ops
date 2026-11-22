@@ -16,6 +16,7 @@ export const presentCompletion = (row: CompletionRecord) =>
 export function presentStationOrders(result: {
   items: (WorkOrderRecord & {
     completions: CompletionRecord[];
+    recuts: import('@roller-bay/shared/production').Recut[];
     hasCuttingWorksheet: boolean;
     worksheetNeedsCorrection: boolean;
   })[];
@@ -27,6 +28,7 @@ export function presentStationOrders(result: {
     ...result,
     items: result.items.map((row) => ({
       ...presentWorkOrder(row),
+      recuts: row.recuts,
       hasCuttingWorksheet: row.hasCuttingWorksheet,
       worksheetNeedsCorrection: row.worksheetNeedsCorrection,
       completions: row.completions.map(presentCompletion),

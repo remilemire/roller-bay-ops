@@ -7,6 +7,7 @@ import {
   worksheetListSchema,
   worksheetDetailSchema,
   type StationQuery,
+  type Recut,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
 import { locationListSchema } from '@roller-bay/shared/locations';
@@ -52,14 +53,17 @@ export const mutationResultSchema = z.object({
   recordId: z.uuid(),
   revision: z.number(),
 });
-export const worksheetForOrder = (id: string) => ({
-  queryKey: [...productionKey, 'worksheet-order', id],
+export const worksheetPath = (id: string, planId?: string) =>
+  planId
+    ? `/production/cutting/orders/${id}/recut-plans/${planId}/worksheet`
+    : `/production/cutting/orders/${id}/worksheet`;
+export const worksheetForOrder = (id: string, planId?: string) => ({
+  queryKey: [...productionKey, 'worksheet-order', id, planId],
   // 204 means the order has no live sheet; queries cannot hold undefined.
   queryFn: () =>
-    api(
-      `/production/cutting/orders/${id}/worksheet`,
-      worksheetSchema.optional(),
-    ).then((sheet) => sheet ?? null),
+    api(worksheetPath(id, planId), worksheetSchema.optional()).then(
+      (sheet) => sheet ?? null,
+    ),
   refetchInterval: 10000,
 });
 export const worksheetDetail = (id: string) => ({
@@ -90,3 +94,12 @@ export async function lookupCuttingLocations(
     })),
   };
 }
+
+export const recutStageLabel = {
+  requested: 'Awaiting fabric',
+  cutting: 'Awaiting cutting',
+  assembly: 'Awaiting assembly',
+  checking: 'Awaiting recheck',
+  accepted: 'Accepted',
+  withdrawn: 'Withdrawn',
+} satisfies Record<Recut['stage'], string>;

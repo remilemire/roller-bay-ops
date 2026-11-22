@@ -207,7 +207,7 @@ test('allocation storage errors preserve domain responses and do not expose driv
     ],
     [
       '23505',
-      'allocations_live_work_order_unique',
+      'allocations_live_primary_order_unique',
       409,
       'order_already_allocated',
     ],
@@ -247,6 +247,7 @@ test('allocation revisions reject stale and terminal-state writes', () => {
     createdByUserId: randomUUID(),
     createdAt: new Date(),
     updatedAt: new Date(),
+    isRecut: false,
     isDraft: false,
     revision: 2,
     confirmedAt: new Date(),

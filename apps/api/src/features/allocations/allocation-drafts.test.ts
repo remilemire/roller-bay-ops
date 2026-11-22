@@ -39,6 +39,7 @@ const header = (): AllocationRecord => ({
   createdByUserId: randomUUID(),
   createdAt: new Date(),
   updatedAt: new Date(),
+  isRecut: false,
   isDraft: true,
   revision: 1,
   confirmedAt: null,

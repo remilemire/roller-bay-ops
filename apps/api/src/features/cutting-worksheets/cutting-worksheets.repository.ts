@@ -4,10 +4,12 @@ import {
   desc,
   eq,
   inArray,
+  getTableColumns,
   isNotNull,
   isNull,
   sql,
 } from 'drizzle-orm';
+import { allocations } from '../allocations/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import {
   cuttingWorksheetEmployees,
@@ -99,11 +101,16 @@ export class CuttingWorksheetsRepository {
   async forOrder(id: string) {
     return this.first(
       await this.db
-        .select()
+        .select(getTableColumns(cuttingWorksheets))
         .from(cuttingWorksheets)
+        .innerJoin(
+          allocations,
+          eq(allocations.id, cuttingWorksheets.allocationId),
+        )
         .where(
           and(
             eq(cuttingWorksheets.workOrderId, id),
+            eq(allocations.isRecut, false),
             isNull(cuttingWorksheets.abandonedAt),
             isNull(cuttingWorksheets.skippedAt),
           ),

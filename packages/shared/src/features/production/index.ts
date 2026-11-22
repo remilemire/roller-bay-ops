@@ -66,7 +66,74 @@ export const stationQuerySchema = z
     (v) => v.view !== 'completed' || (!!v.from && !!v.to && v.from < v.to),
     'Completed view needs a valid time range.',
   );
+export const recutRequestSchema = z.strictObject({
+  requirementId: z.uuid(),
+  quantity: z.number().int().min(1).max(10000),
+  reason: z.string().trim().min(1).max(1000),
+});
+export const recutStageSchema = z.enum([
+  'requested',
+  'cutting',
+  'assembly',
+  'checking',
+  'accepted',
+  'withdrawn',
+]);
+export const recutSchema = recutRequestSchema
+  .extend({
+    // Older records and clients include the route selected at request time.
+    needsAssembly: z.boolean(),
+    id: z.uuid(),
+    workOrderId: z.uuid(),
+    allocationId: z.uuid().nullable(),
+    stage: recutStageSchema,
+    revision: z.number().int().positive(),
+    fabricColorCode: z.string(),
+    widthMm: z.number().positive(),
+    lengthMm: z.number().positive(),
+  })
+  .strip();
+export type Recut = z.infer<typeof recutSchema>;
+export const recutRevisionSchema = z.strictObject({
+  expectedRevision: z.number().int().positive(),
+});
+export const recutAssignmentSchema = recutRevisionSchema.extend({
+  stockItemId: z.uuid(),
+});
+export const recutWithdrawalSchema = recutRevisionSchema.extend({
+  reason: z.string().trim().min(1).max(1000),
+});
+export const recutSignoffSchema = recutRevisionSchema.extend({
+  employeeIds: employeeIdsSchema,
+});
+export const recutBlindsSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    position: z.number().int(),
+    fabricColorCode: z.string(),
+    widthMm: z.number(),
+    lengthMm: z.number(),
+    quantity: z.number().int(),
+  }),
+);
+export const recutStockSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    locationLabel: z.string(),
+    isRemnant: z.boolean(),
+    widthMm: z.number(),
+    availableLengthMm: z.number(),
+  }),
+);
 export const stationOrderSchema = workOrderSchema.extend({
+  recuts: z
+    .array(
+      recutSchema.extend({
+        worksheetId: z.uuid().nullable(),
+        needsCorrection: z.boolean(),
+      }),
+    )
+    .default([]),
   completions: productionCompletionsSchema,
   hasCuttingWorksheet: z.boolean(),
   worksheetNeedsCorrection: z.boolean().default(false),
@@ -134,6 +201,7 @@ export const worksheetReturnSchema = z.strictObject({
   reason: z.string().trim().min(1).max(1000),
 });
 export const worksheetSchema = z.object({
+  isRecut: z.boolean().optional(),
   id: z.uuid(),
   allocationId: z.uuid(),
   workOrderId: z.uuid(),

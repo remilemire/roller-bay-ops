@@ -28,7 +28,7 @@ export async function allocationOperation<T>(
           throw orderNotFound(error);
         if (
           cause.code === '23505' &&
-          constraint === 'allocations_live_work_order_unique'
+          constraint === 'allocations_live_primary_order_unique'
         )
           throw orderAlreadyAllocated(error);
         // Neither key says which blind; the issue names the list.

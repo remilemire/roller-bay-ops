@@ -2734,8 +2734,22 @@ label.detail-label {
   margin-right: 8px;
   color: var(--muted);
 }
+.station-order-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px var(--field-gap);
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .station-order-history {
-  margin-top: 6px;
+  flex: 1 1 13rem;
+  min-width: 0;
+}
+.station-order-footer > .button {
+  min-height: var(--control-height);
 }
 .station-order-history > summary {
   padding-block: 10px;

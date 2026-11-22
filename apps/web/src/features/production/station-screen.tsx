@@ -32,6 +32,7 @@ import {
   employeeNames,
 } from './production.api';
 import { CompletionAction } from './completion-action';
+import { RequestRecut, RecutActions } from './recut-actions';
 import { StationOrderGrid } from './station-order-grid';
 export function StationsScreen() {
   const user = useCurrentUser();
@@ -223,7 +224,8 @@ function StationQueue({ station }: { station: Station }) {
                         </Link>
                       </Button>
                     ) : (
-                      !order.cutAt && (
+                      !order.cutAt &&
+                      !order.shippedAt && (
                         <CuttingChoice
                           orderId={order.id}
                           orderNumber={order.orderNumber}
@@ -231,6 +233,14 @@ function StationQueue({ station }: { station: Station }) {
                         />
                       )
                     )
+                  ) : order.shippedAt && view === 'queue' ? null : (station ===
+                      'checking' ||
+                      station === 'shipping') &&
+                    !order[stamp[station]] &&
+                    order.recuts.some(
+                      (r) => r.stage !== 'accepted' && r.stage !== 'withdrawn',
+                    ) ? (
+                    <span>Awaiting recut</span>
                   ) : (
                     <CompletionAction
                       station={station}
@@ -240,52 +250,71 @@ function StationQueue({ station }: { station: Station }) {
                     />
                   )}
                 </div>
+                {order.recuts
+                  .filter(
+                    (r) =>
+                      !['accepted', 'withdrawn'].includes(r.stage) ||
+                      r.needsCorrection,
+                  )
+                  .map((r) => (
+                    <RecutActions key={r.id} recut={r} station={station} />
+                  ))}
                 {order.note && (
                   <p className="station-order-note">
                     <span>Note</span> {order.note}
                   </p>
                 )}
-                <details className="station-order-history">
-                  <summary>
-                    Production details ·{' '}
-                    {order.completions.length
-                      ? stationSchema.options
-                          .filter((stage) =>
-                            order.completions.some((c) => c.station === stage),
-                          )
-                          .map((stage) => completionLabels[stage])
-                          .join(', ')
-                      : 'No stages recorded'}
-                  </summary>
-                  <dl className="station-history">
-                    {/* Stages are independent: never infer an earlier completion
+                <div className="station-order-footer">
+                  <details className="station-order-history">
+                    <summary>
+                      Production details ·{' '}
+                      {order.completions.length
+                        ? stationSchema.options
+                            .filter((stage) =>
+                              order.completions.some(
+                                (c) => c.station === stage,
+                              ),
+                            )
+                            .map((stage) => completionLabels[stage])
+                            .join(', ')
+                        : 'No stages recorded'}
+                    </summary>
+                    <dl className="station-history">
+                      {/* Stages are independent: never infer an earlier completion
                         from a later one or turn this into a progress bar. */}
-                    {stationSchema.options.map((stage) => {
-                      const completion = order.completions.find(
-                        (c) => c.station === stage,
-                      );
-                      return (
-                        <div className="station-history-row" key={stage}>
-                          <dt>{stationLabels[stage]}</dt>
-                          <dd>
-                            {completion ? (
-                              <>
-                                <span>
-                                  {employeeNames(completion.employees)}
-                                </span>
-                                <time dateTime={completion.completedAt}>
-                                  {dateTimeLabel(completion.completedAt)}
-                                </time>
-                              </>
-                            ) : (
-                              <span className="muted">Not recorded</span>
-                            )}
-                          </dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
-                </details>
+                      {stationSchema.options.map((stage) => {
+                        const completion = order.completions.find(
+                          (c) => c.station === stage,
+                        );
+                        return (
+                          <div className="station-history-row" key={stage}>
+                            <dt>{stationLabels[stage]}</dt>
+                            <dd>
+                              {completion ? (
+                                <>
+                                  <span>
+                                    {employeeNames(completion.employees)}
+                                  </span>
+                                  <time dateTime={completion.completedAt}>
+                                    {dateTimeLabel(completion.completedAt)}
+                                  </time>
+                                </>
+                              ) : (
+                                <span className="muted">Not recorded</span>
+                              )}
+                            </dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </details>
+                  {station !== 'cutting' && order.cutAt && (
+                    <RequestRecut
+                      orderId={order.id}
+                      orderNumber={order.orderNumber}
+                    />
+                  )}
+                </div>
               </section>
             ))}
           </StationOrderGrid>

@@ -35,6 +35,9 @@ test('station login, whole-order attribution, and employee directory', async ({
   ).toContainText('Alex Reed');
   expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.orders[0]!.shipDate).toBeNull();
+  await expect(page.getByRole('button', { name: 'Request recut' })).toHaveCount(
+    0,
+  );
   await page.goto('/stock-items');
   await expect(page).toHaveURL(/stations$/);
   expect(
@@ -560,6 +563,9 @@ test('cutting station offers manual completion without starting a worksheet', as
   ).toContainText('Alex Reed');
   expect(state.worksheets).toHaveLength(0);
   expect(state.orders[0]!.cutAt).not.toBeNull();
+  await expect(page.getByRole('button', { name: 'Request recut' })).toHaveCount(
+    0,
+  );
 });
 
 test('a cleared cut can be recorded manually while keeping the previous worksheet', async ({

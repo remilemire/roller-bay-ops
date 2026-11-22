@@ -295,6 +295,8 @@ export async function mockApi(
       };
       return send(state.employees[i]);
     }
+    if (method === 'GET' && /^\/production\/orders\/[^/]+\/recuts$/.test(path))
+      return send([]);
     const completionPath = path.match(
       /^\/production\/orders\/([^/]+)\/completions$/,
     );

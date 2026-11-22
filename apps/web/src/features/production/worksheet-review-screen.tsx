@@ -85,7 +85,9 @@ export function WorksheetReviewScreen({
     (!!sheet.submittedAt || canManage);
   return (
     <section className="stack">
-      <PageHeading title={`Cutting results · ${sheet.orderNumber}`} />
+      <PageHeading
+        title={`${sheet.isRecut ? 'Recut' : 'Cutting'} results · ${sheet.orderNumber}`}
+      />
       {sheet.skippedAt && (
         <p className="notice">
           These cutting results were closed without recording measurements.

@@ -14,12 +14,15 @@ import {
   isNotNull,
   isNull,
   ne,
+  notInArray,
+  or,
   sql,
   type SQL,
 } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
 import { stockItems } from '../stock-items/tables.js';
+import { recuts } from '../production/tables.js';
 import { workOrders } from '../work-orders/tables.js';
 import type { CuttingPlanSummary } from './cutting-plan/cutting-plan.types.js';
 import { allocationCutItems } from './tables/allocation-cut-items.table.js';
@@ -60,6 +63,35 @@ const batches = <T>(values: T[]): T[][] =>
   );
 export class AllocationsRepository {
   constructor(private readonly db: DatabaseExecutor) {}
+  async hasRecutHistory(allocationId: string) {
+    const [found] = await this.db
+      .select({ id: recuts.id })
+      .from(recuts)
+      .innerJoin(
+        allocationRequirements,
+        eq(allocationRequirements.id, recuts.requirementId),
+      )
+      .where(eq(allocationRequirements.allocationId, allocationId))
+      .limit(1);
+    return !!found;
+  }
+  async hasUnresolvedRecutWork(orderId: string) {
+    const [open] = await this.db
+      .select({ id: recuts.id })
+      .from(recuts)
+      .leftJoin(allocations, eq(allocations.id, recuts.allocationId))
+      .where(
+        and(
+          eq(recuts.workOrderId, orderId),
+          or(
+            notInArray(recuts.stage, ['withdrawn', 'accepted']),
+            and(eq(recuts.stage, 'accepted'), isNull(allocations.completedAt)),
+          ),
+        ),
+      )
+      .limit(1);
+    return !!open;
+  }
   async liveForOrder(orderId: string) {
     return (
       await this.db
@@ -68,6 +100,7 @@ export class AllocationsRepository {
         .where(
           and(
             eq(allocations.workOrderId, orderId),
+            eq(allocations.isRecut, false),
             isNull(allocations.releasedAt),
             eq(allocations.isDraft, false),
             isNull(allocations.cancelledAt),
@@ -386,6 +419,7 @@ export class AllocationsRepository {
                   : undefined,
           )!;
     const where = and(
+      eq(allocations.isRecut, false),
       state,
       query.search
         ? ilike(

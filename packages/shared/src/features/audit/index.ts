@@ -4,6 +4,7 @@ import {
   completionEmployeeSchema,
   productionCompletionSchema,
   worksheetSchema,
+  recutSchema,
 } from '../production/index.js';
 import { stockSnapshotSchema } from '../stock-items/index.js';
 import { stockReceiptRecordSchema } from '../stock-receipts/index.js';
@@ -13,6 +14,7 @@ import {
 } from '../allocations/index.js';
 import { workOrderSchema } from '../work-orders/index.js';
 export const auditRecordTypeSchema = z.enum([
+  'recuts',
   'employees',
   'production',
   'cutting-worksheets',
@@ -38,6 +40,12 @@ const legacyWorksheetSnapshotSchema = worksheetSchema
     employees: [{ employeeId, employeeName, employeeInitials }],
   }));
 export const auditSnapshotSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('recuts'),
+    value: recutSchema.extend({
+      employees: z.array(completionEmployeeSchema).optional(),
+    }),
+  }),
   z.object({ type: z.literal('employees'), value: employeeSchema }),
   z.object({
     type: z.literal('production'),

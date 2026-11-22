@@ -23,6 +23,7 @@ import { EmployeeSelection } from './employee-selection';
 import { Dialog } from '@/components/ui/dialog';
 import {
   worksheetForOrder,
+  worksheetPath,
   productionKey,
   completions,
   employeeNames,
@@ -32,24 +33,32 @@ import {
 type Editor = { completionEditor: ComponentType<CompletionEditorProps> };
 export function CuttingWorkspace({
   orderId,
+  planId,
   completionEditor,
-}: { orderId: string } & Editor) {
+}: { orderId: string; planId?: string } & Editor) {
   const user = useCurrentUser();
   if (user.role === 'production' && !user.stations.includes('cutting'))
     return <p>This account is not assigned to cutting.</p>;
-  return <CuttingOrder orderId={orderId} completionEditor={completionEditor} />;
+  return (
+    <CuttingOrder
+      planId={planId}
+      orderId={orderId}
+      completionEditor={completionEditor}
+    />
+  );
 }
 function CuttingOrder({
   orderId,
+  planId,
   completionEditor,
-}: { orderId: string } & Editor) {
-  const query = useQuery(worksheetForOrder(orderId));
+}: { orderId: string; planId?: string } & Editor) {
+  const query = useQuery(worksheetForOrder(orderId, planId));
   const client = useQueryClient();
   const [beginOpen, setBeginOpen] = useState(false);
   const [cutterIds, setCutterIds] = useState<string[]>([]);
   const start = useMutation({
     mutationFn: () =>
-      api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
+      api(worksheetPath(orderId, planId), worksheetSchema, {
         method: 'POST',
         body: { employeeIds: cutterIds },
       }),
@@ -67,7 +76,11 @@ function CuttingOrder({
     <div className="stack station-workspace">
       <PageHeading
         title={
-          query.data ? `Cutting · ${query.data.orderNumber}` : 'Cutting sheet'
+          query.data
+            ? `${planId ? 'Recut' : 'Cutting'} · ${query.data.orderNumber}`
+            : planId
+              ? 'Replacement worksheet'
+              : 'Cutting sheet'
         }
       >
         <Button asChild variant="outline">
@@ -115,7 +128,7 @@ function CuttingOrder({
           </Dialog>
         </section>
       )}
-      {query.data && <CutAttribution sheet={query.data} />}
+      {query.data && !planId && <CutAttribution sheet={query.data} />}
       {query.data && (
         <Worksheet
           key={query.data.id}
