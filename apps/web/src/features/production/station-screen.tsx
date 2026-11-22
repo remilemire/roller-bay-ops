@@ -137,12 +137,16 @@ function StationChoice({ station }: { station: Station }) {
 }
 function StationQueue({ station }: { station: Station }) {
   const params = useListParams();
+  const canAssign =
+    useCurrentUser().role !== 'production' && station === 'cutting';
   const view =
-    params.get('view') === 'completed'
-      ? 'completed'
-      : params.get('view') === 'all' || params.search
-        ? 'all'
-        : 'queue';
+    canAssign && params.get('view') === 'recuts'
+      ? 'recuts'
+      : params.get('view') === 'completed'
+        ? 'completed'
+        : params.get('view') === 'all' || params.search
+          ? 'all'
+          : 'queue';
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
@@ -181,6 +185,9 @@ function StationQueue({ station }: { station: Station }) {
             { value: 'queue', label: 'Work queue' },
             { value: 'completed', label: 'Completed today' },
             { value: 'all', label: 'All allocated orders' },
+            ...(canAssign
+              ? [{ value: 'recuts' as const, label: 'Awaiting fabric' }]
+              : []),
           ]}
           onChange={(value) => params.set({ view: value, search: '', page: 1 })}
         />
@@ -216,8 +223,9 @@ function StationQueue({ station }: { station: Station }) {
                         : 'Unscheduled'}
                     </p>
                   </div>
-                  {station === 'cutting' ? (
-                    order.cutAt && order.worksheetNeedsCorrection ? (
+                  {view === 'recuts' ? null : station === 'cutting' ? (
+                    (order.cutAt || order.cutAwaitingRecuts) &&
+                    order.worksheetNeedsCorrection ? (
                       <Button asChild>
                         <Link href={`/stations/cutting/${order.id}`}>
                           Correct returned worksheet
@@ -229,6 +237,11 @@ function StationQueue({ station }: { station: Station }) {
                         <CuttingChoice
                           orderId={order.id}
                           orderNumber={order.orderNumber}
+                          awaitingCut={order.recuts.some(
+                            (r) =>
+                              r.stage === 'requested' || r.stage === 'cutting',
+                          )}
+                          originalSubmitted={order.cutAwaitingRecuts}
                           hasWorksheet={order.hasCuttingWorksheet}
                         />
                       )
@@ -251,10 +264,11 @@ function StationQueue({ station }: { station: Station }) {
                   )}
                 </div>
                 {order.recuts
-                  .filter(
-                    (r) =>
-                      !['accepted', 'withdrawn'].includes(r.stage) ||
-                      r.needsCorrection,
+                  .filter((r) =>
+                    view === 'recuts'
+                      ? r.stage === 'requested'
+                      : !['accepted', 'withdrawn'].includes(r.stage) ||
+                        r.needsCorrection,
                   )
                   .map((r) => (
                     <RecutActions key={r.id} recut={r} station={station} />
@@ -308,7 +322,7 @@ function StationQueue({ station }: { station: Station }) {
                       })}
                     </dl>
                   </details>
-                  {station !== 'cutting' && order.cutAt && (
+                  {view !== 'recuts' && (
                     <RequestRecut
                       orderId={order.id}
                       orderNumber={order.orderNumber}
@@ -333,12 +347,27 @@ function CuttingChoice({
   orderId,
   orderNumber,
   hasWorksheet,
+  awaitingCut,
+  originalSubmitted,
 }: {
   orderId: string;
   orderNumber: string;
   hasWorksheet: boolean;
+  awaitingCut: boolean;
+  originalSubmitted: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  if (originalSubmitted)
+    return awaitingCut ? (
+      <span>Awaiting replacement cut</span>
+    ) : (
+      <CompletionAction
+        station="cutting"
+        orderId={orderId}
+        orderNumber={orderNumber}
+        done={false}
+      />
+    );
   return (
     <>
       <div className="inline-actions">
@@ -351,26 +380,27 @@ function CuttingChoice({
         description="Choose how to record this order's cutting."
       >
         <div className="stack">
-          <section className="stack">
-            <h3>Sign off only</h3>
-            <p>
-              Mark the order cut now and credit the selected employees. No
-              measurements are submitted.
-            </p>
-            <CompletionAction
-              station="cutting"
-              orderId={orderId}
-              orderNumber={orderNumber}
-              inline
-              done={false}
-            />
-          </section>
+          {awaitingCut ? (
+            <p>Cutting sign-off is waiting for replacement fabric to be cut.</p>
+          ) : (
+            <section className="stack">
+              <h3>Sign off only</h3>
+              <p>
+                Mark the order cut now and credit the selected employees. No
+                measurements are submitted.
+              </p>
+              <CompletionAction
+                station="cutting"
+                orderId={orderId}
+                orderNumber={orderNumber}
+                inline
+                done={false}
+              />
+            </section>
+          )}
           <section className="stack">
             <h3>Cutting worksheet</h3>
-            <p>
-              Follow cutting instructions and save measurements. Submitting the
-              worksheet also marks the order cut.
-            </p>
+            <p>Follow cutting instructions and save measurements.</p>
             <div className="inline-actions">
               <Button asChild>
                 <Link href={`/stations/cutting/${orderId}`}>

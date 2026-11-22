@@ -119,9 +119,17 @@ export class CuttingWorkflowService {
         // return clears submittedAt but retains results. Resubmissions and
         // retries must not overwrite attribution or restore an admin-cleared
         // milestone.
-        if (!row.results && row.snapshot.isRecut) {
+        if (row.results) return result;
+        if (row.snapshot.isRecut) {
           await this.recuts.cut(context, row.allocationId, actor);
-        } else if (!row.results) {
+          // Only the last replacement completes a previously submitted primary sheet.
+          if (!order.cutAwaitingRecuts) return result;
+        }
+        if (order.cutAt) return result;
+        if (await context.production.hasUncutRecuts(order.id)) {
+          if (!row.snapshot.isRecut)
+            await this.orders.deferCutUntilRecuts(context, order.id);
+        } else {
           await this.production.recordWorksheetCut(
             context,
             order,

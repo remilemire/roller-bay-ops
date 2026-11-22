@@ -48,7 +48,7 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
     <section className="panel">
       <div className="panel-heading">
         <h2>Production</h2>
-        {order.allocatedAt && order.cutAt && !order.cancelledAt && (
+        {order.allocatedAt && !order.cancelledAt && (
           <RequestRecut orderId={order.id} orderNumber={order.orderNumber} />
         )}
       </div>

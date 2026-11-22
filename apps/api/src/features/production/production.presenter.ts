@@ -29,6 +29,7 @@ export function presentStationOrders(result: {
     items: result.items.map((row) => ({
       ...presentWorkOrder(row),
       recuts: row.recuts,
+      cutAwaitingRecuts: row.cutAwaitingRecuts,
       hasCuttingWorksheet: row.hasCuttingWorksheet,
       worksheetNeedsCorrection: row.worksheetNeedsCorrection,
       completions: row.completions.map(presentCompletion),

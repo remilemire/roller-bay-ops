@@ -123,6 +123,34 @@ export class ProductionRepository {
       .where(eq(recuts.id, id));
     return (await this.recutRows(eq(recuts.id, id)))[0]!;
   }
+  async pendingRecutCount() {
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(recuts)
+      .innerJoin(workOrders, eq(workOrders.id, recuts.workOrderId))
+      .where(
+        and(
+          eq(recuts.stage, 'requested'),
+          isNull(workOrders.deletedAt),
+          isNull(workOrders.cancelledAt),
+          isNotNull(workOrders.allocatedAt),
+        ),
+      );
+    return row!;
+  }
+  async hasUncutRecuts(orderId: string) {
+    const rows = await this.db
+      .select({ id: recuts.id })
+      .from(recuts)
+      .where(
+        and(
+          eq(recuts.workOrderId, orderId),
+          inArray(recuts.stage, ['requested', 'cutting']),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
   async openRecuts(orderId: string) {
     return this.recutRows(
       and(
@@ -194,6 +222,19 @@ export class ProductionRepository {
         ),
     );
     const where = and(
+      query.view === 'recuts'
+        ? exists(
+            this.db
+              .select({ id: recuts.id })
+              .from(recuts)
+              .where(
+                and(
+                  eq(recuts.workOrderId, workOrders.id),
+                  eq(recuts.stage, 'requested'),
+                ),
+              ),
+          )
+        : undefined,
       isNull(workOrders.deletedAt),
       isNull(workOrders.cancelledAt),
       isNotNull(workOrders.allocatedAt),
@@ -208,7 +249,10 @@ export class ProductionRepository {
               isNull(stamp),
               isNull(workOrders.shippedAt),
               station === 'cutting'
-                ? not(hasWorksheet('submitted'))
+                ? or(
+                    workOrders.cutAwaitingRecuts,
+                    not(hasWorksheet('submitted')),
+                  )
                 : undefined,
             ),
           )

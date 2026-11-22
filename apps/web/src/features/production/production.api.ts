@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { employeeListSchema } from '@roller-bay/shared/employees';
 import {
+  pendingRecutCountSchema,
   productionCompletionsSchema,
   stationOrderListSchema,
   worksheetSchema,
@@ -41,6 +42,12 @@ export const productionOrders = (station: Station, query: StationQuery) => ({
       `/production/${station}/orders${queryString(query)}`,
       stationOrderListSchema,
     ),
+  refetchInterval: 10000,
+});
+export const pendingRecutCount = () => ({
+  queryKey: [...productionKey, 'pending-recut-count'],
+  queryFn: () =>
+    api('/production/recuts/pending-count', pendingRecutCountSchema),
   refetchInterval: 10000,
 });
 export const completions = (id: string) => ({

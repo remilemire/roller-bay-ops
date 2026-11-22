@@ -1,4 +1,5 @@
 'use client';
+import { RequestRecut } from './recut-actions';
 import Link from 'next/link';
 import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -198,6 +199,12 @@ function Worksheet({
                 ? 'Results awaiting office review'
                 : 'Results in progress'}
         </p>
+        {!sheet.submittedAt && !sheet.skippedAt && !sheet.abandonedAt && (
+          <RequestRecut
+            orderId={sheet.workOrderId}
+            orderNumber={sheet.orderNumber}
+          />
+        )}
         {/* Submitted results credit the cut; an admin corrects it after that. */}
         {!sheet.results && !sheet.skippedAt && (
           <Button

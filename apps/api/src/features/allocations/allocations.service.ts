@@ -110,7 +110,9 @@ export class AllocationsService {
     const reserved = await context.allocations.reservations(
       stocks.map((s) => s.id),
     );
+    const consumed = await this.worksheets.reportedConsumedStockIds(context);
     return stocks.flatMap((s) => {
+      if (consumed.has(s.id)) return [];
       const held = toLengthUnits(Number(reserved.get(s.id) ?? 0));
       const available = toLengthUnits(s.remainingLengthMm) - held;
       const layout = recutLayout(s.widthMm, blind, settings);
@@ -155,6 +157,12 @@ export class AllocationsService {
       lock: true,
     });
     if (!stock) throw new NotFoundException('Selected stock not found.');
+    if (
+      (await this.worksheets.reportedConsumedStockIds(context)).has(stockItemId)
+    )
+      throw new ConflictException(
+        'This stock was reported consumed. Select another roll or remnant.',
+      );
     const requirement = { ...blind, id: randomUUID() };
     const { settings } = this.cuttingRules.apply([], source.settings);
     const layout = recutLayout(stock.widthMm, blind, settings);

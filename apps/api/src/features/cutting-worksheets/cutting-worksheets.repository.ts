@@ -152,6 +152,25 @@ export class CuttingWorksheetsRepository {
       ).length > 0
     );
   }
+  async reportedConsumedStockIds() {
+    // An unreviewed physical observation can be newer than the inventory balance.
+    const rows = await this.db
+      .selectDistinct({ id: sql<string>`item->>'stockItemId'` })
+      .from(cuttingWorksheets)
+      .crossJoin(
+        sql`lateral jsonb_array_elements(${cuttingWorksheets.results}->'items') as item`,
+      )
+      .where(
+        and(
+          isNotNull(cuttingWorksheets.submittedAt),
+          isNull(cuttingWorksheets.reviewedAt),
+          isNull(cuttingWorksheets.abandonedAt),
+          isNull(cuttingWorksheets.skippedAt),
+          sql`item->>'outcome' = 'consumed'`,
+        ),
+      );
+    return new Set(rows.map((row) => row.id));
+  }
   async latestForStock(id: string) {
     return this.first(
       await this.db

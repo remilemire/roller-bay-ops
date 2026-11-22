@@ -64,6 +64,11 @@ export class RecutsService {
     private readonly audit: AuditService,
     private readonly employees: EmployeesService,
   ) {}
+  pendingCount() {
+    return productionOperation(() =>
+      this.uow.readOnlyTransaction((ctx) => ctx.production.pendingRecutCount()),
+    );
+  }
   list(orderId: string) {
     return productionOperation(() =>
       this.uow.readOnlyTransaction(async (ctx) =>
@@ -98,10 +103,6 @@ export class RecutsService {
       kind: 'order',
       id: orderId,
       apply: async (ctx, order) => {
-        if (!order.cutAt)
-          throw new ConflictException(
-            'Record cutting before requesting a recut.',
-          );
         const blind = (await ctx.production.recutBlinds(order.id)).find(
           (b) => b.id === input.requirementId,
         );

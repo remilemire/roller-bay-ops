@@ -65,8 +65,6 @@ test('checking replaces one blind on the same roll without rewriting the order o
     quantity: 1,
     reason: 'Flaw across face',
   };
-  await post(orderRequestPath, payload).expect(409);
-  assert.deepEqual((await get(orderRequestPath).expect(200)).body, []);
   const submitted = await submit(original, 10);
   const originalCompletions = (
     await get(`${path}/orders/${order}/completions`).expect(200)
@@ -268,4 +266,90 @@ test('a shipped order with a recorded cut gets a replacement and retains its ori
     (await get(`${base}/orders/${id}/completions`).expect(200)).body,
     originalCompletions,
   );
+});
+
+test('a cutter reports a shortage, staff assign another roll, and the last replacement finishes the order cut', async (t) => {
+  const { get, post, input, create, seed, pool, userId } =
+    await startAllocationsApp(t);
+  await pool.query("UPDATE users SET role='admin' WHERE id=$1", [userId]);
+  const employeeIds = [
+    (await post('/api/employees', { name: 'Jo', initials: 'JO' }).expect(201))
+      .body.id,
+  ];
+  const planned = await input(await seed());
+  const { workOrderId } = await create(planned);
+  const base = '/api/production';
+  const cutting = `${base}/cutting/orders/${workOrderId}`;
+  const countPath = `${base}/recuts/pending-count`;
+  const queuePath = `${base}/cutting/orders?view=recuts`;
+  const primary = worksheetSchema.parse(
+    (await post(`${cutting}/worksheet`, { employeeIds }).expect(201)).body,
+  );
+  await pool.query(
+    `UPDATE users SET role='production', stations='["cutting"]'::jsonb WHERE id=$1`,
+    [userId],
+  );
+  const requested = (
+    await post(`${base}/orders/${workOrderId}/recuts`, {
+      requirementId: planned.requirements[0]!.id,
+      quantity: 1,
+      reason: 'Roll ran short',
+    }).expect(201)
+  ).body;
+  await get(countPath).expect(403);
+  const submit = (sheet: typeof primary) =>
+    post(`${base}/cutting/worksheets/${sheet.id}/submit`, {
+      expectedRevision: sheet.revision,
+      results: {
+        expectedRevision: sheet.snapshot.revision,
+        items: sheet.snapshot.items.map((i) => ({
+          stockItemId: i.stockItemId,
+          expectedRevision: i.stockItem.revision,
+          outcome: 'consumed',
+          scraps: [],
+        })),
+      },
+    }).expect(201);
+  await submit(primary);
+  await post(`${cutting}/complete`, { employeeIds }).expect(409);
+  await pool.query("UPDATE users SET role='staff' WHERE id=$1", [userId]);
+  const order = async () =>
+    (await get(`/api/work-orders/${workOrderId}`).expect(200)).body;
+  assert.equal((await order()).cutAt, null);
+  const exhausted = primary.snapshot.items[0]!.stockItemId;
+  const candidates = (
+    await get(`${base}/recuts/${requested.recordId}/stock`).expect(200)
+  ).body;
+  assert.ok(!candidates.some((s: { id: string }) => s.id === exhausted));
+  await post(`${base}/recuts/${requested.recordId}/assign`, {
+    expectedRevision: requested.revision,
+    stockItemId: exhausted,
+  }).expect(409);
+  assert.equal((await get(countPath).expect(200)).body.total, 1);
+  assert.deepEqual(
+    stationOrderListSchema
+      .parse((await get(queuePath).expect(200)).body)
+      .items.map((row) => row.id),
+    [workOrderId],
+  );
+  await post(`${base}/recuts/${requested.recordId}/assign`, {
+    expectedRevision: requested.revision,
+    stockItemId: await seed(),
+  }).expect(201);
+  assert.equal((await get(countPath).expect(200)).body.total, 0);
+  assert.equal((await get(queuePath).expect(200)).body.total, 0);
+  const [recut] = (
+    await get(`${base}/orders/${workOrderId}/recuts`).expect(200)
+  ).body;
+  const replacement = worksheetSchema.parse(
+    (
+      await post(`${cutting}/recut-plans/${recut.allocationId}/worksheet`, {
+        employeeIds,
+      }).expect(201)
+    ).body,
+  );
+  const finished = await submit(replacement);
+  assert.equal((await order()).cutAt, finished.body.submittedAt);
+  await submit(replacement);
+  assert.equal((await order()).cutAt, finished.body.submittedAt);
 });

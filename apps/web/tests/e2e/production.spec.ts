@@ -35,9 +35,9 @@ test('station login, whole-order attribution, and employee directory', async ({
   ).toContainText('Alex Reed');
   expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.orders[0]!.shipDate).toBeNull();
-  await expect(page.getByRole('button', { name: 'Request recut' })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }).first(),
+  ).toBeVisible();
   await page.goto('/stock-items');
   await expect(page).toHaveURL(/stations$/);
   expect(
@@ -64,6 +64,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await pickEmployee(page, 'Alex Reed', 'Cutters');
   await page.getByRole('button', { name: 'Start worksheet' }).click();
   await expect(page.getByText(/Cutters: Alex Reed \(AR\)/)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }),
+  ).toBeVisible();
   await page.getByLabel('Cut 1 done').check();
   await expect(page.getByRole('button', { name: 'Sign off only' })).toHaveCount(
     0,
@@ -563,9 +566,9 @@ test('cutting station offers manual completion without starting a worksheet', as
   ).toContainText('Alex Reed');
   expect(state.worksheets).toHaveLength(0);
   expect(state.orders[0]!.cutAt).not.toBeNull();
-  await expect(page.getByRole('button', { name: 'Request recut' })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }).first(),
+  ).toBeVisible();
 });
 
 test('a cleared cut can be recorded manually while keeping the previous worksheet', async ({
@@ -813,4 +816,41 @@ test('review summarizes empty remnants and separates replacement measurements fr
     path: info.outputPath('readable-cutting-review.png'),
     fullPage: true,
   });
+});
+
+test('overview links pending recut requests to fabric assignment', async ({
+  page,
+}) => {
+  const state = await mockApi(page, { role: 'staff' });
+  for (const [index, stage] of (
+    ['requested', 'requested', 'assembly'] as const
+  ).entries()) {
+    state.recuts.push({
+      id: `11111111-2222-4333-8444-00000000000${index}`,
+      workOrderId: ids.order,
+      requirementId: state.allocation.requirements[0]!.id,
+      allocationId: stage === 'requested' ? null : state.allocation.id,
+      reason: `Fabric issue ${index}`,
+      stage,
+      quantity: 1,
+      revision: 1,
+      fabricColorCode: 'LINEN',
+      widthMm: 500,
+      lengthMm: 1000,
+      needsAssembly: true,
+    });
+  }
+  await page.goto('/');
+  const requests = page.getByRole('link', { name: /Recuts awaiting fabric/ });
+  await expect(requests).toContainText('2');
+  await requests.click();
+  await expect(
+    page.getByRole('button', { name: 'Awaiting fabric', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Assign fabric' })).toHaveCount(
+    2,
+  );
+  await expect(page.getByText('Fabric issue 2', { exact: false })).toHaveCount(
+    0,
+  );
 });

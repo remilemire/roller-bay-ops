@@ -57,7 +57,7 @@ export const stationQuerySchema = z
       .regex(/^\d{0,6}$/)
       .default(''),
     page: z.coerce.number().int().min(1).max(1000000).default(1),
-    view: z.enum(['queue', 'completed', 'all']).default('queue'),
+    view: z.enum(['queue', 'completed', 'all', 'recuts']).default('queue'),
     // The browser supplies the station's local day as explicit UTC bounds.
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
@@ -70,6 +70,9 @@ export const recutRequestSchema = z.strictObject({
   requirementId: z.uuid(),
   quantity: z.number().int().min(1).max(10000),
   reason: z.string().trim().min(1).max(1000),
+});
+export const pendingRecutCountSchema = z.object({
+  total: z.number().int().nonnegative(),
 });
 export const recutStageSchema = z.enum([
   'requested',
@@ -135,6 +138,7 @@ export const stationOrderSchema = workOrderSchema.extend({
     )
     .default([]),
   completions: productionCompletionsSchema,
+  cutAwaitingRecuts: z.boolean().default(false),
   hasCuttingWorksheet: z.boolean(),
   worksheetNeedsCorrection: z.boolean().default(false),
 });

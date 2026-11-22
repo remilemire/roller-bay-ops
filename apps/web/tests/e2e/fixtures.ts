@@ -1,5 +1,6 @@
 import type {
   ProductionCompletion,
+  Recut,
   Worksheet,
 } from '@roller-bay/shared/production';
 import type { Station } from '@roller-bay/shared/users';
@@ -170,6 +171,7 @@ export async function mockApi(
       typeof allocationDraftSchema.parse
     > | null,
     allocation: structuredClone(allocation),
+    recuts: [] as Recut[],
     completionRequests: [] as unknown[],
     orders: [
       structuredClone(order),
@@ -297,6 +299,10 @@ export async function mockApi(
     }
     if (method === 'GET' && /^\/production\/orders\/[^/]+\/recuts$/.test(path))
       return send([]);
+    if (path === '/production/recuts/pending-count')
+      return send({
+        total: state.recuts.filter((r) => r.stage === 'requested').length,
+      });
     const completionPath = path.match(
       /^\/production\/orders\/([^/]+)\/completions$/,
     );
@@ -333,6 +339,10 @@ export async function mockApi(
             .filter(
               (o) =>
                 o.allocatedAt &&
+                (view !== 'recuts' ||
+                  state.recuts.some(
+                    (r) => r.workOrderId === o.id && r.stage === 'requested',
+                  )) &&
                 o.orderNumber.includes(search) &&
                 (view !== 'queue' ||
                   (station === 'cutting' && needsCorrection(o.id)) ||
@@ -346,6 +356,13 @@ export async function mockApi(
             )
             .map((o) => ({
               ...o,
+              recuts: state.recuts
+                .filter((r) => r.workOrderId === o.id)
+                .map((r) => ({
+                  ...r,
+                  worksheetId: null,
+                  needsCorrection: false,
+                })),
               hasCuttingWorksheet: !!worksheetFor(o.id),
               worksheetNeedsCorrection: needsCorrection(o.id),
               completions: state.productionCompletions.filter(

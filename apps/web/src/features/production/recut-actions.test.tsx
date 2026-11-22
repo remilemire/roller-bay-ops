@@ -53,9 +53,9 @@ it('staff can request a replacement from a shipped order with only the blind, qu
   });
   const user = userEvent.setup();
   const client = new QueryClient();
-  const view = (cutAt: string | null) => (
+  const view = (allocatedAt: string | null) => (
     <QueryClientProvider client={client}>
-      <OrderProduction order={{ ...shipped, cutAt }} />
+      <OrderProduction order={{ ...shipped, allocatedAt }} />
     </QueryClientProvider>
   );
   const { rerender } = render(view(null));

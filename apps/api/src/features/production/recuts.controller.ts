@@ -30,6 +30,9 @@ const keyPipe = new ZodValidationPipe(correctionKeySchema);
 @Roles('production')
 export class RecutsController {
   constructor(private readonly recuts: RecutsService) {}
+  @Get('recuts/pending-count') @Roles('staff') pendingCount() {
+    return this.recuts.pendingCount();
+  }
   @Get('orders/:id/recuts') list(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,

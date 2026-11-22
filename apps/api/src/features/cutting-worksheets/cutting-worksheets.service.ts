@@ -108,6 +108,9 @@ export class CuttingWorksheetsService {
     const row = await context.cuttingWorksheets.forAllocation(id);
     return row ? presentWorksheet(row) : null;
   }
+  reportedConsumedStockIds(context: UnitOfWorkContext) {
+    return context.cuttingWorksheets.reportedConsumedStockIds();
+  }
   async assertPlanMutable(context: UnitOfWorkContext, allocationId: string) {
     if (await context.cuttingWorksheets.forAllocation(allocationId))
       throw new ConflictException(
