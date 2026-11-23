@@ -854,3 +854,68 @@ test('overview links pending recut requests to fabric assignment', async ({
     0,
   );
 });
+
+test('staff build a manual recut plan from the cutting station', async ({
+  page,
+}) => {
+  const state = await mockApi(page, { role: 'staff' });
+  const id = '11111111-2222-4333-8444-000000000001';
+  state.recuts.push({
+    id,
+    workOrderId: ids.order,
+    requirementId: state.allocation.requirements[0]!.id,
+    allocationId: null,
+    reason: 'Fabric flaw',
+    stage: 'requested',
+    quantity: 13,
+    revision: 1,
+    fabricColorCode: 'LINEN',
+    widthMm: 80,
+    lengthMm: 1000,
+    needsAssembly: true,
+  });
+  const rolls = [
+    '11111111-2222-4333-8444-000000000002',
+    '11111111-2222-4333-8444-000000000003',
+  ];
+  const endpoint = `**/production/recuts/${id}`;
+  await page.route(`${endpoint}/stock`, (route) => route.fulfill({ json: [] }));
+  await page.route(`${endpoint}/manual-stock`, (route) =>
+    route.fulfill({
+      json: rolls.map((id, i) => ({
+        id,
+        locationLabel: `Bin ${i + 1}`,
+        widthMm: i === 0 ? 1000 : 150,
+        availableLengthMm: 1000,
+        isRemnant: true,
+      })),
+    }),
+  );
+  let submitted: unknown;
+  await page.route(`${endpoint}/assign`, (route) => {
+    submitted = route.request().postDataJSON();
+    return route.fulfill({ json: { recordId: id, revision: 2 } });
+  });
+  await page.goto('/stations?station=cutting&view=recuts');
+  await page.getByRole('button', { name: 'Assign fabric' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Build a manual plan' }).click();
+  for (const [i, roll] of rolls.entries()) {
+    await dialog.getByRole('button', { name: 'Add cut' }).click();
+    await dialog.getByLabel(`Stock item · cut ${i + 1}`).selectOption(roll);
+    await dialog.getByRole('button', { name: 'Assign a blind' }).nth(i).click();
+    const quantity = dialog.getByLabel('Quantity in this cut').nth(i);
+    await quantity.pressSequentially(i === 0 ? '12' : '1');
+  }
+  await dialog.getByRole('button', { name: 'Reserve manual plan' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(submitted).toEqual({
+    expectedRevision: 1,
+    plan: {
+      cuts: rolls.map((stockItemId, i) => ({
+        stockItemId,
+        items: [{ requirementId: id, quantity: i === 0 ? 12 : 1 }],
+      })),
+    },
+  });
+});

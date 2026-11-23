@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { stationSchema, measurementUnitsSchema } from '../users/index.js';
 import {
   allocationDetailSchema,
+  cuttingPlanInputSchema,
   completeAllocationSchema,
 } from '../allocations/index.js';
 import { workOrderSchema } from '../work-orders/index.js';
@@ -111,10 +112,17 @@ export const recutSelectionSchema = z.strictObject({
     .optional(),
 });
 export type RecutSelection = z.infer<typeof recutSelectionSchema>;
-export const recutAssignmentSchema = recutRevisionSchema.extend({
+const recutAssignmentBase = recutRevisionSchema.extend({
   ...recutSelectionSchema.shape,
-  stockItemId: z.uuid(),
 });
+export const manualRecutAssignmentSchema = recutAssignmentBase.extend({
+  plan: cuttingPlanInputSchema,
+});
+export const recutAssignmentSchema = z.union([
+  recutAssignmentBase.extend({ stockItemId: z.uuid() }),
+  manualRecutAssignmentSchema,
+]);
+export type RecutAssignment = z.infer<typeof recutAssignmentSchema>;
 export const recutWithdrawalSchema = recutRevisionSchema.extend({
   unusedWorksheet: recutRevisionSchema.extend({ id: z.uuid() }).optional(),
   reason: z.string().trim().min(1).max(1000),

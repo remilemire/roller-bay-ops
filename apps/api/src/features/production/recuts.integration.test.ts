@@ -649,3 +649,148 @@ test('withdrawing from a started shared sheet retires it and regenerates the rem
   assert.ok(retired.abandonedAt);
   assert.equal(retired.snapshot.requirements.length, 2);
 });
+
+test('staff can split manual recuts across remnants, validate without reserving, and start one worksheet', async (t) => {
+  const { pool, userId, input, create, seed, get, post } =
+    await startAllocationsApp(t);
+  await pool.query("UPDATE users SET role='admin' WHERE id=$1", [userId]);
+  const employeeIds = [
+    (await post('/api/employees', { name: 'Lee', initials: 'LE' }).expect(201))
+      .body.id,
+  ];
+  const primary = await input(await seed(), 1000);
+  primary.requirements[0]!.quantity = 3;
+  primary.plan.cuts.push(
+    ...Array.from({ length: 2 }, () => structuredClone(primary.plan.cuts[0]!)),
+  );
+  await pool.query('UPDATE work_orders SET quantity=3 WHERE id=$1', [
+    primary.workOrderId,
+  ]);
+  await create(primary);
+  const base = '/api/production';
+  const list = `${base}/orders/${primary.workOrderId}/recuts`;
+  const request = async (quantity: number) =>
+    (
+      await post(list, {
+        requirementId: primary.requirements[0]!.id,
+        quantity,
+        reason: 'Flaw',
+      }).expect(201)
+    ).body.recordId as string;
+  const first = await request(2),
+    other = await request(1);
+  const a = await seed(1000, true),
+    b = await seed(1000, true);
+  await pool.query('UPDATE fabric_stock_items SET width_mm=600 WHERE id=$1', [
+    a,
+  ]);
+  const action = `${base}/recuts/${first}`;
+  const selection = { additionalRecuts: [{ id: other, expectedRevision: 1 }] };
+  const candidates = async (route: string) =>
+    (await post(`${action}/${route}`, selection).expect(200)).body as {
+      id: string;
+    }[];
+  const manual = await candidates('manual-stock');
+  assert.ok([a, b].every((id) => manual.some((s) => s.id === id)));
+  assert.ok(
+    !(await candidates('stock-options')).some((s) => s.id === a || s.id === b),
+  );
+  const body = {
+    ...selection,
+    expectedRevision: 1,
+    plan: {
+      cuts: [
+        { stockItemId: a, items: [{ requirementId: first, quantity: 1 }] },
+        {
+          stockItemId: b,
+          items: [
+            { requirementId: other, quantity: 1 },
+            { requirementId: first, quantity: 1 },
+          ],
+        },
+      ],
+    },
+  };
+  const invalid = { ...body, plan: { cuts: [body.plan.cuts[0]] } };
+  await post(`${action}/validate-plan`, invalid).expect(400);
+  await post(`${action}/assign`, invalid).expect(400);
+  await pool.query(
+    "UPDATE users SET role='production',stations=$1::jsonb WHERE id=$2",
+    [JSON.stringify(['cutting']), userId],
+  );
+  await post(`${action}/manual-stock`, selection).expect(403);
+  await post(`${action}/validate-plan`, body).expect(403);
+  await post(`${action}/assign`, body).expect(403);
+  await pool.query("UPDATE users SET role='staff' WHERE id=$1", [userId]);
+  const preview = await post(`${action}/validate-plan`, body).expect(200);
+  assert.equal(preview.body.stockItemCount, 2);
+  assert.ok(
+    (await get(list)).body.every(
+      (r: { stage: string }) => r.stage === 'requested',
+    ),
+  );
+  await pool.query(
+    'UPDATE fabric_stock_items SET explicit_length_mm=999 WHERE id=$1',
+    [b],
+  );
+  await post(`${action}/assign`, body).expect(409);
+  assert.ok(
+    (await get(list)).body.every(
+      (r: { allocationId: string | null }) => r.allocationId === null,
+    ),
+  );
+  await pool.query(
+    'UPDATE fabric_stock_items SET explicit_length_mm=1000 WHERE id=$1',
+    [b],
+  );
+  const key = randomUUID();
+  const save = () => post(`${action}/assign`, body, key).expect(201);
+  assert.deepEqual((await save()).body, (await save()).body);
+  const tasks = (await get(list).expect(200)).body;
+  assert.equal(tasks[0].allocationId, tasks[1].allocationId);
+  const path = (id: string) =>
+    `${base}/cutting/orders/${primary.workOrderId}/recut-plans/${id}/worksheet`;
+  const sheet = worksheetSchema.parse(
+    (await post(path(tasks[0].allocationId), { employeeIds }).expect(201)).body,
+  );
+  assert.deepEqual(
+    sheet.snapshot.plan.cuts.map((c) => [
+      c.stockItemId,
+      c.lengthMm,
+      c.items.length,
+    ]),
+    [
+      [a, 1000, 1],
+      [b, 1000, 2],
+    ],
+  );
+  const storedId = sheet.snapshot.requirements.find(
+    (r) => r.quantity === 2,
+  )!.id;
+  assert.deepEqual(
+    sheet.snapshot.plan.cuts[1]!.items.map((i) => i.requirementId === storedId),
+    [false, true],
+  );
+  await post(`${base}/recuts/${other}/withdraw`, {
+    expectedRevision: 2,
+    reason: 'Original usable',
+    unusedWorksheet: { id: sheet.id, expectedRevision: sheet.revision },
+  }).expect(201);
+  const remaining = (await get(list).expect(200)).body.find(
+    (r: { id: string }) => r.id === first,
+  );
+  assert.equal(remaining.stage, 'cutting');
+  const revised = worksheetSchema.parse(
+    (await post(path(remaining.allocationId), { employeeIds }).expect(201))
+      .body,
+  );
+  assert.deepEqual(
+    revised.snapshot.requirements.map((r) => r.quantity),
+    [2],
+  );
+  assert.ok(
+    revised.snapshot.items.every(
+      (i) => i.stockItemId === a || i.stockItemId === b,
+    ),
+  );
+});

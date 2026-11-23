@@ -20,12 +20,16 @@ export function CutPlanEditor({
   onChange,
   onGenerate,
   onValidate,
+  stockOptions,
+  requirementLabels,
 }: {
   form: UseFormReturn<AllocationForm>;
   units: MeasurementUnits;
   onChange: () => void;
-  onGenerate: () => void;
-  onValidate: () => void;
+  onGenerate?: () => void;
+  onValidate?: () => void;
+  stockOptions?: { value: string; label: string }[];
+  requirementLabels?: ReadonlyMap<string, string>;
 }) {
   const cuts = useFieldArray({
     control: form.control,
@@ -33,10 +37,6 @@ export function CutPlanEditor({
     keyName: 'formKey',
   });
   const values = useWatch({ control: form.control }) as AllocationForm;
-  function setCuts(value: AllocationForm['cuts']) {
-    form.setValue('cuts', value, { shouldDirty: true });
-    onChange();
-  }
   function addCut() {
     cuts.append({ stockItemId: '', items: [] });
     onChange();
@@ -47,7 +47,7 @@ export function CutPlanEditor({
       !cuts.fields.length ||
       window.confirm('Replace the current cuts with a generated plan?')
     )
-      onGenerate();
+      onGenerate?.();
   }
   return (
     <section className="panel">
@@ -66,15 +66,23 @@ export function CutPlanEditor({
               <Plus size={16} />
               Add cut
             </Button>
-            <Button type="button" variant="outline" onClick={generate}>
-              <Sparkles size={16} />
-              Generate plan
-            </Button>
+            {onGenerate && (
+              <Button type="button" variant="outline" onClick={generate}>
+                <Sparkles size={16} />
+                Generate plan
+              </Button>
+            )}
           </div>
         )}
       </div>
       <div className="panel-body">
-        {!cuts.fields.length && (
+        {!cuts.fields.length && !onGenerate && (
+          <Button type="button" variant="outline" onClick={addCut}>
+            <Plus size={16} />
+            Add cut
+          </Button>
+        )}
+        {!cuts.fields.length && onGenerate && (
           <div className="plan-start">
             <div className="plan-option">
               <Sparkles size={18} />
@@ -104,7 +112,9 @@ export function CutPlanEditor({
           // Field-array changes can render before the watched values catch up.
           const cut = form.getValues(`cuts.${index}`) ?? row;
           const change = (next: typeof cut) => {
-            setCuts(values.cuts.map((d, i) => (i === index ? next : d)));
+            // Keep field-array keys stable while typing quantities or choosing stock.
+            form.setValue(`cuts.${index}`, next, { shouldDirty: true });
+            onChange();
             form.clearErrors(`cuts.${index}`);
           };
           const error = (name: FieldPath<AllocationForm>) =>
@@ -142,14 +152,23 @@ export function CutPlanEditor({
                 </div>
               </div>
               <div className="form-grid">
-                <Lookup
-                  label={`Stock item · cut ${index + 1}`}
-                  value={cut.stockItemId}
-                  onChange={(v) => change({ ...cut, stockItemId: v })}
-                  queryKey={[...stockKey, units.rollWidth]}
-                  load={lookupStock(units.rollWidth)}
-                  error={error(`cuts.${index}.stockItemId`)}
-                />
+                {stockOptions ? (
+                  <ChoiceField
+                    label={`Stock item · cut ${index + 1}`}
+                    value={cut.stockItemId}
+                    onChange={(stockItemId) => change({ ...cut, stockItemId })}
+                    options={stockOptions}
+                  />
+                ) : (
+                  <Lookup
+                    label={`Stock item · cut ${index + 1}`}
+                    value={cut.stockItemId}
+                    onChange={(v) => change({ ...cut, stockItemId: v })}
+                    queryKey={[...stockKey, units.rollWidth]}
+                    load={lookupStock(units.rollWidth)}
+                    error={error(`cuts.${index}.stockItemId`)}
+                  />
+                )}
               </div>
               <hr className="divider" />
               {cut.items.map((assignment, ai) => (
@@ -168,7 +187,9 @@ export function CutPlanEditor({
                     error={error(`cuts.${index}.items.${ai}.requirementId`)}
                     options={values.requirements.map((r, i) => ({
                       value: r.id,
-                      label: `Blind ${i + 1} · ${r.width || '?'} ${fieldSuffix(units, 'blindWidth')} × ${r.length || '?'} ${fieldSuffix(units, 'finishedDrop')}`,
+                      label:
+                        requirementLabels?.get(r.id) ??
+                        `Blind ${i + 1} · ${r.width || '?'} ${fieldSuffix(units, 'blindWidth')} × ${r.length || '?'} ${fieldSuffix(units, 'finishedDrop')}`,
                     }))}
                   />
                   <div
@@ -234,7 +255,7 @@ export function CutPlanEditor({
             </div>
           );
         })}
-        {cuts.fields.length > 0 && (
+        {cuts.fields.length > 0 && onValidate && (
           <Button type="button" variant="outline" onClick={() => onValidate()}>
             <Check size={16} />
             Validate plan

@@ -1391,6 +1391,9 @@ td strong {
   backdrop-filter: var(--glass-filter);
   box-shadow: 0 18px 56px -20px #0005;
 }
+.dialog-content.dialog-wide {
+  width: min(94vw, 900px);
+}
 .dialog-heading {
   display: flex;
   justify-content: space-between;

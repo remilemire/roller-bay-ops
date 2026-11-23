@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
 import { api } from '@/lib/api';
-import { RecutActions } from './recut-actions';
+import { ManualCutEditor } from '@/features/allocations';
+import { ManualCutEditorContext, RecutActions } from './recut-actions';
 import { OrderProduction } from './order-production';
 import { workOrderSchema } from '@roller-bay/shared/work-orders';
 vi.mock('@/features/auth', () => ({
@@ -241,6 +242,89 @@ it('withdraws a started recut only after staff confirm the displayed worksheet i
           expectedRevision: 2,
           reason: 'Original blind passed checking',
           unusedWorksheet: { id: task.worksheetId, expectedRevision: 4 },
+        },
+      },
+    ),
+  );
+});
+
+it('builds a manual worksheet across two rolls even when neither fits the whole request', async () => {
+  const task = {
+    id: crypto.randomUUID(),
+    requirementId: crypto.randomUUID(),
+    workOrderId: crypto.randomUUID(),
+    quantity: 2,
+    widthMm: 500,
+    lengthMm: 1000,
+    fabricColorCode: 'LINEN',
+    reason: 'Flaw',
+    stage: 'requested' as const,
+    revision: 1,
+    allocationId: null,
+    worksheetId: null,
+    needsAssembly: true,
+    needsCorrection: false,
+  };
+  const rolls = ['A', 'B'].map((locationLabel) => ({
+    locationLabel,
+    id: crypto.randomUUID(),
+    widthMm: 600,
+    availableLengthMm: 1000,
+    isRemnant: true,
+  }));
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path.endsWith('/manual-stock')) return rolls;
+    if (path.endsWith('/stock')) return [];
+    if (path.endsWith('/validate-plan'))
+      return {
+        reservations: rolls.map((r) => ({
+          stockItemId: r.id,
+          reservedLengthMm: 1000,
+        })),
+      };
+    return { recordId: task.id, revision: 2 };
+  });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ManualCutEditorContext.Provider
+        value={(props) => <ManualCutEditor {...props} />}
+      >
+        <RecutActions recut={task} orderRecuts={[task]} station="cutting" />
+      </ManualCutEditorContext.Provider>
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Assign fabric' }));
+  await user.click(screen.getByRole('button', { name: 'Build a manual plan' }));
+  for (const [i, roll] of rolls.entries()) {
+    await user.click(await screen.findByRole('button', { name: 'Add cut' }));
+    await user.selectOptions(
+      screen.getByLabelText(`Stock item · cut ${i + 1}`),
+      roll.id,
+    );
+    await user.click(
+      screen.getAllByRole('button', { name: 'Assign a blind' })[i]!,
+    );
+    await user.type(screen.getAllByLabelText('Quantity in this cut')[i]!, '1');
+  }
+  await user.click(screen.getByRole('button', { name: 'Validate plan' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Plan fits');
+  await user.click(screen.getByRole('button', { name: 'Reserve manual plan' }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      `/production/recuts/${task.id}/assign`,
+      expect.anything(),
+      {
+        method: 'POST',
+        key: expect.any(String),
+        body: {
+          expectedRevision: 1,
+          plan: {
+            cuts: rolls.map((r) => ({
+              stockItemId: r.id,
+              items: [{ requirementId: task.id, quantity: 1 }],
+            })),
+          },
         },
       },
     ),

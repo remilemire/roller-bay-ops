@@ -1,10 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import type { ManualCutEditorProps } from '@/features/allocations';
+import { cuttingPlanSummarySchema } from '@roller-bay/shared/allocations';
 import Link from 'next/link';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import {
   recutAssignmentSchema,
+  manualRecutAssignmentSchema,
   recutBlindsSchema,
   recutRequestSchema,
   recutSignoffSchema,
@@ -29,6 +32,10 @@ import {
 } from './production.api';
 import { useProductionWrite } from './use-production-write';
 import { EmployeeSelection } from './employee-selection';
+
+export const ManualCutEditorContext = createContext<
+  ((props: ManualCutEditorProps) => ReactNode) | null
+>(null);
 
 function Submit<T>({
   path,
@@ -260,6 +267,7 @@ export function RecutActions({
       {edit && (
         <Dialog
           open
+          wide={edit.action === 'assign'}
           onOpenChange={(v) => {
             if (!v) close();
           }}
@@ -318,8 +326,8 @@ function RecutForm({
         {sharedUncut && (
           <p>
             The app will generate a new cutting plan for the remaining recuts on
-            this roll. If the fabric no longer fits, they return to Awaiting
-            fabric.
+            the previously assigned stock. If a new plan is unavailable, they
+            return to Awaiting fabric.
           </p>
         )}
         {hasOpenSheet && (
@@ -390,6 +398,9 @@ function AssignFabric({
   close: () => void;
 }) {
   const units = useMeasurementUnits();
+  const renderManualEditor = useContext(ManualCutEditorContext);
+  const [manual, setManual] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [stockItemId, setStock] = useState('');
   const additionalRecuts = eligible
@@ -399,22 +410,37 @@ function AssignFabric({
     ? { additionalRecuts }
     : {};
   const stock = useQuery({
-    queryKey: [...productionKey, 'recut-stock', task.id, selection],
+    queryKey: [...productionKey, 'recut-stock', task.id, selection, manual],
     queryFn: ({ signal }) =>
-      additionalRecuts.length
-        ? api(`/production/recuts/${task.id}/stock-options`, recutStockSchema, {
+      manual
+        ? api(`/production/recuts/${task.id}/manual-stock`, recutStockSchema, {
             method: 'POST',
             body: selection,
             signal,
           })
-        : api(`/production/recuts/${task.id}/stock`, recutStockSchema, {
-            signal,
-          }),
+        : additionalRecuts.length
+          ? api(
+              `/production/recuts/${task.id}/stock-options`,
+              recutStockSchema,
+              {
+                method: 'POST',
+                body: selection,
+                signal,
+              },
+            )
+          : api(`/production/recuts/${task.id}/stock`, recutStockSchema, {
+              signal,
+            }),
   });
+  const stockOptions = (stock.data ?? []).map((s) => ({
+    value: s.id,
+    label: `${s.isRemnant ? 'Remnant' : 'Roll'} ${s.id.slice(0, 8).toUpperCase()} · ${s.locationLabel} · ${measurementLabel(s.widthMm, units.rollWidth)} wide · ${measurementLabel(s.availableLengthMm, units.rollLength)} available`,
+  }));
+  const requests = [task, ...eligible.filter((r) => selected.includes(r.id))];
   return (
     <div className="stack">
       {eligible.length > 0 && (
-        <fieldset className="form-fieldset">
+        <fieldset className="form-fieldset" disabled={manual}>
           <legend>Cut together on one worksheet</legend>
           {[task, ...eligible].map((r) => (
             <label className="correction-check" key={r.id}>
@@ -438,31 +464,134 @@ function AssignFabric({
           ))}
         </fieldset>
       )}
+      {renderManualEditor && (
+        <div className="inline-actions">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (
+                manual &&
+                dirty &&
+                !window.confirm('Discard the cuts you entered?')
+              )
+                return;
+              setManual(!manual);
+              setDirty(false);
+              setStock('');
+            }}
+          >
+            {manual ? 'Back to quick assignment' : 'Build a manual plan'}
+          </Button>
+        </div>
+      )}
+      {manual && stock.data?.length === 0 && (
+        <p>No roll or remnant currently fits a selected blind.</p>
+      )}
       {stock.isPending ? (
         <Loading />
-      ) : stock.error ? (
+      ) : stock.error && !stock.data ? (
         <ErrorNotice error={stock.error} retry={() => void stock.refetch()} />
-      ) : stock.data.length ? (
-        <ChoiceField
-          label={`Stock · ${task.fabricColorCode}`}
-          value={stockItemId}
-          onChange={setStock}
-          options={stock.data.map((s) => ({
-            value: s.id,
-            label: `${s.isRemnant ? 'Remnant' : 'Roll'} ${s.id.slice(0, 8).toUpperCase()} · ${s.locationLabel} · ${measurementLabel(s.widthMm, units.rollWidth)} wide · ${measurementLabel(s.availableLengthMm, units.rollLength)} available`,
-          }))}
-        />
+      ) : stock.data?.length || (manual && stock.data) ? (
+        manual && renderManualEditor ? (
+          renderManualEditor({
+            units,
+            stockOptions,
+            requirements: requests.map((r, i) => ({
+              ...r,
+              label: `Blind ${i + 1} · ${r.quantity} × ${measurementLabel(r.widthMm, units.blindWidth)} × ${measurementLabel(r.lengthMm, units.finishedDrop)} · ${r.reason}`,
+            })),
+            onDirty: () => setDirty(true),
+            actions: (plan) => (
+              <ManualPlanActions
+                task={task}
+                selection={selection}
+                plan={plan}
+                close={close}
+              />
+            ),
+          })
+        ) : (
+          <ChoiceField
+            label={`Stock · ${task.fabricColorCode}`}
+            value={stockItemId}
+            onChange={setStock}
+            options={stockOptions}
+          />
+        )
       ) : (
         <p>No stock can fit the selected replacements.</p>
+      )}
+      {!manual && (
+        <Submit
+          path={`/production/recuts/${task.id}/assign`}
+          schema={recutAssignmentSchema}
+          body={{ expectedRevision: task.revision, stockItemId, ...selection }}
+          disabled={
+            !stock.data?.some((s) => s.id === stockItemId) || !!stock.error
+          }
+          label="Reserve fabric"
+          close={close}
+        />
+      )}
+    </div>
+  );
+}
+
+function ManualPlanActions({
+  task,
+  selection,
+  plan,
+  close,
+}: {
+  task: Task;
+  selection: RecutSelection;
+  plan: Parameters<ManualCutEditorProps['actions']>[0];
+  close: () => void;
+}) {
+  const units = useMeasurementUnits();
+  const body = { expectedRevision: task.revision, ...selection, plan };
+  const preview = useMutation({
+    mutationFn: (input: typeof body) =>
+      api(
+        `/production/recuts/${task.id}/validate-plan`,
+        cuttingPlanSummarySchema,
+        { method: 'POST', body: input },
+      ),
+  });
+  const current = JSON.stringify(preview.variables) === JSON.stringify(body);
+  return (
+    <div className="stack">
+      <div className="inline-actions">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            preview.isPending ||
+            !manualRecutAssignmentSchema.safeParse(body).success
+          }
+          onClick={() => preview.mutate(body)}
+        >
+          Validate plan
+        </Button>
+      </div>
+      {current && preview.error && <ErrorNotice error={preview.error} />}
+      {current && preview.data && (
+        <div className="notice" role="status">
+          Plan fits ·{' '}
+          {preview.data.reservations
+            .map(
+              (r) =>
+                `${r.stockItemId.slice(0, 8).toUpperCase()} · ${measurementLabel(r.reservedLengthMm, units.rollLength)}`,
+            )
+            .join(' / ')}
+        </div>
       )}
       <Submit
         path={`/production/recuts/${task.id}/assign`}
         schema={recutAssignmentSchema}
-        body={{ expectedRevision: task.revision, stockItemId, ...selection }}
-        disabled={
-          !stock.data?.some((s) => s.id === stockItemId) || !!stock.error
-        }
-        label="Reserve fabric"
+        body={body}
+        label="Reserve manual plan"
         close={close}
       />
     </div>

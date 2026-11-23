@@ -9,6 +9,7 @@ import {
   recutBlindsSchema,
   type Recut,
   type RecutSelection,
+  type RecutAssignment,
 } from '@roller-bay/shared/production';
 import type { AuditChange } from '@roller-bay/shared/audit';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
@@ -139,17 +140,20 @@ export class RecutsService {
       }),
     ];
   }
-  candidates(id: string, input: RecutSelection = {}) {
+  candidates(id: string, input: RecutSelection = {}, partial = false) {
     return productionOperation(() =>
       this.uow.readOnlyTransaction(async (ctx) => {
         const row = await this.find(ctx, id);
-        const requests = input.additionalRecuts?.length
-          ? await this.selectedRequests(ctx, row, input)
-          : [row];
+        const requests =
+          partial || input.additionalRecuts?.length
+            ? await this.selectedRequests(ctx, row, input)
+            : [row];
         return this.allocations.recutStock(
           ctx,
           row.sourceId,
           requests.map(replacementBlind),
+          undefined,
+          partial,
         );
       }),
     );
@@ -186,26 +190,53 @@ export class RecutsService {
       },
     });
   }
-  assign(
+  previewManual(
     id: string,
-    input: RecutSelection & { expectedRevision: number; stockItemId: string },
-    actor: string,
-    key: string,
+    input: Extract<RecutAssignment, { plan: unknown }>,
   ) {
+    return productionOperation(() =>
+      this.uow.readOnlyTransaction(async (ctx) => {
+        const primary = await this.find(ctx, id);
+        if (primary.revision !== input.expectedRevision)
+          throw new ConflictException('Recut changed. Reopen the assignment.');
+        const requests = await this.selectedRequests(ctx, primary, input);
+        const { summary } = await this.allocations.manualRecutPlan(
+          ctx,
+          primary.sourceId,
+          primary.workOrderId,
+          requests.map(replacementBlind),
+          input.plan,
+          false,
+        );
+        return summary;
+      }),
+    );
+  }
+  assign(id: string, input: RecutAssignment, actor: string, key: string) {
     return this.write('assigned', input, actor, key, {
       kind: 'recut',
       id,
       expectedRevision: input.expectedRevision,
       apply: async (ctx, before) => {
         const requests = await this.selectedRequests(ctx, before, input);
-        const allocationId = await this.allocations.reserveRecut(
-          ctx,
-          before.sourceId,
-          before.workOrderId,
-          requests.map(replacementBlind),
-          input.stockItemId,
-          actor,
-        );
+        const allocationId =
+          'plan' in input
+            ? await this.allocations.reserveManualRecut(
+                ctx,
+                before.sourceId,
+                before.workOrderId,
+                requests.map(replacementBlind),
+                input.plan,
+                actor,
+              )
+            : await this.allocations.reserveRecut(
+                ctx,
+                before.sourceId,
+                before.workOrderId,
+                requests.map(replacementBlind),
+                input.stockItemId,
+                actor,
+              );
         const changes: Change[] = [];
         for (const request of requests) {
           changes.push({
@@ -239,7 +270,7 @@ export class RecutsService {
           throw new ConflictException('This recut is closed.');
         const changes: Change[] = [];
         if (before.allocationId) {
-          const stockId = await this.allocations.releaseUnusedRecut(
+          const stockIds = await this.allocations.releaseUnusedRecut(
             ctx,
             before.allocationId,
             actor,
@@ -251,28 +282,15 @@ export class RecutsService {
               await ctx.production.recutsForPlan(before.allocationId)
             ).filter((r) => r.id !== id && r.stage === 'cutting');
             if (remaining.length) {
-              const blinds = remaining.map(replacementBlind);
-              // The released roll is still locked. Repack only the remaining requests.
-              const available =
-                stockId &&
-                (
-                  await this.allocations.recutStock(
-                    ctx,
-                    before.sourceId,
-                    blinds,
-                    stockId,
-                  )
-                ).some((s) => s.id === stockId);
-              const allocationId = available
-                ? await this.allocations.reserveRecut(
-                    ctx,
-                    before.sourceId,
-                    before.workOrderId,
-                    blinds,
-                    stockId,
-                    actor,
-                  )
-                : null;
+              const allocationId =
+                await this.allocations.reassignRemainingRecuts(
+                  ctx,
+                  before.sourceId,
+                  before.workOrderId,
+                  remaining.map(replacementBlind),
+                  stockIds ?? [],
+                  actor,
+                );
               for (const other of remaining) {
                 changes.push({
                   before: other,

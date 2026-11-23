@@ -13,6 +13,7 @@ import {
   recutRequestSchema,
   recutAssignmentSchema,
   recutSelectionSchema,
+  manualRecutAssignmentSchema,
   recutSignoffSchema,
   recutWithdrawalSchema,
 } from '@roller-bay/shared/production';
@@ -78,6 +79,26 @@ export class RecutsController {
     input: z.infer<typeof recutSelectionSchema>,
   ) {
     return this.recuts.candidates(id, input);
+  }
+  @Post('recuts/:id/manual-stock')
+  @HttpCode(200)
+  @Roles('staff')
+  manualStock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(recutSelectionSchema))
+    input: z.infer<typeof recutSelectionSchema>,
+  ) {
+    return this.recuts.candidates(id, input, true);
+  }
+  @Post('recuts/:id/validate-plan')
+  @HttpCode(200)
+  @Roles('staff')
+  validatePlan(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(manualRecutAssignmentSchema))
+    input: z.infer<typeof manualRecutAssignmentSchema>,
+  ) {
+    return this.recuts.previewManual(id, input);
   }
   @Post('recuts/:id/assign') @Roles('staff') assign(
     @Param('id', ParseUUIDPipe) id: string,
