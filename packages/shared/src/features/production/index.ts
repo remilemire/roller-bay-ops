@@ -116,6 +116,7 @@ export const recutAssignmentSchema = recutRevisionSchema.extend({
   stockItemId: z.uuid(),
 });
 export const recutWithdrawalSchema = recutRevisionSchema.extend({
+  unusedWorksheet: recutRevisionSchema.extend({ id: z.uuid() }).optional(),
   reason: z.string().trim().min(1).max(1000),
 });
 export const recutSignoffSchema = recutRevisionSchema.extend({
@@ -145,6 +146,7 @@ export const stationOrderSchema = workOrderSchema.extend({
     .array(
       recutSchema.extend({
         worksheetId: z.uuid().nullable(),
+        worksheetRevision: z.number().int().positive().nullable().optional(),
         needsCorrection: z.boolean(),
       }),
     )

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import type {
   WorksheetSubmit,
   worksheetReviewSchema,
@@ -36,6 +40,15 @@ export class CuttingWorkflowService {
         if (sheet && (!sheet.snapshot.isRecut || sheet.workOrderId !== orderId))
           throw new ConflictException(
             'Select a replacement plan for this order.',
+          );
+        if (
+          !sheet &&
+          !(await context.production.recutsForPlan(planId)).some(
+            (r) => r.workOrderId === orderId && r.stage === 'cutting',
+          )
+        )
+          throw new ConflictException(
+            'This replacement plan is closed. Open the current worksheet from the cutting station.',
           );
         return sheet;
       }),
@@ -142,10 +155,20 @@ export class CuttingWorkflowService {
       }),
     );
   }
-  abandon(id: string, expectedRevision: number, reason: string, actor: string) {
+  abandon(
+    id: string,
+    expectedRevision: number,
+    reason: string,
+    actor: string,
+    canAbandonPrimary: boolean,
+  ) {
     return worksheetOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         const initial = await this.worksheets.requireRecord(context, id);
+        if (!initial.snapshot.isRecut && !canAbandonPrimary)
+          throw new ForbiddenException(
+            'Only an admin or owner can cancel the original cutting worksheet.',
+          );
         if (initial.abandonedAt) return presentWorksheet(initial);
         await this.allocations.lockAllocation(context, initial.allocationId);
         if (initial.snapshot.isRecut) {

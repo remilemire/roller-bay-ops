@@ -222,7 +222,11 @@ export class RecutsService {
   }
   withdraw(
     id: string,
-    input: { expectedRevision: number; reason: string },
+    input: {
+      expectedRevision: number;
+      reason: string;
+      unusedWorksheet?: { id: string; expectedRevision: number };
+    },
     actor: string,
     key: string,
   ) {
@@ -235,23 +239,49 @@ export class RecutsService {
           throw new ConflictException('This recut is closed.');
         const changes: Change[] = [];
         if (before.allocationId) {
-          await this.allocations.releaseUnusedRecut(ctx, before.allocationId);
-          // Before a cut, the reservation covers the complete group. Release it
-          // and return its remaining requests to the picker in this transaction.
+          const stockId = await this.allocations.releaseUnusedRecut(
+            ctx,
+            before.allocationId,
+            actor,
+            input.reason,
+            input.unusedWorksheet,
+          );
           if (before.stage === 'cutting') {
-            const group = await ctx.production.recutsForPlan(
-              before.allocationId,
-            );
-            for (const other of group.filter(
-              (r) => r.id !== id && r.stage === 'cutting',
-            )) {
-              changes.push({
-                before: other,
-                row: await ctx.production.updateRecut(other.id, {
-                  stage: 'requested',
-                  allocationId: null,
-                }),
-              });
+            const remaining = (
+              await ctx.production.recutsForPlan(before.allocationId)
+            ).filter((r) => r.id !== id && r.stage === 'cutting');
+            if (remaining.length) {
+              const blinds = remaining.map(replacementBlind);
+              // The released roll is still locked. Repack only the remaining requests.
+              const available =
+                stockId &&
+                (
+                  await this.allocations.recutStock(
+                    ctx,
+                    before.sourceId,
+                    blinds,
+                    stockId,
+                  )
+                ).some((s) => s.id === stockId);
+              const allocationId = available
+                ? await this.allocations.reserveRecut(
+                    ctx,
+                    before.sourceId,
+                    before.workOrderId,
+                    blinds,
+                    stockId,
+                    actor,
+                  )
+                : null;
+              for (const other of remaining) {
+                changes.push({
+                  before: other,
+                  row: await ctx.production.updateRecut(other.id, {
+                    stage: allocationId ? 'cutting' : 'requested',
+                    allocationId,
+                  }),
+                });
+              }
             }
           }
         }

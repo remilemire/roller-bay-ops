@@ -9,7 +9,7 @@ import {
   type WorksheetEmployees,
   type WorksheetSubmit,
 } from '@roller-bay/shared/production';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@/features/allocations';
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
+import { TextField } from '@/components/ui/field';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
 import { EmployeeSelection } from './employee-selection';
@@ -69,9 +70,16 @@ function CuttingOrder({
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error && !query.data)
+  if (
+    query.error &&
+    (!query.data ||
+      (planId && query.error instanceof ApiError && query.error.status === 409))
+  )
     return (
-      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+      <div className="stack">
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+        <Link href="/stations?station=cutting">Back to cutting</Link>
+      </div>
     );
   return (
     <div className="stack station-workspace">
@@ -206,6 +214,17 @@ function Worksheet({
               orderNumber={sheet.orderNumber}
             />
           )}
+          {sheet.snapshot.isRecut &&
+            !sheet.results &&
+            !sheet.abandonedAt &&
+            !sheet.skippedAt && (
+              <CancelReplacementSheet
+                sheet={sheet}
+                hasCheckedCuts={
+                  checked.length > 0 || !!sheet.draft?.checkedCuts.length
+                }
+              />
+            )}
           {/* Submitted results credit the cut; an admin corrects it after that. */}
           {!sheet.results && !sheet.skippedAt && (
             <Button
@@ -360,5 +379,74 @@ function ChangeCutters({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function CancelReplacementSheet({
+  sheet,
+  hasCheckedCuts,
+}: {
+  sheet: Worksheet;
+  hasCheckedCuts: boolean;
+}) {
+  const [revision, setRevision] = useState<number | null>(null);
+  const [reason, setReason] = useState('');
+  const client = useQueryClient();
+  const cancel = useMutation({
+    mutationFn: () =>
+      api(
+        `/production/cutting/worksheets/${sheet.id}/abandon`,
+        worksheetSchema,
+        {
+          method: 'POST',
+          body: { expectedRevision: revision, reason: reason.trim() },
+        },
+      ),
+    onSuccess: async () => {
+      setRevision(null);
+      await client.invalidateQueries({ queryKey: productionKey });
+    },
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={hasCheckedCuts}
+        onClick={() => {
+          cancel.reset();
+          setReason('');
+          setRevision(sheet.revision);
+        }}
+      >
+        Cancel unused sheet
+      </Button>
+      <Dialog
+        open={revision !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevision(null);
+        }}
+        title="Cancel unused worksheet?"
+        description="Only cancel if no fabric has been cut. This discards worksheet entries. The recuts keep their fabric assignment and can be started again."
+      >
+        <div className="stack">
+          <TextField
+            label="Reason for cancellation"
+            maxLength={1000}
+            value={reason}
+            onChange={setReason}
+          />
+          {cancel.error && <ErrorNotice error={cancel.error} />}
+          <div className="form-actions">
+            <Button
+              disabled={!reason.trim() || hasCheckedCuts || cancel.isPending}
+              onClick={() => cancel.mutate()}
+            >
+              Confirm cancellation
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }

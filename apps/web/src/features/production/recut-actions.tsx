@@ -167,7 +167,11 @@ function RequestForm({
   );
 }
 
-type Task = Recut & { worksheetId: string | null; needsCorrection: boolean };
+type Task = Recut & {
+  worksheetId: string | null;
+  worksheetRevision?: number | null;
+  needsCorrection: boolean;
+};
 export function RecutActions({
   recut,
   orderRecuts,
@@ -197,6 +201,11 @@ export function RecutActions({
       ),
     });
   const close = () => setEdit(null);
+  const groupSize = recut.allocationId
+    ? orderRecuts.filter(
+        (r) => r.allocationId === recut.allocationId && r.stage !== 'withdrawn',
+      ).length
+    : 0;
   return (
     <section className="station-recut">
       <div>
@@ -226,7 +235,9 @@ export function RecutActions({
               >
                 {recut.needsCorrection
                   ? 'Correct recut measurements'
-                  : 'Open replacement worksheet'}
+                  : groupSize > 1
+                    ? `Open shared worksheet · ${groupSize} recuts`
+                    : 'Open replacement worksheet'}
               </Link>
             </Button>
           )}
@@ -299,14 +310,28 @@ function RecutForm({
   const [employeeIds, setEmployees] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const expectedRevision = task.revision;
+  const [confirmedUnused, setConfirmedUnused] = useState(false);
+  const hasOpenSheet = task.stage === 'cutting' && !!task.worksheetId;
   if (action === 'withdraw')
     return (
       <div className="stack">
         {sharedUncut && (
           <p>
-            Withdrawing this request releases the shared reservation. The other
-            requests will return to Awaiting fabric.
+            The app will generate a new cutting plan for the remaining recuts on
+            this roll. If the fabric no longer fits, they return to Awaiting
+            fabric.
           </p>
+        )}
+        {hasOpenSheet && (
+          <label className="correction-check">
+            <input
+              type="checkbox"
+              checked={confirmedUnused}
+              onChange={(e) => setConfirmedUnused(e.target.checked)}
+            />{' '}
+            No fabric has been cut on this worksheet. Cancel the sheet and
+            discard its draft.
+          </label>
         )}
         <TextField
           label="Reason for withdrawal"
@@ -317,7 +342,21 @@ function RecutForm({
         <Submit
           path={`/production/recuts/${task.id}/withdraw`}
           schema={recutWithdrawalSchema}
-          body={{ expectedRevision, reason }}
+          body={{
+            expectedRevision,
+            reason,
+            ...(hasOpenSheet &&
+              confirmedUnused &&
+              task.worksheetRevision && {
+                unusedWorksheet: {
+                  id: task.worksheetId!,
+                  expectedRevision: task.worksheetRevision,
+                },
+              }),
+          }}
+          disabled={
+            hasOpenSheet && (!confirmedUnused || !task.worksheetRevision)
+          }
           label="Withdraw recut"
           close={close}
         />

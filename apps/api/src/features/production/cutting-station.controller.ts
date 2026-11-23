@@ -169,17 +169,19 @@ export class CuttingStationController {
       req.currentUser!.id,
     );
   }
-  @Post('worksheets/:id/abandon') @Roles('admin') abandon(
+  @Post('worksheets/:id/abandon') abandon(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetReturnSchema))
     body: { expectedRevision: number; reason: string },
     @Req() req: Request,
   ) {
+    requireStation(req.currentUser!, 'cutting');
     return this.workflow.abandon(
       id,
       body.expectedRevision,
       body.reason,
       req.currentUser!.id,
+      hasAnyRole(req.currentUser!.role, ['admin']),
     );
   }
 }

@@ -388,6 +388,10 @@ export class CuttingWorksheetsService {
     actor: string,
   ) {
     if (row.abandonedAt) return presentWorksheet(row);
+    if (row.snapshot.isRecut && (row.results || row.draft?.checkedCuts.length))
+      throw new ConflictException(
+        'This replacement has recorded cutting progress. Finish its worksheet before withdrawing the recut.',
+      );
     if (
       row.skippedAt ||
       row.revision !== expectedRevision ||

@@ -120,6 +120,7 @@ export class AllocationsService {
     context: UnitOfWorkContext,
     sourceId: string,
     blinds: CreateAllocation['requirements'],
+    stockItemId?: string,
   ) {
     const source = await context.allocations.findById(sourceId);
     if (!source) throw new NotFoundException('Original allocation not found.');
@@ -127,6 +128,7 @@ export class AllocationsService {
     const first = blinds[0]!;
     const stocks = await this.stockItems.findForAllocation(context, {
       colorIds: [first.fabricColorId],
+      ...(stockItemId && { stockIds: [stockItemId] }),
     });
     const reserved = await context.allocations.reservations(
       stocks.map((s) => s.id),
@@ -259,13 +261,42 @@ export class AllocationsService {
     );
     return header.id;
   }
-  async releaseUnusedRecut(context: UnitOfWorkContext, id: string) {
+  async releaseUnusedRecut(
+    context: UnitOfWorkContext,
+    id: string,
+    actor: string,
+    reason: string,
+    unusedWorksheet?: { id: string; expectedRevision: number },
+  ) {
     const header = await this.lockAllocation(context, id);
     if (!header.isRecut)
       throw new ConflictException('Expected a replacement allocation.');
     if (header.completedAt) return;
+    if (unusedWorksheet) {
+      const sheet = await this.worksheets.requireRecord(
+        context,
+        unusedWorksheet.id,
+        true,
+      );
+      if (sheet.allocationId !== id || sheet.abandonedAt)
+        throw new ConflictException(
+          'The replacement worksheet changed. Reopen the withdrawal.',
+        );
+      await this.stockItems.findForAllocation(context, {
+        stockIds: Object.keys(sheet.baselines),
+        lock: true,
+      });
+      await this.worksheets.abandon(
+        context,
+        sheet,
+        unusedWorksheet.expectedRevision,
+        reason,
+        actor,
+      );
+    }
     await this.worksheets.assertPlanMutable(context, id);
-    await this.releaseAllocation(context, id);
+    const released = await this.releaseAllocation(context, id);
+    return released.before.value.items[0]?.stockItemId;
   }
   create(input: CreateAllocation, userId: string, key: string) {
     const requestHash = hash(input);

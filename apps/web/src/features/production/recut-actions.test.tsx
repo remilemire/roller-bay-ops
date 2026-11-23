@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defaultMeasurementUnits } from '@roller-bay/shared/users';
@@ -184,6 +184,64 @@ it('lets staff group pending requests for the same fabric and reselect stock tha
         method: 'POST',
         key: expect.any(String),
         body: { expectedRevision: 1, stockItemId: large.id, additionalRecuts },
+      },
+    ),
+  );
+});
+
+it('withdraws a started recut only after staff confirm the displayed worksheet is unused', async () => {
+  const task = {
+    id: crypto.randomUUID(),
+    requirementId: crypto.randomUUID(),
+    workOrderId: crypto.randomUUID(),
+    quantity: 2,
+    widthMm: 660,
+    lengthMm: 1397,
+    fabricColorCode: 'HB410-CH',
+    reason: 'Fabric flaw',
+    stage: 'cutting' as const,
+    revision: 2,
+    allocationId: crypto.randomUUID(),
+    worksheetId: crypto.randomUUID(),
+    worksheetRevision: 4,
+    needsAssembly: true,
+    needsCorrection: false,
+  };
+  const peer = { ...task, id: crypto.randomUUID() };
+  vi.mocked(api).mockResolvedValue({ recordId: task.id, revision: 3 });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RecutActions recut={task} orderRecuts={[task, peer]} station="cutting" />
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.getByRole('link', { name: /shared worksheet · 2 recuts/i }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Withdraw recut' }));
+  const dialog = within(screen.getByRole('dialog'));
+  await user.type(
+    dialog.getByLabelText('Reason for withdrawal'),
+    'Original blind passed checking',
+  );
+  const submit = dialog.getByRole('button', { name: 'Withdraw recut' });
+  expect(submit).toBeDisabled();
+  await user.click(
+    dialog.getByRole('checkbox', { name: /No fabric has been cut/ }),
+  );
+  await user.click(submit);
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      `/production/recuts/${task.id}/withdraw`,
+      expect.anything(),
+      {
+        method: 'POST',
+        key: expect.any(String),
+        body: {
+          expectedRevision: 2,
+          reason: 'Original blind passed checking',
+          unusedWorksheet: { id: task.worksheetId, expectedRevision: 4 },
+        },
       },
     ),
   );

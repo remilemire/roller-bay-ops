@@ -1,3 +1,4 @@
+import http from 'supertest';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -485,12 +486,30 @@ test('three different-sized recuts share a reservation and worksheet and retain 
   ]);
 });
 
-test('withdrawing an unstarted shared cut frees the remnant and returns its other request to staff', async (t) => {
-  const { post, get, create, input, seed, pool } = await startAllocationsApp(t);
+test('withdrawing from a started shared sheet retires it and regenerates the remaining cuts on the same remnant', async (t) => {
+  const {
+    post,
+    get,
+    create,
+    input,
+    seed,
+    pool,
+    userId,
+    server,
+    cookie,
+    origin,
+  } = await startAllocationsApp(t);
+  await pool.query("UPDATE users SET role='admin' WHERE id=$1", [userId]);
+  const employeeIds = [
+    (await post('/api/employees', { name: 'Sam', initials: 'SM' }).expect(201))
+      .body.id,
+  ];
   const planned = await input(await seed());
-  planned.requirements[0]!.quantity = 2;
+  planned.requirements[0]!.quantity = 4;
+  planned.plan.cuts.push(structuredClone(planned.plan.cuts[0]!));
+  planned.plan.cuts[1]!.items[0]!.quantity = 2;
   planned.plan.cuts[0]!.items[0]!.quantity = 2;
-  await pool.query('UPDATE work_orders SET quantity=2 WHERE id=$1', [
+  await pool.query('UPDATE work_orders SET quantity=4 WHERE id=$1', [
     planned.workOrderId,
   ]);
   await create(planned);
@@ -500,23 +519,73 @@ test('withdrawing an unstarted shared cut frees the remnant and returns its othe
     (
       await post(requests, {
         requirementId: planned.requirements[0]!.id,
-        quantity: 1,
+        quantity: 2,
         reason,
       }).expect(201)
     ).body;
   const first = await request('Flaw');
   const peer = await request('Short cut');
-  const remnant = await seed(1100, true);
+  const remnant = await seed(2100, true);
   const firstPath = `${base}/recuts/${first.recordId}`;
   const assigned = await post(`${firstPath}/assign`, {
     expectedRevision: first.revision,
     additionalRecuts: [{ id: peer.recordId, expectedRevision: peer.revision }],
     stockItemId: remnant,
   }).expect(201);
-  await post(`${firstPath}/withdraw`, {
+  const queue = stationOrderListSchema.parse(
+    (await get(`${base}/cutting/orders`).expect(200)).body,
+  );
+  const plan = queue.items.find((o) => o.id === planned.workOrderId)!.recuts[0]!
+    .allocationId!;
+  const cutting = `${base}/cutting/orders/${planned.workOrderId}`;
+  const path = (allocationId: string) =>
+    `${cutting}/recut-plans/${allocationId}/worksheet`;
+  const original = worksheetSchema.parse(
+    (await post(path(plan), { employeeIds }).expect(201)).body,
+  );
+  const abandon = (sheet: typeof original) =>
+    post(`${base}/cutting/worksheets/${sheet.id}/abandon`, {
+      expectedRevision: sheet.revision,
+      reason: 'No fabric cut',
+    });
+  await pool.query(
+    "UPDATE users SET role='production',stations=$2::jsonb WHERE id=$1",
+    [userId, JSON.stringify(['cutting'])],
+  );
+  await abandon(original).expect(201);
+  const primary = worksheetSchema.parse(
+    (await post(`${cutting}/worksheet`, { employeeIds }).expect(201)).body,
+  );
+  await abandon(primary).expect(403);
+  const sheet = worksheetSchema.parse(
+    (await post(path(plan), { employeeIds }).expect(201)).body,
+  );
+  assert.notEqual(sheet.id, original.id);
+  assert.equal(
+    sheet.snapshot.requirements.reduce((total, r) => total + r.quantity, 0),
+    4,
+  );
+  await pool.query("UPDATE users SET role='staff' WHERE id=$1", [userId]);
+  const body = {
     expectedRevision: assigned.body.revision,
     reason: 'Original blind passed checking',
-  }).expect(201);
+  };
+  await post(`${firstPath}/withdraw`, body).expect(409);
+  await post(`${firstPath}/withdraw`, {
+    ...body,
+    unusedWorksheet: { id: sheet.id, expectedRevision: sheet.revision + 1 },
+  }).expect(409);
+  const key = randomUUID();
+  const withdraw = () =>
+    post(
+      `${firstPath}/withdraw`,
+      {
+        ...body,
+        unusedWorksheet: { id: sheet.id, expectedRevision: sheet.revision },
+      },
+      key,
+    ).expect(201);
+  assert.deepEqual((await withdraw()).body, (await withdraw()).body);
   const rows = (await get(requests).expect(200)).body as {
     id: string;
     stage: string;
@@ -525,10 +594,58 @@ test('withdrawing an unstarted shared cut frees the remnant and returns its othe
   }[];
   const remaining = rows.find((r) => r.id === peer.recordId)!;
   assert.equal(rows.find((r) => r.id === first.recordId)?.stage, 'withdrawn');
-  assert.equal(remaining.stage, 'requested');
-  assert.equal(remaining.allocationId, null);
-  await post(`${base}/recuts/${remaining.id}/assign`, {
+  assert.equal(remaining.stage, 'cutting');
+  assert.ok(remaining.allocationId && remaining.allocationId !== plan);
+  await get(path(plan)).expect(409);
+  const fresh = worksheetSchema.parse(
+    (await post(path(remaining.allocationId), { employeeIds }).expect(201))
+      .body,
+  );
+  assert.notEqual(fresh.id, sheet.id);
+  assert.equal(fresh.snapshot.items[0]!.stockItemId, remnant);
+  assert.deepEqual(
+    fresh.snapshot.requirements.map((r) => r.quantity),
+    [2],
+  );
+  assert.equal(fresh.snapshot.plan.cuts.length, 1);
+  const draft = {
+    form: {
+      items: [
+        {
+          stockItemId: remnant,
+          expectedRevision: 1,
+          outcome: 'consumed',
+          tube: '',
+          depth: '',
+          width: '',
+          length: '',
+          locationId: '',
+          scraps: [],
+        },
+      ],
+    },
+    units: (await get('/api/auth/me')).body.measurementUnits,
+    checkedCuts: [0],
+  };
+  const saved = worksheetSchema.parse(
+    (
+      await http(server)
+        .put(`${base}/cutting/worksheets/${fresh.id}/draft`)
+        .set('Cookie', cookie)
+        .set('Origin', origin)
+        .send({ expectedRevision: fresh.revision, draft })
+        .expect(200)
+    ).body,
+  );
+  await abandon(saved).expect(409);
+  await post(`${base}/recuts/${remaining.id}/withdraw`, {
     expectedRevision: remaining.revision,
-    stockItemId: remnant,
-  }).expect(201);
+    reason: 'Already started',
+    unusedWorksheet: { id: fresh.id, expectedRevision: saved.revision },
+  }).expect(409);
+  const retired = (
+    await get(`${base}/cutting/worksheets/${sheet.id}`).expect(200)
+  ).body;
+  assert.ok(retired.abandonedAt);
+  assert.equal(retired.snapshot.requirements.length, 2);
 });

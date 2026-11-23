@@ -54,6 +54,7 @@ export class ProductionRepository {
         widthMm: sql<number>`${allocationRequirements.widthMm}::float8`,
         lengthMm: sql<number>`${allocationRequirements.lengthMm}::float8`,
         worksheetId: cuttingWorksheets.id,
+        worksheetRevision: cuttingWorksheets.revision,
         needsCorrection: sql<boolean>`${cuttingWorksheets.results} IS NOT NULL AND ${cuttingWorksheets.submittedAt} IS NULL`,
       })
       .from(recuts)
