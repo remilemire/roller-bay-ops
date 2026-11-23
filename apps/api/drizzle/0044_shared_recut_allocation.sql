@@ -1,0 +1,2 @@
+ALTER TABLE "production_recuts" DROP CONSTRAINT "production_recuts_allocation_id_unique";--> statement-breakpoint
+CREATE INDEX "production_recuts_allocation_idx" ON "production_recuts" USING btree ("allocation_id");

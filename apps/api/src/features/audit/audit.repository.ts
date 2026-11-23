@@ -1,5 +1,6 @@
 import type { AuditChange, AuditRecordType } from '@roller-bay/shared/audit';
 import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm';
+import { recuts } from '../production/tables.js';
 import { allocations } from '../allocations/tables.js';
 import { cuttingWorksheets } from '../cutting-worksheets/tables.js';
 import type { DatabaseExecutor } from '../../database/database-executor.js';
@@ -74,6 +75,16 @@ export class AuditRepository {
           ),
           recordType === 'work-orders'
             ? or(
+                and(
+                  eq(auditChanges.recordType, 'recuts'),
+                  inArray(
+                    auditChanges.recordId,
+                    this.db
+                      .select({ id: recuts.id })
+                      .from(recuts)
+                      .where(eq(recuts.workOrderId, recordId)),
+                  ),
+                ),
                 and(
                   eq(auditChanges.recordType, 'production'),
                   eq(auditChanges.recordId, recordId),

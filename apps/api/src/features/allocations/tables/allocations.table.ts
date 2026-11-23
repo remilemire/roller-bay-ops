@@ -24,6 +24,7 @@ export const allocations = pgTable(
   'allocations',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    isRecut: boolean('is_recut').notNull().default(false),
     isDraft: boolean('is_draft').default(true).notNull(),
     // Drafts too: a plan assigns an order's blinds, so there is none to make
     // without an order.
@@ -83,12 +84,12 @@ export const allocations = pgTable(
     ),
     check('allocations_revision_positive', sql`${table.revision} > 0`),
     index('allocations_work_order_id_idx').on(table.workOrderId),
-    // An order has at most one live allocation: confirmed and not cancelled,
+    // An order has at most one live primary allocation: confirmed and not cancelled,
     // including once completed, until explicitly released. Drafts may share an order.
-    uniqueIndex('allocations_live_work_order_unique')
+    uniqueIndex('allocations_live_primary_order_unique')
       .on(table.workOrderId)
       .where(
-        sql`NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL AND ${table.releasedAt} IS NULL`,
+        sql`NOT ${table.isRecut} AND NOT ${table.isDraft} AND ${table.cancelledAt} IS NULL AND ${table.releasedAt} IS NULL`,
       ),
     index('allocations_created_by_user_id_idx').on(table.createdByUserId),
     check(

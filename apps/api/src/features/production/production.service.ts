@@ -113,6 +113,7 @@ export class ProductionService {
             actor,
           );
         } else {
+          await this.requireRecutsReady(context, id, station);
           const people = await this.employees.requireActiveMany(
             context,
             employeeIds,
@@ -202,6 +203,8 @@ export class ProductionService {
           input,
         );
         if (replay.result) return replay.result;
+        if (input.completedAt && !order[milestoneTimestampField[station]])
+          await this.requireRecutsReady(context, id, station);
         // Historical facts remain correctable after cancellation or fabric release.
         if (input.expectedRevision !== order.revision)
           throw new ConflictException(
@@ -261,6 +264,23 @@ export class ProductionService {
         );
       }),
     );
+  }
+  private async requireRecutsReady(
+    context: UnitOfWorkContext,
+    id: string,
+    station: Station,
+  ) {
+    if (station === 'cutting' && (await context.production.hasUncutRecuts(id)))
+      throw new ConflictException(
+        'Finish the replacement cuts before signing off cutting.',
+      );
+    if (
+      (station === 'checking' || station === 'shipping') &&
+      (await context.production.openRecuts(id)).length
+    )
+      throw new ConflictException(
+        'Resolve open recuts before signing off this order.',
+      );
   }
   private confirmExistingCompletion(
     context: UnitOfWorkContext,

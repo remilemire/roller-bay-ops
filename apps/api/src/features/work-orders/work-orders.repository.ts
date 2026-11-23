@@ -185,6 +185,7 @@ export class WorkOrdersRepository {
         | 'quantity'
         | 'shippedAt'
         | 'allocatedAt'
+        | 'cutAwaitingRecuts'
         | 'cancelledAt'
         | 'cancellationReason'
       >
@@ -205,6 +206,7 @@ export class WorkOrdersRepository {
       .update(workOrders)
       .set({
         [milestoneTimestampField[station]]: at,
+        ...(station === 'cutting' ? { cutAwaitingRecuts: false } : {}),
         updatedAt: new Date(),
         revision: sql`${workOrders.revision}+1`,
       })
@@ -220,7 +222,7 @@ export class WorkOrdersRepository {
   async stamp(id: string, values: Pick<WorkOrderRecord, 'allocatedAt'>) {
     await this.db
       .update(workOrders)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, cutAwaitingRecuts: false, updatedAt: new Date() })
       .where(eq(workOrders.id, id));
     return (await this.findById(id))!;
   }

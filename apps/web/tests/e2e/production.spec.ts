@@ -35,6 +35,9 @@ test('station login, whole-order attribution, and employee directory', async ({
   ).toContainText('Alex Reed');
   expect(state.orders[0]!.cutAt).toBeNull();
   expect(state.orders[0]!.shipDate).toBeNull();
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }).first(),
+  ).toBeVisible();
   await page.goto('/stock-items');
   await expect(page).toHaveURL(/stations$/);
   expect(
@@ -61,6 +64,9 @@ test('worksheet submission records cutting and sends measurements for office rev
   await pickEmployee(page, 'Alex Reed', 'Cutters');
   await page.getByRole('button', { name: 'Start worksheet' }).click();
   await expect(page.getByText(/Cutters: Alex Reed \(AR\)/)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }),
+  ).toBeVisible();
   await page.getByLabel('Cut 1 done').check();
   await expect(page.getByRole('button', { name: 'Sign off only' })).toHaveCount(
     0,
@@ -560,6 +566,9 @@ test('cutting station offers manual completion without starting a worksheet', as
   ).toContainText('Alex Reed');
   expect(state.worksheets).toHaveLength(0);
   expect(state.orders[0]!.cutAt).not.toBeNull();
+  await expect(
+    page.getByRole('button', { name: 'Request recut' }).first(),
+  ).toBeVisible();
 });
 
 test('a cleared cut can be recorded manually while keeping the previous worksheet', async ({
@@ -806,5 +815,107 @@ test('review summarizes empty remnants and separates replacement measurements fr
   await page.screenshot({
     path: info.outputPath('readable-cutting-review.png'),
     fullPage: true,
+  });
+});
+
+test('overview links pending recut requests to fabric assignment', async ({
+  page,
+}) => {
+  const state = await mockApi(page, { role: 'staff' });
+  for (const [index, stage] of (
+    ['requested', 'requested', 'assembly'] as const
+  ).entries()) {
+    state.recuts.push({
+      id: `11111111-2222-4333-8444-00000000000${index}`,
+      workOrderId: ids.order,
+      requirementId: state.allocation.requirements[0]!.id,
+      allocationId: stage === 'requested' ? null : state.allocation.id,
+      reason: `Fabric issue ${index}`,
+      stage,
+      quantity: 1,
+      revision: 1,
+      fabricColorCode: 'LINEN',
+      widthMm: 500,
+      lengthMm: 1000,
+      needsAssembly: true,
+    });
+  }
+  await page.goto('/');
+  const requests = page.getByRole('link', { name: /Recuts awaiting fabric/ });
+  await expect(requests).toContainText('2');
+  await requests.click();
+  await expect(
+    page.getByRole('button', { name: 'Awaiting fabric', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Assign fabric' })).toHaveCount(
+    2,
+  );
+  await expect(page.getByText('Fabric issue 2', { exact: false })).toHaveCount(
+    0,
+  );
+});
+
+test('staff build a manual recut plan from the cutting station', async ({
+  page,
+}) => {
+  const state = await mockApi(page, { role: 'staff' });
+  const id = '11111111-2222-4333-8444-000000000001';
+  state.recuts.push({
+    id,
+    workOrderId: ids.order,
+    requirementId: state.allocation.requirements[0]!.id,
+    allocationId: null,
+    reason: 'Fabric flaw',
+    stage: 'requested',
+    quantity: 13,
+    revision: 1,
+    fabricColorCode: 'LINEN',
+    widthMm: 80,
+    lengthMm: 1000,
+    needsAssembly: true,
+  });
+  const rolls = [
+    '11111111-2222-4333-8444-000000000002',
+    '11111111-2222-4333-8444-000000000003',
+  ];
+  const endpoint = `**/production/recuts/${id}`;
+  await page.route(`${endpoint}/stock`, (route) => route.fulfill({ json: [] }));
+  await page.route(`${endpoint}/manual-stock`, (route) =>
+    route.fulfill({
+      json: rolls.map((id, i) => ({
+        id,
+        locationLabel: `Bin ${i + 1}`,
+        widthMm: i === 0 ? 1000 : 150,
+        availableLengthMm: 1000,
+        isRemnant: true,
+      })),
+    }),
+  );
+  let submitted: unknown;
+  await page.route(`${endpoint}/assign`, (route) => {
+    submitted = route.request().postDataJSON();
+    return route.fulfill({ json: { recordId: id, revision: 2 } });
+  });
+  await page.goto('/stations?station=cutting&view=recuts');
+  await page.getByRole('button', { name: 'Assign fabric' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Build a manual plan' }).click();
+  for (const [i, roll] of rolls.entries()) {
+    await dialog.getByRole('button', { name: 'Add cut' }).click();
+    await dialog.getByLabel(`Stock item · cut ${i + 1}`).selectOption(roll);
+    await dialog.getByRole('button', { name: 'Assign a blind' }).nth(i).click();
+    const quantity = dialog.getByLabel('Quantity in this cut').nth(i);
+    await quantity.pressSequentially(i === 0 ? '12' : '1');
+  }
+  await dialog.getByRole('button', { name: 'Reserve manual plan' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(submitted).toEqual({
+    expectedRevision: 1,
+    plan: {
+      cuts: rolls.map((stockItemId, i) => ({
+        stockItemId,
+        items: [{ requirementId: id, quantity: i === 0 ? 12 : 1 }],
+      })),
+    },
   });
 });

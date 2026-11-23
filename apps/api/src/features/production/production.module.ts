@@ -9,6 +9,8 @@ import { EmployeesModule } from '../employees/index.js';
 import { LocationsModule } from '../locations/index.js';
 import { StockItemsModule } from '../stock-items/index.js';
 import { WorkOrdersModule } from '../work-orders/index.js';
+import { RecutsController } from './recuts.controller.js';
+import { RecutsService } from './recuts.service.js';
 import { CuttingStationController } from './cutting-station.controller.js';
 import { CuttingWorkflowService } from './cutting-workflow.service.js';
 import { ProductionController } from './production.controller.js';
@@ -26,7 +28,11 @@ import { ProductionService } from './production.service.js';
     EmployeesModule,
     WorkOrdersModule,
   ],
-  controllers: [ProductionController, CuttingStationController],
+  controllers: [
+    RecutsController,
+    ProductionController,
+    CuttingStationController,
+  ],
   providers: [
     {
       provide: ProductionRepository,
@@ -34,6 +40,7 @@ import { ProductionService } from './production.service.js';
       useFactory: (database: DatabaseService) =>
         new ProductionRepository(database.db),
     },
+    RecutsService,
     ProductionService,
     CuttingWorkflowService,
   ],

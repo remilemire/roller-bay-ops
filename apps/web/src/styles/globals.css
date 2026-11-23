@@ -1391,6 +1391,9 @@ td strong {
   backdrop-filter: var(--glass-filter);
   box-shadow: 0 18px 56px -20px #0005;
 }
+.dialog-content.dialog-wide {
+  width: min(94vw, 900px);
+}
 .dialog-heading {
   display: flex;
   justify-content: space-between;
@@ -2698,6 +2701,9 @@ label.detail-label {
   row-gap: 0;
 }
 .station-order {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   padding: 18px 20px;
 }
 .station-order-header {
@@ -2725,7 +2731,6 @@ label.detail-label {
   margin-top: 4px;
 }
 .station-order-note {
-  margin-top: 12px;
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2734,8 +2739,37 @@ label.detail-label {
   margin-right: 8px;
   color: var(--muted);
 }
+.station-recut {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--action-gap);
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.station-recut p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.station-recut > .inline-actions:empty,
+.worksheet-cutter-actions:empty {
+  display: none;
+}
+.station-order-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px var(--field-gap);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .station-order-history {
-  margin-top: 6px;
+  flex: 1 1 13rem;
+  min-width: 0;
+}
+.station-order-footer > .button {
+  min-height: var(--control-height);
 }
 .station-order-history > summary {
   padding-block: 10px;

@@ -108,6 +108,9 @@ export class CuttingWorksheetsService {
     const row = await context.cuttingWorksheets.forAllocation(id);
     return row ? presentWorksheet(row) : null;
   }
+  reportedConsumedStockIds(context: UnitOfWorkContext) {
+    return context.cuttingWorksheets.reportedConsumedStockIds();
+  }
   async assertPlanMutable(context: UnitOfWorkContext, allocationId: string) {
     if (await context.cuttingWorksheets.forAllocation(allocationId))
       throw new ConflictException(
@@ -385,6 +388,10 @@ export class CuttingWorksheetsService {
     actor: string,
   ) {
     if (row.abandonedAt) return presentWorksheet(row);
+    if (row.snapshot.isRecut && (row.results || row.draft?.checkedCuts.length))
+      throw new ConflictException(
+        'This replacement has recorded cutting progress. Finish its worksheet before withdrawing the recut.',
+      );
     if (
       row.skippedAt ||
       row.revision !== expectedRevision ||

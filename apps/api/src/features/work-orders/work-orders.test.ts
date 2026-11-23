@@ -25,6 +25,7 @@ test('work order status is the furthest step reached', () => {
     createdAt: at,
     scheduledAt: null,
     allocatedAt: null,
+    cutAwaitingRecuts: false,
     cutAt: null,
     assembledAt: null,
     checkedAt: null,

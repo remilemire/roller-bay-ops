@@ -612,7 +612,7 @@ export function CompletionEditor({
         }
         description={
           worksheet && !worksheet.resolution
-            ? 'Submitting records cutting completion unless already recorded. The office reviews measurements before updating inventory.'
+            ? 'The office reviews the submitted measurements before updating inventory.'
             : 'Stock measurements will be updated, retained remnants created, and this allocation reconciled. This does not change production milestones.'
         }
       >

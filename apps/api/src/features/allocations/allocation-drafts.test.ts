@@ -18,6 +18,7 @@ import { AuditService } from '../audit/index.js';
 import type { CuttingWorksheetsService } from '../cutting-worksheets/index.js';
 import type { StockItemsService } from '../stock-items/index.js';
 import type { WorkOrdersService } from '../work-orders/index.js';
+import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
 import { AllocationDetailsService } from './allocation-details.service.js';
 import {
   requireActiveRevision,
@@ -39,6 +40,7 @@ const header = (): AllocationRecord => ({
   createdByUserId: randomUUID(),
   createdAt: new Date(),
   updatedAt: new Date(),
+  isRecut: false,
   isDraft: true,
   revision: 1,
   confirmedAt: null,
@@ -209,6 +211,7 @@ test('incomplete allocation draft cannot reach reservation or confirmation write
       stock as unknown as StockItemsService,
       cuttingRules,
     ),
+    new CuttingPlanOptimizer(null),
   );
   await assert.rejects(
     service.submitDraft(draft.id, 1, randomUUID()),

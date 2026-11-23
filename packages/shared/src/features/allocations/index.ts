@@ -253,6 +253,7 @@ export const allocationQuerySchema = z.strictObject({
   state: allocationStateSchema.optional(),
 });
 export const allocationSummarySchema = z.object({
+  isRecut: z.boolean().optional(),
   id,
   workOrderId: id,
   orderNumber: z.string(),

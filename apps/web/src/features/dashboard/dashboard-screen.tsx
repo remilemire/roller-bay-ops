@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ClipboardClock,
   CalendarClock,
   CalendarDays,
   ClipboardList,
@@ -12,6 +13,7 @@ import {
   Plus,
   ArrowRight,
 } from 'lucide-react';
+import { pendingRecutCount } from '@/features/production';
 import { stockList } from '@/features/stock-items';
 import { receiptList } from '@/features/stock-receipts';
 import { allocationList } from '@/features/allocations';
@@ -33,7 +35,7 @@ const WEEK_ROWS = 8;
 export function DashboardScreen() {
   const stock = useQuery(stockList({ pageSize: 1 }));
   const active = useQuery(allocationList({ state: 'active', pageSize: 5 }));
-  const receiptDrafts = useQuery(receiptList({ state: 'draft', pageSize: 1 }));
+  const recuts = useQuery(pendingRecutCount());
   const allocationDrafts = useQuery(
     allocationList({ state: 'draft', pageSize: 1 }),
   );
@@ -81,11 +83,11 @@ export function DashboardScreen() {
       href: '/stock-items?state=on-hand',
     },
     {
-      label: 'Receipt drafts',
-      value: receiptDrafts.data?.total,
-      Icon: PackagePlus,
-      error: receiptDrafts.error,
-      href: '/stock-receipts?state=draft',
+      label: 'Recuts awaiting fabric',
+      value: recuts.data?.total,
+      Icon: ClipboardClock,
+      error: recuts.error,
+      href: '/stations?station=cutting&view=recuts',
     },
     {
       label: 'Allocation drafts',

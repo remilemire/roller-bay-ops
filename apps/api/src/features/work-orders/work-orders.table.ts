@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   integer,
@@ -27,6 +28,8 @@ export const workOrders = pgTable(
     // scheduled_at is when the ship date was set, and goes when it does.
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
     allocatedAt: timestamp('allocated_at', { withTimezone: true }),
+    // The original worksheet was submitted while replacement cuts were outstanding.
+    cutAwaitingRecuts: boolean('cut_awaiting_recuts').notNull().default(false),
     cutAt: timestamp('cut_at', { withTimezone: true }),
     assembledAt: timestamp('assembled_at', { withTimezone: true }),
     checkedAt: timestamp('checked_at', { withTimezone: true }),

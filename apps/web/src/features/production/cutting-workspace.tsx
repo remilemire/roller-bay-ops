@@ -1,4 +1,5 @@
 'use client';
+import { RequestRecut } from './recut-actions';
 import Link from 'next/link';
 import { useState, type ComponentType } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +9,7 @@ import {
   type WorksheetEmployees,
   type WorksheetSubmit,
 } from '@roller-bay/shared/production';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useCurrentUser } from '@/features/auth';
 import { useMeasurementUnits } from '@/features/users';
 import {
@@ -17,12 +18,14 @@ import {
 } from '@/features/allocations';
 import { RecordValues } from '@/components/records/record-values';
 import { Button } from '@/components/ui/button';
+import { TextField } from '@/components/ui/field';
 import { PageHeading, Loading, ErrorNotice } from '@/components/ui/feedback';
 import { CuttingInstructions } from './cutting-instructions';
 import { EmployeeSelection } from './employee-selection';
 import { Dialog } from '@/components/ui/dialog';
 import {
   worksheetForOrder,
+  worksheetPath,
   productionKey,
   completions,
   employeeNames,
@@ -32,24 +35,32 @@ import {
 type Editor = { completionEditor: ComponentType<CompletionEditorProps> };
 export function CuttingWorkspace({
   orderId,
+  planId,
   completionEditor,
-}: { orderId: string } & Editor) {
+}: { orderId: string; planId?: string } & Editor) {
   const user = useCurrentUser();
   if (user.role === 'production' && !user.stations.includes('cutting'))
     return <p>This account is not assigned to cutting.</p>;
-  return <CuttingOrder orderId={orderId} completionEditor={completionEditor} />;
+  return (
+    <CuttingOrder
+      planId={planId}
+      orderId={orderId}
+      completionEditor={completionEditor}
+    />
+  );
 }
 function CuttingOrder({
   orderId,
+  planId,
   completionEditor,
-}: { orderId: string } & Editor) {
-  const query = useQuery(worksheetForOrder(orderId));
+}: { orderId: string; planId?: string } & Editor) {
+  const query = useQuery(worksheetForOrder(orderId, planId));
   const client = useQueryClient();
   const [beginOpen, setBeginOpen] = useState(false);
   const [cutterIds, setCutterIds] = useState<string[]>([]);
   const start = useMutation({
     mutationFn: () =>
-      api(`/production/cutting/orders/${orderId}/worksheet`, worksheetSchema, {
+      api(worksheetPath(orderId, planId), worksheetSchema, {
         method: 'POST',
         body: { employeeIds: cutterIds },
       }),
@@ -59,15 +70,26 @@ function CuttingOrder({
     },
   });
   if (query.isPending) return <Loading />;
-  if (query.error && !query.data)
+  if (
+    query.error &&
+    (!query.data ||
+      (planId && query.error instanceof ApiError && query.error.status === 409))
+  )
     return (
-      <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+      <div className="stack">
+        <ErrorNotice error={query.error} retry={() => void query.refetch()} />
+        <Link href="/stations?station=cutting">Back to cutting</Link>
+      </div>
     );
   return (
     <div className="stack station-workspace">
       <PageHeading
         title={
-          query.data ? `Cutting · ${query.data.orderNumber}` : 'Cutting sheet'
+          query.data
+            ? `${planId ? 'Recut' : 'Cutting'} · ${query.data.orderNumber}`
+            : planId
+              ? 'Replacement worksheet'
+              : 'Cutting sheet'
         }
       >
         <Button asChild variant="outline">
@@ -115,7 +137,7 @@ function CuttingOrder({
           </Dialog>
         </section>
       )}
-      {query.data && <CutAttribution sheet={query.data} />}
+      {query.data && !planId && <CutAttribution sheet={query.data} />}
       {query.data && (
         <Worksheet
           key={query.data.id}
@@ -185,16 +207,35 @@ function Worksheet({
                 ? 'Results awaiting office review'
                 : 'Results in progress'}
         </p>
-        {/* Submitted results credit the cut; an admin corrects it after that. */}
-        {!sheet.results && !sheet.skippedAt && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setChangingCutters(true)}
-          >
-            Change cutters
-          </Button>
-        )}
+        <div className="inline-actions worksheet-cutter-actions">
+          {!sheet.submittedAt && !sheet.skippedAt && !sheet.abandonedAt && (
+            <RequestRecut
+              orderId={sheet.workOrderId}
+              orderNumber={sheet.orderNumber}
+            />
+          )}
+          {sheet.snapshot.isRecut &&
+            !sheet.results &&
+            !sheet.abandonedAt &&
+            !sheet.skippedAt && (
+              <CancelReplacementSheet
+                sheet={sheet}
+                hasCheckedCuts={
+                  checked.length > 0 || !!sheet.draft?.checkedCuts.length
+                }
+              />
+            )}
+          {/* Submitted results credit the cut; an admin corrects it after that. */}
+          {!sheet.results && !sheet.skippedAt && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setChangingCutters(true)}
+            >
+              Change cutters
+            </Button>
+          )}
+        </div>
       </div>
       {changingCutters && (
         <ChangeCutters
@@ -338,5 +379,74 @@ function ChangeCutters({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function CancelReplacementSheet({
+  sheet,
+  hasCheckedCuts,
+}: {
+  sheet: Worksheet;
+  hasCheckedCuts: boolean;
+}) {
+  const [revision, setRevision] = useState<number | null>(null);
+  const [reason, setReason] = useState('');
+  const client = useQueryClient();
+  const cancel = useMutation({
+    mutationFn: () =>
+      api(
+        `/production/cutting/worksheets/${sheet.id}/abandon`,
+        worksheetSchema,
+        {
+          method: 'POST',
+          body: { expectedRevision: revision, reason: reason.trim() },
+        },
+      ),
+    onSuccess: async () => {
+      setRevision(null);
+      await client.invalidateQueries({ queryKey: productionKey });
+    },
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={hasCheckedCuts}
+        onClick={() => {
+          cancel.reset();
+          setReason('');
+          setRevision(sheet.revision);
+        }}
+      >
+        Cancel unused sheet
+      </Button>
+      <Dialog
+        open={revision !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevision(null);
+        }}
+        title="Cancel unused worksheet?"
+        description="Only cancel if no fabric has been cut. This discards worksheet entries. The recuts keep their fabric assignment and can be started again."
+      >
+        <div className="stack">
+          <TextField
+            label="Reason for cancellation"
+            maxLength={1000}
+            value={reason}
+            onChange={setReason}
+          />
+          {cancel.error && <ErrorNotice error={cancel.error} />}
+          <div className="form-actions">
+            <Button
+              disabled={!reason.trim() || hasCheckedCuts || cancel.isPending}
+              onClick={() => cancel.mutate()}
+            >
+              Confirm cancellation
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }

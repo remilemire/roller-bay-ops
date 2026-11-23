@@ -7,12 +7,14 @@ export function Dialog({
   onOpenChange,
   title,
   description,
+  wide,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  wide?: boolean;
   children: ReactNode;
 }) {
   // Callers open dialogs without a Radix Trigger, so remember where focus belongs.
@@ -22,7 +24,7 @@ export function Dialog({
       <Primitive.Portal>
         <Primitive.Overlay className="dialog-overlay" />
         <Primitive.Content
-          className="dialog-content"
+          className={wide ? 'dialog-content dialog-wide' : 'dialog-content'}
           {...(!description ? { 'aria-describedby': undefined } : {})}
           // Escape on an open lookup list or date calendar closes that, not
           // the dialog.

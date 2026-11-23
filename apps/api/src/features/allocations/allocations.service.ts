@@ -36,10 +36,15 @@ import {
   type AllocationQuery,
   type CompleteAllocationRequest,
   type CreateAllocation,
+  type CuttingContext,
   type ReplaceAllocation,
   requirementInput,
 } from '@roller-bay/shared/allocations';
-import { createHash } from 'node:crypto';
+import { CuttingPlanOptimizer } from './optimizer/cutting-plan-optimizer.js';
+import { CuttingOptimizationError } from './optimizer/optimization.errors.js';
+import { findFeasiblePlan } from './optimizer/feasibility-search.js';
+import { recutLayout } from './recut-plan.js';
+import { createHash, randomUUID } from 'node:crypto';
 import { buildCuttingContext } from './allocation-cutting-context.js';
 import { AllocationDetailsService } from './allocation-details.service.js';
 import {
@@ -77,6 +82,7 @@ function requireOrderQuantity(
       ],
     });
 }
+const groupedRecutTimeoutMs = 5_000;
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 @Injectable()
@@ -89,7 +95,370 @@ export class AllocationsService {
     private readonly cuttingRules: CuttingRulesService,
     private readonly orders: WorkOrdersService,
     private readonly details: AllocationDetailsService,
+    private readonly optimizer: CuttingPlanOptimizer,
   ) {}
+  private async groupedRecutPlan(context: CuttingContext, signal: AbortSignal) {
+    try {
+      const result = await findFeasiblePlan(
+        this.optimizer.prepare(context),
+        signal,
+      );
+      return result.status === 'feasible' ? result.plan : null;
+    } catch (error) {
+      if (error instanceof CuttingOptimizationError) {
+        if (error.code === 'invalid_input')
+          throw new BadRequestException(error.message);
+        if (error.code === 'cancelled')
+          throw new ConflictException(
+            'The grouped layout took too long to check. Select fewer requests.',
+          );
+      }
+      throw error;
+    }
+  }
+  async recutStock(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    blinds: CreateAllocation['requirements'],
+    stockItemId?: string,
+    partial = false,
+  ) {
+    const source = await context.allocations.findById(sourceId);
+    if (!source) throw new NotFoundException('Original allocation not found.');
+    const configured = this.cuttingRules.apply(blinds, source.settings);
+    const first = blinds[0]!;
+    const stocks = await this.stockItems.findForAllocation(context, {
+      colorIds: [first.fabricColorId],
+      ...(stockItemId && { stockIds: [stockItemId] }),
+    });
+    const reserved = await context.allocations.reservations(
+      stocks.map((s) => s.id),
+    );
+    const consumed = await this.worksheets.reportedConsumedStockIds(context);
+    const candidates = [];
+    const signal = AbortSignal.timeout(groupedRecutTimeoutMs);
+    // Identical available rectangles have the same fit, independent of shelf or roll number.
+    const fits = new Map<string, boolean>();
+    for (const stock of stocks) {
+      const held = toLengthUnits(Number(reserved.get(stock.id) ?? 0));
+      const available = toLengthUnits(stock.remainingLengthMm) - held;
+      if (
+        available <= 0n ||
+        consumed.has(stock.id) ||
+        (stock.isRemnant && held > 0n)
+      )
+        continue;
+      const geometry = `${stock.widthMm}/${available}`;
+      let fit = fits.get(geometry);
+      if (fit === undefined) {
+        if (partial) {
+          fit = blinds.some((blind) => {
+            const layout = recutLayout(
+              stock.widthMm,
+              { ...blind, quantity: 1 },
+              configured.settings,
+            );
+            return layout !== null && layout.length <= available;
+          });
+        } else if (blinds.length === 1) {
+          const layout = recutLayout(stock.widthMm, first, configured.settings);
+          fit = layout !== null && available >= layout.length;
+        } else {
+          fit = !!(await this.groupedRecutPlan(
+            buildCuttingContext(configured, [stock], reserved),
+            signal,
+          ));
+        }
+        fits.set(geometry, fit);
+      }
+      if (fit)
+        candidates.push({
+          id: stock.id,
+          widthMm: stock.widthMm,
+          availableLengthMm: Number(available) / 1000,
+          locationLabel: stock.locationLabel,
+          isRemnant: stock.isRemnant,
+        });
+    }
+    return candidates;
+  }
+  private async requireRecutSource(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    workOrderId: string,
+  ) {
+    const source = await context.allocations.findById(sourceId);
+    if (
+      !source ||
+      source.workOrderId !== workOrderId ||
+      source.cancelledAt ||
+      source.releasedAt ||
+      source.isRecut ||
+      source.isDraft
+    )
+      throw new ConflictException('The original allocation is no longer live.');
+    return source;
+  }
+
+  async manualRecutPlan(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    workOrderId: string,
+    blinds: CreateAllocation['requirements'],
+    plan: CreateAllocation['plan'],
+    lockStock: boolean,
+  ) {
+    const source = await this.requireRecutSource(
+      context,
+      sourceId,
+      workOrderId,
+    );
+    const input = this.configure(blinds, plan, source.settings);
+    const summary = await this.validatePlan(context, input, {
+      lock: lockStock,
+    });
+    const consumed = await this.worksheets.reportedConsumedStockIds(context);
+    if (plan.cuts.some((cut) => consumed.has(cut.stockItemId)))
+      throw new ConflictException(
+        'A selected roll was reported consumed. Choose another stock item.',
+      );
+    return { input, summary };
+  }
+  async reserveManualRecut(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    workOrderId: string,
+    blinds: CreateAllocation['requirements'],
+    plan: CreateAllocation['plan'],
+    actor: string,
+  ) {
+    const { input, summary } = await this.manualRecutPlan(
+      context,
+      sourceId,
+      workOrderId,
+      blinds,
+      plan,
+      true,
+    );
+    // The editor addresses requests by ID. Each allocation keeps independent requirement rows.
+    const ids = new Map(blinds.map((b) => [b.id, randomUUID()]));
+    const stored = {
+      ...input,
+      requirements: input.requirements.map((r) => ({
+        ...r,
+        id: ids.get(r.id)!,
+      })),
+      plan: {
+        cuts: input.plan.cuts.map((c) => ({
+          ...c,
+          items: c.items.map((i) => ({
+            ...i,
+            requirementId: ids.get(i.requirementId)!,
+          })),
+        })),
+      },
+    };
+    return this.saveRecut(context, workOrderId, actor, stored, summary);
+  }
+  async reserveRecut(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    workOrderId: string,
+    blinds: CreateAllocation['requirements'],
+    stockItemId: string,
+    actor: string,
+  ) {
+    const source = await this.requireRecutSource(
+      context,
+      sourceId,
+      workOrderId,
+    );
+    const [stock] = await this.stockItems.findForAllocation(context, {
+      stockIds: [stockItemId],
+      lock: true,
+    });
+    if (!stock) throw new NotFoundException('Selected stock not found.');
+    if (
+      (await this.worksheets.reportedConsumedStockIds(context)).has(stockItemId)
+    )
+      throw new ConflictException(
+        'This stock was reported consumed. Select another roll or remnant.',
+      );
+    const { requirements, settings } = this.cuttingRules.apply(
+      blinds.map((blind) => ({ ...blind, id: randomUUID() })),
+      source.settings,
+    );
+    let cuts: CreateAllocation['plan']['cuts'];
+    if (requirements.length === 1) {
+      const requirement = requirements[0]!;
+      const layout = recutLayout(stock.widthMm, requirement, settings);
+      if (!layout)
+        throw new BadRequestException(
+          'The replacement is wider than the usable fabric.',
+        );
+      cuts = Array.from({ length: layout.rows }, (_, i) => ({
+        stockItemId,
+        items: [
+          {
+            requirementId: requirement.id,
+            quantity: Math.min(
+              layout.across,
+              requirement.quantity - i * layout.across,
+            ),
+          },
+        ],
+      }));
+    } else {
+      const reserved = await context.allocations.reservations([stockItemId]);
+      if (Number(reserved.get(stockItemId) ?? 0) >= stock.remainingLengthMm)
+        throw new ConflictException(
+          'The selected stock has no available length.',
+        );
+      const plan = await this.groupedRecutPlan(
+        buildCuttingContext({ requirements, settings }, [stock], reserved),
+        AbortSignal.timeout(groupedRecutTimeoutMs),
+      );
+      if (!plan)
+        throw new ConflictException(
+          'The selected stock cannot fit all selected recuts.',
+        );
+      cuts = plan.cuts;
+    }
+    const input = {
+      requirements,
+      settings,
+      plan: planCutLengths(requirements, { cuts }),
+    };
+    const summary = await this.validateForWrite(context, input);
+    return this.saveRecut(context, workOrderId, actor, input, summary);
+  }
+  private async saveRecut(
+    context: UnitOfWorkContext,
+    workOrderId: string,
+    actor: string,
+    input: ConfiguredAllocationPlan,
+    summary: NonNullable<AllocationRecord['plannedSummary']>,
+  ) {
+    const header = (await context.allocations.create({
+      workOrderId,
+      createdByUserId: actor,
+      isRecut: true,
+    }))!;
+    await context.allocations.replacePlan(header.id, input, summary);
+    await context.allocations.initializePlan(
+      header.id,
+      input.settings,
+      summary,
+      new Date(),
+    );
+    return header.id;
+  }
+  async reassignRemainingRecuts(
+    context: UnitOfWorkContext,
+    sourceId: string,
+    workOrderId: string,
+    blinds: CreateAllocation['requirements'],
+    stockIds: string[],
+    actor: string,
+  ) {
+    if (!stockIds.length) return null;
+    if (stockIds.length === 1) {
+      const [available] = await this.recutStock(
+        context,
+        sourceId,
+        blinds,
+        stockIds[0]!,
+      );
+      return available
+        ? this.reserveRecut(
+            context,
+            sourceId,
+            workOrderId,
+            blinds,
+            available.id,
+            actor,
+          )
+        : null;
+    }
+    // Withdrawal already locked all previously reserved items. Keep the new
+    // plan on those rolls, or return the requests to staff for another choice.
+    const source = await context.allocations.findById(sourceId);
+    if (!source) throw new NotFoundException('Original allocation not found.');
+    const configured = this.cuttingRules.apply(blinds, source.settings);
+    const consumed = await this.worksheets.reportedConsumedStockIds(context);
+    const stocks = await this.stockItems.findForAllocation(context, {
+      stockIds,
+      colorIds: [blinds[0]!.fabricColorId],
+    });
+    const reserved = await context.allocations.reservations(stockIds);
+    const available = stocks.filter(
+      (s) =>
+        !consumed.has(s.id) &&
+        Number(reserved.get(s.id) ?? 0) < s.remainingLengthMm,
+    );
+    const snapshot = buildCuttingContext(configured, available, reserved);
+    let result;
+    try {
+      result = await findFeasiblePlan(
+        this.optimizer.prepare(snapshot),
+        AbortSignal.timeout(groupedRecutTimeoutMs),
+      );
+    } catch (error) {
+      if (
+        error instanceof CuttingOptimizationError &&
+        (error.code === 'invalid_input' || error.code === 'cancelled')
+      )
+        return null;
+      throw error;
+    }
+    return result.status === 'feasible'
+      ? this.reserveManualRecut(
+          context,
+          sourceId,
+          workOrderId,
+          blinds,
+          result.plan,
+          actor,
+        )
+      : null;
+  }
+  async releaseUnusedRecut(
+    context: UnitOfWorkContext,
+    id: string,
+    actor: string,
+    reason: string,
+    unusedWorksheet?: { id: string; expectedRevision: number },
+  ) {
+    const header = await this.lockAllocation(context, id);
+    if (!header.isRecut)
+      throw new ConflictException('Expected a replacement allocation.');
+    if (header.completedAt) return;
+    if (unusedWorksheet) {
+      const sheet = await this.worksheets.requireRecord(
+        context,
+        unusedWorksheet.id,
+        true,
+      );
+      if (sheet.allocationId !== id || sheet.abandonedAt)
+        throw new ConflictException(
+          'The replacement worksheet changed. Reopen the withdrawal.',
+        );
+      await this.stockItems.findForAllocation(context, {
+        stockIds: Object.keys(sheet.baselines),
+        lock: true,
+      });
+      await this.worksheets.abandon(
+        context,
+        sheet,
+        unusedWorksheet.expectedRevision,
+        reason,
+        actor,
+      );
+    }
+    await this.worksheets.assertPlanMutable(context, id);
+    const released = await this.releaseAllocation(context, id);
+    return released.before.value.items.map((item) => item.stockItemId);
+  }
   create(input: CreateAllocation, userId: string, key: string) {
     const requestHash = hash(input);
     return allocationOperation(() =>
@@ -277,11 +646,19 @@ export class AllocationsService {
           await context.allocations.findById(id, true),
           input.expectedRevision,
         );
+        if (header.isRecut)
+          throw new ConflictException(
+            'Manage replacement plans through the recut request.',
+          );
         const order = await this.orders.assertPlanningAllowed(
           context,
           header.workOrderId,
         );
         await this.worksheets.assertPlanMutable(context, id);
+        if (await context.allocations.hasRecutHistory(id))
+          throw new ConflictException(
+            'The original blind requirements are retained for recut history.',
+          );
         const before = await this.details.load(context, header);
         // The order lock above prevents a production completion during
         // replanning, and a change of its quantity. Replanning may change the
@@ -322,10 +699,20 @@ export class AllocationsService {
       this.unitOfWork.transaction(async (context) => {
         const header = await context.allocations.findById(id, true);
         if (!header) throw new NotFoundException('Allocation not found.');
+        if (header.isRecut)
+          throw new ConflictException(
+            'Withdraw the recut to release its stock.',
+          );
         if (header.cancelledAt) return this.details.load(context, header);
         requireActiveRevision(header, revision);
         await this.worksheets.assertPlanMutable(context, id);
         const order = await this.orders.release(context, header.workOrderId);
+        if (
+          await context.allocations.hasUnresolvedRecutWork(header.workOrderId)
+        )
+          throw new ConflictException(
+            'Resolve recuts and reconcile their cutting results before releasing the order.',
+          );
         const items = await context.allocations.items(id);
         await this.stockItems.findForAllocation(context, {
           stockIds: items.map((item) => item.stockItemId!),
@@ -437,6 +824,10 @@ export class AllocationsService {
     if (order.shippedAt)
       throw new ConflictException(
         'Shipped orders cannot be cancelled or released.',
+      );
+    if (await context.allocations.hasUnresolvedRecutWork(order.id))
+      throw new ConflictException(
+        'Resolve recuts and reconcile their cutting results before releasing the order.',
       );
     const found = allocation
       ? await this.worksheets.forAllocation(context, allocation.id)
@@ -594,6 +985,10 @@ export class AllocationsService {
       const requestHash = hash(request);
       const header = await context.allocations.findById(id, true);
       if (!header) throw new NotFoundException('Allocation not found.');
+      if (header.isRecut && !worksheetId)
+        throw new ConflictException(
+          'Submit and review the replacement worksheet.',
+        );
       // Completion changes stock and creates remnants. Check its replay identity
       // before checking the active revision, which the original commit advanced.
       if (
@@ -786,6 +1181,21 @@ export class AllocationsService {
     excludeId?: string,
     previousIds: string[] = [],
   ) {
+    return this.validatePlan(context, input, {
+      lock: true,
+      excludeId,
+      previousIds,
+    });
+  }
+  private async validatePlan(
+    context: UnitOfWorkContext,
+    input: ConfiguredAllocationPlan,
+    {
+      lock,
+      excludeId,
+      previousIds = [],
+    }: { lock: boolean; excludeId?: string; previousIds?: string[] },
+  ) {
     await this.stockItems.requireColors(
       input.requirements.map((item) => item.fabricColorId),
       context,
@@ -797,7 +1207,7 @@ export class AllocationsService {
     // union before excluding this order's existing reservation from availability.
     const locked = await this.stockItems.findForAllocation(context, {
       stockIds: [...new Set([...selected, ...previousIds])],
-      lock: true,
+      lock,
     });
     if (selected.some((id) => !locked.some((stock) => stock.id === id)))
       throw new NotFoundException('A selected stock item does not exist.');

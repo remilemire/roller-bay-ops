@@ -1,0 +1,1 @@
+ALTER TABLE "work_orders" ADD COLUMN "cut_awaiting_recuts" boolean DEFAULT false NOT NULL;

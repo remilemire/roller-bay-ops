@@ -6,6 +6,7 @@ import type { WorksheetRecord } from './cutting-worksheets.table.js';
 export const presentWorksheet = (row: WorksheetRecord) =>
   worksheetSchema.parse({
     ...row,
+    isRecut: row.snapshot.isRecut,
     startedAt: row.startedAt.toISOString(),
     abandonedAt: row.abandonedAt?.toISOString() ?? null,
     skippedAt: row.skippedAt?.toISOString() ?? null,

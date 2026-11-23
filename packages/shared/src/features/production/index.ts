@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { stationSchema, measurementUnitsSchema } from '../users/index.js';
 import {
   allocationDetailSchema,
+  cuttingPlanInputSchema,
   completeAllocationSchema,
 } from '../allocations/index.js';
 import { workOrderSchema } from '../work-orders/index.js';
@@ -57,7 +58,7 @@ export const stationQuerySchema = z
       .regex(/^\d{0,6}$/)
       .default(''),
     page: z.coerce.number().int().min(1).max(1000000).default(1),
-    view: z.enum(['queue', 'completed', 'all']).default('queue'),
+    view: z.enum(['queue', 'completed', 'all', 'recuts']).default('queue'),
     // The browser supplies the station's local day as explicit UTC bounds.
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
@@ -66,8 +67,100 @@ export const stationQuerySchema = z
     (v) => v.view !== 'completed' || (!!v.from && !!v.to && v.from < v.to),
     'Completed view needs a valid time range.',
   );
+export const recutRequestSchema = z.strictObject({
+  requirementId: z.uuid(),
+  quantity: z.number().int().min(1).max(10000),
+  reason: z.string().trim().min(1).max(1000),
+});
+export const pendingRecutCountSchema = z.object({
+  total: z.number().int().nonnegative(),
+});
+export const recutStageSchema = z.enum([
+  'requested',
+  'cutting',
+  'assembly',
+  'checking',
+  'accepted',
+  'withdrawn',
+]);
+export const recutSchema = recutRequestSchema
+  .extend({
+    // Older records and clients include the route selected at request time.
+    needsAssembly: z.boolean(),
+    id: z.uuid(),
+    workOrderId: z.uuid(),
+    allocationId: z.uuid().nullable(),
+    stage: recutStageSchema,
+    revision: z.number().int().positive(),
+    fabricColorCode: z.string(),
+    widthMm: z.number().positive(),
+    lengthMm: z.number().positive(),
+  })
+  .strip();
+export type Recut = z.infer<typeof recutSchema>;
+export const recutRevisionSchema = z.strictObject({
+  expectedRevision: z.number().int().positive(),
+});
+export const recutSelectionSchema = z.strictObject({
+  additionalRecuts: z
+    .array(recutRevisionSchema.extend({ id: z.uuid() }))
+    .max(999)
+    .refine(
+      (items) => new Set(items.map((item) => item.id)).size === items.length,
+      'Select each request once.',
+    )
+    .optional(),
+});
+export type RecutSelection = z.infer<typeof recutSelectionSchema>;
+const recutAssignmentBase = recutRevisionSchema.extend({
+  ...recutSelectionSchema.shape,
+});
+export const manualRecutAssignmentSchema = recutAssignmentBase.extend({
+  plan: cuttingPlanInputSchema,
+});
+export const recutAssignmentSchema = z.union([
+  recutAssignmentBase.extend({ stockItemId: z.uuid() }),
+  manualRecutAssignmentSchema,
+]);
+export type RecutAssignment = z.infer<typeof recutAssignmentSchema>;
+export const recutWithdrawalSchema = recutRevisionSchema.extend({
+  unusedWorksheet: recutRevisionSchema.extend({ id: z.uuid() }).optional(),
+  reason: z.string().trim().min(1).max(1000),
+});
+export const recutSignoffSchema = recutRevisionSchema.extend({
+  employeeIds: employeeIdsSchema,
+});
+export const recutBlindsSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    position: z.number().int(),
+    fabricColorCode: z.string(),
+    widthMm: z.number(),
+    lengthMm: z.number(),
+    quantity: z.number().int(),
+  }),
+);
+export const recutStockSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    locationLabel: z.string(),
+    isRemnant: z.boolean(),
+    widthMm: z.number(),
+    availableLengthMm: z.number(),
+  }),
+);
 export const stationOrderSchema = workOrderSchema.extend({
+  recuts: z
+    .array(
+      recutSchema.extend({
+        worksheetId: z.uuid().nullable(),
+        worksheetRevision: z.number().int().positive().nullable().optional(),
+        needsCorrection: z.boolean(),
+      }),
+    )
+    .default([]),
   completions: productionCompletionsSchema,
+  cutAwaitingRecuts: z.boolean().default(false),
   hasCuttingWorksheet: z.boolean(),
   worksheetNeedsCorrection: z.boolean().default(false),
 });
@@ -134,6 +227,7 @@ export const worksheetReturnSchema = z.strictObject({
   reason: z.string().trim().min(1).max(1000),
 });
 export const worksheetSchema = z.object({
+  isRecut: z.boolean().optional(),
   id: z.uuid(),
   allocationId: z.uuid(),
   workOrderId: z.uuid(),

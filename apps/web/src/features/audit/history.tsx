@@ -49,7 +49,14 @@ export function History({ type, id }: { type: AuditRecordType; id: string }) {
                   </p>
                 )}
                 {event.changes
-                  .filter((c) => c.recordType === type && c.recordId === id)
+                  .filter(
+                    (c) =>
+                      (c.recordType === type && c.recordId === id) ||
+                      (type === 'work-orders' &&
+                        c.recordType === 'recuts' &&
+                        c.after?.type === 'recuts' &&
+                        c.after.value.workOrderId === id),
+                  )
                   .map((change, i) => (
                     <div key={i} className="audit-change">
                       <div>

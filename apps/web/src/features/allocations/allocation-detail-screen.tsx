@@ -81,7 +81,8 @@ function AllocationRecord({
 } & AllocationSections) {
   const id = allocation.id;
   const router = useRouter();
-  const openResults = recordResults && allocation.state === 'active';
+  const openResults =
+    recordResults && allocation.state === 'active' && !allocation.isRecut;
   const admin = useCanManage();
   const [correcting, setCorrecting] = useState(false);
   const units = useMeasurementUnits();
@@ -141,7 +142,7 @@ function AllocationRecord({
   return (
     <>
       <PageHeading
-        eyebrow={`ALLOCATION · ${shortId(id)}`}
+        eyebrow={`${allocation.isRecut ? 'RECUT' : 'ALLOCATION'} · ${shortId(id)}`}
         title={allocation.orderNumber}
         description={`Created ${dateLabel(allocation.createdAt)} · Revision ${allocation.revision}`}
       >
@@ -154,7 +155,7 @@ function AllocationRecord({
             </Link>
           </Button>
         )}
-        {allocation.state === 'active' && (
+        {!allocation.isRecut && allocation.state === 'active' && (
           <Button
             variant="outline"
             onClick={() => {
@@ -166,20 +167,21 @@ function AllocationRecord({
             Edit plan
           </Button>
         )}
-        {(allocation.state === 'active' ||
-          (admin &&
-            allocation.state === 'completed' &&
-            !allocation.releasedAt)) && (
-          <Button variant="outline" onClick={() => setCancel(true)}>
-            Cancel allocation
-          </Button>
-        )}
+        {!allocation.isRecut &&
+          (allocation.state === 'active' ||
+            (admin &&
+              allocation.state === 'completed' &&
+              !allocation.releasedAt)) && (
+            <Button variant="outline" onClick={() => setCancel(true)}>
+              Cancel allocation
+            </Button>
+          )}
         {admin && allocation.state === 'completed' && (
           <Button onClick={() => setCorrecting(true)}>
             Correct cutting results
           </Button>
         )}
-        {allocation.state === 'active' && (
+        {!allocation.isRecut && allocation.state === 'active' && (
           <Button
             onClick={() => {
               setEditingRecord(allocation);

@@ -332,6 +332,9 @@ export class WorkOrdersService {
     if (!order) throw orderNotFound();
     return order;
   }
+  async deferCutUntilRecuts(context: UnitOfWorkContext, orderId: string) {
+    await context.workOrders.update(orderId, { cutAwaitingRecuts: true });
+  }
   async recordProductionMilestone(
     context: UnitOfWorkContext,
     id: string,
@@ -364,6 +367,7 @@ export class WorkOrdersService {
     this.assertCanStopWork(order);
     const row = await context.workOrders.update(order.id, {
       allocatedAt: null,
+      cutAwaitingRecuts: false,
     });
     return { row, change: change(order, row) };
   }
@@ -377,6 +381,7 @@ export class WorkOrdersService {
       shipDate: null,
       scheduledAt: null,
       allocatedAt: null,
+      cutAwaitingRecuts: false,
       cancelledAt: new Date(),
       cancellationReason: reason,
     });

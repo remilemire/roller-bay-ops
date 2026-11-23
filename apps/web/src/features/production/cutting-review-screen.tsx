@@ -35,7 +35,10 @@ export function CuttingReviewScreen() {
               <tbody>
                 {query.data.map((s) => (
                   <tr key={s.id}>
-                    <td>{s.orderNumber}</td>
+                    <td>
+                      {s.orderNumber}
+                      {s.isRecut ? ' · Recut' : ''}
+                    </td>
                     <td className="table-cell-wrap">
                       {employeeNames(s.employees)}
                     </td>

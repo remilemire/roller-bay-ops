@@ -78,6 +78,32 @@ export class CuttingStationController {
     requireStation(req.currentUser!, 'cutting');
     return this.workflow.begin(id, body.employeeIds, req.currentUser!.id);
   }
+  @Get('orders/:id/recut-plans/:planId/worksheet') async recutSheet(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    requireStation(req.currentUser!, 'cutting');
+    const sheet = await this.workflow.replacementSheet(id, planId);
+    if (!sheet) res.status(204);
+    return sheet;
+  }
+  @Post('orders/:id/recut-plans/:planId/worksheet') beginRecut(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('planId', new ParseUUIDPipe()) planId: string,
+    @Body(new ZodValidationPipe(worksheetBeginSchema))
+    body: z.infer<typeof worksheetBeginSchema>,
+    @Req() req: Request,
+  ) {
+    requireStation(req.currentUser!, 'cutting');
+    return this.workflow.begin(
+      id,
+      body.employeeIds,
+      req.currentUser!.id,
+      planId,
+    );
+  }
   @Get('worksheets/:id') get(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: Request,
@@ -143,17 +169,19 @@ export class CuttingStationController {
       req.currentUser!.id,
     );
   }
-  @Post('worksheets/:id/abandon') @Roles('admin') abandon(
+  @Post('worksheets/:id/abandon') abandon(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(worksheetReturnSchema))
     body: { expectedRevision: number; reason: string },
     @Req() req: Request,
   ) {
+    requireStation(req.currentUser!, 'cutting');
     return this.workflow.abandon(
       id,
       body.expectedRevision,
       body.reason,
       req.currentUser!.id,
+      hasAnyRole(req.currentUser!.role, ['admin']),
     );
   }
 }

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { stationSchema, type Station } from '@roller-bay/shared/users';
 import type { WorkOrder } from '@roller-bay/shared/work-orders';
 import {
+  recutSchema,
   milestoneCorrectionSchema,
   type ProductionCompletion,
 } from '@roller-bay/shared/production';
@@ -11,12 +12,15 @@ import { useCurrentUser, useCanManage } from '@/features/auth';
 import { useProductionWrite } from './use-production-write';
 import { dateTimeLabel } from '@/lib/format';
 import { FACILITY_TIME_ZONE, facilityTimeToIso } from '@/lib/facility-time';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/dialog';
 import { ErrorNotice } from '@/components/ui/feedback';
+import { RequestRecut } from './recut-actions';
 import { EmployeeSelection } from './employee-selection';
 import {
+  recutStageLabel,
   completions,
   completionLabels,
   stationLabels,
@@ -26,6 +30,12 @@ import {
 } from './production.api';
 export function OrderProduction({ order }: { order: WorkOrder }) {
   const query = useQuery(completions(order.id));
+  const replacements = useQuery({
+    queryKey: [...productionKey, 'order-recuts', order.id],
+    queryFn: () =>
+      api(`/production/orders/${order.id}/recuts`, recutSchema.array()),
+    refetchInterval: 10000,
+  });
   const canManage = useCanManage();
   const [correcting, setCorrecting] = useState<Station | null>(null);
   const stamp = {
@@ -38,6 +48,9 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
     <section className="panel">
       <div className="panel-heading">
         <h2>Production</h2>
+        {order.allocatedAt && !order.cancelledAt && (
+          <RequestRecut orderId={order.id} orderNumber={order.orderNumber} />
+        )}
       </div>
       <div className="panel-body stack">
         {query.error && (
@@ -72,6 +85,29 @@ export function OrderProduction({ order }: { order: WorkOrder }) {
             );
           })}
         </dl>
+        {replacements.error && (
+          <ErrorNotice
+            error={replacements.error}
+            retry={() => void replacements.refetch()}
+          />
+        )}
+        {!!replacements.data?.length && (
+          <>
+            <h3>Recuts</h3>
+            <dl className="record-list">
+              {replacements.data.map((r) => (
+                <div key={r.id}>
+                  <dt>
+                    {r.quantity} × {r.fabricColorCode}
+                  </dt>
+                  <dd>
+                    {recutStageLabel[r.stage]} · {r.reason}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        )}
         {correcting && (
           <Correction
             order={order}

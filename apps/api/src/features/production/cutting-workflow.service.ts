@@ -1,10 +1,15 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import type {
   WorksheetSubmit,
   worksheetReviewSchema,
 } from '@roller-bay/shared/production';
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
+import { RecutsService } from './recuts.service.js';
 import { ProductionService } from './production.service.js';
 import { UnitOfWork } from '../../unit-of-work/unit-of-work.js';
 import { AllocationsService } from '../allocations/index.js';
@@ -25,16 +30,49 @@ export class CuttingWorkflowService {
     private readonly orders: WorkOrdersService,
     private readonly stock: StockItemsService,
     private readonly worksheets: CuttingWorksheetsService,
+    private readonly recuts: RecutsService,
     private readonly production: ProductionService,
   ) {}
-  begin(orderId: string, employeeIds: string[], actor: string) {
+  replacementSheet(orderId: string, planId: string) {
+    return worksheetOperation(() =>
+      this.unitOfWork.readOnlyTransaction(async (context) => {
+        const sheet = await this.worksheets.forAllocation(context, planId);
+        if (sheet && (!sheet.snapshot.isRecut || sheet.workOrderId !== orderId))
+          throw new ConflictException(
+            'Select a replacement plan for this order.',
+          );
+        if (
+          !sheet &&
+          !(await context.production.recutsForPlan(planId)).some(
+            (r) => r.workOrderId === orderId && r.stage === 'cutting',
+          )
+        )
+          throw new ConflictException(
+            'This replacement plan is closed. Open the current worksheet from the cutting station.',
+          );
+        return sheet;
+      }),
+    );
+  }
+  begin(
+    orderId: string,
+    employeeIds: string[],
+    actor: string,
+    replacementPlanId?: string,
+  ) {
     return worksheetOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         // Same lock order as allocation edits: allocation -> order -> worksheet -> sorted stock.
-        const allocation = await this.allocations.lockForCutting(
-          context,
-          orderId,
-        );
+        const allocation = replacementPlanId
+          ? await this.allocations.lockAllocation(context, replacementPlanId)
+          : await this.allocations.lockForCutting(context, orderId);
+        if (
+          replacementPlanId &&
+          (!allocation.isRecut || allocation.workOrderId !== orderId)
+        )
+          throw new ConflictException(
+            'Select a replacement plan for this order.',
+          );
         const existing = await this.worksheets.forAllocation(
           context,
           allocation.id,
@@ -44,7 +82,7 @@ export class CuttingWorkflowService {
         this.orders.assertNotCancelled(order);
         if (!order.allocatedAt)
           throw new ConflictException('Allocate this order before cutting.');
-        if (order.cutAt || order.shippedAt)
+        if (!allocation.isRecut && (order.cutAt || order.shippedAt))
           throw new ConflictException('This order is already cut or shipped.');
         const snapshot = await this.allocations.worksheetSnapshot(
           context,
@@ -94,7 +132,17 @@ export class CuttingWorkflowService {
         // return clears submittedAt but retains results. Resubmissions and
         // retries must not overwrite attribution or restore an admin-cleared
         // milestone.
-        if (!row.results) {
+        if (row.results) return result;
+        if (row.snapshot.isRecut) {
+          await this.recuts.cut(context, row.allocationId, actor);
+          // Only the last replacement completes a previously submitted primary sheet.
+          if (!order.cutAwaitingRecuts) return result;
+        }
+        if (order.cutAt) return result;
+        if (await context.production.hasUncutRecuts(order.id)) {
+          if (!row.snapshot.isRecut)
+            await this.orders.deferCutUntilRecuts(context, order.id);
+        } else {
           await this.production.recordWorksheetCut(
             context,
             order,
@@ -107,13 +155,30 @@ export class CuttingWorkflowService {
       }),
     );
   }
-  abandon(id: string, expectedRevision: number, reason: string, actor: string) {
+  abandon(
+    id: string,
+    expectedRevision: number,
+    reason: string,
+    actor: string,
+    canAbandonPrimary: boolean,
+  ) {
     return worksheetOperation(() =>
       this.unitOfWork.transaction(async (context) => {
         const initial = await this.worksheets.requireRecord(context, id);
+        if (!initial.snapshot.isRecut && !canAbandonPrimary)
+          throw new ForbiddenException(
+            'Only an admin or owner can cancel the original cutting worksheet.',
+          );
         if (initial.abandonedAt) return presentWorksheet(initial);
         await this.allocations.lockAllocation(context, initial.allocationId);
-        await this.orders.assertPlanningAllowed(context, initial.workOrderId);
+        if (initial.snapshot.isRecut) {
+          await this.orders.requireOrder(context, initial.workOrderId);
+          if (initial.results)
+            throw new ConflictException(
+              'This replacement has already been cut.',
+            );
+        } else
+          await this.orders.assertPlanningAllowed(context, initial.workOrderId);
         const row = await this.worksheets.requireRecord(context, id, true);
         await this.stock.findForAllocation(context, {
           stockIds: Object.keys(row.baselines),
